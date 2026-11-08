@@ -29,25 +29,6 @@ _BOARD_LABELS: dict[str, str] = {
     "seven_over": "七连板及以上",
 }
 
-#: 单条命中事件的行字段（契约稳定面）
-_ROW_FIELDS: tuple[str, ...] = (
-    "code",
-    "name",
-    "holding_kind",
-    "event_type",
-    "event_date",
-    "net_value_yi",
-    "hot_money_net_value_yi",
-    "org_net_value_yi",
-    "hot_rank",
-    "range_days",
-    "limit_reason",
-    "concepts",
-    "board_label",
-    "board_num",
-    "seal_nextday",
-)
-
 
 def _yi(value: Any) -> float | None:
     """元 → 亿元（保留两位）；非法值 ``None``。"""

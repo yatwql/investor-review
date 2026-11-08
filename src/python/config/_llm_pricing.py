@@ -112,9 +112,12 @@ def ensure_llm_pricing_file(path: str | None = None) -> bool:
     from src.python.core.atomic_write import write_text_atomic
 
     os.makedirs(os.path.dirname(target), exist_ok=True)
-    return write_text_atomic(
+    created = write_text_atomic(
         target, render_default_pricing_ref(), prefix=".pricing_", log_tag="pricing", noun="计价参考"
     )
+    if created:
+        invalidate_pricing_cache()  # 新铺出的模板可能覆盖上一条缓存结论
+    return created
 
 
 # ── 读取 / 校验 / 合并 ────────────────────────────────────────

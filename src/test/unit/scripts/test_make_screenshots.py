@@ -63,12 +63,17 @@ class TestDemoWorkspace:
             assert [tuple(row) for row in rows[1:]] == expected
 
     @pytest.mark.unit_scripts
-    def test_config_uses_absolute_paths(self, demo, tmp_path):
+    def test_config_uses_project_relative_paths(self, demo, tmp_path):
+        """演示配置写相对项目根（`data/holdings` / `reports`）：上屏与真机截图都不带本机目录。
+
+        隔离靠 `INVEST_PROJECT_ROOT` 指到演示根，相对路径在其中正确解析；写绝对路径会把
+        `/home/<user>/...` 这类本机路径带进 Web 面板与 README 配图。
+        """
         workspace = demo.build(tmp_path / "shots")
         config = json.loads((workspace / "data" / "config" / "config.json").read_text(encoding="utf-8"))
 
-        assert Path(config["holdings_dir"]).is_absolute()
-        assert Path(config["output_dir"]).is_absolute()
+        for key in ("holdings_dir", "output_dir", "llm_key_file", "llm_settings_file", "llm_providers_file"):
+            assert not Path(config[key]).is_absolute(), f"{key} 不得写绝对路径：{config[key]}"
         assert not (workspace / "display-config.json").exists()
 
     @pytest.mark.unit_scripts

@@ -525,21 +525,26 @@ class TestSinaParallelism:
 
     @patch("src.python.providers.sina_news.fetch_news")
     def test_categories_fetch_concurrently(self, mock_fetch: MagicMock) -> None:
-        import time
+        """三个分类必须同时在飞：用屏障判定并发，不用墙钟。
+
+        并发语义由屏障表达：三路真并发时同时到达即放行；任一路被串行排队则屏障超时
+        抛 `BrokenBarrierError`，该分类取数失败 → 结果条数不足。刻意不按耗时阈值判定
+        ——耗时把「是否并发」与 runner 调度快慢混在一起，慢机器上会红成假阳性。
+        """
+        import threading
 
         from src.python.providers import news_sources
 
-        def _slow(**kwargs):
-            time.sleep(0.05)
+        barrier = threading.Barrier(3, timeout=5)
+
+        def _sync(**kwargs):
+            barrier.wait()  # 三路必须同时在飞；串行时在此超时
             return [{"title": "t", "url": f"http://u-{kwargs['lid']}-{kwargs['page']}"}]
 
-        mock_fetch.side_effect = _slow
-        started = time.perf_counter()
+        mock_fetch.side_effect = _sync
         result = news_sources._fetch_from_sina(num=150)  # per_category=50 → 每类 1 页即止
-        elapsed = time.perf_counter() - started
 
-        assert len(result) == 3
-        assert elapsed < 0.12, f"三个分类未并发（{elapsed:.2f}s，串行约 0.15s）"
+        assert len(result) == 3, f"三个分类未并发（结果 {len(result)} 条，屏障超时即串行）"
 
     @patch("src.python.providers.sina_news.fetch_news")
     def test_cross_category_url_dedupe_kept(self, mock_fetch: MagicMock) -> None:

@@ -197,10 +197,14 @@ class TestSwitchPanelUndoKeys:
 
     def test_undo_restores_previous_value(self):
         """改一项 → `u`：写回变更前值（此后会话已无待退条目）。"""
+        from src.python.config.features import is_feature_enabled
+
         writes = self._drive(["1", "u", "0"])
         assert len(writes) == 2, writes
-        assert writes[0]["value"] is True, "首键切换应写入新值"
-        assert writes[1] == {"key": writes[0]["key"], "value": False}, "u 应退回变更前值"
+        key = writes[0]["key"]
+        assert writes[0]["value"] is not is_feature_enabled(key), "首键切换应写入当前值的反面"
+        # 撤销写回的是「进入面板时读到的基线」——本用例把 read_config_value 桩成 False
+        assert writes[1] == {"key": key, "value": False}, "u 应退回变更前值"
 
     def test_restore_all_returns_every_touched_key(self):
         """改两项 → `U`：两个键各写回一次进入时的值。"""

@@ -15,7 +15,7 @@ from typing import Any
 import httpx
 
 from src.python.core.code_utils import is_index_code, is_us_index_code
-from src.python.core.code_symbols import get_index_exchange_prefix
+from src.python.core.code_symbols import index_exchange_of
 from src.python.core.http_client import make_http_client
 from src.python.core.retry import STRATEGY_EXPONENTIAL, TRANSIENT_EXCEPTIONS, RetryPolicy, retry_transient
 from src.python.core.throttle import RateLimiter  # 间隔节流唯一原语（数据/调度/LLM 三层共用）
@@ -287,8 +287,6 @@ _INDEX_KLINE_URL = "https://push2his.eastmoney.com/api/qt/stock/kline/get"
 #: 指数取数重试策略：总尝试 3 次、指数退避（与腾讯 K 线同一口径）；历史链无链级重试，
 #: 故重试必须落在 provider 内。
 _INDEX_RETRY_POLICY = RetryPolicy(attempts=3, strategy=STRATEGY_EXPONENTIAL, base_backoff=0.5, factor=2.0, jitter=0.2)
-#: 无交易所前缀的指数代码 → 东方财富市场号（0=深市 / 1=沪市）：399/932 系深市，其余按沪市
-_INDEX_BARE_MARKET: tuple[tuple[tuple[str, ...], str], ...] = ((("399", "932"), "0"),)
 
 
 def _index_secid(code: str) -> str:
@@ -300,17 +298,14 @@ def _index_secid(code: str) -> str:
     raw = (code or "").strip().lower()
     if not is_index_code(raw) or is_us_index_code(raw):
         return ""
-    prefix = get_index_exchange_prefix(raw)
-    digits = raw[len(prefix) :] if prefix else raw
+    exchange = index_exchange_of(raw)
+    if not exchange:
+        return ""
+    # 裸码不带前缀：只在 raw 确实以交易所前缀开头时裁掉，否则整段是指数数字码
+    digits = raw[len(exchange) :] if raw.startswith(exchange) else raw
     if not digits.isdigit() or len(digits) != 6:
         return ""
-    if prefix == "sh":
-        market = "1"
-    elif prefix == "sz":
-        market = "0"
-    else:
-        market = next((m for heads, m in _INDEX_BARE_MARKET if digits.startswith(heads)), "1")
-    return f"{market}.{digits}"
+    return f"{'1' if exchange == 'sh' else '0'}.{digits}"
 
 
 def _fetch_index_kline_json(secid: str, days: int) -> dict[str, Any] | None:

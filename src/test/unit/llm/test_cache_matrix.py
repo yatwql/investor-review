@@ -15,6 +15,7 @@ from unittest.mock import patch
 
 import pytest
 
+from src.test._market_clock import freeze_market_bucket
 from src.test.unit.llm._cache_fixtures import (
     CHAIN_CONFIG,
     MODULE_INDEX,
@@ -300,10 +301,7 @@ class TestMarketSnapshotBucketPolicy:
 
     @staticmethod
     def _freeze(monkeypatch, key: str, label: str, intraday: bool) -> None:
-        from src.python.core import market_hours
-
-        frozen = market_hours.MarketSnapshot(key=key, label=label, as_of="2026-11-06", intraday=intraday)
-        monkeypatch.setattr(market_hours, "market_snapshot_bucket", lambda now=None: frozen)
+        freeze_market_bucket(monkeypatch, key=key, label=label, intraday=intraday)
 
     def test_intraday_run_never_reuses_price_sensitive_modules(self, llm_cache_dir, monkeypatch):
         """盘中档：价格相关模块即便同输入、TTL 未到也必须重算。

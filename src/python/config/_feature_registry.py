@@ -89,6 +89,9 @@ PANEL_GROUPS: dict[str, tuple[str, ...]] = {
         GROUP_MARKET,
         GROUP_FUND_STYLE,
         GROUP_EVENT_SUMMARY,
+        # 机制类（约束标注/决策反思/追问入口/信号预消化）留在本面板独立成组：
+        # [C] 是章节驱动的面板（章节注册表 + 子项），渲染机制组要另建一套行模型，
+        # 收益不抵成本。判断依据与输出评级改内置后已不占编号。
         GROUP_MECHANISM,
     ),
     "[C]": (GROUP_STANDALONE, GROUP_CHAPTER_OPTIONS),
@@ -110,6 +113,10 @@ class FeatureSwitchDef:
         experimental: 生命周期为实验项（``--experiment`` 取值域即此字段为真者；
             末位默认 False，仅实验项显式标注）
         needs_hint: 说明是否默认以副行展示（默认 False = 常识项，悬停读取）
+        panel_visible: 是否出现在 TUI/Web 配置面板。为 False 的两类：**默认常开的机制项**
+            （判断依据 / LLM 输出评级——日常无需调、但仍是可用 ``features.json``
+            覆写关闭的回退通道）与**自动项**（成本流水 / 候选比较——由数据或配置
+            决定是否产出，没有「关掉」的语义）。两者都不上面板，编号也不派生。
     """
 
     label: str
@@ -119,6 +126,7 @@ class FeatureSwitchDef:
     affects_report: bool
     experimental: bool = False
     needs_hint: bool = False
+    panel_visible: bool = True
 
 
 feature_switch_registry: dict[str, FeatureSwitchDef] = {
@@ -129,6 +137,7 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         GROUP_MECHANISM,
         True,
         True,
+        panel_visible=False,
     ),
     "portfolio_constraints": FeatureSwitchDef(
         "集中度/相关性约束",
@@ -201,13 +210,6 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         True,
     ),
     # ── 独立章节与回放：What-if 交易成本与基准对比（页签/区块类转正项：实验身份已摘除、default 保持 False）──
-    "whatif_trade_cost": FeatureSwitchDef(
-        "What-if 交易成本对比",
-        "调仓回放计入申赎成本（FIFO 持有期阶梯）+ 成本前后收益差与业绩基准三线参照",
-        GROUP_STANDALONE,
-        False,
-        True,
-    ),
     # ── 分析增强：事件窗对照（区块类转正项：实验身份已摘除、default 保持 False）──
     "event_window_impact": FeatureSwitchDef(
         "事件窗对照",
@@ -223,6 +225,7 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         GROUP_MECHANISM,
         True,
         True,
+        panel_visible=False,
     ),
     # ── 机制与诊断：只读诊断（不改产物、不写文件，默认关的代价是环境出故障者看不到它） ──
     # ── 分析增强与独立章节与回放（以下声明顺序即各组组内面板顺序）──
@@ -237,8 +240,9 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         "候选基金比较子表",
         "「基金业绩分析」章渲染候选基金横向比较表（候选来自 comparison_candidates）",
         GROUP_FUND_STYLE,
-        False,
         True,
+        True,
+        panel_visible=False,  # 自动项：配置了候选池即生效，无需开关
     ),
     "cost_lots": FeatureSwitchDef(
         "成本流水",
@@ -274,6 +278,7 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         GROUP_EVENT_SUMMARY,
         False,
         True,
+        needs_hint=True,
     ),
     "fund_purchase_limit": FeatureSwitchDef(
         "基金申购限购",
@@ -296,6 +301,13 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         False,
         True,
     ),
+    "whatif_trade_cost": FeatureSwitchDef(
+        "What-if 交易成本对比",
+        "调仓回放计入申赎成本（FIFO 持有期阶梯）+ 成本前后收益差与业绩基准三线参照",
+        GROUP_PORTFOLIO,
+        False,
+        True,
+    ),
     "crisis_replay": FeatureSwitchDef(
         "危机回放",
         "危机区间标注升级为双层回放：组合侧窗口内危机穿越表现（区间收益） + 指数侧历史危机区间表现（收益/最大回撤，长窗指数日线）",
@@ -307,7 +319,7 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         "首页执行摘要卡",
         "摘要区首屏执行摘要卡：关键指标环比行（总市值/总收益率/持仓数/集中度） + 本期关键变化 Top N（快照 diff 单源派生，无上期快照时整块隐藏）",
         GROUP_EVENT_SUMMARY,
-        False,
+        True,
         True,
     ),
     # ── 分析增强：投资方法框架（转正项：评分口径验证达成，已摘除实验身份、默认开；
@@ -334,6 +346,21 @@ def switches_in_group(group: str) -> list[tuple[str, FeatureSwitchDef]]:
     return [(flag, d) for flag, d in feature_switch_registry.items() if d.group == group]
 
 
+def panel_switches(panel: str) -> list[tuple[str, FeatureSwitchDef]]:
+    """某面板**上屏**的开关清单 ``[(开关名, 声明), ...]``（组序 + 注册表序）。
+
+    渠道层（TUI 面板 / Web 配置面）取数的唯一入口：``panel_visible=False`` 的
+    开关（默认常开的机制项、数据驱动的自动项）不在任何面板出现——此前 Web 侧
+    直接按 ``switches_in_group`` 下发，会与 TUI 面板的口径分叉。
+    """
+    return [
+        (flag, definition)
+        for group in PANEL_GROUPS.get(panel, ())
+        for flag, definition in switches_in_group(group)
+        if definition.panel_visible
+    ]
+
+
 def panel_option_numbers(panel: str) -> tuple[tuple[int, str, FeatureSwitchDef], ...]:
     """按面板的组序派生编号：``((1, 开关名, 声明), (2, ...), ...)``（1 起连续）。
 
@@ -342,9 +369,8 @@ def panel_option_numbers(panel: str) -> tuple[tuple[int, str, FeatureSwitchDef],
     不得写死数字。
     """
     numbered: list[tuple[int, str, FeatureSwitchDef]] = []
-    for group in PANEL_GROUPS.get(panel, ()):
-        for flag, definition in switches_in_group(group):
-            numbered.append((len(numbered) + 1, flag, definition))
+    for flag, definition in panel_switches(panel):
+        numbered.append((len(numbered) + 1, flag, definition))
     return tuple(numbered)
 
 

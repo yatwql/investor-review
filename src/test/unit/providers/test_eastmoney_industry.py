@@ -8,8 +8,6 @@ from unittest.mock import Mock, patch
 
 from src.python.providers.eastmoney_industry import (
     fetch_industry_and_concepts,
-    fetch_industry,
-    fetch_concepts,
     _secid,
 )
 import pytest
@@ -349,87 +347,6 @@ class TestFetchIndustryAndConcepts(unittest.TestCase):
         self.assertEqual(result["industry_id"], "")
         self.assertEqual(result["concepts"], [])
         self.assertEqual(result["concept_ids"], [])
-
-
-class TestFetchIndustry(unittest.TestCase):
-    """测试 fetch_industry 便捷接口。"""
-
-    def setUp(self):
-        from src.python.core.provider_registry import get_registry
-
-        get_registry().session_cache_clear("industry")
-
-    @patch("src.python.core.http_client.httpx.Client")
-    def test_industry_found(self, mock_client_cls):
-        """有行业数据时返回行业名称。"""
-        mock_client_cls.side_effect = _mock_httpx(json.dumps(_MOCK_SUCCESS_RESPONSE))
-        result = fetch_industry("600900")
-        self.assertEqual(result, "电力")
-
-    @patch("src.python.core.http_client.httpx.Client")
-    def test_industry_not_found(self, mock_client_cls):
-        """无行业数据时返回 None。"""
-        mock_client_cls.side_effect = _mock_httpx(json.dumps(_MOCK_EMPTY_RESPONSE))
-        result = fetch_industry("600900")
-        self.assertIsNone(result)
-
-    @patch("src.python.core.http_client.httpx.Client")
-    def test_industry_dash_returned(self, mock_client_cls):
-        """行业字段为 '-' 时 fetch_industry 返回 None。"""
-        mock_client_cls.side_effect = _mock_httpx(json.dumps(_MOCK_INDUSTRY_IS_DASH_RESPONSE))
-        result = fetch_industry("600900")
-        self.assertIsNone(result)
-
-    @patch("src.python.core.http_client.httpx.Client")
-    def test_industry_number_returned(self, mock_client_cls):
-        """行业字段为数字时 fetch_industry 返回 None。"""
-        mock_client_cls.side_effect = _mock_httpx(json.dumps(_MOCK_INDUSTRY_IS_NUMBER_RESPONSE))
-        result = fetch_industry("600900")
-        self.assertIsNone(result)
-
-
-class TestFetchConcepts(unittest.TestCase):
-    """测试 fetch_concepts 便捷接口。"""
-
-    def setUp(self):
-        from src.python.core.provider_registry import get_registry
-
-        get_registry().session_cache_clear("industry")
-
-    @patch("src.python.core.http_client.httpx.Client")
-    def test_concepts_found(self, mock_client_cls):
-        """有概念板块时返回列表。"""
-        mock_client_cls.side_effect = _mock_httpx(json.dumps(_MOCK_SUCCESS_RESPONSE))
-        result = fetch_concepts("600900")
-        self.assertEqual(result, ["创投", "参股银行", "核能核电", "风能", "水利建设"])
-
-    @patch("src.python.core.http_client.httpx.Client")
-    def test_concepts_empty(self, mock_client_cls):
-        """无概念板块时返回空列表。"""
-        mock_client_cls.side_effect = _mock_httpx(json.dumps(_MOCK_NO_CONCEPT_RESPONSE))
-        result = fetch_concepts("600900")
-        self.assertEqual(result, [])
-
-    @patch("src.python.core.http_client.httpx.Client")
-    def test_concepts_number(self, mock_client_cls):
-        """概念字段为数字时 fetch_concepts 返回空列表。"""
-        mock_client_cls.side_effect = _mock_httpx(json.dumps(_MOCK_CONCEPTS_IS_NUMBER_RESPONSE))
-        result = fetch_concepts("600900")
-        self.assertEqual(result, [])
-
-    @patch("src.python.core.http_client.httpx.Client")
-    def test_concepts_dash(self, mock_client_cls):
-        """概念字段为 '-' 时 fetch_concepts 返回空列表。"""
-        mock_client_cls.side_effect = _mock_httpx(json.dumps(_MOCK_CONCEPTS_IS_DASH_RESPONSE))
-        result = fetch_concepts("600900")
-        self.assertEqual(result, [])
-
-    @patch("src.python.core.http_client.httpx.Client")
-    def test_concepts_etf_empty(self, mock_client_cls):
-        """ETF 无概念时返回空列表。"""
-        mock_client_cls.side_effect = _mock_httpx(json.dumps(_MOCK_ETF_NO_INDUSTRY_RESPONSE))
-        result = fetch_concepts("518880")
-        self.assertEqual(result, [])
 
 
 class TestIndustryExtendedFields(unittest.TestCase):

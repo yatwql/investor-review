@@ -192,11 +192,10 @@ class TestAggregateNews(unittest.TestCase):
         self.assertEqual(len(result), 1)
         mock_fetch.assert_not_called()
 
-    @patch("src.python.providers.news_aggregator._log_source_status")
     @patch("src.python.providers.news_aggregator._save_news_cache")
     @patch("src.python.providers.news_aggregator._check_news_cache")
     @patch("src.python.providers.news_aggregator._fetch_from_all_sources")
-    def test_cache_miss(self, mock_fetch, mock_cache_check, mock_save, mock_log):
+    def test_cache_miss(self, mock_fetch, mock_cache_check, mock_save):
         """缓存未命中 → 调取源并保存缓存。"""
         mock_cache_check.return_value = None
         mock_fetch.return_value = ([{"ctime": "2026-07-01", "title": "news"}], {"eastmoney": (1, "OK")})

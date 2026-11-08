@@ -390,7 +390,7 @@ class _ChaptersPanel:
             None,
             *render_titled_panel("报告章节显隐", rows, columns=columns),
             *wrap_hanging(
-                "  提示：本章只切换显隐、不增删章节也不改顺序；关闭即整章不出现（关联产物仅影响对应报告页签）",
+                "  提示：本章只切换显隐、不增删章节也不改顺序；关闭即整章不出现（只给既有页签加层的开关在 [S]）",
                 inner_width(columns),
             ),
             *wrap_hanging(

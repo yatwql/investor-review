@@ -7,22 +7,13 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
-from src.python.core.ansi_colors import codes_for, supports_color
+from src.python.core.ansi_colors import codes_for
 from src.python.report.progress import ProgressReporter
 
 _logger = logging.getLogger("invest")
 
 # ── 颜色：转义码单一来源在 core/ansi_colors，本模块只按 **stderr** 判定着色能力 ──
 # （ansi_colors 的模块级常量按 stdout 判定；CLI verbose 写 stderr，须各自判定）
-
-
-def _should_color() -> bool:
-    """检测 stderr 是否支持 ANSI 颜色输出（判据单源：core/ansi_colors.supports_color）。
-
-    按 stderr 而非 stdout 判定——CLI verbose 进度写标准错误，stdout 被重定向时
-    不该让 stderr 一起失色。
-    """
-    return supports_color(sys.stderr)
 
 
 def _clr(text: str, color: str) -> str:

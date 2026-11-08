@@ -65,7 +65,14 @@ def _build_flow_data(
         return None
     from src.python.analysis.cost_flow import build_approximate_fund_flow_data, build_fund_flow_data
 
-    current_prices = {d.code: d.price for d in details if getattr(d, "price", None)}
+    # 只收**数值**市价：成本流水在 current_prices 上做乘法/比较（``final_value > 0``），
+    # 混进 None / 字符串 / 其它对象会抛出 TypeError 并把整页签连坐（HTML 侧为此整份失败）。
+    # 缺价的品种只是少一个估值锚，不该让这一段炸掉。
+    current_prices: dict[str, float] = {}
+    for d in details:
+        price = getattr(d, "price", None)
+        if isinstance(price, (int, float)) and not isinstance(price, bool) and price > 0:
+            current_prices[d.code] = float(price)
     if not transactions and not dividends:
         # 无流水页签：返回快照近似契约（成本分档单档判断 + 可选近似年化），
         # 供渲染层写「可选进阶增强」说明；开关开启但零持仓时近似也仅占位契约。

@@ -1,7 +1,7 @@
 """test_handlers_config 兄弟分片（switch）：[S] 章节内容面板的只读信息 / 切换 / 实验开关。
 
-``[S]`` 只呈现 ``PANEL_GROUPS["[S]"]`` 的五组（18 项）内容开关；LLM 章节 / 独立
-整章 / 关联产物在 ``[C]``，其面板用例见 ``test_handlers_report_chapters``。
+``[S]`` 只呈现 ``PANEL_GROUPS["[S]"]`` 的五组（18 项）内容开关（含机制与质量组）；LLM 章节与独立
+整章在 ``[C]``，其面板用例见 ``test_handlers_report_chapters``。
 """
 
 from __future__ import annotations
@@ -17,15 +17,17 @@ pytestmark = [pytest.mark.unit, pytest.mark.unit_core]
 def _switch_menu_number(flag: str) -> int:
     """按面板同一派生规则计算某功能开关的菜单编号（测试输入用）。
 
-    编号 = ``panel_option_numbers("[S]")`` 的序号——注册表新增/挪动开关时自动
-    跟随；硬编码编号会静默错位成「切换了别的开关」。
+    编号 = ``[S]`` 或 ``[C]`` 面板的派生序号——注册表新增/挪动开关时自动跟随；
+    硬编码编号会静默错位成「切换了别的开关」。机制类开关（约束/反思/追问/信号）
+    机制类开关归 ``[C]``，故两个面板都查。
     """
     from src.python.config.features import panel_option_numbers
 
-    for number, name, _definition in panel_option_numbers("[S]"):
-        if name == flag:
-            return number
-    raise AssertionError(f"开关不在 [S] 面板上屏：{flag}")
+    for panel in ("[S]", "[C]"):
+        for number, name, _definition in panel_option_numbers(panel):
+            if name == flag:
+                return number
+    raise AssertionError(f"开关不在 [S]/[C] 面板上屏：{flag}")
 
 
 class TestContentPanelToggles:
@@ -72,7 +74,7 @@ class TestContentPanelToggles:
 
         numbered = panel_option_numbers("[S]")
         assert [n for n, _f, _d in numbered] == list(range(1, len(numbered) + 1))
-        expected = [flag for group in PANEL_GROUPS["[S]"] for flag, _d in switches_in_group(group)]
+        expected = [flag for group in PANEL_GROUPS["[S]"] for flag, _d in switches_in_group(group) if _d.panel_visible]
         assert [f for _n, f, _d in numbered] == expected
 
 

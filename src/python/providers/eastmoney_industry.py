@@ -253,33 +253,3 @@ def fetch_industry_and_concepts(code: str) -> dict[str, Any] | None:
     )
     reg.session_cache_set("industry", code, result)
     return result
-
-
-def fetch_industry(code: str) -> str | None:
-    """仅获取行业名称（便捷接口）。
-
-    Args:
-        code: 6 位证券代码
-
-    Returns:
-        行业名称字符串（如 "电力设备"）；失败返回 None
-    """
-    result = fetch_industry_and_concepts(code)
-    if result and result.get("industry"):
-        return result["industry"]
-    return None
-
-
-def fetch_concepts(code: str) -> list[str]:
-    """仅获取概念板块列表（便捷接口）。
-
-    Args:
-        code: 6 位证券代码
-
-    Returns:
-        概念板块名称列表；失败或无概念时返回空列表
-    """
-    result = fetch_industry_and_concepts(code)
-    if result:
-        return result.get("concepts", [])
-    return []

@@ -85,16 +85,6 @@ def reset_doc_miss_hits() -> None:
     reset_all_negative_hits()
 
 
-def sections_miss_hits() -> int:
-    """本轮「章节清单不可得」负缓存命中次数（供报告层打一行汇总 INFO）。"""
-    return SECTIONS_MISS.hits()
-
-
-def doc_miss_hits() -> int:
-    """本轮空正文负缓存命中次数（报告级汇总日志/观测用）。"""
-    return DOC_MISS.hits()
-
-
 #: 索引来源的类别级取用标记（数据源说明表「本次使用」按前缀归属；两前缀同归「财报全文」类别）
 _SRC_INDEX_DATASINK = "report_datasink_index"
 _SRC_INDEX_CNINFO = "report_cninfo_index"

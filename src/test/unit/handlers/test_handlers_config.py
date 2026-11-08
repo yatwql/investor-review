@@ -146,7 +146,7 @@ class TestConfigPanelsAreRectangular:
 
 
 class TestChapterPanelsOwnTheirBlocks:
-    """两面板职责切分：``[C]`` 只放章节（含 LLM / 整章 / 关联产物），``[S]`` 只放章内内容。"""
+    """两面板职责切分：``[C]`` 只放章节（含 LLM / 整章），``[S]`` 只放章内内容。"""
 
     def _source(self, module: str) -> str:
         from pathlib import Path
@@ -176,9 +176,12 @@ class TestChapterPanelsOwnTheirBlocks:
         content = {flag for _n, flag, _d in panel_option_numbers("[S]")}
         chapter_backed = {e.key for e in chapter_registry if e.source == "features"}
         sub_items = {flag for e in chapter_registry for flag in e.sub_items}
+        # 内置项（判断依据/输出评级）与自动项（成本流水/候选比较）不上面板
+        hidden = {flag for flag, d in feature_switch_registry.items() if not d.panel_visible}
         assert content & chapter_backed == set()
         assert content & sub_items == set()
-        assert content | chapter_backed | sub_items == set(feature_switch_registry)
+        assert content & hidden == set()
+        assert content | chapter_backed | sub_items | hidden == set(feature_switch_registry)
         assert set(PANEL_GROUPS) == {"[C]", "[S]"}
 
 
@@ -312,6 +315,7 @@ class TestKeyColumnVisible:
             for key in feature_switch_registry
             if key not in flat
             and key not in {"llm_debate_procon", "llm_debate_conditional"}
+            and feature_switch_registry[key].panel_visible
             and feature_switch_registry[key].group not in {"standalone", "chapter_options"}
         ]
         assert missing == []

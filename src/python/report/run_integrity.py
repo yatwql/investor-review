@@ -118,7 +118,7 @@ def guard_run(fn: Callable) -> Callable:
 
 def bind_perf(perf: Any) -> None:
     """绑定本次运行的 PerfCollector（中断时据此落 status=interrupted 记录）。"""
-    ctx = _current.get()
+    ctx = current_run()
     if ctx is not None:
         ctx.perf = perf
 
@@ -129,27 +129,27 @@ def current_perf() -> Any | None:
     供深层 helper（如 full 路径 HTML/Excel 写出）补阶段埋点——避免为计时把
     `perf` 逐层透传签名，同时保持取用点集中可审计（与 bind_perf 同源）。
     """
-    ctx = _current.get()
+    ctx = current_run()
     return ctx.perf if ctx is not None else None
 
 
 def bind_health(future: Any, report_type: str, holdings: list) -> None:
     """绑定后台健康检查 future（中断时收敛，防线程残留）。"""
-    ctx = _current.get()
+    ctx = current_run()
     if ctx is not None and future is not None:
         ctx.health = (future, report_type, holdings)
 
 
 def note_temp(path: str) -> None:
     """登记在写临时文件（写临时文件前调用；中断收口按登记精确清理）。"""
-    ctx = _current.get()
+    ctx = current_run()
     if ctx is not None:
         ctx.temps.append(path)
 
 
 def note_artifact(kind: str, path: str) -> None:
     """登记已原子落盘的产物（os.replace 成功后调用；kind ∈ {"html","xlsx"}）。"""
-    ctx = _current.get()
+    ctx = current_run()
     if ctx is not None:
         ctx.artifacts.append((kind, path))
 
@@ -225,7 +225,7 @@ def handle_interruption(reporter: Any = None) -> None:
     输出「已写盘 / 未完成已丢弃 / 已清理临时文件」明细 → 收敛健康检查。
     各步独立 best-effort，任一步失败不影响后续步骤与中断传播。
     """
-    ctx = _current.get()
+    ctx = current_run()
     if ctx is None:
         logger.warning("[run_integrity] 生成在运行上下文建立前被中断")
         _emit(reporter, "生成已中断——未产生任何产物")

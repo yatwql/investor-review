@@ -1,6 +1,6 @@
 # 开发者指南
 
-> 文档版本：0.17.5
+> 文档版本：0.17.6
 
 ## 概述
 
@@ -1009,6 +1009,8 @@ INVEST_CACHE_DIR=docs/tmp/screenshots/demo/data/cache \    # 缓存改落（不�
 
 演示根只隔离「数据面」，代码与模板资产仍从仓库读取：`build()` 会在演示根建 `src/` 软链指向仓库 `src/`（不复制第二份源码树，避免与仓库漂移）。
 
+**路径上屏口径**：演示配置只写相对项目根的路径（`data/holdings` / `reports`），而配置层读入时会把路径绝对化——所以面板/状态卡显示路径前必须过 `core/system_info.display_path()`（项目根之下 → 相对形式，越出根目录或跨盘符保持绝对）。Web 工作台的正式覆盖提示、TUI 首页摘要、`/api/config/edit` 的路径输入框都走这一个原语；漏掉它的直接后果是 README/手册配图里带着 `/home/<user>/...` 这类本机目录。
+
 > **Windows 限制**：未开启开发者模式时创建符号链接失败，报告 HTML 会因 `TemplateNotFound: report_template.html` 失败（Excel 仍能生成）。两种解法任选其一：① 开启开发者模式（设置 → 隐私和安全性 → 开发者选项）；② 手工建目录联接：`mklink /J <demo>\src <repo>\src`。设置后重跑 `make-screenshots.py demo` 即可。
 
 **一条可重复的配图流水线**（README / 手册配图刷新，全部来自虚构演示持仓）：
@@ -1399,7 +1401,7 @@ DataModuleDef("我的 LLM 分析", "llm_my_analysis",
 
 > **读侧增强类开关也应转正（第三类首例：`deterministic_signal` / `module_quality_gate` / `llm_debate_conditional`）**：判据落在「**开启的代价是否只在读侧**」——只在既有提示词或既有产物流水线上追加一段由**已算出的**数据派生的内容，不新增 LLM 调用次数、不写新的持久化文件、无隐式网络与耗时；且该段内容有确定的收益（方向性结论替代裸数值、结构化契约替代表格猜测、质量分级提示读者降级参考、缺凭据时给可读指引）。此类开关默认关的实际代价是**机制在生产路径从不执行**，用户手上的产物看不到这层增强；用户若逐项去 `features.json` 里打开它，等于用配置承担了本该由默认值表达的取舍（转正判据的可观测量：见 core/experiment_stats.py 的启用次数统计与 doctor 账本概览）。转正口径：① `experimental` 置 `False` 且 `default` 置 `True`（**两处字段改动**；作用域属机制与诊断，`group` 不变）；② `affects_report` **照实答 `True`**——它们确实改变产物内容（`deterministic_signal` 注入信号块、`module_quality_gate` 注入质量横幅、`llm_debate_conditional` 追加情景段），故 Web 面板照常带「（影响报告）」标记；③ 开关保留为关闭杠杆，`features.json` 置 false 即回到「未引入本机制」的行为；④ 凡开关改变提示词者，其缓存后缀函数（→ `_dh`、`debate_feature_cache_suffix()` → `_c`、`prompts_signals._signal_digest_cache_suffix()`、`core.signal_ledger.summary_cache_suffix()` → `_sg`）随之由「默认返回空」变为「默认返回非空」——**升级后首次运行会换键重生成一次**，属预期行为，须在变更记录中写明；⑤ 测试补四向——默认值、非实验项（`--experiment` 取值域退出）、显式关闭仍走未引入前的路径（关闭基线必须**显式**置 false，不能再依赖 `reset_feature_flags()`，它现在返回的是已转正的默认值）、默认配置下走增强路径（见 `test_features.py::TestReadSidePromotion`）。
 >
-> **章节/页签类开关转正目标是独立章 / 事件与摘要组（第四类首例：`holding_change_review` / `whatif_trade_cost` / `event_window_impact` 已按此归入，default 保持 `False`）**：判据落在「产物形态」——独立章节/页签类能力验证通过后的归宿按作用域入独立章节与回放 / 分析增强组：`default` 保持 `False`（默认产物字节不因转正变化，读者拿到的报告不因转正多出章节），面板入口随分组自动延续，`--experiment` 取值域随 `experimental` 摘除同步退出，产物自述与启用统计随实验身份移除（「质量可能不稳定」警示只属于未验证功能，统计的观测使命随转正完成）。转正定义因此为「**摘除 experimental 身份，作用域变则同时改 group**」。
+> **章节/页签类开关转正目标是独立章 / 事件与摘要组（第四类首例：`holding_change_review` / `event_window_impact` 已按此归入，default 保持 `False`；只给既有页签加层的 `whatif_trade_cost` 按同一判据归入持仓与交易组）**：判据落在「产物形态」——独立章节/页签类能力验证通过后的归宿按作用域入独立章节与回放 / 分析增强组：`default` 保持 `False`（默认产物字节不因转正变化，读者拿到的报告不因转正多出章节），面板入口随分组自动延续，`--experiment` 取值域随 `experimental` 摘除同步退出，产物自述与启用统计随实验身份移除（「质量可能不稳定」警示只属于未验证功能，统计的观测使命随转正完成）。转正定义因此为「**摘除 experimental 身份，作用域变则同时改 group**」。
 >
 > **刻意不转正的两类（判据的反面）**：**写盘积累型**——`decision_reflection` / `report_qa` 仍标 `experimental=True`（账本结算样本尚不足以判转正，撤销死线见 plan.md）。`signal_ledger`（确定性信号沉淀）不再单独设开关：其真实积累已验证（账本有存量数据、写盘幂等开销可忽略），并入 `deterministic_signal` 转正（摘除实验身份）。**调用次数放大型**——`llm_debate_procon` 把一次 `expert_review` 调用换成最多三次（pro → con → synthesis），默认开启直接改变费用与耗时量级，保持默认关、由用户按需开启。集中度问答不再受开关控制（原 `llm_debate_qa_concentration` 已撤销），改为辩论流程内建段落（阈值触发）。实验功能的真实使用情况可用 `core/experiment_stats.py`（启用计数）加 `doctor` 账本概览观测，作为转正/撤销的客观数据。
 

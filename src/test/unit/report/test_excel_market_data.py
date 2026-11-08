@@ -60,6 +60,50 @@ class TestBuildFlowData(unittest.TestCase):
         # 位置参数：transactions, dividends, holdings, current_prices
         self.assertEqual(args[3], {"600519": 1500.0})
 
+    def test_approximate_path_runs_without_flows(self):
+        """开关开 + 无流水：近似分支真实跑通（不 mock 下游）。
+
+        该分支长期只被 mock 覆盖（只看「传了什么参数」），真实行为没被跑过——
+        一次「开关开 + 无流水」的编排用例就因非数值市价在 ``final_value > 0``
+        抛 ``TypeError``，把整份 HTML 坐连失败。本用例走真实现，锁三件事：
+        返回近似契约（``approximate=True``）、成本分档能算出、不抛异常。
+        """
+        from src.python.core.models import Holding
+
+        holdings = [Holding(account="A", name="长江电力", code="600900", shares=100.0, cost_price=20.0)]
+        detail = MagicMock()
+        detail.code = "600900"
+        detail.price = 30.0
+
+        with patch("src.python.report.excel_market_data._resolve_holdings_start_date", return_value=None):
+            result = _build_flow_data(True, None, None, holdings, [detail])
+
+        assert result is not None
+        self.assertTrue(result["approximate"])
+        self.assertIsInstance(result, dict)
+
+    def test_non_numeric_price_is_filtered_not_crashing(self):
+        """非数值/非正市价被过滤，不把成本流水段（及其页签）连坐。
+
+        市价可能来自旧缓存或残缺明细，一旦是 ``None`` / 字符串 / 其它对象，
+        下游乘法与比较（``final_value > 0``）就抛 ``TypeError``。
+        """
+        from src.python.core.models import Holding
+
+        holdings = [Holding(account="A", name="长江电力", code="600900", shares=100.0, cost_price=20.0)]
+        bad_detail = MagicMock()
+        bad_detail.code = "600900"
+        bad_detail.price = MagicMock()  # 非数值
+        str_detail = MagicMock()
+        str_detail.code = "600901"
+        str_detail.price = "30.5"  # 字符串（旧缓存形态）
+
+        with patch("src.python.report.excel_market_data._resolve_holdings_start_date", return_value=None):
+            result = _build_flow_data(True, None, None, holdings, [bad_detail, str_detail])
+
+        assert result is not None
+        self.assertTrue(result["approximate"])
+
 
 class TestResolveHoldingsStartDate(unittest.TestCase):
     """_resolve_holdings_start_date 建仓日期解析。"""

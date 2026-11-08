@@ -88,7 +88,7 @@ CLI 与 TUI 共享同一套缓存、配置与报告管线，可交替使用。
 >
 > 两个参数可同时使用：`--feature` 在 `--experiment` 之后应用，故 `--experiment all --feature factor_catalog=off` 表示「其余实验功能全开、只关掉因子目录」。
 >
-> **一次性覆写与持久化的分工**：`--experiment` / `--feature` / `--chapter` / `--anonymize` 只作用于**这一次命令**（进程退出即失效，不写盘）；要把改动落到共享配置，用 `config set`（见 [§10](#10-config-子命令读写共享配置)），或在 TUI / Web 配置面板操作。`--chapter` 与 `--feature` 的分工：前者按**章节键**（可覆盖 `config.json` 的 `enable_*`、`llm_settings.json` 的 `enabled_llm.*` 与独立章节/关联产物/智囊团子项），后者只覆盖 `features.json` 的功能开关。
+> **一次性覆写与持久化的分工**：`--experiment` / `--feature` / `--chapter` / `--anonymize` 只作用于**这一次命令**（进程退出即失效，不写盘）；要把改动落到共享配置，用 `config set`（见 [§10](#10-config-子命令读写共享配置)），或在 TUI / Web 配置面板操作。`--chapter` 与 `--feature` 的分工：前者按**章节键**（可覆盖 `config.json` 的 `enable_*`、`llm_settings.json` 的 `enabled_llm.*` 与独立章节、智囊团子项），后者只覆盖 `features.json` 的功能开关（包括只影响既有页签的 `whatif_trade_cost` 等章内项）。
 
 ---
 

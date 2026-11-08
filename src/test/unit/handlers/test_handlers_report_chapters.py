@@ -105,13 +105,19 @@ def _llm_enabled() -> dict:
 
 
 class TestChapterPanelRendering:
-    def test_renders_four_blocks_with_derived_numbers(self, monkeypatch, llm_settings):
-        """四块标题按固定顺序上屏，章节编号由注册表派生（1..N 连续）。"""
-        from src.python.config.chapter_registry import BLOCK_LABELS, BLOCK_ORDER, chapter_numbers
+    def test_renders_blocks_with_derived_numbers(self, monkeypatch, llm_settings):
+        """非空块的标题按 BLOCK_ORDER 上屏，章节编号由注册表派生（1..N 连续）。"""
+        from src.python.config.chapter_registry import (
+            BLOCK_LABELS,
+            BLOCK_ORDER,
+            chapter_numbers,
+            chapters_in_block,
+        )
 
         llm_settings({})
         out = _run(monkeypatch, ["0"])
-        positions = [out.index(f"── {BLOCK_LABELS[block]}（") for block in BLOCK_ORDER]
+        blocks = [block for block in BLOCK_ORDER if chapters_in_block(block)]
+        positions = [out.index(f"── {BLOCK_LABELS[block]}（") for block in blocks]
         assert positions == sorted(positions), "块序应为 BLOCK_ORDER"
         for number, entry in chapter_numbers():
             assert f"{number}. " in out
@@ -205,12 +211,6 @@ class TestChapterPanelWrites:
         llm_settings({})
         _run(monkeypatch, [str(_chapter_number("rebalance_schedule_replay")), "0"])
         assert _features_file()["rebalance_schedule_replay"] is True
-
-    def test_artifact_chapter_writes_features_json(self, monkeypatch, llm_settings):
-        """关联产物 → ``features.json`` 覆写（仅影响调仓模拟报告页签）。"""
-        llm_settings({})
-        _run(monkeypatch, [str(_chapter_number("whatif_trade_cost")), "0"])
-        assert _features_file()["whatif_trade_cost"] is True
 
 
 class TestChapterSubItems:

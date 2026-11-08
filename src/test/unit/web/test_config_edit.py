@@ -311,15 +311,21 @@ class TestReportScopeOverWeb:
             assert config_edit_whitelist[flag] == {"kind": "bool", "target": "features", "writer": "features"}
 
     def test_surface_groups_derive_from_registry(self):
-        from src.python.config.features import GROUP_LABELS, GROUP_ORDER, experimental_flags, switches_in_group
+        """功能组 = `[S]` 面板五组（组序/组标题/上屏项全部经 `panel_switches` 同源派生）。
+
+        `[C]` 面板的整章与章节子项不进功能组——它们由章节注册表块与子项渲染承载。
+        """
+        from src.python.config.features import GROUP_LABELS, PANEL_GROUPS, experimental_flags, panel_switches
         from src.python.web.config_edit import get_config_edit_surface
 
         surface = get_config_edit_surface()
         features = surface["features"]
-        assert [g["key"] for g in features["groups"]] == list(GROUP_ORDER)
+        assert [g["key"] for g in features["groups"]] == list(PANEL_GROUPS["[S]"])
         for group in features["groups"]:
             assert group["title"] == GROUP_LABELS[group["key"]]
-            assert set(group["switches"]) == {flag for flag, _d in switches_in_group(group["key"])}
+            # 只下发上屏开关（panel_visible=False 的机制/自动项不在任何面板出现）
+            expected = {flag for flag, d in panel_switches("[S]") if d.group == group["key"]}
+            assert set(group["switches"]) == expected
             assert "labels" not in group  # 显示名由 features.labels 同源下发
         assert set(features["experimental"]) == {flag for flag, _d in experimental_flags()}
 
@@ -334,18 +340,35 @@ class TestReportScopeOverWeb:
 
 
 class TestWebPanelCoversAllSwitches:
-    """Web 配置面板的开关面必须覆盖注册表全部开关（四组全覆盖），防渠道层漏渲染。"""
+    """Web 配置面板的开关面口径 = 注册表的**上屏**开关，与 TUI 面板同源。
 
-    def test_surface_flags_cover_registry(self):
-        from src.python.config.features import feature_switch_registry
+    `panel_visible=False` 的开关（默认常开的机制项、数据驱动的自动项）在两端都不
+    出现：它们不是「漏渲染」，而是按声明不上屏。此处同时锁住这层边界——既保证
+    上屏开关全渲染，也保证不可见开关确实没被下发（防止两端口径再次分叉）。
+    """
+
+    def test_surface_flags_cover_visible_registry(self):
+        """上屏开关全覆盖：`[S]` 项经功能组、`[C]` 项经章节块/子项，隐藏项一个不下发。"""
+        from src.python.config.chapter_registry import chapter_registry
+        from src.python.config.features import feature_switch_registry, panel_switches
         from src.python.web.config_edit import get_config_edit_surface
 
         surface = get_config_edit_surface()
-        shown = set()
-        for group in surface["features"]["groups"]:
-            shown |= set(group["switches"])
-        missing = set(feature_switch_registry) - shown
-        assert not missing, f"Web 面板未渲染这些开关：{sorted(missing)}"
+        shown = {flag for group in surface["features"]["groups"] for flag in group["switches"]}
+        panel_s = {flag for flag, _d in panel_switches("[S]")}
+        panel_c = {flag for flag, _d in panel_switches("[C]")}
+        chapter_side = set(surface["standalone_chapters"]) | {
+            item for entry in chapter_registry for item in entry.sub_items
+        }
+        visible = {flag for flag, d in feature_switch_registry.items() if d.panel_visible}
+        hidden = set(feature_switch_registry) - visible
+
+        assert shown == panel_s, "功能组只承载 [S] 面板项"
+        assert panel_c <= chapter_side, f"[C] 面板项须经章节块或子项下发：{sorted(panel_c - chapter_side)}"
+        assert visible - (shown | chapter_side) == set(), (
+            f"Web 面板未渲染这些上屏开关：{sorted(visible - (shown | chapter_side))}"
+        )
+        assert shown & hidden == set(), f"Web 面板下发了不上屏的开关：{sorted(shown & hidden)}"
 
 
 class TestLlmProvidersBlock:

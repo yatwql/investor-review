@@ -45,13 +45,6 @@ class TestSnapshotStorage:
         assert fb.save_baseline({}, {}) is False
         assert not path.exists()
 
-    def test_changed_components_lists_names(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(fb, "BASELINE_FILE", str(tmp_path / "snap.json"))
-        fb.reset_baseline_cache()
-        base = {"holdings": "a", "a_indices": "b", "totals": "c"}
-        assert fb.changed_components({"holdings": "a", "a_indices": "B2", "totals": "c"}, base) == ["a_indices"]
-        assert fb.changed_components({"holdings": "a"}, {}) == [], "无基线不臆测变化"
-
 
 class TestResetClearsBothBaselines:
     """`reset_baseline_cache()` 必须同时清「跨进程快照」与「进程内上轮键」。
@@ -134,7 +127,6 @@ class TestBaselineWrittenByRun:
         from src.python.llm import generators_orchestrator as go
 
         go._LAST_FP_COMPONENTS = {}
-        go._FINGERPRINT_CHANGED_MODULES.clear()
         from src.python.llm.skeleton import reset_prev_module_cache_keys
 
         reset_prev_module_cache_keys()

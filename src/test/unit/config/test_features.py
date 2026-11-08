@@ -291,7 +291,11 @@ class TestReadSidePromotion:
             assert is_experimental_switch(flag) is False
 
     def test_switch_still_honored(self):
-        """转正不等于不可关——关闭途径仍有效（features.json / ``--feature``）。"""
+        """转正不等于不可关——关闭途径仍有效（features.json / ``--feature``）。
+
+        面板不展示（``panel_visible=False``）的开关同样保留这条关闭通道——不上面板
+        只是「日常无需调」，不是「不可关」。
+        """
         from src.python.config.features import is_feature_enabled, set_feature_enabled
 
         for flag in self.PROMOTED:

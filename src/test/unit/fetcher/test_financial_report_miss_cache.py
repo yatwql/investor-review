@@ -156,12 +156,12 @@ class TestDocMissVisibility:
         self._patch_chain(monkeypatch)
         fr.reset_doc_miss_hits()
         fr._fetch_document("47990", "管理层讨论与分析")  # 首次：写负缓存
-        assert fr.doc_miss_hits() == 0
+        assert fr.DOC_MISS.hits() == 0
         fr._fetch_document("47990", "管理层讨论与分析")  # 第二次：命中
         fr._fetch_document("47990", "管理层讨论与分析")  # 第三次：命中
-        assert fr.doc_miss_hits() == 2
+        assert fr.DOC_MISS.hits() == 2
         fr.reset_doc_miss_hits()
-        assert fr.doc_miss_hits() == 0
+        assert fr.DOC_MISS.hits() == 0
 
     def test_digest_logs_hit_summary(self, isolated_cache, monkeypatch, caplog):
         """报告级只打一行 INFO 汇总（确定性缺失不是故障）。"""
@@ -274,12 +274,12 @@ class TestSectionsUnavailableNegativeCache:
         monkeypatch.setattr(fr.datasink, "fetch_report_sections", lambda doc_id: None)
         fr.reset_doc_miss_hits()
         fr._fetch_sections("47990")  # 首次：写负缓存（未命中）→ 不计
-        assert fr.sections_miss_hits() == 0
+        assert fr.SECTIONS_MISS.hits() == 0
         fr._fetch_sections("47990")
         fr._fetch_sections("47990")
-        assert fr.sections_miss_hits() == 2
+        assert fr.SECTIONS_MISS.hits() == 2
         fr.reset_doc_miss_hits()
-        assert fr.sections_miss_hits() == 0
+        assert fr.SECTIONS_MISS.hits() == 0
 
     def test_transport_failure_opens_short_backoff(self, isolated_cache, monkeypatch):
         """传输级失败（挂起/断连）→ 30min 短退避，下一轮不再白等同一篇的超时预算。
@@ -341,7 +341,7 @@ class TestSectionsUnavailableNegativeCache:
         assert fr._collect_doc_sections(817432, ["管理层讨论与分析"])[1] == []
         assert fr._collect_doc_sections(817432, ["管理层讨论与分析"])[1] == []
         assert calls["n"] == 1, "不可用清单确认一次后，下一轮不得再探 /sections"
-        assert fr.sections_miss_hits() == 1
+        assert fr.SECTIONS_MISS.hits() == 1
 
     def test_unusable_sections_miss_can_be_invalidated(self, isolated_cache, monkeypatch):
         """负缓存可被显式失效（源侧补齐时不必干等 TTL）。"""

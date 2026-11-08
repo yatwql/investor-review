@@ -78,16 +78,21 @@ def demo_dir(output_root: Path | None = None) -> Path:
     return (output_root or DEFAULT_ROOT) / "demo"
 
 
-def _config(demo: Path) -> dict[str, object]:
-    """按演示工作区绝对路径装配配置（报告生成用）。"""
+def _config() -> dict[str, object]:
+    """按演示工作区装配配置（报告生成用）。
+
+    路径一律写**相对项目根**（`data/holdings` / `reports`）：演示根的 `src/` 软链与
+    `INVEST_PROJECT_ROOT` 让相对路径在演示根内正确解析，而上屏（Web 面板 / TUI /
+    CLI 产物路径）又能读作相对路径——绝对路径会把本机目录带进截图。
+    """
     return {
-        "holdings_dir": str(demo / "data" / "holdings"),
+        "holdings_dir": os.path.join("data", "holdings"),
         "holdings_filename": HOLDINGS_FILENAME,
-        "output_dir": str(demo / "reports"),
-        "llm_key_file": str(demo / "data" / "config" / "llm_key.json"),
-        "llm_settings_file": str(demo / "data" / "config" / "llm_settings.json"),
-        "llm_providers_file": str(demo / "data" / "config" / "llm_providers.json"),
-        "data_key_file": str(demo / "data" / "config" / "data_key.json"),
+        "output_dir": "reports",
+        "llm_key_file": os.path.join("data", "config", "llm_key.json"),
+        "llm_settings_file": os.path.join("data", "config", "llm_settings.json"),
+        "llm_providers_file": os.path.join("data", "config", "llm_providers.json"),
+        "data_key_file": os.path.join("data", "config", "data_key.json"),
         "news_sources": {},
         "history": {"fetch_mode": "auto", "days": 365},
         "daily_cost_limit": 0,
@@ -229,7 +234,7 @@ def build(output_root: Path | None = None) -> Path:
     _link_repo_src(demo)
     _write_holdings(demo)
     _write_llm_files(demo)
-    config = _config(demo)
+    config = _config()
     (config_dir / "config.json").write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return demo
 

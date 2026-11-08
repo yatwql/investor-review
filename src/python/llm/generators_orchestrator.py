@@ -156,12 +156,8 @@ def _compute_module_cache_info(
     _baseline_source = "上次报告" if _LAST_FP_COMPONENTS else "上次进程"
     if _prev_components:
         _changed = diff_fingerprint_components(_prev_components, _components)
-        # 变化组件集合供缓存未命中归因（"内容变了" vs "只是 TTL 到点"），不参与键构造
-        _FINGERPRINT_CHANGED_MODULES["__changed__"] = frozenset(_changed)
         if _changed:
             logger.info("[fingerprint] 指纹组件变化（相对%s）: %s", _baseline_source, _changed)
-    else:
-        _FINGERPRINT_CHANGED_MODULES.pop("__changed__", None)
     if logger.isEnabledFor(logging.DEBUG):
         logger.debug("[fingerprint] 组件哈希: %s", _components)
     _LAST_FP_COMPONENTS = _components
@@ -216,60 +212,6 @@ def _compute_module_cache_info(
     return info
 
 
-#: 本次运行「相对上次报告」发生变化的指纹组件（键 ``__changed__`` → 变化组件集合）。
-#: 值类型不统一是有意的：唯一消费者是归因判定（读 ``__changed__``），不参与键构造。
-_FINGERPRINT_CHANGED_MODULES: dict[str, Any] = {}
-
-#: 模块 → 依赖的指纹组件（与 `llm/module_fingerprint.py` 各构造函数的入参口径一致）。
-#: 只用于**归因**（判断"内容变了"还是"只是 TTL 到点"），不参与缓存键构造。
-_MODULE_FINGERPRINT_COMPONENTS: dict[str, frozenset[str]] = {
-    "global_macro": frozenset({"totals", "categories", "a_indices", "us_indices", "competitive_context"}),
-    "expert_review": frozenset(
-        {
-            "totals",
-            "holdings",
-            "penetration",
-            "categories",
-            "history_risk",
-            "competitive_context",
-            "metrics",
-            "pipeline_blocks",
-            "ledger_blocks",
-            "purchase_block",
-            "holding_change_block",
-            "event_impact_block",
-            "schedule_replay_block",
-            "generation_params",
-        }
-    ),
-    "health_check": frozenset(
-        {
-            "totals",
-            "holdings",
-            "penetration",
-            "categories",
-            "history_risk",
-            "data_quality",
-            "pipeline_blocks",
-            "ledger_blocks",
-            "purchase_block",
-            "generation_params",
-        }
-    ),
-    "penetration_deep": frozenset(
-        {
-            "totals",
-            "holdings",
-            "penetration_full",
-            "categories",
-            "history_risk",
-            "purchase_block",
-            "generation_params",
-        }
-    ),
-}
-
-
 def _key_changed_from_baseline(current_key: str, module_key: str) -> bool | None:
     """该模块当前的缓存键相对**上轮键**是否变化（进程内优先，其次跨进程快照）。
 
@@ -284,24 +226,6 @@ def _key_changed_from_baseline(current_key: str, module_key: str) -> bool | None
     if not prev:
         return None
     return prev != current_key
-
-
-def _inputs_fingerprint_changed(module_key: str) -> bool | None:
-    """该模块依赖的指纹组件相对上次报告是否变化。
-
-    Returns:
-        ``True``/``False``：有上轮基线可比较；``None``：本进程内还没有上轮快照
-        （冷启动）。冷启动不能归因为 ``ttl_expired``——那是「内容没变、只是到点」的
-        结论，实际是「压根没有可命中的上轮缓存」，两者对「放宽 TTL 能不能省钱」的判断相反。
-    """
-    changed = _FINGERPRINT_CHANGED_MODULES.get("__changed__")
-    if changed is None:
-        return None
-    changed_components = frozenset(changed) if isinstance(changed, (set, frozenset, list, tuple)) else frozenset()
-    components = _MODULE_FINGERPRINT_COMPONENTS.get(module_key)
-    if components is None:
-        return True
-    return bool(components & changed_components)
 
 
 def _recompute_reason(cache_info: dict, fingerprint_changed: bool | None) -> str:

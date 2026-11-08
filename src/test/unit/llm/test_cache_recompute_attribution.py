@@ -21,7 +21,7 @@ from unittest.mock import patch
 import pytest
 
 from src.python.llm.observation import LlmObservation
-from src.test.unit.llm._cache_fixtures import degradation_events, make_inputs, run_generate_all_llm
+from src.test.unit.llm._cache_fixtures import make_inputs, run_generate_all_llm
 
 pytestmark = [
     pytest.mark.unit,
@@ -81,37 +81,15 @@ class TestReasonClassification:
 
         assert _recompute_reason({"can_cache": True}, fingerprint_changed=False) == "ttl_expired"
 
-    @pytest.mark.parametrize(
-        "module,component,expected",
-        [
-            ("global_macro", "a_indices", True),
-            ("global_macro", "data_quality", False),
-            ("health_check", "data_quality", True),
-            ("penetration_deep", "penetration_full", True),
-            ("penetration_deep", "metrics", False),
-        ],
-    )
-    def test_module_component_mapping(self, module, component, expected):
-        """模块 → 依赖组件：只有真正影响该模块的组件变化才算"内容变了"。"""
-        from src.python.llm import generators_orchestrator as go
-
-        go._FINGERPRINT_CHANGED_MODULES["__changed__"] = frozenset({component})
-        try:
-            assert go._inputs_fingerprint_changed(module) is expected
-        finally:
-            go._FINGERPRINT_CHANGED_MODULES.pop("__changed__", None)
-
     def test_cold_start_is_not_labelled_ttl_expired(self):
         """冷启动（本进程无上轮快照）不得归因为 ``ttl_expired``。
 
         回归场景：新进程首轮四模块全 miss，日志记 `ttl_expired=4`——据此判定「放宽
         TTL 能省钱」是错的：实际是无上轮缓存可命中，放宽 TTL 一分也省不下。
         """
-        from src.python.llm import generators_orchestrator as go
+        from src.python.llm.generators_orchestrator import _recompute_reason
 
-        go._FINGERPRINT_CHANGED_MODULES.pop("__changed__", None)
-        assert go._inputs_fingerprint_changed("global_macro") is None
-        assert go._recompute_reason({"can_cache": True}, None) == "cache_miss"
+        assert _recompute_reason({"can_cache": True}, None) == "cache_miss"
 
 
 class TestObservationDoesNotChangeBehaviour:
@@ -186,25 +164,12 @@ class TestPerfPersistence:
             _record_llm_context(_Perf())
         assert "module_recompute_reasons" not in recorded, "全命中时不应写该字段（perf 记录不膨胀）"
 
-    def test_degradation_scenario_still_recorded(self, llm_cache_dir):
-        """带降级事件的运行也能归因（降级块变化应体现为 fingerprint_changed）。"""
-        from src.python.llm import generators_orchestrator as go
-
-        inputs = make_inputs()
-        _run(inputs, degradation=degradation_events("industry"))
-        go._FINGERPRINT_CHANGED_MODULES["__changed__"] = frozenset({"data_quality"})
-        try:
-            assert go._inputs_fingerprint_changed("health_check") is True
-            assert go._inputs_fingerprint_changed("global_macro") is False
-        finally:
-            go._FINGERPRINT_CHANGED_MODULES.pop("__changed__", None)
-
 
 class TestSkeletonPathAttribution:
     """骨架路径（预检之后才定键的模块，如 self_review）同样要进归因统计。
 
-    缺陷场景：`recompute_reasons` 只统计预检覆盖的四个基础模块，self_review 每次
-    重算却从未计入——最贵的模块之一被漏掉，据此判断 TTL 是否放宽会系统性低估。
+    预检只覆盖四个基础模块，self_review 等骨架模块每次重算却从未计入——最贵的
+    模块之一被漏掉，据此判断 TTL 是否放宽会系统性低估。
     """
 
     def test_skeleton_miss_is_attributed(self, llm_cache_dir):
@@ -310,6 +275,30 @@ class TestSkeletonPathAttribution:
         skeleton._PREV_MODULE_CACHE_KEY["self_review"] = "stale"
         start_report_run()
         assert "self_review" not in skeleton._PREV_MODULE_CACHE_KEY
+
+
+class TestDegradationAttribution:
+    """降级事件进指纹：数据质量变化必须是 ``fingerprint_changed``，不得混进 ``ttl_expired``。
+
+    判据是「键是否变化」，而 ``data_quality`` 组件由降级事件渲染出的文本哈希而来——
+    降级集合变了，键就变。若把它当「只是到点」，会得出「放宽 TTL 能省钱」的错误结论，
+    实际上旧结论对当前数据质量已不成立，必须重算。
+    """
+
+    def test_degradation_change_is_fingerprint_changed(self, llm_cache_dir):
+        from src.python.llm import observation, skeleton
+        from src.test.unit.llm._cache_fixtures import degradation_events
+
+        skeleton.reset_prev_module_cache_keys()
+        inputs = make_inputs()
+        assert not any(_run(inputs)), "首轮应全 miss（据此建立上轮键基线）"
+
+        sink = observation.LlmObservation()
+        with patch("src.python.llm.observation.current_llm_observation", return_value=sink):
+            _run(inputs, degradation=degradation_events("industry"))
+
+        # 降级只改数据质量段落 → 只有 health_check 换键（其余模块输入未动，仍命中）
+        assert sink.module_recompute_reasons() == {"health_check": "fingerprint_changed"}
 
 
 class TestObservationBindingAndCounting:

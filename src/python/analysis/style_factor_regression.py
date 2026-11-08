@@ -66,7 +66,6 @@ FACTOR_STALE_TRADING_DAYS: int = 86
 
 # 基准指数（沪深300）——风格漂移对照用
 BASELINE_INDEX: str = "sh000300"
-BASELINE_NAME: str = "沪深300"
 
 # 有效样本下限：低于此判数据不足，不接受硬算
 MIN_SAMPLES: int = 36

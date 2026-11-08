@@ -4,7 +4,8 @@
   - get_config — 缺失/损坏/空文件返回默认值
   - init_config — 初始化创建默认配置
   - set_config — 写入/读取/异常场景（含单键补丁）
-  - 合并 LLM 默认值 / del_config / validate_config
+  - del_config / validate_config（LLM 设置的默认值补齐由 `_llm_schema.merge_defaults` 承担，
+    覆盖见 test_llm_settings_v2.py）
 
 兄弟分片：test_config_consistency.py（模板与声明一致性：LLM 设置键/批处理键/报告节顺序/原子写崩溃恢复）、
 test_config_feature_gates.py（板层与功能开关访问器：组合进化/候选比较/动作开关/数据沉降/报告组开关）。
@@ -23,6 +24,7 @@ from unittest.mock import patch
 from unittest import mock
 
 from src.python import config as cfg
+from src.python.config import _config_defaults
 from src.python.core.json_comments import strip_json_comments as _strip_json_comments
 from src.python.core.constants import PROJECT_ROOT
 import pytest
@@ -49,74 +51,17 @@ _PATH_KEYS_IN_TEMPLATE = frozenset(
 )
 
 
-class TestMergeLlmDefaults(unittest.TestCase):
-    """_merge_llm_defaults 运行时补默认语义测试。
-
-    语义（与 get_config 的 config.json 合并策略一致）：
-      - 默认值打底，用户覆盖
-      - 用户显式 null 不覆盖默认
-      - 嵌套 dict 一层合并
-      - 未知键透传
-    """
-
-    def setUp(self):
-        from src.python.config._llm_settings import _merge_llm_defaults
-
-        self._merge = _merge_llm_defaults
-
-    def test_empty_base_returns_full_defaults(self):
-        """空用户配置 → 返回完整默认配置。"""
-        merged = self._merge({})
-        self.assertEqual(merged["max_retries"], 2)
-        self.assertEqual(merged["temperature_global_macro"], 0.3)
-        self.assertIn("fact_check", merged)
-        self.assertIn("debate", merged)
-
-    def test_user_scalar_overrides_default(self):
-        """用户标量覆盖默认值，其余默认保留。"""
-        merged = self._merge({"max_retries": 5})
-        self.assertEqual(merged["max_retries"], 5)
-        self.assertEqual(merged["llm_max_concurrency"], 3)
-
-    def test_null_does_not_override_default(self):
-        """用户显式 null → 不覆盖默认值（null 不覆盖）。"""
-        merged = self._merge({"max_retries": None, "temperature_global_macro": None})
-        self.assertEqual(merged["max_retries"], 2)
-        self.assertEqual(merged["temperature_global_macro"], 0.3)
-
-    def test_dict_one_level_merge(self):
-        """嵌套 dict 一层合并，只覆盖部分子键不丢默认。"""
-        merged = self._merge({"enabled_llm": {"global_macro": False}})
-        self.assertFalse(merged["enabled_llm"]["global_macro"])
-        self.assertTrue(merged["enabled_llm"]["expert_review"])
-
-        merged2 = self._merge({"fact_check": {"tolerance": 2.0}})
-        self.assertEqual(merged2["fact_check"]["tolerance"], 2.0)
-        self.assertIsNotNone(merged2["fact_check"].get("tolerance_overrides"))
-
-    def test_unknown_key_passthrough(self):
-        """默认中不存在的键原样透传（未知键透传）。"""
-        merged = self._merge({"custom_field": "custom_value"})
-        self.assertEqual(merged["custom_field"], "custom_value")
-
-    def test_debate_defaults_preserved(self):
-        """debate 段缺失 → 默认值保留（schema 校验由 _load_debate_config 兜底）。"""
-        merged = self._merge({})
-        self.assertEqual(merged["debate"]["max_total_tokens_per_report"], 72000)
-        self.assertEqual(merged["debate"]["concentration_qa"]["threshold"], 0.20)
-
-
 class TestGetConfig(unittest.TestCase):
     """get_config 的异常场景测试。"""
 
     def setUp(self):
         # 备份原始 _CONFIG_FILE，用临时目录替代
-        self._orig_config = cfg._config_defaults._CONFIG_FILE
+        self._orig_config = _config_defaults._CONFIG_FILE
         self.tmp = tempfile.TemporaryDirectory()
-        cfg._config_defaults._CONFIG_FILE = os.path.join(self.tmp.name, "config.json")
+        _config_defaults._CONFIG_FILE = os.path.join(self.tmp.name, "config.json")
 
     def tearDown(self):
-        cfg._config_defaults._CONFIG_FILE = self._orig_config
+        _config_defaults._CONFIG_FILE = self._orig_config
         self.tmp.cleanup()
 
     @pytest.mark.smoke
@@ -133,7 +78,7 @@ class TestGetConfig(unittest.TestCase):
     def test_corrupted_json_returns_defaults(self):
         """配置文件损坏 → 返回默认值。"""
         os.makedirs(self.tmp.name, exist_ok=True)
-        with open(cfg._config_defaults._CONFIG_FILE, "w", encoding="utf-8") as f:
+        with open(_config_defaults._CONFIG_FILE, "w", encoding="utf-8") as f:
             f.write("{invalid json!!!")
         result = cfg.get_config()
         self.assertEqual(result["holdings_dir"], _ABS_HOLDINGS_DIR)
@@ -141,7 +86,7 @@ class TestGetConfig(unittest.TestCase):
     def test_empty_file_returns_defaults(self):
         """配置文件为空 → 返回默认值。"""
         os.makedirs(self.tmp.name, exist_ok=True)
-        with open(cfg._config_defaults._CONFIG_FILE, "w", encoding="utf-8") as f:
+        with open(_config_defaults._CONFIG_FILE, "w", encoding="utf-8") as f:
             f.write("")
         result = cfg.get_config()
         self.assertEqual(result["holdings_dir"], _ABS_HOLDINGS_DIR)
@@ -150,7 +95,7 @@ class TestGetConfig(unittest.TestCase):
         """部分配置 → 未配置项用默认值补齐。"""
         os.makedirs(self.tmp.name, exist_ok=True)
         partial = {"holdings_dir": "/custom/path"}
-        with open(cfg._config_defaults._CONFIG_FILE, "w", encoding="utf-8") as f:
+        with open(_config_defaults._CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(partial, f)
         result = cfg.get_config()
         self.assertEqual(result["holdings_dir"], "/custom/path")
@@ -169,7 +114,7 @@ class TestGetConfig(unittest.TestCase):
             "cache_ttl": {"price": 3600},
             "preferred_provider": {},
         }
-        with open(cfg._config_defaults._CONFIG_FILE, "w", encoding="utf-8") as f:
+        with open(_config_defaults._CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f)
         result = cfg.get_config()
         self.assertEqual(result["holdings_dir"], "/a")
@@ -179,7 +124,7 @@ class TestGetConfig(unittest.TestCase):
         """history 段内的未知选项被忽略，fetch_mode 取默认值。"""
         os.makedirs(self.tmp.name, exist_ok=True)
         legacy = {"history": {"unused_option": "off"}}
-        with open(cfg._config_defaults._CONFIG_FILE, "w", encoding="utf-8") as f:
+        with open(_config_defaults._CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(legacy, f)
         result = cfg.get_config()
         hist = result.get("history", {})
@@ -199,7 +144,7 @@ class TestGetConfig(unittest.TestCase):
         """用户显式配置 history.lookback_days 覆盖默认值。"""
         os.makedirs(self.tmp.name, exist_ok=True)
         user = {"history": {"lookback_days": 120}}
-        with open(cfg._config_defaults._CONFIG_FILE, "w", encoding="utf-8") as f:
+        with open(_config_defaults._CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(user, f)
         result = cfg.get_config()
         hist = result.get("history", {})
@@ -212,20 +157,20 @@ class TestInitConfig(unittest.TestCase):
     """init_config 的边界场景测试。"""
 
     def setUp(self):
-        self._orig_config = cfg._config_defaults._CONFIG_FILE
+        self._orig_config = _config_defaults._CONFIG_FILE
         self.tmp = tempfile.TemporaryDirectory()
-        cfg._config_defaults._CONFIG_FILE = os.path.join(self.tmp.name, "config.json")
+        _config_defaults._CONFIG_FILE = os.path.join(self.tmp.name, "config.json")
 
     def tearDown(self):
-        cfg._config_defaults._CONFIG_FILE = self._orig_config
+        _config_defaults._CONFIG_FILE = self._orig_config
         self.tmp.cleanup()
 
     @pytest.mark.smoke
     def test_init_creates_default_config(self):
         """初始化 → 创建包含默认值的配置文件。"""
-        self.assertFalse(os.path.exists(cfg._config_defaults._CONFIG_FILE))
+        self.assertFalse(os.path.exists(_config_defaults._CONFIG_FILE))
         cfg.init_config()
-        self.assertTrue(os.path.exists(cfg._config_defaults._CONFIG_FILE))
+        self.assertTrue(os.path.exists(_config_defaults._CONFIG_FILE))
         data = cfg.get_config()
         self.assertEqual(data["holdings_dir"], _ABS_HOLDINGS_DIR)
 
@@ -233,19 +178,19 @@ class TestInitConfig(unittest.TestCase):
         """配置文件已存在 → 不覆盖。"""
         os.makedirs(self.tmp.name, exist_ok=True)
         existing = {"holdings_dir": "/manual"}
-        with open(cfg._config_defaults._CONFIG_FILE, "w", encoding="utf-8") as f:
+        with open(_config_defaults._CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(existing, f)
         cfg.init_config()
-        with open(cfg._config_defaults._CONFIG_FILE, encoding="utf-8") as f:
+        with open(_config_defaults._CONFIG_FILE, encoding="utf-8") as f:
             data = json.load(f)
         self.assertEqual(data["holdings_dir"], "/manual")
 
     def test_init_nonexistent_dir(self):
         """配置目录不存在 → 创建后写入。"""
         non_exist = os.path.join(self.tmp.name, "sub", "config")
-        cfg._config_defaults._CONFIG_FILE = os.path.join(non_exist, "config.json")
+        _config_defaults._CONFIG_FILE = os.path.join(non_exist, "config.json")
         cfg.init_config()
-        self.assertTrue(os.path.exists(cfg._config_defaults._CONFIG_FILE))
+        self.assertTrue(os.path.exists(_config_defaults._CONFIG_FILE))
 
     @pytest.mark.smoke
     def test_init_template_writes_relative_paths(self):
@@ -253,7 +198,7 @@ class TestInitConfig(unittest.TestCase):
         # conftest _isolate_sensitive_paths 会把 llm_settings_file / llm_key_file /
         # llm_providers_file 注入为临时路径，此处还原为项目根内路径，验证模板在
         # 真实场景下写相对路径
-        _defaults = cfg._config_defaults._DEFAULT_CONFIG
+        _defaults = _config_defaults._DEFAULT_CONFIG
         _rel_values = {
             "llm_settings_file": os.path.join(PROJECT_ROOT, "data/config/llm_settings.json"),
             "llm_key_file": os.path.join(PROJECT_ROOT, "data/config/llm_key.json"),
@@ -262,16 +207,18 @@ class TestInitConfig(unittest.TestCase):
         _orig = {k: _defaults[k] for k in _rel_values}
         try:
             _defaults.update(_rel_values)
-            # `init_config` 末尾会按这些路径「确保 llm 配置文件存在」——本用例只验证
-            # 模板写出相对路径，不应在仓库内创建真实的 data/config/llm_*.json。
+            # `init_config` 末尾会「确保可编辑配置文件存在」——本用例只验证模板写出
+            # 相对路径，四处落盘一律屏蔽，不得在仓库内创建真实的 data/config/*.json。
             with (
                 mock.patch.object(cfg._core, "_ensure_llm_settings_file"),
                 mock.patch.object(cfg._core, "_ensure_llm_providers_file"),
+                mock.patch.object(cfg._core, "ensure_logger_file"),
+                mock.patch.object(cfg._core, "ensure_llm_pricing_file"),
             ):
                 cfg.init_config()
         finally:
             _defaults.update(_orig)
-        with open(cfg._config_defaults._CONFIG_FILE, encoding="utf-8") as f:
+        with open(_config_defaults._CONFIG_FILE, encoding="utf-8") as f:
             raw = f.read()
         cleaned = _strip_json_comments(raw)
         data = json.loads(cleaned)
@@ -282,16 +229,71 @@ class TestInitConfig(unittest.TestCase):
             )
 
 
+class TestInitConfigEnsuresEditableFiles(unittest.TestCase):
+    """init_config 兜底铺出可编辑配置文件（缺失即按模板写出，已存在不动）。
+
+    行为由来：logger.json / llm_pricing_ref.json 是用户在面板里可改的配置面，
+    首次运行若 absent，面板读到的是内置默认值、却写不出一份可编辑副本——
+    故初始化阶段统一补齐，且必须幂等（已有内容绝不被模板覆盖）。
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.logger_path = os.path.join(self.tmp.name, "config", "logger.json")
+        self.pricing_path = os.path.join(self.tmp.name, "config", "llm_pricing_ref.json")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _init_with_redirected_paths(self):
+        """把两份可编辑配置文件钉到临时目录后跑 init_config（其余写盘入口屏蔽）。"""
+        from src.python.config import _core as cfg_core
+        from src.python.config import _llm_pricing, _logging
+
+        with (
+            mock.patch.object(_logging, "LOGGER_CONFIG_PATH", self.logger_path),
+            mock.patch.object(_llm_pricing, "PRICING_FILE", self.pricing_path),
+            mock.patch.object(cfg_core, "_ensure_llm_settings_file"),
+            mock.patch.object(cfg_core, "_ensure_llm_providers_file"),
+        ):
+            cfg.init_config()
+
+    @staticmethod
+    def _read(path: str) -> str:
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+
+    def test_init_lays_down_missing_editable_files(self):
+        """缺失 → 初始化后两份文件均在（含注释模板，可直接编辑）。"""
+        self._init_with_redirected_paths()
+        self.assertTrue(os.path.exists(self.logger_path), "logger.json 未被铺出")
+        self.assertTrue(os.path.exists(self.pricing_path), "llm_pricing_ref.json 未被铺出")
+        self.assertIn("//", self._read(self.logger_path), "模板应保留注释")
+
+    def test_init_does_not_overwrite_existing_editable_files(self):
+        """已存在 → 初始化不改内容（用户改动不得被模板覆盖）。"""
+        os.makedirs(os.path.dirname(self.logger_path), exist_ok=True)
+        for path, content in (
+            (self.logger_path, '{"file": {"level": "DEBUG"}}'),
+            (self.pricing_path, '{"version": 1}'),
+        ):
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(content)
+        self._init_with_redirected_paths()
+        self.assertIn("DEBUG", self._read(self.logger_path))
+        self.assertIn('"version": 1', self._read(self.pricing_path))
+
+
 class TestSetConfig(unittest.TestCase):
     """set_config 的异常场景测试。"""
 
     def setUp(self):
-        self._orig_config = cfg._config_defaults._CONFIG_FILE
+        self._orig_config = _config_defaults._CONFIG_FILE
         self.tmp = tempfile.TemporaryDirectory()
-        cfg._config_defaults._CONFIG_FILE = os.path.join(self.tmp.name, "config.json")
+        _config_defaults._CONFIG_FILE = os.path.join(self.tmp.name, "config.json")
 
     def tearDown(self):
-        cfg._config_defaults._CONFIG_FILE = self._orig_config
+        _config_defaults._CONFIG_FILE = self._orig_config
         self.tmp.cleanup()
 
     @pytest.mark.smoke
@@ -347,11 +349,11 @@ class TestSetConfig(unittest.TestCase):
             "enable_fund_deep_analysis": True,
             "news_top_count": 300,
         }
-        with open(cfg._config_defaults._CONFIG_FILE, "w", encoding="utf-8") as f:
+        with open(_config_defaults._CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(relative, f)
         # 生产环境实际触发 set_config 的入口：首次运行隐私提示标记
         cfg.set_config("_privacy_notice_shown", True)
-        with open(cfg._config_defaults._CONFIG_FILE, encoding="utf-8") as f:
+        with open(_config_defaults._CONFIG_FILE, encoding="utf-8") as f:
             data = json.load(f)
         for key in _PATH_KEYS_IN_TEMPLATE:
             self.assertFalse(
@@ -363,7 +365,7 @@ class TestSetConfig(unittest.TestCase):
         """写入相对路径值 → 落盘仍为相对路径，读取时被绝对化。"""
         cfg.init_config()
         cfg.set_config("holdings_dir", "data/custom")
-        with open(cfg._config_defaults._CONFIG_FILE, encoding="utf-8") as f:
+        with open(_config_defaults._CONFIG_FILE, encoding="utf-8") as f:
             data = json.loads(_strip_json_comments(f.read()))
         self.assertEqual(data["holdings_dir"], "data/custom")
         result = cfg.get_config()
@@ -374,7 +376,7 @@ class TestSetConfig(unittest.TestCase):
         cfg.init_config()
         external = os.path.join(os.path.dirname(PROJECT_ROOT), "external")
         cfg.set_config("holdings_dir", external)
-        with open(cfg._config_defaults._CONFIG_FILE, encoding="utf-8") as f:
+        with open(_config_defaults._CONFIG_FILE, encoding="utf-8") as f:
             data = json.loads(_strip_json_comments(f.read()))
         self.assertEqual(data["holdings_dir"], external)
 
@@ -388,17 +390,17 @@ class TestSetConfigSingleKeyPatch(unittest.TestCase):
     """
 
     def setUp(self):
-        self._orig_config = cfg._config_defaults._CONFIG_FILE
+        self._orig_config = _config_defaults._CONFIG_FILE
         self.tmp = tempfile.TemporaryDirectory()
-        cfg._config_defaults._CONFIG_FILE = os.path.join(self.tmp.name, "config.json")
+        _config_defaults._CONFIG_FILE = os.path.join(self.tmp.name, "config.json")
         cfg.init_config()
 
     def tearDown(self):
-        cfg._config_defaults._CONFIG_FILE = self._orig_config
+        _config_defaults._CONFIG_FILE = self._orig_config
         self.tmp.cleanup()
 
     def _read_disk(self) -> str:
-        with open(cfg._config_defaults._CONFIG_FILE, encoding="utf-8") as f:
+        with open(_config_defaults._CONFIG_FILE, encoding="utf-8") as f:
             return f.read()
 
     def test_preserves_comment_groups_and_inline(self):
@@ -446,7 +448,7 @@ class TestSetConfigSingleKeyPatch(unittest.TestCase):
 
     def test_first_creation_has_comment_groups(self):
         """文件不存在时 set_config 用模板打底 → 落盘带完整分组注释。"""
-        os.remove(cfg._config_defaults._CONFIG_FILE)
+        os.remove(_config_defaults._CONFIG_FILE)
         cfg.set_config("_privacy_notice_shown", True)
         raw = self._read_disk()
         self.assertIn("// ── A. 路径与文件 ──", raw)
@@ -458,17 +460,17 @@ class TestDelConfig(unittest.TestCase):
     """del_config 单键删除：保留注释分组、删中间键/末键、键不存在静默。"""
 
     def setUp(self):
-        self._orig_config = cfg._config_defaults._CONFIG_FILE
+        self._orig_config = _config_defaults._CONFIG_FILE
         self.tmp = tempfile.TemporaryDirectory()
-        cfg._config_defaults._CONFIG_FILE = os.path.join(self.tmp.name, "config.json")
+        _config_defaults._CONFIG_FILE = os.path.join(self.tmp.name, "config.json")
         cfg.init_config()
 
     def tearDown(self):
-        cfg._config_defaults._CONFIG_FILE = self._orig_config
+        _config_defaults._CONFIG_FILE = self._orig_config
         self.tmp.cleanup()
 
     def _read_disk(self) -> str:
-        with open(cfg._config_defaults._CONFIG_FILE, encoding="utf-8") as f:
+        with open(_config_defaults._CONFIG_FILE, encoding="utf-8") as f:
             return f.read()
 
     def test_del_existing_key_removes(self):

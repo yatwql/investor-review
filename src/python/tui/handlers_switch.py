@@ -2,8 +2,9 @@
 """TUI ``[S]`` 报告章节内容呈现面板：18 项五组（组序与编号取自功能开关注册表）。
 
 ``[S]`` 只呈现 ``PANEL_GROUPS["[S]"]`` 的五组内容开关（持仓与交易 / 市场与估值 /
-基金与风格 / 事件与摘要 / 机制与质量）；LLM 章节、默认关闭的整章与
-关联产物在 ``[C]``，本面板不再混排。编号由 :func:`config.features.panel_option_numbers`
+基金与风格 / 事件与摘要 / 机制与质量）；LLM 章节与默认关闭的整章在 ``[C]``，
+本面板不再混排（只给既有页签加层的 What-if 交易成本对比归持仓与交易组，在本面板）。
+编号由 :func:`config.features.panel_option_numbers`
 派生——增删开关后自动重排，渠道层不写死数字。
 
 写盘、读数、提示输入统一经 ``handlers_config`` **函数内局部导入**
@@ -226,9 +227,7 @@ def run_content_options_panel() -> None:
             print(style_heading(f"  ── {header} ──"))
             print("\n".join(f"  {row}" if row else "" for row in panel_rows))
         if state["repaint"]:
-            for _line in wrap_hanging(
-                "  章节显隐（顶层 / LLM / 整章 / 关联产物）在菜单 [C] 配置", inner_width(columns)
-            ):
+            for _line in wrap_hanging("  章节显隐（顶层 / LLM / 整章）在菜单 [C] 配置", inner_width(columns)):
                 print(_line)
             print()
         # 本轮已渲染 → 窄终端下一轮只回反馈行（省纵向空间）；宽/中档照常整屏重绘

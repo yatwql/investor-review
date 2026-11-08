@@ -709,36 +709,6 @@ def _resolve_quote(code: str) -> float:
         return 0.0
 
 
-def _print_intent_summary(
-    account: str,
-    name: str,
-    code: str,
-    side: str,
-    shares: float,
-    price: float,
-    trade_date: str,
-    extra_lines: list[str] | None = None,
-) -> None:
-    """单笔回显（录入确认用）。"""
-    columns = terminal_columns()
-    print()
-    print(style_heading("  ── 本笔内容 ──"))
-    rows = [
-        f"  账户  : {account}",
-        f"  方向  : {SIDE_LABELS[side]}",
-        f"  标的  : {name}（{code}）",
-        *(extra_lines or []),
-        f"  份额  : {shares:g}",
-        f"  价格  : {price:g}",
-        f"  交易日: {trade_date}",
-    ]
-    for row in rows:
-        print("\n".join(wrap_hanging(row, columns)))
-
-
-# ── S：回显变更 → 确认 → 写回 ──────────────────────────────
-
-
 def _save(session: _Session) -> None:
     """回显本次全部变更，确认后原子写回持仓文件。"""
     book = session.book

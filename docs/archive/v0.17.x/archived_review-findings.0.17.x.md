@@ -1,8 +1,8 @@
 # 自审记录归档 — v0.17.x
 
-> 归档时间：2026-11-04（v0.17.0 发布，本系列首批已修复批次并入）；2026-11-04 v0.17.0 本批原表搬运；2026-11-05 v0.17.1 本批原表搬运；2026-11-05 v0.17.2 本批原表搬运；2026-11-06 v0.17.3 本批原表搬运；2026-11-08 v0.17.4 本批原表搬运；2026-11-08 v0.17.5 本批原表搬运
+> 归档时间：2026-11-04（v0.17.0 发布，本系列首批已修复批次并入）；2026-11-04 v0.17.0 本批原表搬运；2026-11-05 v0.17.1 本批原表搬运；2026-11-05 v0.17.2 本批原表搬运；2026-11-06 v0.17.3 本批原表搬运；2026-11-08 v0.17.4 本批原表搬运；2026-11-08 v0.17.5 本批原表搬运；2026-11-08 v0.17.6 本批原表搬运
 > 原始文件：`docs/managements/review-findings.md`
-> 涵盖版本：v0.17.x 已修复项（按发布版号批次，v0.17.0 → ）（含 v0.17.5）
+> 涵盖版本：v0.17.x 已修复项（按发布版号批次，v0.17.0 → v0.17.6）（含 v0.17.6）
 > 归档内容：台账表格经 `release.py prepare` 整块搬运（无损）；表外散文留主台账
 
 ---
@@ -91,3 +91,19 @@
 | **rf-1076** | LLM 缓存无时间口径区分：指纹里含行情派生块（申购限购 / 持仓变动 / 环比降级），盘中逐分钟变、收盘后冻结，但缓存判定只看内容与 TTL——盘中反复出报告等于每次全量重算（实测 4 个基础模块 0/4 命中、9 次调用约 130s/¥0.13），而「一律复用」又会让交易时段内的读者拿到十分钟前的盘中结论 | `core/market_hours.py` 新增行情口径桶 `market_snapshot_bucket()`（盘中 / 上午收盘 / 当日收盘 / 上一交易日收盘四档，每轮报告判定一次并由 `generate_report` 入口重置）：盘中档在预检与骨架两处跳过缓存读（归因 `intraday_no_reuse`），其余档同档内可复用；桶键作为后缀进四个基础模块与辩论键的指纹，统一 prompt 附录后追加 `【数据口径】…` 声明，预检摘要旁固定打印本轮口径；补 15 条断言（分档/每轮一次/提示词口径/进键/盘中断复用/收盘复用） |
 | **rf-1077** | 与个股价格无关的模块把价格锁进了键：`global_macro` 的键含持仓变动复盘块（市值差/盈亏差）与行情口径桶后缀，`news_correlation` 的逐条键用原始 `penetrated_assets`（含 mv/ratio_pct）——两者结论都只与「我持有哪些品种」有关，价格一变键就换，24h/1h TTL 实际从未生效，TOP N 新闻的逐条缓存每轮全废 | `global_macro_fingerprint` 去掉持仓变动复盘块与桶后缀（保留结构/分类/申购限购块，后者无价格）；新闻侧新增 `generators_news.news_context_fingerprint()`，穿透资产经 `extract_stable_penetration` 只留 name/codes；`trading_calendar.trading_day_as_of_cached()` 新增（桶只读已缓存日历、不触网，消除指纹用例对离线的隐性依赖）；测试补 6 条断言（两模块键不受价格/桶影响、结构仍换键），并修 `purchase_constraint_injection` 的两处位置实参类型债 |
 | **rf-1078** | 「价格相关 / 价格无关」两分类只体现在各指纹函数的实现里：去价格改了 `global_macro`/`news_correlation`，但盘中闸门仍对**所有**模块生效——价格无关模块（结论不随报价变）在盘中也被强行重算，分类没有驱动力，后续新增模块只能靠人记住「该不该带桶后缀」 | 分类单源到 `llm/cache_policy.PRICE_INDEPENDENT_MODULES` + `is_price_sensitive_module()`：盘中闸门先判分类、再判档位（价格无关模块盘中直接复用）；新模块默认归入价格相关；补 5 条断言（分类集合 / 未知模块保守归类 / 闸门按分类生效 / 盘中仅价格相关模块重算 / 跨档复用） |
+
+## 已修复（0.17.6）
+
+> 完整复盘见 `changelog.md` 0.17.6 段；此处为台账原表搬运（无损），本批发布日 2026-11-08。
+
+| 编号 | 问题 | 修复 |
+|:--|:--|:--|
+| **rf-1079** | `[S]` 面板混排两类语义（章内内容 vs 机制/入口）：6 项机制类里「报告对话式追问」其实只是主菜单 `Q` 的入口开关；`decision_basis` / `module_quality_gate` 默认常开却占面板编号；`candidate_compare` 候选池为空也渲染空表；`whatif_trade_cost` 挂在 `[C]`「关联产物」但不新增章节；`market_sentiment` 需凭据却未标 `needs_hint` | 注册表新增 `panel_visible` 并据此派生编号：前两者不上面板（默认常开，仍可用 `features.json` 覆写关闭）；`candidate_compare` 改自动项（不上面板、补空池判定）；`summary_highlights` 转正默认开；`market_sentiment` 补 `needs_hint`；`whatif_trade_cost` 迁入 `[S]` 持仓与交易，`[C]` 回归纯章节；守护与夹具补「空块」容忍 |
+| **rf-1080** | 成本流水「近似分支」缺数值防护：`_build_flow_data` 把明细里的 `price` 原样收进 `current_prices`，一旦是非数值（旧缓存/残缺明细/测试桩），下游 `sum(... * prices[code])` 与 `final_value > 0` 即抛 `TypeError` ——异常冒泡到 HTML 写入，整份报告 `html_ok=False`。该分支此前只有mock 级用例（只验传参），真实执行路径从未被跑到 | `current_prices` 改为只收「正数值」市价（`isinstance(price, (int, float))` 且 > 0），缺价品种只是少一个估值锚；补两条真实现回归：无流水 + 开关开跑通近似契约、非数值/字符串市价被过滤不抛 |
+| **rf-1081** | 面板可见性须跨渠道同源：`panel_visible=False` 的开关（判断依据 / LLM 输出评级 / 候选基金比较）若只按 TUI 过滤，Web 配置面仍按 `switches_in_group` 全量下发，两渠道开关清单即分叉；另有两处同批清理：`tui/handlers_holdings` 里单笔回显函数已无调用点（死代码），以及「行情口径桶」的测试冻结逻辑在 3 个文件里各写一份 `MarketSnapshot` 字面量（档位 label 会各处漂移） | 新增 `_feature_registry.panel_switches(panel)`（组序 + 可见性过滤）作为面板类渠道的唯一取数口，`panel_option_numbers` 复用、Web 配置面改用它过滤；删除死函数；新增 `src/test/_market_clock.py`（`freeze_market_bucket` / `freeze_intraday`）替换各处字面量桩 |
+| **rf-1082** | `init_config` 新增「缺失即按模板铺出 `logger.json` / `llm_pricing_ref.json`」，但无用例锁定该行为（新行为无回归）；另 `test_init_template_writes_relative_paths` 只屏蔽了原本两处写盘入口，新增两处在它临时还原真实路径的分支里会把文件写进仓库 `data/config/`（测试隔离漏洞，文件被删时静默恢复） | 补两条用例：缺失即铺出且有注释模板、已存在不改写（幂等）；该用例的写盘屏蔽补齐到四处 `_ensure_llm_settings_file` / `_ensure_llm_providers_file` / `ensure_logger_file` / `ensure_llm_pricing_file` |
+| **rf-1083** | 归因口径收口为「只看模块键是否变化」后，`llm-technical.md` 仍在描述已不存在的「模块→组件映射表」（文档与实现分叉）；同批拆分用例时丢了 `TestSkeletonPathAttribution` 类头（骨架路径归因的来由注释），且 `_cache_fixtures.degradation_events` 构造器无人调用（死测试设施） | 文档改为「唯一判据是键变化，组件哈希只服务诊断可读性」；恢复类头；补回归：降级事件变化只让 `health_check` 归因为 `fingerprint_changed`（数据质量变了不得计作「只是到点」），顺带重新启用该构造器 |
+| **rf-1084** | 面板分块口径漂移：rf-1079 把 `whatif_trade_cost` 从 `[C]`「关联产物」迁入 `[S]`「持仓与交易」后，注册表已无 `artifact` 条目、`[S]` 编号整体重排，但 8 份文档仍按旧口径描述（`[C]`「四块含关联产物」/`[S]` 1-4·5-8·9-11·15-20 旧编号/「四组章内内容」/`--chapter` 可覆盖关联产物/R-WIF-13 分组），读者会按错面板找入口 | 全量核对后按实现单源重写：`[C]` 统一为三块（顶层 / LLM / 整章，并注明 `artifact` 分块位保留、空块自动跳过）；`[S]` 编号改为 1-5 / 6-9 / 10-11 / 12-14 / 15-18（`decision_basis` / `module_quality_gate` 内置常开不占编号）；关联产物入口统一指向 `[S]` 持仓与交易组（含 `--chapter` 与 R-WIF-13 表述） |
+| **rf-1085** | Web 配置面未随 `[S]`/`[C]` 收口适配：① 载荷仍带**永远为空**的「关联产物」块（`standalone_related`，`artifact` 分块位已无条目），前端 `renderBoolBlock` 对空表照样渲染块标题；② 功能开关按 `GROUP_ORDER` 全量建组下发（含 `[C]` 专属的独立整章/章节子项组），上屏判定内联重复一份——`panel_switches` 的 docstring 声称 Web 已改用它，实际未接；③ 上屏集合与 TUI 分叉无任何用例兜底 | ① 删除空块（domain/标题表/载荷/JS 渲染器/用例），并加断言「`artifact` 块一旦有条目即变红」，防将来产物页签开关静默不上屏；② `groups` 改为只承载 `[S]` 面板，经 `panel_switches("[S]")` 单点取数（组序/上屏项/组标题全部派生）；③ 新增三条契约用例（组集与组内项 = `[S]` 面板、`[C]` 项须经章节块或子项覆盖、隐藏项不得下发）；同步 Web 手册域块清单与机制组条目、TUI 面板提示语与模块说明 |
+| **rf-1086** | README/手册配图把**本机绝对路径**带上了屏：演示工作区配置写的是绝对路径，而配置层读入后又会绝对化——Web 工作台「正式更新 —— 覆盖 /lzcapp/…/演示持仓.xlsx」直接印出开发者本机目录（同一问题在 `/api/config/edit` 的路径输入框、系统状态卡的持仓/输出目录上同源）。演示数据本身是虚构的，泄漏的是机器路径（不可移植，也让配图显得像「别人的机器」） | ① 演示配置改回**相对项目根**（`data/holdings` / `reports`，隔离靠 `INVEST_PROJECT_ROOT`），并加用例断言配置内不出现绝对路径；② 新增展示原语 `core/system_info.display_path()`（项目根之下 → 相对、越出根目录或跨盘符保持绝对，判据与落盘反绝对化同源），系统状态卡与 Web 配置面路径输入框统一改走它；③ 用例改为按「真值来源 + 展示原语」断言，并显式校「项目内路径上屏须相对化」；④ developer-guide 补一条纪律，README 全套配图重出 |
+| **rf-1087** | 并发用例用**墙钟阈值**表达并发，CI 上偶发红：`test_slow_jjcc_hedges_to_zqcc` 让 jjcc `sleep(2.0)` 后断言总耗时 `< 1.9s`（对冲阈值 1.5s，余量仅 0.4s），慢 runner 实测 1.92s / 2.07s 直接失败；同类 `test_categories_fetch_concurrently` 以 0.05s×3 并发断言 `< 0.12s`（串行基线 0.15s，余量 0.03s）。两处断言的都不是并发语义，而是调度运气——同一次提交的本地门禁全绿、CI 三版本里 3.13 红两次 | 改用**事件/屏障**判并发，零墙钟断言：jjcc 用例改为 jjcc 阻塞在 `threading.Event` 上，主线程等「zqcc 已起跳」后校验此刻 jjcc 仍未返回（真并发）再放行；新浪分类用例改为三路 `threading.Barrier(3)`，串行则屏障超时、取数失败、条数断言点明「未并发」；两处 docstring 记入「为何不用墙钟」防回退 |

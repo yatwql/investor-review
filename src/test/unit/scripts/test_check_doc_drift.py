@@ -329,6 +329,8 @@ def _panel_doc(
     for block in drift.BLOCK_ORDER:
         entries = drift.chapters_in_block(block)
         numbers = [drift.chapter_number(entry.key) for entry in entries]
+        if not numbers:
+            continue  # 空块（如 artifact）无标题可写，与守护侧同口径跳过
         first, last = numbers[0], numbers[-1]
         lines.append(f"**{drift.BLOCK_LABELS[block]}（{first}-{last}，写配置文件）**：块说明")
         lines.append("")

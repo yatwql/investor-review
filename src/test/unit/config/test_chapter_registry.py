@@ -33,8 +33,12 @@ class TestChapterRegistryStructure:
         assert [n for n, _e in numbered] == list(range(1, len(chapter_registry) + 1))
         assert [e.key for _n, e in numbered] == [e.key for e in chapter_registry]
 
-    def test_four_blocks_partition_registry_in_declared_order(self):
-        """四块不重叠、并集为全集，且各块在表中是连续区间（边界正确）。"""
+    def test_blocks_partition_registry_in_declared_order(self):
+        """各块不重叠、并集为全集，且**非空块**按 BLOCK_ORDER 连续排列（边界正确）。
+
+        空块合法：``artifact``（关联产物）当前无章节挂在其中——块定义保留，
+        以免 web 侧按块取值的口径分叉。
+        """
         from src.python.config.chapter_registry import (
             BLOCK_ORDER,
             chapter_registry,
@@ -43,9 +47,10 @@ class TestChapterRegistryStructure:
 
         blocks = [[e.key for e in chapters_in_block(block)] for block in BLOCK_ORDER]
         assert [key for block in blocks for key in block] == [e.key for e in chapter_registry]
-        assert all(blocks), "四块都应有章节（结构断言）"
-        starts = [chapter_registry.index(chapters_in_block(block)[0]) for block in BLOCK_ORDER]
-        assert starts == sorted(starts), "块序必须与 BLOCK_ORDER 一致"
+        ordered = [b for b in blocks if b]
+        keys = [e.key for e in chapter_registry]
+        starts = [keys.index(block[0]) for block in ordered]
+        assert starts == sorted(starts), "非空块序必须与 BLOCK_ORDER 一致"
 
     def test_every_block_has_label(self):
         from src.python.config.chapter_registry import BLOCK_LABELS, BLOCK_ORDER

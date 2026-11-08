@@ -311,8 +311,7 @@ def adapter_chain_slots(domain: str) -> tuple[dict[str, tuple[str, Callable]], d
     返回结构与 ``fetch_with_fallback`` 的两个入参一一对应，可直接替换既有
     手写 provider 映射与转换函数映射。
     """
-    _ensure_adapters_loaded()
-    adapters = ADAPTER_REGISTRY.get(domain, {})
+    adapters = get_adapters(domain)
     provider_map: dict[str, tuple[str, Callable]] = {
         source_id: (adapter.display_name, adapter.fetch_raw) for source_id, adapter in adapters.items()
     }

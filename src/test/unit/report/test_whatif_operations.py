@@ -403,13 +403,18 @@ class TestCostPanelSwitch(unittest.TestCase):
 class TestCostPanelSwitchRegistry:
     """whatif_trade_cost 已登记于独立章节与回放组（页签类转正）、默认关、影响报告。"""
 
-    def test_switch_registered_in_standalone_group_off_by_default(self):
-        """分组/默认值/产物影响随注册表声明（结构关系断言，不写死分组计数）。"""
+    def test_switch_registered_in_portfolio_group_off_by_default(self):
+        """分组/默认值/产物影响随注册表声明（结构关系断言，不写死分组计数）。
+
+        分组是 ``portfolio``（``[S]`` 持仓与交易）而非 ``standalone``：本开关只给
+        既有调仓页签加成本层，不新增章节——页签本体与成本层分属不同面板。
+        """
         from src.python.config.features import feature_switch_registry, is_feature_enabled
 
         sw = feature_switch_registry["whatif_trade_cost"]
         assert sw.label == "What-if 交易成本对比"
-        assert sw.group == "standalone"
+        assert sw.group == "portfolio"
+        assert sw.panel_visible is True
         assert sw.default is False
         assert sw.affects_report is True
         assert is_feature_enabled("whatif_trade_cost") is False

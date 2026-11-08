@@ -20,9 +20,9 @@ import numpy as np
 import pytest
 
 from src.python.analysis.industry_beta import (
+    INDUSTRY_INDEX_MAP,
     compute_industry_beta_analysis,
     compute_industry_exposure,
-    industry_index_for,
     unavailable_result,
 )
 
@@ -93,11 +93,11 @@ class TestIndustryIndexMap:
             "医药": "sz399989",
         }
         for name, code in expected.items():
-            assert industry_index_for(name) == code
+            assert INDUSTRY_INDEX_MAP.get(name) == code
 
     def test_unknown_industry_none(self):
         """未知行业无映射（仅暴露占比）。"""
-        assert industry_index_for("新兴赛道") is None
+        assert INDUSTRY_INDEX_MAP.get("新兴赛道") is None
 
 
 class TestIndustryBetaKnownAnswer:

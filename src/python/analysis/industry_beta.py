@@ -56,11 +56,6 @@ INDUSTRY_INDEX_MAP: dict[str, str] = {
 MIN_INDUSTRY_SAMPLES: int = 36
 
 
-def industry_index_for(industry: str) -> str | None:
-    """行业名 → 指数代码（无映射返回 None）。"""
-    return INDUSTRY_INDEX_MAP.get(industry)
-
-
 # ═══════════════════════════════════════════════════════════════
 #  结果工厂
 # ═══════════════════════════════════════════════════════════════
