@@ -172,8 +172,11 @@ def compute_all_metrics(
     if portfolio_weights and individual_vols:
         vol_list: list[float] = []
         weight_list: list[float] = []
+        vols = list(individual_vols.values())
         for i, w in enumerate(portfolio_weights):
-            vol_list.append(list(individual_vols.values())[i] if i < len(individual_vols) else 0.0)
+            vol = vols[i] if i < len(vols) else 0.0
+            # 缺波动率的品种按 0 计入（不把 None 塞进 risk_contribution 的浮点序列）
+            vol_list.append(float(vol) if vol is not None else 0.0)
             weight_list.append(w)
         rc_result = risk_contribution(weight_list, vol_list)
 
