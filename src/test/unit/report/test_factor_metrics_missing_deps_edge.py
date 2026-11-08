@@ -13,6 +13,7 @@ from typing import cast
 
 import pytest
 
+from src.python.analysis.unavailable_contracts import factor_unavailable_result, industry_unavailable_result
 from src.python.report import _report_factor_metrics as rfm
 from src.python.report.progress import ProgressReporter
 
@@ -83,6 +84,7 @@ class TestCalcLayerMissingDependency:
         assert result["available"] is False
         assert result["status"] == "source_failed"
         assert reporter.warnings, "降级必须向用户可见（reporter.warn）"
+        assert result == factor_unavailable_result("source_failed"), "降级契约须与共享工厂逐键一致"
 
     def test_industry_beta_degrades_when_calc_module_unimportable(self, monkeypatch):
         """行业 Beta 计算层不可导入 → 子表降级，不阻塞主报告。"""
@@ -103,3 +105,4 @@ class TestCalcLayerMissingDependency:
         assert result["available"] is False
         assert result["status"] == "source_failed"
         assert reporter.warnings, "降级必须向用户可见（reporter.warn）"
+        assert result == industry_unavailable_result("source_failed"), "降级契约须与共享工厂逐键一致"

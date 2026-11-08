@@ -10,6 +10,7 @@
 
 ### 修复
 
+- **空数据契约键集收口单源 + TUI 前置失败退出码**（rf-1074）：上一轮修复引入的兜底把 `available=False` 的键集写到第三处（`report/_report_factor_metrics` 字面量），且兜底 `window` 退化为 `0`；现键集单源到新增的 `analysis/unavailable_contracts.py`（无 numpy/pandas，重依赖坏掉时仍可用），两个计算模块与编排层兜底统一委托它，补三条单源断言。`tui.main()` 前置检查失败改为 `raise SystemExit(1)`，直连入口也能被脚本感知。
 - **裸解释器启动致 full 报告整份失败**（rf-1073）：系统 Python（无 pandas/numpy）下生成报告，`ModuleNotFoundError: No module named 'pandas'` 从数据准备阶段冒泡到 `generate_report`，用户只看到「生成失败」。三处根因同批修：启动脚本不再依赖 `activate`（venv 搬家后其烘焙的绝对 `VIRTUAL_ENV` 使激活静默失效，裸 `python3` 落到系统解释器），改为直接调用 `.venv` 内解释器并前置「重依赖可导入」硬闸；`pandas`/`numpy` 补进 `requirements.txt`/`pyproject.toml`（此前仅经 akshare 传递安装）；`analysis/style_factor_regression.py` 的 pandas/numpy 改惰性导入、编排层把计算层导入纳入 `try` 并 `ImportError` → `available=False` 降级（§1.4.5，不再拖垮整份报告）。`core/doctor.py` 增「关键依赖」自检行与 `interpreter_preflight_error()`，TUI/Web 入口启动即拦截并给出解释器路径与修复命令。
 - **幻觉采样三处断言只看「有告警」**（rf-1065）：`test_wrong_profit_rate_vs_portfolio` / `test_mixed_correct_and_wrong` /
   `test_missing_code` 原本只断言 `len(issues) >= 1`——检测器把任意无关数值判成偏离也能转绿，测不出「对照的是组合

@@ -18,6 +18,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from src.python.analysis._math_utils import _t_critical_95
+from src.python.analysis.unavailable_contracts import factor_unavailable_result
 from src.python.core.constants import DEFAULT_WINDOW
 from src.python.core.trading_calendar import count_trading_days_elapsed
 
@@ -81,29 +82,18 @@ MIN_FACTORS: int = 2
 def unavailable_result(status: str, sample_count: int = 0, stale_factors: list[str] | None = None) -> dict:
     """返回不可用结果（数据契约，available=False）。
 
+    键集单源在 ``analysis.unavailable_contracts``（编排层在计算层导入失败时也要
+    用同一份空契约，不能各自写字面量）。
+
     Args:
-        status: "insufficient"（数据不足）或 "source_failed"（数据源故障）。
+        status: "insufficient"（数据不足）或 "source_failed"（数据源/依赖故障）。
         sample_count: 对齐后有效样本数（数据不足时为实际值）。
         stale_factors: 本次剔除的停更/不可用因子。
 
     Returns:
         含全部数据契约键的空结果字典。
     """
-    return {
-        "available": False,
-        "status": status,
-        "betas": {},
-        "t_stats": {},
-        "significant": {},
-        "style_allocation": {},
-        "baseline_betas": {},
-        "factor_correlations": {},
-        "correlation_note": "",
-        "alpha": 0.0,
-        "window": DEFAULT_WINDOW,
-        "sample_count": sample_count,
-        "stale_factors": stale_factors or [],
-    }
+    return factor_unavailable_result(status, sample_count=sample_count, stale_factors=stale_factors)
 
 
 # ═══════════════════════════════════════════════════════════════

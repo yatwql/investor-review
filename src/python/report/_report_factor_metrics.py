@@ -12,6 +12,7 @@ import logging
 import time
 from datetime import datetime
 
+from src.python.analysis.unavailable_contracts import factor_unavailable_result, industry_unavailable_result
 from src.python.core.code_utils import is_six_digit_code
 from src.python.core.concurrency import worker_pool
 from src.python.core.perf import SLOW_SPAN_WARN_SECONDS
@@ -40,49 +41,6 @@ def _timed_fetch(fn, *args, label: str = "", **kwargs):
                 elapsed,
                 _SLOW_FETCH_WARN_SECONDS,
             )
-
-
-# ── 依赖缺失时的最小数据契约（不经过计算层，避免二次 ImportError） ──
-
-
-def _factor_unavailable_fallback(status: str) -> dict:
-    """风格因子回归区块的降级契约（纯计算层 import 失败时使用）。
-
-    键集与 `analysis.style_factor_regression.unavailable_result` 一致；但本函数
-    住在编排层，不得反向 import 那个模块（正是它 import 失败）。
-    """
-    return {
-        "available": False,
-        "status": status,
-        "betas": {},
-        "t_stats": {},
-        "significant": {},
-        "style_allocation": {},
-        "baseline_betas": {},
-        "factor_correlations": {},
-        "correlation_note": "",
-        "alpha": 0.0,
-        "window": 0,
-        "sample_count": 0,
-        "stale_factors": [],
-    }
-
-
-def _industry_unavailable_fallback(status: str) -> dict:
-    """行业 Beta 子表的降级契约（键集同 `analysis.industry_beta.unavailable_result`）。"""
-    return {
-        "available": False,
-        "status": status,
-        "exposure": {},
-        "betas": {},
-        "alphas": {},
-        "t_stats": {},
-        "significant": {},
-        "correlations": {},
-        "unmapped_industries": [],
-        "window": 0,
-        "sample_count": 0,
-    }
 
 
 # ── 持仓历史 K 线路由 ──
@@ -167,14 +125,13 @@ def compute_factor_exposure_data(
             compute_factor_exposure,
             filter_stale_factor_klines,
             klines_to_returns,
-            unavailable_result,
         )
         from src.python.fetcher.index import fetch_index_history
     except ImportError as exc:
         # 纯计算层重依赖（pandas/numpy）缺失：该区块降级，不阻塞主报告（§1.4.5）
         logger.warning("[factor] 风格因子回归依赖缺失（%s），章节降级为数据源暂不可用", exc)
         reporter.warn("风格因子回归依赖缺失，章节降级")
-        return _factor_unavailable_fallback("source_failed")
+        return factor_unavailable_result("source_failed")
 
     today_str = datetime.now().strftime("%Y-%m-%d")
     # 90 条历史：预留对齐/dropna 头部损耗，保证 ≥window(60) 期有效样本
@@ -222,12 +179,12 @@ def compute_factor_exposure_data(
         portfolio_returns = asif_portfolio_daily_returns(holdings_bars)
         if not portfolio_returns:
             logger.warning("[factor] 组合历史收益为空，因子暴露数据不足")
-            return unavailable_result("insufficient")
+            return factor_unavailable_result("insufficient")
 
         # 数据源故障：全部因子拉取为空（区别于数据不足，§1.4.5 ②）
         if all(not bars for bars in factor_klines.values()):
             logger.warning("[factor] 全部因子指数 K 线获取失败，章节降级为数据源暂不可用")
-            return unavailable_result("source_failed")
+            return factor_unavailable_result("source_failed")
 
         # ── 3. 新鲜度剔除（停更）+ 空拉取剔除 ──
         empty_factors = [f for f, bars in factor_klines.items() if not bars]
@@ -235,7 +192,7 @@ def compute_factor_exposure_data(
         excluded = sorted(set(empty_factors + stale))
         if len(fresh) < MIN_FACTORS:
             logger.warning("[factor] 有效因子不足 %d（剔除 %s），数据不足", MIN_FACTORS, excluded)
-            return unavailable_result("insufficient", stale_factors=excluded)
+            return factor_unavailable_result("insufficient", stale_factors=excluded)
 
         # ── 4. 因子收益序列 + 沪深300 基准 ──
         factor_returns = {f: klines_to_returns(fresh[f]) for f in fresh}
@@ -258,7 +215,7 @@ def compute_factor_exposure_data(
         return result
     except Exception:
         logger.exception("[factor] 因子暴露计算异常，章节降级")
-        return unavailable_result("source_failed")
+        return factor_unavailable_result("source_failed")
 
 
 def compute_industry_beta_data(
@@ -301,13 +258,12 @@ def compute_industry_beta_data(
             INDUSTRY_INDEX_MAP,
             compute_industry_beta_analysis,
             compute_industry_exposure,
-            unavailable_result,
         )
     except ImportError as exc:
         # 纯计算层重依赖缺失：子表降级（§1.4.5），不阻塞主报告
         logger.warning("[industry_beta] 行业 Beta 依赖缺失（%s），子表降级", exc)
         reporter.warn("行业 Beta 依赖缺失，子表降级")
-        return _industry_unavailable_fallback("source_failed")
+        return industry_unavailable_result("source_failed")
 
     _days = 90
 
@@ -329,7 +285,7 @@ def compute_industry_beta_data(
         exposure_result = compute_industry_exposure(industry_cap)
         if not exposure_result["available"]:
             reporter.warn("行业 Beta：行业分类（push2）不可用，写入占位")
-            return unavailable_result("source_failed")
+            return industry_unavailable_result("source_failed")
 
         # ── 3. 组合 as-if 日收益（并行拉取持仓 K 线） ──
         holdings_bars: dict[str, dict] = {}
@@ -358,7 +314,7 @@ def compute_industry_beta_data(
         portfolio_returns = asif_portfolio_daily_returns(holdings_bars)
         if not portfolio_returns:
             logger.warning("[industry_beta] 组合历史收益为空，行业 Beta 数据不足")
-            return unavailable_result("insufficient")
+            return industry_unavailable_result("insufficient")
 
         # ── 4. 有暴露且映射行业的指数 K 线（并行） ──
         mapped_industries = sorted(i for i in exposure_result["exposure"] if i in INDUSTRY_INDEX_MAP)
@@ -398,4 +354,4 @@ def compute_industry_beta_data(
         return result
     except Exception:
         logger.exception("[industry_beta] 行业 Beta 编排异常，章节子表降级")
-        return unavailable_result("source_failed")
+        return industry_unavailable_result("source_failed")

@@ -19,7 +19,9 @@ from pathlib import Path
 
 import pytest
 
+from src.python.analysis import industry_beta
 from src.python.analysis import style_factor_regression as sfr
+from src.python.analysis.unavailable_contracts import factor_unavailable_result, industry_unavailable_result
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_analysis, pytest.mark.edge]
 
@@ -62,3 +64,22 @@ class TestNumericStackLazyImport:
         assert result["available"] is False
         assert result["status"] == "source_failed"
         assert result["betas"] == {}
+
+    def test_unavailable_result_delegates_to_shared_contract(self):
+        """计算层的空契约与共享工厂同源（键集/默认值不得各自维护一份）。"""
+        assert sfr.unavailable_result("insufficient", sample_count=5, stale_factors=["growth"]) == (
+            factor_unavailable_result("insufficient", sample_count=5, stale_factors=["growth"])
+        )
+        assert industry_beta.unavailable_result("source_failed") == industry_unavailable_result("source_failed")
+
+    def test_contracts_module_has_no_third_party_dependency(self):
+        """契约模块是「重依赖坏掉时仍须可用」的那一层：不得引入 numpy/pandas。"""
+        source = Path(sfr.__file__).with_name("unavailable_contracts.py").read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        imported = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imported |= {alias.name.split(".")[0] for alias in node.names}
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imported.add(node.module.split(".")[0])
+        assert not {"pandas", "numpy"} & imported

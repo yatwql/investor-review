@@ -247,7 +247,7 @@ def main() -> None:
     preflight_error = interpreter_preflight_error()
     if preflight_error:
         print(preflight_error, file=sys.stderr)
-        return
+        raise SystemExit(1)
 
     # ASCII 降级（TUI_ASCII=1）：在写出层做一字符换一字符的符号替换，版面代码不动
     from src.python.tui.symbols import install_ascii_stream
