@@ -1,5 +1,5 @@
 # 测试覆盖统计
-> 文档版本：0.17.5-dev
+> 文档版本：0.17.5
 
 > ⚠ 以下测试项数为撰写时的快照值，实际计数随版本迭代而变化。`模式对应测试量` 表由 `--mode bench --update-docs` 自动回填本机实测；功能域/分组等子表精确统计请运行 `scripts/test-collect-coverage.py`（或 `pytest src/test/ --collect-only -q`）获取实时计数。
 
@@ -18,7 +18,7 @@
 | `regression` | **293** | ~15s |
 | `dev-verify` | **9276** | ~1min |
 | `verify` | **13150** | ~29s |
-| `integration` | **344** | ~15s |
+| `integration` | **344** | ~16s |
 | `edge` | **1193** | ~12s |
 | `data` | **70** | ~5s |
 | `all` | **13494** | ~28s |
@@ -74,7 +74,7 @@
 | `verify,regression` | ~35s（verify+regression 顺序之和） | ~5min（verify+regression 顺序之和） |
 | `dev-verify` | ~1min | ~4min |
 | `verify` | ~29s | ~4min |
-| `integration` | ~15s | ~2min |
+| `integration` | ~16s | ~2min |
 | `edge` | ~12s | ~1min |
 | `data` | ~5s | ~31s |
 | `all` | ~28s | ~4min |

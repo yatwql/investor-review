@@ -2,69 +2,18 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
-> **最近发布 [0.17.4]**（2026-11-08）——已发布版本段随发布移入 [`archived_changelog.0.17.x.md`](../archive/v0.17.x/archived_changelog.0.17.x.md)；本文件只保留当前开发版本段与归档索引。
+> **最近发布 [0.17.5]**（2026-11-08）——已发布版本段随发布移入 [`archived_changelog.0.17.x.md`](../archive/v0.17.x/archived_changelog.0.17.x.md)；本文件只保留当前开发版本段与归档索引。
 
 ---
 
-## [0.17.5-dev] - 开发中（未发布）
+## [0.17.6-dev] - 开发中（未发布）
 
-### 修复
-
-- **LLM 指纹分两类**（rf-1078）（价格相关 / 价格无关，`cache_policy.PRICE_INDEPENDENT_MODULES` 单源）：价格无关模块（`global_macro` / `news_correlation`）键里不含价格、不带行情口径桶后缀，盘中可复用；其余模块带桶后缀、盘中不复用。分类同时驱动「桶后缀」与「盘中闸门」两处行为，新模块默认按价格相关处理。
-- **与价格无关模块的缓存键去掉价格信息**（rf-1077）：`global_macro`（全球政经局势）与 `news_correlation`（财经热点关联）的结论只取决于「持有哪些品种」，此前键里带着持仓变动复盘块（市值/盈亏差）、行情口径桶后缀与穿透 mv/ratio_pct，价格一变就整批换键、TTL 从未生效。现前者只留结构/分类/申购限购块，后者穿透只留 `name/codes`（`news_context_fingerprint()` 单点构造）。另新增 `trading_calendar.trading_day_as_of_cached()`：行情口径桶改用「只读已缓存日历、绝不触网」的判定，指纹相关用例不再隐性依赖取数。
-- **LLM 缓存加时间口径：盘中不复用、收盘档可复用**（rf-1076）：LLM 指纹含行情派生块（申购限购/持仓变动/环比降级），盘中逐分钟变、收盘后冻结。新增 `core.market_hours.market_snapshot_bucket()` 把「本次运行依据哪个已完成时点」抽成四档（盘中 / 上午收盘 / 当日收盘 / 上一交易日收盘），每轮报告判定一次；盘中档在预检与骨架两处跳过缓存读（归因 `intraday_no_reuse`），收盘档同档内正常复用；桶键进四个基础模块与辩论键指纹；统一 prompt 附录后追加 `【数据口径】…` 行，预检摘要旁打印本轮口径。文档：`llm-technical.md` §7.6、`technical.md` §3.4、FAQ 同步。
-- **运行观测口径回正：逐模块耗时扣排队、批量模块耗时落账、市场情绪零命中可判读**（rf-1075）：`per_module.duration` 改为「模型耗时」（`PacingGate` 现按线程记账整段过闸等待——含此前漏记的并发许可等待——骨架调用前后扣减；实测串行端点曾把 62s 墙钟记成 88.2s）；批量路径（`news_correlation`）由骨架回传阶段墙钟，不再恒记 0.0s；`market_sentiment` 日志补两侧规模（龙虎榜/连板梯队条目数 × 跟踪标的数），交易日改为龙虎榜→连板梯队双源兜底。
-- **空数据契约键集收口单源 + TUI 前置失败退出码**（rf-1074）：上一轮修复引入的兜底把 `available=False` 的键集写到第三处（`report/_report_factor_metrics` 字面量），且兜底 `window` 退化为 `0`；现键集单源到新增的 `analysis/unavailable_contracts.py`（无 numpy/pandas，重依赖坏掉时仍可用），两个计算模块与编排层兜底统一委托它，补三条单源断言。`tui.main()` 前置检查失败改为 `raise SystemExit(1)`，直连入口也能被脚本感知。
-- **裸解释器启动致 full 报告整份失败**（rf-1073）：系统 Python（无 pandas/numpy）下生成报告，`ModuleNotFoundError: No module named 'pandas'` 从数据准备阶段冒泡到 `generate_report`，用户只看到「生成失败」。三处根因同批修：启动脚本不再依赖 `activate`（venv 搬家后其烘焙的绝对 `VIRTUAL_ENV` 使激活静默失效，裸 `python3` 落到系统解释器），改为直接调用 `.venv` 内解释器并前置「重依赖可导入」硬闸；`pandas`/`numpy` 补进 `requirements.txt`/`pyproject.toml`（此前仅经 akshare 传递安装）；`analysis/style_factor_regression.py` 的 pandas/numpy 改惰性导入、编排层把计算层导入纳入 `try` 并 `ImportError` → `available=False` 降级（§1.4.5，不再拖垮整份报告）。`core/doctor.py` 增「关键依赖」自检行与 `interpreter_preflight_error()`，TUI/Web 入口启动即拦截并给出解释器路径与修复命令。
-- **幻觉采样三处断言只看「有告警」**（rf-1065）：`test_wrong_profit_rate_vs_portfolio` / `test_mixed_correct_and_wrong` /
-  `test_missing_code` 原本只断言 `len(issues) >= 1`——检测器把任意无关数值判成偏离也能转绿，测不出「对照的是组合
-  累计收益率 / 涉事个股 600036 / 涉事代码 002837」这一核心口径。现补点名断言（含实际值 9.7% 与代码）；
-  与仓内已有的 `test_wrong_stock_return`（已断言 `issues[0]` 含代码）同标准。
-- **缓存边界用例名实不符**（rf-1065）：`test_intraday_written_cache_expired_right_after_close_gate` 名称称
-  「盘后已过期」，断言却是「仍可读」（本用例只验读侧，收盘时点门禁由同文件 TTL 口径用例覆盖）。
-  改名为 `test_intraday_written_cache_survives_static_ttl_after_close`，docstring 直接写明验证的是「静态 TTL 下仍可读」。
-
-### 清理
-
-- **`test-coverage.md` 揟掉历史复盘痕迹与失真导语**（rf-1066）：两条带日期的「门禁口径变更」告示（含「修复前匹配全空」
-  「台账旧值 10,136」「9,800→10,145」）已在 `changelog`/归档，不再在统计页重复；其中「上方 `dev-verify`/`verify`
-  两行为并入前快照」已是错误导语（该表已重测），删除后条目只留当前口径并指向 `technical.md` §4.23。「两机差距」
-  段内联的绝对耗时（`unit ~28s`/`all ~39s`/`data ~3s`）与紧邻其上的表（`~1min`/`~28s`/`~5s`）相矛盾，改为只陈述
-  按表重算的比值区间；旧采集事故叙事改为不带日期的排查口径（先查未 mock 外部访问，再谈负载与并行度）。
-- **8 份文档正文清掉历史复盘痕迹**（rf-1067）：`DESIGN.md` / `developer-guide.md` / `technical.md` / `llm-technical.md` /
-  `scripts-reference.md` / `testplan.md` / `datasource-reliability.md` / `how-to-config-llm-reference.md` 里的带日期告示
-  （「已采纳 / 已落地 / 收紧」）、「曾经的写法」「曾占…现口径」「历史漂移」等对照叙事，统一改写为**当前状态陈述**：
-  告示去日期与「已采纳」口吻只留规则；对照叙事改为「若…则…」的风险机制；缺陷描述改为要求陈述；口径类内容指向真源
-  （如 `technical.md` §4.23 / §9.2）。实测确认：仅保留实测数据点的日期（取值快照），不保留变更公告式日期。
-- **程序注释清掉历史复盘叙事**（rf-1068）：`src/python` 47 处、`scripts` 19 处、`src/test` 44 处「此前 X 现在 Y」
-  「原先各写一份」「曾占…」式对照与带日期的校准告示，统一改写为**当前状态陈述**：对照句改「若/不得 X，否则 Y」，
-  告示去日期只留规则，重命名史改「不得沿用旧称」。保留「回归背景 / 回归场景」元描述（`CLAUDE.md` 明确豁免，
-  用于说明断言为何存在）。顺带修 `edit_ops`/`_ymd` 两处入参类型收窄（Pyright 报 Unknown|None 赋给 str）。
-- **评测脚本 global_macro 漏传 `total_cost`**（rf-1069）：`scripts/_eval_halluc_sampler/llm_call.py` 调用
-  `_build_global_macro_prompt` / `generate_global_macro` 时少传 `total_cost`——`categories` 落在 `total_cost` 位置、
-  `categories` 缺参，该评测路径运行时必抛 `TypeError`。补实参；顺带初始化 `cached=False`（未命中任何分支时不再未绑定）。
-- **6 文件静态类型债清理**（rf-1069）：`prompts_signals._is_number` 改 `TypeGuard[float]`（11 处数值运算不再报
-  Unknown）、`generators` 的默认值取键前 `isinstance(..., dict)` 收窄且 `_max_tokens` 显式兜底 18432、
-  `generators_orchestrator` 的基线组件 `or {}`、`test_correlation_html` 用 `_require_section()` 断言取节点并
-  去掉 Optional 下标、`test-smoke-web`/`metrics.py`/`_llm_settings`/`atomic_write` 的 Optional 与 I/O 调用收口。
-- **96h 变更技术债收口**（rf-1070）：去 Jinja 化批次留下的 `.bg-primary` / `.bg-alloc-mid` / `.bg-alloc-low`
-  三条工具类无任何引用（SVG 用的是 `.fill-alloc-*`），按死样式删除并重标定报告页 CSS 规则集哈希；
-  `close_html_generation_stage`（full/both 共用收口）此前只有端到端间接触及，补 4 条直测锁住其分支——
-  无 recorder 静默返回、有分段时按「落盘」耗时告警、渲染慢指向模板而非磁盘、无分段时回落总值。
-- **控制台着色回归「色源单源」约束**（rf-1071）：`core/ansi_colors` 新增 `RAW_CODES` 与
-  `supports_color(stream)` / `codes_for(stream)`（按**指定流**判定着色能力），`core/doctor.py` 与
-  `report/cli_progress.py` 改为调用前者——此前两模块各自硬写 `\033[...` 转义码并各自复制
-  `NO_COLOR`/`isatty` 判定，改配色或降级口径必漏改一处。
-- **删掉最后一处「旧内部接口」门面**（rf-1072）：`core/data_freshness._detail_value` 只是
-  `core/detail_view.detail_value` 的一行转发（自述「仅保留旧名」），`holding_status` 也经它取值；
-  现已统一直调 `detail_value`。兼容面七类复核结论保持不变：旧配置项/旧配置文件/旧数据文件/
-  旧数据结构/旧缓存结构/旧缓存文件均无兼容分支（结构变更一律硬闸门拒绝或整体作废，见 `technical.md` §9.2）。
 
 （本次发布内容见下方归档索引）
 
 ## 归档
 
-- [`archived_changelog.0.17.x.md`](../archive/v0.17.x/archived_changelog.0.17.x.md) — v0.17.0 ~ v0.17.4（2026-11-04 ~ 2026-11-08）
+- [`archived_changelog.0.17.x.md`](../archive/v0.17.x/archived_changelog.0.17.x.md) — v0.17.0 ~ v0.17.5（2026-11-04 ~ 2026-11-08）
 - [`archived_changelog.0.16.x.md`](../archive/v0.16.x/archived_changelog.0.16.x.md) — v0.16.0 ~ v0.16.17（2026-10-25 ~ 2026-11-03）
 - [`archived_changelog.0.15.x.md`](../archive/v0.15.x/archived_changelog.0.15.x.md) — v0.15.0 ~ v0.15.9（2026-10-24 ~ 2026-10-25）
 - [`archived_changelog.0.14.x.md`](../archive/v0.14.x/archived_changelog.0.14.x.md) — v0.14.0 ~ v0.14.8（2026-10-21 ~ 2026-10-23）
