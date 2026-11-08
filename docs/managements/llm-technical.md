@@ -936,6 +936,8 @@ penetrated_assets ──→ extract_stable_penetration()
 
 ### 7.3 TTL 分辨率
 
+> TTL 回答「能用多久」，行情口径桶回答「能不能用」：盘中档先于 TTL 生效（见 §7.6）。
+
 `get_ttl(data_type)` 的解析顺序（**与缓存键无关，不做按 key 抖动**）：
 
 1. 盘中特例：注册表 `DataModuleDef.market_ttl` 声明盘中敏感（当前仅 price/index）且处于交易时段 → `market_hour_ttl`（config 数值覆盖，缺省 30s）
@@ -995,6 +997,36 @@ cache_get(optimistic_key, ttl) → 命中 → 直接返回（+ 缓存标记）
 设计目的：绝大多数情况下链首 Provider 最常使用，提前检查避免不必要的链遍历。
 
 **缓存写入**：API 调用成功后，以**实际返回的 provider_name** 写入缓存（而非链首），确保缓存键与实际 Provider 一致。
+
+### 7.6 行情口径桶与盘中复用策略
+
+**问题**：指纹里含行情派生块（申购限购约束 / 持仓变动复盘 / 环比与降级块），这些块在盘中逐分钟
+变、收盘后冻结。若不做时间口径区分，同一份持仓在盘中反复出报告就是「每次都换键、每次都重算」；
+反过来若一律复用，交易时段内读者会拿到十分钟前的盘中结论。
+
+**方案**：`core/market_hours.market_snapshot_bucket()` 把「本次运行看到的是哪个**已完成**时点」抽成
+一个桶，**每轮报告判定一次**（`report/orchestrator.generate_report` 入口重置 memo）：
+
+| 时点（北京时间） | 桶键 | 复用 |
+|:--|:--|:--|
+| 交易日 09:30–11:30 / 13:00–15:00 | `intraday:<当日>` | **不复用**（跳过缓存读，照常写） |
+| 交易日 11:30–13:00 | `noon:<当日>` | 可复用（当日 11:30 快照） |
+| 交易日 ≥ 15:00 | `close:<当日>` | 可复用 |
+| 交易日 09:30 前、非交易日 | `close:<上一交易日>` | 可复用 |
+
+- **闸门位置**：预检（`generators_orchestrator._precheck_one_cache`）与骨架
+  （`skeleton.generate_llm_content`）两处，后者覆盖预检之后才确定键的模块（`self_review` /
+  `holding_change`）——只拦一处等于「基础模块重算了、后置模块仍复用盘中结论」。
+- **归因**：盘中跳过读而写入的未命中归因为 `intraday_no_reuse`（`observation.RECOMPUTE_REASONS`
+  的合法取值之一），与「指纹变化 / TTL 到点 / 强制重算」区分开。
+- **进键**：桶键作为后缀并入四个基础模块与辩论白脸/黑脸的指纹（`module_fingerprint.market_bucket_cache_suffix()`）。
+  盘中档虽不复用，键里仍带档标识，避免盘中写下的缓存被收盘档读到。
+- **口径声明**：统一 prompt 附录之后追加一行 `【数据口径】行情为 <桶 label> 口径…`
+  （`market_hours.market_snapshot_note()`），使收盘档复用出的结论按该档陈述，不写出「当前盘中」式措辞。
+- **场外净值**：只有官方净值（T+1 晚间更新），不参与盘中判定；其口径由净值日自然覆盖。
+- **每轮日志**：预检摘要旁固定一行 `[LLM 预检] 行情口径：<label>（桶 <key>，盘中不复用/已完成时点可复用）`。
+
+[↑ 回到顶部](#目录)
 
 [↑ 回到顶部](#目录)
 

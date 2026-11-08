@@ -285,6 +285,10 @@ def generate_report(
 
     参数语义见 :func:`_generate_report_impl`。
     """
+    # 行情口径桶每轮判定一次（长驻 TUI 进程可能跨时段连续出报告，memo 必须按轮失效）
+    from src.python.core.market_hours import reset_market_snapshot
+
+    reset_market_snapshot()
     try:
         return _generate_report_impl(
             holdings,

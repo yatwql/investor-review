@@ -59,6 +59,7 @@ from src.python.llm.rate_caliber import PROMPT_SCHEMA_VERSION
 
 __all__ = [
     "ModuleFingerprintInputs",
+    "market_bucket_cache_suffix",
     "debate_feature_cache_suffix",
     "fingerprint_components",
     "diff_fingerprint_components",
@@ -288,6 +289,19 @@ def generation_params_suffix(module: str) -> str:
     return "_" + compute_fingerprint(*parts)
 
 
+def market_bucket_cache_suffix() -> str:
+    """行情口径桶后缀 —— 进四个基础模块与辩论键的指纹。
+
+    为什么要进键：收盘档（上一交易日收盘 / 上午收盘 / 当日收盘）之间行情快照不同，
+    同一份持仓在两档下的输入并不等价；进键让「档变了」显式换键，而不是靠块文本
+    逐字节比较去猜。盘中档虽按策略不复用，键里仍带档标识——否则盘中写下的缓存
+    会被收盘档读到（键相同、内容却是盘中口径）。
+    """
+    from src.python.core.market_hours import market_snapshot_bucket
+
+    return "_" + compute_fingerprint(market_snapshot_bucket().key)
+
+
 def global_macro_fingerprint(inputs: ModuleFingerprintInputs) -> str:
     """全球政经局势：持仓结构 + 分类结构 + 统一附录**口径类**块 + 版本盐。
 
@@ -307,7 +321,7 @@ def global_macro_fingerprint(inputs: ModuleFingerprintInputs) -> str:
         _parts.append(inputs.purchase_block)
     if inputs.holding_change_block:
         _parts.append(inputs.holding_change_block)
-    return compute_fingerprint(*_parts) + generation_params_suffix("global_macro")
+    return compute_fingerprint(*_parts) + market_bucket_cache_suffix() + generation_params_suffix("global_macro")
 
 
 def expert_review_fingerprint(inputs: ModuleFingerprintInputs) -> str:
@@ -341,6 +355,7 @@ def expert_review_fingerprint(inputs: ModuleFingerprintInputs) -> str:
     _fp += _pipeline_block_cache_suffix(inputs.pipeline_data)
     _fp += signal_ledger.summary_cache_suffix()
     _fp += scenario_mandate_cache_suffix()
+    _fp += market_bucket_cache_suffix()
     _fp += generation_params_suffix("expert_review")
     return _fp
 
@@ -378,6 +393,7 @@ def debate_procon_fingerprint(inputs: ModuleFingerprintInputs) -> str:
         compute_fingerprint(*_parts)
         + debate_feature_cache_suffix()
         + _pipeline_block_cache_suffix(inputs.pipeline_data)
+        + market_bucket_cache_suffix()
         + generation_params_suffix("expert_review")
     )
 
@@ -439,6 +455,7 @@ def health_check_fingerprint(inputs: ModuleFingerprintInputs) -> str:
     _fp = compute_fingerprint(*_parts)
     _fp += _signal_digest_cache_suffix(inputs.pipeline_data)
     _fp += _pipeline_block_cache_suffix(inputs.pipeline_data)
+    _fp += market_bucket_cache_suffix()
     _fp += generation_params_suffix("health_check")
     return _fp
 
@@ -467,8 +484,12 @@ def penetration_deep_fingerprint(inputs: ModuleFingerprintInputs) -> str:
     ]
     if _extra:
         # 条件并入：口径类块进提示词即进键；两块均空时不追加 part（逐字节回退）
-        return compute_fingerprint(_base, *_extra) + generation_params_suffix("penetration_deep")
-    return _base + generation_params_suffix("penetration_deep")
+        return (
+            compute_fingerprint(_base, *_extra)
+            + market_bucket_cache_suffix()
+            + generation_params_suffix("penetration_deep")
+        )
+    return _base + market_bucket_cache_suffix() + generation_params_suffix("penetration_deep")
 
 
 def self_review_fingerprint(

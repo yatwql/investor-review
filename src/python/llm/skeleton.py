@@ -550,7 +550,24 @@ def generate_llm_content(
     from src.python.llm.observation import current_llm_observation
 
     _hit_sink = current_llm_observation()
-    if cache_enabled and not force:
+    from src.python.core.market_hours import market_snapshot_bucket
+
+    _bucket = market_snapshot_bucket()
+    if cache_enabled and not force and _bucket.intraday:
+        # 盘中档不复用（与预检侧同一策略，见 core.market_hours.market_snapshot_bucket）：
+        # 本骨架覆盖预检之后的模块（self_review / holding_change 等），闸门漏在这里
+        # 就等于「基础模块重算了、后置模块仍复用旧盘中结论」。
+        logger.info("[LLM] %s 盘中档不复用缓存（%s）", module_key or precheck_key, _bucket.label)
+        if _hit_sink is not None and hasattr(_hit_sink, "note_cache"):
+            _hit_sink.note_cache(False)
+        if _hit_sink is not None and hasattr(_hit_sink, "note_recompute_reason") and module_key:
+            from src.python.llm.observation import RECOMPUTE_INTRADAY_NO_REUSE
+
+            _hit_sink.note_recompute_reason(module_key, RECOMPUTE_INTRADAY_NO_REUSE)
+        _force_read = True
+    else:
+        _force_read = False
+    if cache_enabled and not force and not _force_read:
         cached = cache_get(precheck_key, cache_ttl)
         if _hit_sink is not None and hasattr(_hit_sink, "note_cache"):
             _hit_sink.note_cache(bool(cached))
@@ -680,6 +697,11 @@ def _run_standard_mode(
         )
         if appendix:
             _user = _user + "\n\n" + appendix
+        # 口径声明：让模型知道手里的行情是哪个已完成的时点（收盘档复用要求内容按该
+        # 口径陈述，缺这句就会写出「当前盘中」式措辞，与报告时间自相矛盾）
+        from src.python.core.market_hours import market_snapshot_note
+
+        _user = _user + "\n\n" + market_snapshot_note()
 
     # ── 账本上下文回灌（决策跨期反思闭环 + 确定性信号沉淀）──
     # 仅对接收模块（expert_review）、非辩论自定义 prompt 变体生效；

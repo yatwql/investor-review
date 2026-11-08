@@ -1441,6 +1441,11 @@ _write_atomic(fd, tmp_path, final_path)
 
 **方案**：缓存文件名中内嵌 MD5 前 12 位十六进制摘要，输入源数据变化时摘要改变，缓存键自动不匹配。
 
+**行情口径桶（LLM 侧配套）**：行情派生输入在盘中逐分钟变、收盘后冻结，故 LLM 缓存另以
+`market_hours.market_snapshot_bucket()` 标注「本次运行依据哪个已完成时点」——盘中档不复用、
+收盘档（上一交易日收盘 / 上午收盘 / 当日收盘）同档内可复用。判定每份报告一次，桶键进基础模块指纹，
+细则见 `llm-technical.md` §7.6。
+
 ```
 文件名模式: {prefix}_{digest}.json
 示例:       profit_forecast_a1b2c3d4e5f6.json

@@ -11,9 +11,12 @@ from __future__ import annotations
 import unittest
 
 import pytest
+
 from unittest.mock import MagicMock, patch
 
 from src.test.helpers import SynchronousExecutor
+
+pytestmark = [pytest.mark.usefixtures("offline_external_sources")]
 
 
 @pytest.mark.llm

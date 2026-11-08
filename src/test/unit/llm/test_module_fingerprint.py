@@ -38,7 +38,37 @@ from src.python.llm.module_fingerprint import (
 )
 from src.python.llm.prompts import CACHE_PREFIX_LLM
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_llm, pytest.mark.llm]
+pytestmark = [
+    pytest.mark.unit,
+    pytest.mark.unit_llm,
+    pytest.mark.llm,
+    pytest.mark.usefixtures("offline_external_sources"),
+]
+
+
+#: 键形后缀：行情口径桶键（盘中/午间/收盘各一档；本文件由 `_frozen_market_bucket`
+#: 固定为 ``close:2026-11-06``，故基线可复现）。后缀整体属于「键形」，随档变化是
+#: 预期行为，仅在桶键常量本身被改动时才需要刷新本表。
+_BUCKET_SUFFIX = "_404174e2503c"
+
+
+@pytest.fixture(autouse=True)
+def _frozen_market_bucket(monkeypatch):
+    """冻结行情口径桶（收盘档 2026-11-06）。
+
+    桶键随钟面变化（盘中/午间/收盘各一档），若不冻结，黄金基线表会随运行时刻漂移。
+    本文件的断言都只关心「同桶下键的增减」，故此处置为常量。
+    """
+    from src.python.core import market_hours
+
+    frozen = market_hours.MarketSnapshot(
+        key="close:2026-11-06",
+        label="上一交易日收盘（2026-11-06）",
+        as_of="2026-11-06",
+        intraday=False,
+    )
+    monkeypatch.setattr(market_hours, "market_snapshot_bucket", lambda now=None: frozen)
+
 
 _MODULE_KEYS = ("global_macro", "expert_review", "health_check", "penetration_deep")
 
@@ -656,7 +686,7 @@ _DEBATE_TIMELY_BLOCKS = {
 # 条件并入之前以本文件样例输入录制的辩论基础指纹（四块皆空时键必须与引入前
 # 逐字节一致——抓「空串 + 分隔符改变哈希」陷阱，存量辩论缓存不无谓失效）。
 # 后缀逻辑有意变更时应同步更新（黄金值例外登记）。
-_DEBATE_PRE_WIRE_BASELINE = "437755c22ee6_c"
+_DEBATE_PRE_WIRE_BASELINE = "437755c22ee6_c" + _BUCKET_SUFFIX
 
 
 def test_debate_appendix_blocks_empty_equals_pre_wire_baseline():
@@ -715,10 +745,10 @@ _PURCHASE_BLOCK_CHANGED = _PURCHASE_BLOCK.replace("100 元", "200 元")
 #: 空块基线（接线前形态）：随提示词文本版本盐递增同步刷新（当前 `rate-caliber-4`）；
 #: 结构后缀 `_c` 不应随盐变化——后缀增减即为键形漂移，属需排查的异常。
 _PRE_WIRE_BASELINE = {
-    "global_macro": "df8fb2929da0",
-    "expert_review": "437755c22ee6_c",
-    "health_check": "e06878f7600a",
-    "penetration_deep": "12f59e5d9751",
+    "global_macro": "df8fb2929da0" + _BUCKET_SUFFIX,
+    "expert_review": "437755c22ee6_c" + _BUCKET_SUFFIX,
+    "health_check": "e06878f7600a" + _BUCKET_SUFFIX,
+    "penetration_deep": "12f59e5d9751" + _BUCKET_SUFFIX,
 }
 
 
@@ -773,3 +803,30 @@ def test_fact_check_rules_version_enters_module_fingerprints(monkeypatch):
 
     for module_key in sorted(_MODULE_KEYS):
         assert _write_fingerprint(module_key) != baseline[module_key], f"{module_key}: 规则版本未进指纹"
+
+
+def test_market_bucket_key_enters_fingerprint(monkeypatch):
+    """收盘档与盘中档的键必须不同：否则盘中写下的缓存会被收盘档读到。"""
+    from src.python.core import market_hours
+    from src.python.llm.module_fingerprint import global_macro_fingerprint
+
+    base = ModuleFingerprintInputs(
+        total_mv=_TOTAL_MV,
+        total_cost=_TOTAL_COST,
+        total_profit=_TOTAL_PROFIT,
+        total_today_profit=_TODAY_PROFIT,
+        holdings_details=_HOLDINGS,
+        categories=dict(_CATEGORIES),
+        history_data=_HISTORY,
+    )
+    closed = global_macro_fingerprint(base)
+    monkeypatch.setattr(
+        market_hours,
+        "market_snapshot_bucket",
+        lambda now=None: market_hours.MarketSnapshot(
+            key="intraday:2026-11-06", label="盘中（2026-11-06 10:00）", as_of="2026-11-06", intraday=True
+        ),
+    )
+    intraday = global_macro_fingerprint(base)
+
+    assert closed != intraday

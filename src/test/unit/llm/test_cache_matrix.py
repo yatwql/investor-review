@@ -294,3 +294,43 @@ class TestSerialModules:
 
     def test_holding_change_misses_when_block_changes(self, llm_cache_dir):
         assert self._holding_change_runs("块A", "块B") == 2, "复盘块变化时归因必须重算"
+
+
+class TestMarketSnapshotBucketPolicy:
+    """行情口径桶决定复用：收盘档同档内可命中，盘中档一律不复用。"""
+
+    @staticmethod
+    def _freeze(monkeypatch, key: str, label: str, intraday: bool) -> None:
+        from src.python.core import market_hours
+
+        frozen = market_hours.MarketSnapshot(key=key, label=label, as_of="2026-11-06", intraday=intraday)
+        monkeypatch.setattr(market_hours, "market_snapshot_bucket", lambda now=None: frozen)
+
+    def test_intraday_run_never_reuses_cache(self, llm_cache_dir, monkeypatch):
+        """盘中档：即便同输入、TTL 未到，也必须重算（不把盘中结论复用给下一次运行）。"""
+        self._freeze(monkeypatch, "intraday:2026-11-06", "盘中（2026-11-06 10:00）", True)
+        base = make_inputs()
+        _run(base)
+        flags = _run(base)
+
+        assert not any(flags), f"盘中档不得命中缓存：{flags}"
+
+    def test_closed_bucket_reuses_cache(self, llm_cache_dir, monkeypatch):
+        """收盘档：同输入第二次运行全命中（这是桶机制要换来的收益）。"""
+        self._freeze(monkeypatch, "close:2026-11-06", "当日收盘（2026-11-06）", False)
+        base = make_inputs()
+        _run(base)
+        flags = _run(base)
+
+        assert all(flags), f"收盘档同输入应全命中：{flags}"
+
+    def test_precheck_logs_bucket_label(self, llm_cache_dir, monkeypatch, caplog):
+        """每轮预检留一行口径：读者要能从日志判断复用是否被盘中策略拦掉。"""
+        self._freeze(monkeypatch, "intraday:2026-11-06", "盘中（2026-11-06 10:00）", True)
+        with caplog.at_level(logging.INFO, logger="invest"):
+            _run(make_inputs())
+
+        bucket_lines = [line for line in _precheck_lines(caplog) if "行情口径" in line]
+        assert bucket_lines, "预检须留下本轮行情口径行"
+        assert "盘中" in bucket_lines[-1]
+        assert "盘中不复用" in bucket_lines[-1]

@@ -18,7 +18,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-pytestmark = [pytest.mark.scenario, pytest.mark.scenario_basic]
+pytestmark = [
+    pytest.mark.scenario,
+    pytest.mark.scenario_basic,
+    # LLM 指纹现含行情口径桶（读交易日历判定档位）：本文件不验日历，声明离线
+    pytest.mark.usefixtures("offline_external_sources"),
+]
 
 # generate_all_llm 返回 4 个分析结果 + 4 个缓存标志（无辩论模式）
 _LLM_OUTPUT_TUPLE_LEN = 8
@@ -197,11 +202,11 @@ class TestHealthCheckDegradationInjection:
         """
         from src.python.llm.prompts_action import _build_health_check_prompt
 
-        kwargs = dict(
-            total_mv=10000,
-            total_cost=9000,
-            total_profit=1000,
-            total_today_profit=100,
+        kwargs: dict = dict(
+            total_mv=10000.0,
+            total_cost=9000.0,
+            total_profit=1000.0,
+            total_today_profit=100.0,
             holdings_count=2,
             categories={"股票": 2},
         )

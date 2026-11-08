@@ -29,6 +29,7 @@ __all__ = [
     "RECOMPUTE_FINGERPRINT_CHANGED",
     "RECOMPUTE_TTL_EXPIRED",
     "RECOMPUTE_CACHE_MISS",
+    "RECOMPUTE_INTRADAY_NO_REUSE",
     "RECOMPUTE_REASONS",
 ]
 
@@ -41,6 +42,8 @@ RECOMPUTE_FINGERPRINT_CHANGED = "fingerprint_changed"
 RECOMPUTE_TTL_EXPIRED = "ttl_expired"
 #: 无上轮可比对的冷启动键（骨架路径专用，保守归类）
 RECOMPUTE_CACHE_MISS = "cache_miss"
+#: 盘中档按策略不复用（行情逐分钟变，读者不能拿到十分钟前的盘中结论）
+RECOMPUTE_INTRADAY_NO_REUSE = "intraday_no_reuse"
 
 #: 全部合法归因值：写入方只许用这里列出的字符串，新增原因必须登记在此（否则周报统计口径漂移）
 RECOMPUTE_REASONS: tuple[str, ...] = (
@@ -48,6 +51,7 @@ RECOMPUTE_REASONS: tuple[str, ...] = (
     RECOMPUTE_FINGERPRINT_CHANGED,
     RECOMPUTE_TTL_EXPIRED,
     RECOMPUTE_CACHE_MISS,
+    RECOMPUTE_INTRADAY_NO_REUSE,
 )
 
 _sink_lock = threading.Lock()

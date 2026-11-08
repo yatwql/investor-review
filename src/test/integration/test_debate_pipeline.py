@@ -11,7 +11,11 @@ from unittest.mock import patch
 
 import pytest
 
-pytestmark = [pytest.mark.integration, pytest.mark.integration_contract]
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.integration_contract,
+    pytest.mark.usefixtures("offline_external_sources"),
+]
 
 # generate_all_llm 返回元组：不含 debate_info 时的长度
 _TUPLE_LEN_WITHOUT_DEBATE = 8
