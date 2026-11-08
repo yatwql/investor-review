@@ -19,14 +19,13 @@
 
 `enable_fund_deep_analysis`、`enable_news`、`enable_history`、`enable_portfolio_evolution`、`enable_action` 五个配置项控制报告按章节组显示或隐藏对应的章节。LLM 分析章节的可见性由 `llm_settings.json` 的 `enabled_llm` 字典控制。关闭某个章节组后，该组涉及的所有章节完全隐藏，不留下序号空缺，剩余章节按顺序重新编号。
 
-TUI 主菜单 `[C]`「配置报告章节显隐」把**所有会决定「哪一章出现」的开关**收在一处，按四块排列（编号连续、由章节注册表派生；智囊团章节下另有生成子项）：
+TUI 主菜单 `[C]`「配置报告章节显隐」把**所有会决定「哪一章出现」的开关**收在一处，按三块排列（编号连续、由章节注册表派生；智囊团章节下另有生成子项；注册表仍保留 `artifact` 分块位，当前无条目，面板与 Web 配置面自动跳过空块）：
 
 | 块 | 编号 | 内容 | 存放 |
 |:--|:--|:--|:--|
 | 顶层章节 | 1-5 | 基金深度分析 / 财经热点关联分析 / 组合历史走势+回撤 / 组合演进 / 行动建议 | `config.json` → `enable_*`（本节表格） |
 | LLM 章节 | 6-12 | 全球政经局势 / 智囊团深度复盘（子项 `7.1`/`7.2`）/ 财经热点关联与持仓关联 / 持仓体检报告 / 穿透深度分析 / 生成后自检 / 持仓变动复盘归因 | `llm_settings.json` → `enabled_llm` |
 | 默认关闭的整章 | 13-15 | 调仓纪律回放 / 持仓变动复盘 / 个股基本面 | `features.json` |
-| 关联产物 | 16 | What-if 交易成本对比（仅调仓模拟报告页签） | `features.json` |
 
 > 上表编号为**当前注册表快照**：新增/删除章节后自动顺延，`?键名` 是稳定入口（面板状态行同时显示键名）。
 
@@ -517,12 +516,12 @@ Web 模式（浏览器界面）提供「配置编辑」面板，可修改的配�
 |:--|:--|:--|
 | 路径与文件 | `holdings_dir` / `holdings_filename` / `output_dir` | `[G]` → `H` / `F` / `O` |
 | 报告章节 | `enable_fund_deep_analysis` / `enable_news` / `enable_history` / `enable_portfolio_evolution` / `enable_action` | `[C]` 1~5 |
-| 持仓与交易 | `cost_lots`（默认关）/ `fund_purchase_limit` / `cost_position` / `risk_adjusted_excess`（默认关） | `[S]` 1-4 |
-| 市场与估值 | `valuation_percentile`（默认关）/ `market_temperature` / `crisis_replay`（默认关）/ `prosperity_framework` | `[S]` 5-8 |
-| 基金与风格 | `factor_catalog` / `industry_beta` / `candidate_compare`（默认开（自动项：配置候选池即生效）） | `[S]` 9-11 |
+| 持仓与交易 | `cost_lots`（默认关）/ `fund_purchase_limit` / `cost_position` / `risk_adjusted_excess`（默认关）/ `whatif_trade_cost`（默认关） | `[S]` 1-5 |
+| 市场与估值 | `valuation_percentile`（默认关）/ `market_temperature` / `crisis_replay`（默认关）/ `prosperity_framework` | `[S]` 6-9 |
+| 基金与风格 | `factor_catalog` / `industry_beta` / `candidate_compare`（默认开；自动项：配置候选池即生效，不占编号） | `[S]` 10-11 |
 | 事件与摘要 | `event_window_impact`（默认关）/ `market_sentiment`（默认关）/ `summary_highlights`（默认开） | `[S]` 12-14 |
-| 机制与质量 | `decision_basis`（默认开，行动建议章内「判断依据」块）/ `portfolio_constraints`（默认关）/ `decision_reflection`（默认关）/ `report_qa`（默认关、实验）/ `deterministic_signal` / `module_quality_gate` | `[S]` 15-20 |
-| 独立章节与回放 | `rebalance_schedule_replay`（默认关）/ `holding_change_review`（默认关）/ `whatif_trade_cost`（默认关）/ `stock_fundamentals`（默认关） | `[C]` 整章与关联产物块 |
+| 机制与质量 | `portfolio_constraints`（默认关）/ `decision_reflection`（默认关）/ `report_qa`（默认关、实验）/ `deterministic_signal`；`decision_basis`（默认开，行动建议章内「判断依据」块）与 `module_quality_gate`（默认开，LLM 输出评级）属内置常开，不占编号 | `[S]` 15-18 |
+| 独立章节与回放 | `rebalance_schedule_replay`（默认关）/ `holding_change_review`（默认关）/ `stock_fundamentals`（默认关）；`whatif_trade_cost`（默认关）已归持仓与交易组 | `[C]` 整章块（`whatif_trade_cost` 在 `[S]` 5） |
 | 章节内选项 | `llm_debate_procon`（默认关）/ `llm_debate_conditional` | `[C]` 7.1 / 7.2（智囊团复盘子项） |
 | 持仓匿名化 | `anonymization.mode`（off / code_display / full_anonymous / summary） | `[G]` → `A` |
 | 对比指数池 | `comparison_indices`（增 / 删 / 重置默认） | `[G]` → `I` |
