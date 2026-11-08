@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.6-dev
-> **编号源**：`rf-next = 1081`（新增问题提出后更新为 +1；已用最大 rf-1080，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1082`（新增问题提出后更新为 +1；已用最大 rf-1081，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -46,7 +46,7 @@
 | `src/python/report/decision_basis.py` 962 行（主程序登记线 700，红线 1000） | 六段块装配（信号/可信度/风险预算/纪律/结算+按视界表现/约束）仍在单模块；拆分方向：结算批表与按视界表现聚合（`build_settlement_summary`＋`build_performance`＋`_mean`/`_tone_*` 色彩助手）可整体下沉 `decision_basis_settlement.py`（只读账本、无跨段依赖，预计 −180 行）；信号清单与区分度登记（`_build_signal_rows`＋`BACKTEST_CONCLUSIONS`）可再下沉一簇 |
 | `src/python/llm/skeleton.py` 848 行（主程序登记线 700） | 模板数据与渲染逻辑可下沉 `llm/skeleton_*`（骨架模板 / 占位渲染 / 缓存归因 / 回写四簇并存） |
 | `src/python/cli/_handlers.py` 852 行（主程序登记线 700） | 命令处理器按渠道分文件（generate/config/data 三簇），保持入口薄壳 |
-| `src/python/tui/handlers_holdings.py` 855 行（红线 1000） | 面板流程与输入采集高度耦合（共用 `_Session`），拆分收益低于回归面；再涨 ~150 行则按「面板流程 / 输入采集」两段拆，并把 `_market_data` 的会话内记忆一并做进去 |
+| `src/python/tui/handlers_holdings.py` 825 行（红线 1000） | 面板流程与输入采集高度耦合（共用 `_Session`），拆分收益低于回归面；再涨 ~150 行则按「面板流程 / 输入采集」两段拆，并把 `_market_data` 的会话内记忆一并做进去 |
 | `src/python/fetcher/financial_report.py` 729 行（主程序登记线 700） | 刚过线：再涨则按「索引 / 正文 / 全文定位」三阶下沉（负缓存样板统一在 `cache/_negative.py`） |
 | `src/static/tmpl/report_template.html` 277 行（样式已抽到 `partials/_report_styles.html` 750 行，各自单一关注点，均未触 1000 行） | 主模板只剩骨架 + include；再增长则按「首页/持仓/LLM/附录」四段拆 partial |
 | `src/static/tmpl/whatif_template.html` 543 行（**不在行数守护域内**：`check-file-length` 只扫 `.py`） | 样式已抽到 `partials/_whatif_styles.html`；剩余为标记与图表配置，暂无需拆分 |
@@ -61,6 +61,7 @@
 |:--|:--|:--|
 | **rf-1079** | `[S]` 面板混排两类语义（章内内容 vs 机制/入口）：6 项机制类里「报告对话式追问」其实只是主菜单 `Q` 的入口开关；`decision_basis` / `module_quality_gate` 默认常开却占面板编号；`candidate_compare` 候选池为空也渲染空表；`whatif_trade_cost` 挂在 `[C]`「关联产物」但不新增章节；`market_sentiment` 需凭据却未标 `needs_hint` | 注册表新增 `panel_visible` 并据此派生编号：前两者不上面板（默认常开，仍可用 `features.json` 覆写关闭）；`candidate_compare` 改自动项（不上面板、补空池判定）；`summary_highlights` 转正默认开；`market_sentiment` 补 `needs_hint`；`whatif_trade_cost` 迁入 `[S]` 持仓与交易，`[C]` 回归纯章节；守护与夹具补「空块」容忍 |
 | **rf-1080** | 成本流水「近似分支」缺数值防护：`_build_flow_data` 把明细里的 `price` 原样收进 `current_prices`，一旦是非数值（旧缓存/残缺明细/测试桩），下游 `sum(... * prices[code])` 与 `final_value > 0` 即抛 `TypeError` ——异常冒泡到 HTML 写入，整份报告 `html_ok=False`。该分支此前只有mock 级用例（只验传参），真实执行路径从未被跑到 | `current_prices` 改为只收「正数值」市价（`isinstance(price, (int, float))` 且 > 0），缺价品种只是少一个估值锚；补两条真实现回归：无流水 + 开关开跑通近似契约、非数值/字符串市价被过滤不抛 |
+| **rf-1081** | 面板可见性须跨渠道同源：`panel_visible=False` 的开关（判断依据 / LLM 输出评级 / 候选基金比较）若只按 TUI 过滤，Web 配置面仍按 `switches_in_group` 全量下发，两渠道开关清单即分叉；另有两处同批清理：`tui/handlers_holdings` 里单笔回显函数已无调用点（死代码），以及「行情口径桶」的测试冻结逻辑在 3 个文件里各写一份 `MarketSnapshot` 字面量（档位 label 会各处漂移） | 新增 `_feature_registry.panel_switches(panel)`（组序 + 可见性过滤）作为面板类渠道的唯一取数口，`panel_option_numbers` 复用、Web 配置面改用它过滤；删除死函数；新增 `src/test/_market_clock.py`（`freeze_market_bucket` / `freeze_intraday`）替换各处字面量桩 |
 
 ### 归档档案
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-08）

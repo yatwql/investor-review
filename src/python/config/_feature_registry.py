@@ -346,6 +346,21 @@ def switches_in_group(group: str) -> list[tuple[str, FeatureSwitchDef]]:
     return [(flag, d) for flag, d in feature_switch_registry.items() if d.group == group]
 
 
+def panel_switches(panel: str) -> list[tuple[str, FeatureSwitchDef]]:
+    """某面板**上屏**的开关清单 ``[(开关名, 声明), ...]``（组序 + 注册表序）。
+
+    渠道层（TUI 面板 / Web 配置面）取数的唯一入口：``panel_visible=False`` 的
+    开关（默认常开的机制项、数据驱动的自动项）不在任何面板出现——此前 Web 侧
+    直接按 ``switches_in_group`` 下发，会与 TUI 面板的口径分叉。
+    """
+    return [
+        (flag, definition)
+        for group in PANEL_GROUPS.get(panel, ())
+        for flag, definition in switches_in_group(group)
+        if definition.panel_visible
+    ]
+
+
 def panel_option_numbers(panel: str) -> tuple[tuple[int, str, FeatureSwitchDef], ...]:
     """按面板的组序派生编号：``((1, 开关名, 声明), (2, ...), ...)``（1 起连续）。
 
@@ -354,11 +369,8 @@ def panel_option_numbers(panel: str) -> tuple[tuple[int, str, FeatureSwitchDef],
     不得写死数字。
     """
     numbered: list[tuple[int, str, FeatureSwitchDef]] = []
-    for group in PANEL_GROUPS.get(panel, ()):
-        for flag, definition in switches_in_group(group):
-            if not definition.panel_visible:
-                continue  # 内置/自动项不上面板：无从切换，也就没有编号
-            numbered.append((len(numbered) + 1, flag, definition))
+    for flag, definition in panel_switches(panel):
+        numbered.append((len(numbered) + 1, flag, definition))
     return tuple(numbered)
 
 

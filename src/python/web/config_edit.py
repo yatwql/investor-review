@@ -349,7 +349,10 @@ def get_config_edit_surface() -> dict:
             {
                 "key": group,
                 "title": GROUP_LABELS[group],
-                "switches": {flag: is_feature_enabled(flag) for flag, _d in switches_in_group(group)},
+                # 只下发上屏开关（`panel_visible=False` 的机制/自动项不在任何面板出现）
+                "switches": {
+                    flag: is_feature_enabled(flag) for flag, _d in switches_in_group(group) if _d.panel_visible
+                },
             }
             for group in GROUP_ORDER
         ],

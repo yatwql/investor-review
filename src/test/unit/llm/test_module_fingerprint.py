@@ -37,6 +37,7 @@ from src.python.llm.module_fingerprint import (
     ModuleFingerprintInputs,
 )
 from src.python.llm.prompts import CACHE_PREFIX_LLM
+from src.test._market_clock import freeze_intraday, freeze_market_bucket
 
 pytestmark = [
     pytest.mark.unit,
@@ -58,15 +59,7 @@ def _frozen_market_bucket(monkeypatch):
     桶键随钟面变化（盘中/午间/收盘各一档），若不冻结，黄金基线表会随运行时刻漂移。
     本文件的断言都只关心「同桶下键的增减」，故此处置为常量。
     """
-    from src.python.core import market_hours
-
-    frozen = market_hours.MarketSnapshot(
-        key="close:2026-11-06",
-        label="上一交易日收盘（2026-11-06）",
-        as_of="2026-11-06",
-        intraday=False,
-    )
-    monkeypatch.setattr(market_hours, "market_snapshot_bucket", lambda now=None: frozen)
+    freeze_market_bucket(monkeypatch)
 
 
 _MODULE_KEYS = ("global_macro", "expert_review", "health_check", "penetration_deep")
@@ -807,7 +800,6 @@ def test_fact_check_rules_version_enters_module_fingerprints(monkeypatch):
 
 def test_market_bucket_key_enters_fingerprint(monkeypatch):
     """收盘档与盘中档的键必须不同：否则盘中写下的缓存会被收盘档读到。"""
-    from src.python.core import market_hours
     from src.python.llm.module_fingerprint import expert_review_fingerprint
 
     base = ModuleFingerprintInputs(
@@ -820,13 +812,7 @@ def test_market_bucket_key_enters_fingerprint(monkeypatch):
         history_data=_HISTORY,
     )
     closed = expert_review_fingerprint(base)
-    monkeypatch.setattr(
-        market_hours,
-        "market_snapshot_bucket",
-        lambda now=None: market_hours.MarketSnapshot(
-            key="intraday:2026-11-06", label="盘中（2026-11-06 10:00）", as_of="2026-11-06", intraday=True
-        ),
-    )
+    freeze_intraday(monkeypatch)
     intraday = expert_review_fingerprint(base)
 
     assert closed != intraday
@@ -890,7 +876,6 @@ def test_bucket_suffix_follows_price_classification(module_key, monkeypatch):
     分类单源是 `cache_policy.PRICE_INDEPENDENT_MODULES`：价格相关模块随档换键，
     价格无关模块跨档同键（否则分类只写在注释里，实现随时漂移）。
     """
-    from src.python.core import market_hours
     from src.python.llm.cache_policy import is_price_sensitive_module
 
     def _inputs():
@@ -904,13 +889,7 @@ def test_bucket_suffix_follows_price_classification(module_key, monkeypatch):
     builder = MODULE_FINGERPRINT_BUILDERS[module_key]
     base = builder(_inputs())
 
-    monkeypatch.setattr(
-        market_hours,
-        "market_snapshot_bucket",
-        lambda now=None: market_hours.MarketSnapshot(
-            key="intraday:2026-11-06", label="盘中（2026-11-06 10:00）", as_of="2026-11-06", intraday=True
-        ),
-    )
+    freeze_intraday(monkeypatch)
     switched = builder(_inputs())
 
     if is_price_sensitive_module(module_key):

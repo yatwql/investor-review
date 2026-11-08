@@ -319,7 +319,9 @@ class TestReportScopeOverWeb:
         assert [g["key"] for g in features["groups"]] == list(GROUP_ORDER)
         for group in features["groups"]:
             assert group["title"] == GROUP_LABELS[group["key"]]
-            assert set(group["switches"]) == {flag for flag, _d in switches_in_group(group["key"])}
+            # 只下发上屏开关（panel_visible=False 的机制/自动项不在任何面板出现）
+            expected = {flag for flag, d in switches_in_group(group["key"]) if d.panel_visible}
+            assert set(group["switches"]) == expected
             assert "labels" not in group  # 显示名由 features.labels 同源下发
         assert set(features["experimental"]) == {flag for flag, _d in experimental_flags()}
 
@@ -334,9 +336,14 @@ class TestReportScopeOverWeb:
 
 
 class TestWebPanelCoversAllSwitches:
-    """Web 配置面板的开关面必须覆盖注册表全部开关（四组全覆盖），防渠道层漏渲染。"""
+    """Web 配置面板的开关面口径 = 注册表的**上屏**开关，与 TUI 面板同源。
 
-    def test_surface_flags_cover_registry(self):
+    `panel_visible=False` 的开关（默认常开的机制项、数据驱动的自动项）在两端都不
+    出现：它们不是「漏渲染」，而是按声明不上屏。此处同时锁住这层边界——既保证
+    上屏开关全渲染，也保证不可见开关确实没被下发（防止两端口径再次分叉）。
+    """
+
+    def test_surface_flags_cover_visible_registry(self):
         from src.python.config.features import feature_switch_registry
         from src.python.web.config_edit import get_config_edit_surface
 
@@ -344,8 +351,11 @@ class TestWebPanelCoversAllSwitches:
         shown = set()
         for group in surface["features"]["groups"]:
             shown |= set(group["switches"])
-        missing = set(feature_switch_registry) - shown
-        assert not missing, f"Web 面板未渲染这些开关：{sorted(missing)}"
+        visible = {flag for flag, d in feature_switch_registry.items() if d.panel_visible}
+        hidden = set(feature_switch_registry) - visible
+
+        assert visible - shown == set(), f"Web 面板未渲染这些上屏开关：{sorted(visible - shown)}"
+        assert shown & hidden == set(), f"Web 面板下发了不上屏的开关：{sorted(shown & hidden)}"
 
 
 class TestLlmProvidersBlock:

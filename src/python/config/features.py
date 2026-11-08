@@ -60,6 +60,7 @@ from ._feature_registry import (
     feature_switch_registry,
     is_experimental_switch,
     panel_option_numbers,
+    panel_switches,
     switches_in_group,
 )
 
@@ -345,6 +346,7 @@ __all__ = [
     "resolve_experiment_flags",
     "resolve_switch_values",
     "set_feature_enabled",
+    "panel_switches",
     "switches_in_group",
     "load_feature_overrides",
     "save_feature_overrides",
