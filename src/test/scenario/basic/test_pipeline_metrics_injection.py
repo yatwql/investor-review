@@ -21,7 +21,6 @@ import pytest
 pytestmark = [
     pytest.mark.scenario,
     pytest.mark.scenario_basic,
-    # LLM 指纹现含行情口径桶（读交易日历判定档位）：本文件不验日历，声明离线
     pytest.mark.usefixtures("offline_external_sources"),
 ]
 

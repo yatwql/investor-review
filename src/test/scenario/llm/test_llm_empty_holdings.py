@@ -16,8 +16,6 @@ from unittest.mock import MagicMock, patch
 
 from src.test.helpers import SynchronousExecutor
 
-pytestmark = [pytest.mark.usefixtures("offline_external_sources")]
-
 
 @pytest.mark.llm
 @pytest.mark.scenario_llm

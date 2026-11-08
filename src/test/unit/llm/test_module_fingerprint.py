@@ -42,7 +42,6 @@ pytestmark = [
     pytest.mark.unit,
     pytest.mark.unit_llm,
     pytest.mark.llm,
-    pytest.mark.usefixtures("offline_external_sources"),
 ]
 
 
@@ -882,3 +881,39 @@ class TestNoPriceModules:
             history_data=_HISTORY,
         )
         assert global_macro_fingerprint(changed) != base
+
+
+@pytest.mark.parametrize("module_key", sorted(_MODULE_KEYS))
+def test_bucket_suffix_follows_price_classification(module_key, monkeypatch):
+    """桶后缀的挂载必须由「价格相关性分类」决定，不得各指纹函数手工分叉。
+
+    分类单源是 `cache_policy.PRICE_INDEPENDENT_MODULES`：价格相关模块随档换键，
+    价格无关模块跨档同键（否则分类只写在注释里，实现随时漂移）。
+    """
+    from src.python.core import market_hours
+    from src.python.llm.cache_policy import is_price_sensitive_module
+
+    def _inputs():
+        return ModuleFingerprintInputs(
+            total_mv=_TOTAL_MV,
+            holdings_details=_HOLDINGS,
+            categories=dict(_CATEGORIES),
+            history_data=_HISTORY,
+        )
+
+    builder = MODULE_FINGERPRINT_BUILDERS[module_key]
+    base = builder(_inputs())
+
+    monkeypatch.setattr(
+        market_hours,
+        "market_snapshot_bucket",
+        lambda now=None: market_hours.MarketSnapshot(
+            key="intraday:2026-11-06", label="盘中（2026-11-06 10:00）", as_of="2026-11-06", intraday=True
+        ),
+    )
+    switched = builder(_inputs())
+
+    if is_price_sensitive_module(module_key):
+        assert switched != base, f"{module_key}: 价格相关模块必须随行情档换键"
+    else:
+        assert switched == base, f"{module_key}: 价格无关模块不得随行情档换键"
