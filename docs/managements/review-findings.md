@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.6-dev
-> **编号源**：`rf-next = 1085`（新增问题提出后更新为 +1；已用最大 rf-1081，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1086`（新增问题提出后更新为 +1；已用最大 rf-1081，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -65,6 +65,7 @@
 | **rf-1082** | `init_config` 新增「缺失即按模板铺出 `logger.json` / `llm_pricing_ref.json`」，但无用例锁定该行为（新行为无回归）；另 `test_init_template_writes_relative_paths` 只屏蔽了原本两处写盘入口，新增两处在它临时还原真实路径的分支里会把文件写进仓库 `data/config/`（测试隔离漏洞，文件被删时静默恢复） | 补两条用例：缺失即铺出且有注释模板、已存在不改写（幂等）；该用例的写盘屏蔽补齐到四处 `_ensure_llm_settings_file` / `_ensure_llm_providers_file` / `ensure_logger_file` / `ensure_llm_pricing_file` |
 | **rf-1083** | 归因口径收口为「只看模块键是否变化」后，`llm-technical.md` 仍在描述已不存在的「模块→组件映射表」（文档与实现分叉）；同批拆分用例时丢了 `TestSkeletonPathAttribution` 类头（骨架路径归因的来由注释），且 `_cache_fixtures.degradation_events` 构造器无人调用（死测试设施） | 文档改为「唯一判据是键变化，组件哈希只服务诊断可读性」；恢复类头；补回归：降级事件变化只让 `health_check` 归因为 `fingerprint_changed`（数据质量变了不得计作「只是到点」），顺带重新启用该构造器 |
 | **rf-1084** | 面板分块口径漂移：rf-1079 把 `whatif_trade_cost` 从 `[C]`「关联产物」迁入 `[S]`「持仓与交易」后，注册表已无 `artifact` 条目、`[S]` 编号整体重排，但 8 份文档仍按旧口径描述（`[C]`「四块含关联产物」/`[S]` 1-4·5-8·9-11·15-20 旧编号/「四组章内内容」/`--chapter` 可覆盖关联产物/R-WIF-13 分组），读者会按错面板找入口 | 全量核对后按实现单源重写：`[C]` 统一为三块（顶层 / LLM / 整章，并注明 `artifact` 分块位保留、空块自动跳过）；`[S]` 编号改为 1-5 / 6-9 / 10-11 / 12-14 / 15-18（`decision_basis` / `module_quality_gate` 内置常开不占编号）；关联产物入口统一指向 `[S]` 持仓与交易组（含 `--chapter` 与 R-WIF-13 表述） |
+| **rf-1085** | Web 配置面未随 `[S]`/`[C]` 收口适配：① 载荷仍带**永远为空**的「关联产物」块（`standalone_related`，`artifact` 分块位已无条目），前端 `renderBoolBlock` 对空表照样渲染块标题；② 功能开关按 `GROUP_ORDER` 全量建组下发（含 `[C]` 专属的独立整章/章节子项组），上屏判定内联重复一份——`panel_switches` 的 docstring 声称 Web 已改用它，实际未接；③ 上屏集合与 TUI 分叉无任何用例兜底 | ① 删除空块（domain/标题表/载荷/JS 渲染器/用例），并加断言「`artifact` 块一旦有条目即变红」，防将来产物页签开关静默不上屏；② `groups` 改为只承载 `[S]` 面板，经 `panel_switches("[S]")` 单点取数（组序/上屏项/组标题全部派生）；③ 新增三条契约用例（组集与组内项 = `[S]` 面板、`[C]` 项须经章节块或子项覆盖、隐藏项不得下发）；同步 Web 手册域块清单与机制组条目、TUI 面板提示语与模块说明 |
 
 ### 归档档案
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-08）

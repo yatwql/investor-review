@@ -1188,9 +1188,6 @@
     standalone_chapters: function (surface) {
       return renderBoolBlock(surface, 'standalone_chapters', surface.standalone_chapters);
     },
-    standalone_related: function (surface) {
-      return renderBoolBlock(surface, 'standalone_related', surface.standalone_related);
-    },
     anonymization: function (surface) {
       return renderAnonGroup(surface);
     },

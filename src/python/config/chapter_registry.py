@@ -10,7 +10,8 @@
   - 顶层章节：``config.json`` 的 ``enable_*`` 布尔键（5 项）
   - LLM 章节：``llm_settings.json`` 的 ``enabled_llm.<模块>``（7 项）
   - 默认关闭的整章：``features.json`` 的独立章节开关（3 项）
-  - 关联产物：``features.json`` 的产物页签开关（1 项，仅调仓模拟报告）
+  - 关联产物：``features.json`` 的产物页签开关（当前 0 项——只给既有页签加层的
+    What-if 交易成本对比已归持仓与交易组；块位保留，将来新产物页签类开关直接归位）
 
 编号由本表顺序派生（:func:`chapter_numbers`）；智囊团的生成选项作为子项挂在
 其章节下（:func:`sub_item_numbers` 派生 ``7.1`` 这类编号）——面板与测试都不得
@@ -141,7 +142,7 @@ def set_chapter_runtime_override(key: str, enabled: bool) -> None:
     """CLI ``--chapter`` 的一次性章节显隐覆写（仅本进程，不写盘）。
 
     按章节来源分派：``config.json`` 顶层键走配置覆写、LLM 章节走
-    ``enabled_llm`` 覆写、独立章节/关联产物/子项走功能开关的运行时切换。
+    ``enabled_llm`` 覆写、独立章节/子项走功能开关的运行时切换。
     与 ``config set``（持久化）泾渭分明。
 
     Raises:

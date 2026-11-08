@@ -69,12 +69,40 @@ class TestBlockRendererContract:
             assert domain["blocks"], f"域 {domain['key']} 无块（空域不应出现）"
             assert len(domain["blocks"]) == len(set(domain["blocks"])), f"域 {domain['key']} 块重复"
 
-    def test_standalone_blocks_derive_from_chapter_registry(self, surface):
-        """独立整章 / 关联产物块键集 = 章节注册表对应块（单一来源，不另写清单）。"""
+    def test_standalone_block_derives_from_chapter_registry(self, surface):
+        """独立整章块键集 = 章节注册表对应块（单一来源，不另写清单）。
+
+        `artifact` 分块位当前无条目（What-if 交易成本对比归 `[S]` 持仓与交易组），
+        故 Web 面不单列「关联产物」块；一旦注册表往该块放条目，本用例直接变红，
+        提醒同步补 Web 块与前端渲染器。
+        """
         from src.python.config.chapter_registry import BLOCK_ARTIFACT, BLOCK_STANDALONE, chapters_in_block
 
         assert set(surface["standalone_chapters"]) == {e.key for e in chapters_in_block(BLOCK_STANDALONE)}
-        assert set(surface["standalone_related"]) == {e.key for e in chapters_in_block(BLOCK_ARTIFACT)}
+        assert not chapters_in_block(BLOCK_ARTIFACT), "artifact 块出现条目时须同步补 Web 块与渲染器"
+        assert "standalone_related" not in surface
+
+    def test_feature_blocks_cover_panel_visible_switches(self, surface):
+        """功能开关块与 TUI `[S]` 面板同源：组集、组内上屏项一致，隐藏项不得下发。
+
+        回归：Web 曾按 `switches_in_group` 全量下发，会把不上屏的默认常开机制项
+        （`decision_basis` / `module_quality_gate`）与自动项（`candidate_compare`）
+        推到面板上，与 TUI 面板口径分叉。
+        """
+        from src.python.config.features import PANEL_GROUPS, panel_switches
+
+        groups = surface["features"]["groups"]
+        assert [group["key"] for group in groups] == list(PANEL_GROUPS["[S]"])
+        emitted = [flag for group in groups for flag in group["switches"]]
+        assert emitted == [flag for flag, _d in panel_switches("[S]")], "顺序与集合均须与 [S] 面板一致"
+        assert "whatif_trade_cost" in emitted, "归入持仓与交易组的 What-if 必须下发"
+        assert not ({"decision_basis", "module_quality_gate", "candidate_compare"} & set(emitted))
+
+    def test_every_feature_block_is_referenced_by_a_domain(self, surface):
+        """不留下无人引用的开关分组（某个组没进任何域 = 面板上永远看不到它）。"""
+        blocks = {block for domain in surface["domains"] for block in domain["blocks"]}
+        for group in surface["features"]["groups"]:
+            assert f"features.{group['key']}" in blocks, group["key"]
 
 
 class TestBlockTitles:

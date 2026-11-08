@@ -20,11 +20,9 @@ from src.python.config.edit_ops import (  # noqa: F401  # 公开再导出
 )
 from src.python.config.features import (
     GROUP_LABELS,
-    GROUP_ORDER,
     experimental_flags,
     feature_switch_registry,
-    switches_in_group,
-)
+)  # noqa: F401  # 公开再导出
 
 logger = logging.getLogger("invest")
 
@@ -80,12 +78,13 @@ def _llm_providers_surface() -> dict:
     }
 
 
-#: 域 → 块（块顺序即渲染顺序）。域与块的划分见 `docs/plan/config-web-design.md` §3.3；
-#: `features.<组键>` 里只放五组「章内内容」开关——独立整章与关联产物走各自块（取自章节注册表）。
+#: 域 → 块（块顺序即渲染顺序）。域与块的划分见 `docs/archive/v0.15.x/web-config/config-web-design.md` §3.3；
+#: `features.<组键>` 里只放 `[S]` 面板的五组「章内内容」开关——独立整章走章节注册表块；
+#: 章节注册表的 `artifact` 分块位已无条目（What-if 交易成本对比归持仓与交易组），故不单列块。
 _DOMAIN_BLOCKS: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
         "report_content",
-        ("sections", "llm", "standalone_chapters", "standalone_related"),
+        ("sections", "llm", "standalone_chapters"),
     ),
     ("presentation_mechanism", ("anonymization",)),
     ("data_and_routes", ("paths", "indices", "providers")),
@@ -99,7 +98,6 @@ _BLOCK_TITLES: dict[str, str] = {
     "sections": "报告章节",
     "llm": "LLM 分析章节",
     "standalone_chapters": "默认关闭的整章",
-    "standalone_related": "关联产物",
     "anonymization": "持仓匿名化",
     "indices": "对比基准指数",
     "providers": "多链线路优先级",
@@ -108,7 +106,7 @@ _BLOCK_TITLES: dict[str, str] = {
     "reference": "参考信息",
 }
 
-#: 五组「章内内容」开关所在的面板（`[S]`）；独立整章/关联产物另立块
+#: 五组「章内内容」开关所在的面板（`[S]`）；独立整章另立块
 _CONTENT_PANEL = "[S]"
 
 
@@ -160,15 +158,12 @@ def _block_domains() -> list[dict]:
     return domains
 
 
-def _standalone_blocks() -> tuple[dict, dict]:
-    """独立整章 / 关联产物两块的值（键集来自章节注册表，值来自运行时开关）。"""
-    from src.python.config.chapter_registry import BLOCK_ARTIFACT, BLOCK_STANDALONE, chapters_in_block
+def _standalone_chapter_values() -> dict:
+    """独立整章块的值（键集来自章节注册表，值来自运行时开关）。"""
+    from src.python.config.chapter_registry import BLOCK_STANDALONE, chapters_in_block
     from src.python.config.features import is_feature_enabled
 
-    def _values(block: str) -> dict:
-        return {entry.key: is_feature_enabled(entry.key) for entry in chapters_in_block(block)}
-
-    return _values(BLOCK_STANDALONE), _values(BLOCK_ARTIFACT)
+    return {entry.key: is_feature_enabled(entry.key) for entry in chapters_in_block(BLOCK_STANDALONE)}
 
 
 def _logging_surface() -> dict:
@@ -308,7 +303,7 @@ def get_config_edit_surface() -> dict:
     )
 
     from src.python.config.anonymizer import ANONYMIZATION_MODE_DESCRIPTIONS, get_anonymization_mode
-    from src.python.config.features import is_feature_enabled
+    from src.python.config.features import PANEL_GROUPS, is_feature_enabled, panel_switches
 
     config = get_config()
     paths = {
@@ -341,27 +336,22 @@ def get_config_edit_surface() -> dict:
     else:
         enabled_map = snapshot[0].get("enabled_llm") or {}
     surface_enabled = {sfx: bool(enabled_map.get(sfx, True)) for sfx in get_llm_module_names()}
-    # 功能开关：按 GROUP_ORDER 四组动态下发（组键/组标题/清单皆由注册表派生，
-    # 不硬编码组名，下次分组调整零改动）；显示名、「影响报告」标记与实验项清单
-    # 由服务端同源下发——前端不维护任何开关字典，避免与注册表漂移。
+    # 功能开关：只下发 `[S]` 面板的**上屏**开关，取数口与 TUI 面板同一个
+    # （`panel_switches`）——`panel_visible=False` 的默认常开机制项与自动项不在任何
+    # 面板出现；组键/组序/组标题/清单一律由注册表派生，不硬编码组名。
+    # `[C]` 的整章与章节子项不进本表：它们走章节注册表块与子项渲染。
+    visible_by_group: dict[str, dict[str, bool]] = {group: {} for group in PANEL_GROUPS[_CONTENT_PANEL]}
+    for flag, definition in panel_switches(_CONTENT_PANEL):
+        visible_by_group[definition.group][flag] = is_feature_enabled(flag)
     features_surface = {
         "groups": [
-            {
-                "key": group,
-                "title": GROUP_LABELS[group],
-                # 只下发上屏开关（`panel_visible=False` 的机制/自动项不在任何面板出现）
-                "switches": {
-                    flag: is_feature_enabled(flag) for flag, _d in switches_in_group(group) if _d.panel_visible
-                },
-            }
-            for group in GROUP_ORDER
+            {"key": group, "title": GROUP_LABELS[group], "switches": visible_by_group[group]}
+            for group in PANEL_GROUPS[_CONTENT_PANEL]
         ],
         "labels": {flag: d.label for flag, d in feature_switch_registry.items()},
         "experimental": [flag for flag, _d in experimental_flags()],
         "report_affecting": [flag for flag, d in feature_switch_registry.items() if d.affects_report],
     }
-
-    standalone_chapters, standalone_related = _standalone_blocks()
 
     return {
         "domains": _block_domains(),
@@ -369,8 +359,7 @@ def get_config_edit_surface() -> dict:
         "block_titles": dict(_BLOCK_TITLES),
         "paths": paths,
         "sections": sections,
-        "standalone_chapters": standalone_chapters,
-        "standalone_related": standalone_related,
+        "standalone_chapters": _standalone_chapter_values(),
         "anonymization": {
             "mode": anon_mode,
             "options": list(ANON_MODES),

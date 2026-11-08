@@ -628,7 +628,7 @@ Web 渠道是第三种交互入口：**浏览器内完成「上传持仓 Excel �
 | GET | `/api/cache` | 缓存统计 | 只读：总量/前缀分布/命中率/过期预估（过期数以 dry_run 预扫描不删除） |
 | POST | `/api/cache/cleanup` | 清理过期缓存 | `_is_same_origin()` 同源守卫；删除 TTL 过期文件，有效缓存不受影响 |
 | POST | `/api/qa/ask` | 报告对话式追问 | 开关 `report_qa`（默认关，关闭时 403），见 §6.8 |
-| GET | `/api/config/edit` | 配置编辑面板 | 无守卫；返回 `domains` 编排契约（五域：报告内容 / 呈现与机制 / 数据与线路 / LLM 运行 / 运行与诊断，每域带 `title`/`hint`/`tui` 导引 + 有序块清单）+ 各块数据面（`paths` / `sections` / `standalone_chapters` / `standalone_related` / `anonymization`（含四档 `labels`）/ `comparison_indices` / `llm` / `llm_tuning` / `llm_providers` / `features`（`groups` + `labels` + `experimental` + `report_affecting`；组按 `GROUP_DOMAIN` 分「报告内容」与「呈现与机制」两段呈现，故同一开关换组即换段——`decision_basis` 归后者）/ `logging` / `reference`）+ 元数据面（`labels` / `descriptions` / `defaults` / `needs_hint`，覆盖白名单全部可编辑键）；块 id ↔ 渲染器契约由 `test_config_surface_contract.py` 双向断言 |
+| GET | `/api/config/edit` | 配置编辑面板 | 无守卫；返回 `domains` 编排契约（五域：报告内容 / 呈现与机制 / 数据与线路 / LLM 运行 / 运行与诊断，每域带 `title`/`hint`/`tui` 导引 + 有序块清单）+ 各块数据面（`paths` / `sections` / `standalone_chapters`（`artifact` 分块位已空 ⇒ 无「关联产物」块） / `anonymization`（含四档 `labels`）/ `comparison_indices` / `llm` / `llm_tuning` / `llm_providers` / `features`（`groups` + `labels` + `experimental` + `report_affecting`；`groups` 只含 `[S]` 面板的上屏开关，取数口与 TUI 同为 `panel_switches`，组按 `GROUP_DOMAIN` 分「报告内容」与「呈现与机制」两段呈现——上屏项换组即换段，`panel_visible=False` 的默认常开机制项与自动项不下发）/ `logging` / `reference`）+ 元数据面（`labels` / `descriptions` / `defaults` / `needs_hint`，覆盖白名单全部可编辑键）；块 id ↔ 渲染器契约由 `test_config_surface_contract.py` 双向断言 |
 | POST | `/api/config/edit` | 应用配置编辑 | `_is_same_origin()` 同源守卫（失败 403）；校验失败 400 BAD_PARAM；写共享配置异常 500 CONFIG_WRITE_FAILED |
 
 #### 1.8.5 RunManager 单 worker 串行队列

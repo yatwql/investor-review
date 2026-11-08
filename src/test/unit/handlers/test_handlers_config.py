@@ -146,7 +146,7 @@ class TestConfigPanelsAreRectangular:
 
 
 class TestChapterPanelsOwnTheirBlocks:
-    """两面板职责切分：``[C]`` 只放章节（含 LLM / 整章 / 关联产物），``[S]`` 只放章内内容。"""
+    """两面板职责切分：``[C]`` 只放章节（含 LLM / 整章），``[S]`` 只放章内内容。"""
 
     def _source(self, module: str) -> str:
         from pathlib import Path
