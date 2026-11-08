@@ -285,6 +285,9 @@ def _finalize_news_token_usage(
             cached=all_cached,
             cost=_cost_val,
             endpoint=_endpoint,
+            # 批量模块的耗时由骨架回传（阶段墙钟 − 门禁排队）；缺它则用量页签
+            # 把该模块恒记为 0.0s，事后无法归因「批量路径花了多久」
+            duration=float(batch_usage.get("duration", 0.0) or 0.0),
         )
 
     fresh_count = len(top_news) - cached_count

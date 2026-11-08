@@ -153,6 +153,7 @@ class TestPacingWaitObservation:
 
         register_policies([{"name": "slow", "pacing": {"min_interval": 0.02}}])
         clear_llm_observation()
+        entered = False
         with PacingGate("slow"):
             entered = True
         assert entered is True
@@ -275,3 +276,136 @@ class TestConcurrencyHintPlacement:
 
         lines = Path(api_base_mod.__file__).read_text(encoding="utf-8").splitlines()
         assert len(lines) <= 800, f"api_base.py 已 {len(lines)} 行，超 800 行硬上限，须拆分"
+
+
+class TestPacingWaitAccounting:
+    """排队时长按线程记账：per-call 时长要能扣掉排队，得到真实模型耗时。"""
+
+    def test_thread_wait_accumulates_then_pops_to_zero(self):
+        from src.python.llm.pacing import pop_thread_pacing_wait
+
+        register_policies([{"name": "slow", "pacing": {"min_interval": 0.05}}])
+        pop_thread_pacing_wait()  # 清掉其它用例可能残留的账
+        for _ in range(3):
+            with PacingGate("slow"):
+                pass
+
+        waited = pop_thread_pacing_wait()
+        assert waited >= 0.09, f"三次过闸至少累计两个间隔，实际 {waited:.3f}s"
+        assert pop_thread_pacing_wait() == 0.0, "领取后必须清零，否则下一次调用会重复扣除"
+
+    def test_concurrency_slot_wait_is_counted(self):
+        """在途并发上限造成的等待同样计入（此前只记了间隔等待）。"""
+        import threading
+
+        from src.python.llm.pacing import pop_thread_pacing_wait
+
+        register_policies([{"name": "serial", "pacing": {"max_concurrency": 1}}])
+        pop_thread_pacing_wait()
+        holding = threading.Event()
+        release = threading.Event()
+        waited: dict[str, float] = {}
+
+        def _hold_slot():
+            with PacingGate("serial"):
+                holding.set()
+                release.wait(2.0)
+
+        def _queue_behind():
+            holding.wait(2.0)
+            with PacingGate("serial"):
+                waited["s"] = pop_thread_pacing_wait()
+
+        holder = threading.Thread(target=_hold_slot)
+        queuer = threading.Thread(target=_queue_behind)
+        holder.start()
+        queuer.start()
+        holding.wait(2.0)
+        import time as _time
+
+        _time.sleep(0.05)  # 让排队线程确实阻塞在许可上
+        release.set()
+        holder.join(2.0)
+        queuer.join(2.0)
+
+        assert waited.get("s", 0.0) > 0.0, "并发许可等待必须可被本线程领取（否则时长归因会高估模型耗时）"
+
+    def test_sink_aggregates_concurrency_wait(self):
+        """观测汇聚器同样要看到并发许可等待（白等总量口径）。"""
+        import threading
+        import time as _time
+
+        from src.python.llm.observation import LlmObservation, bind_llm_observation, clear_llm_observation
+
+        register_policies([{"name": "serial2", "pacing": {"max_concurrency": 1}}])
+        sink = LlmObservation()
+        bind_llm_observation(sink)
+        holding = threading.Event()
+        release = threading.Event()
+
+        def _hold_slot():
+            with PacingGate("serial2"):
+                holding.set()
+                release.wait(2.0)
+
+        def _queue_behind():
+            holding.wait(2.0)
+            with PacingGate("serial2"):
+                pass
+
+        holder = threading.Thread(target=_hold_slot)
+        queuer = threading.Thread(target=_queue_behind)
+        try:
+            holder.start()
+            queuer.start()
+            holding.wait(2.0)
+            _time.sleep(0.05)
+            release.set()
+            holder.join(2.0)
+            queuer.join(2.0)
+            assert sink.pacing_wait_seconds() > 0.0
+        finally:
+            clear_llm_observation()
+
+
+class TestCallDurationExcludesPacingWait:
+    """per_module.duration 记「模型耗时」，不含端点门禁排队。
+
+    现场：expert_review 记 88.2s，而日志时间戳算出的墙钟约 62s——串行端点
+    （max_concurrency=1）把排队时间算进了模型耗时，归因会高估约 40%。
+    """
+
+    def test_recorded_duration_subtracts_pacing_wait(self, monkeypatch):
+        from src.python.llm import pacing, skeleton
+
+        recorded: dict[str, float] = {}
+        monkeypatch.setattr(
+            skeleton,
+            "record_per_module",
+            lambda *a, **kw: recorded.update({"duration": kw.get("duration", 0.0)}),
+        )
+
+        def _fake_call_llm(*_args, **_kwargs):
+            pacing._note_wait(0.2)  # 模拟本次调用在门禁上排了 0.2s
+            time.sleep(0.3)  # elapsed 的墙钟：0.2s 排队 + 0.1s 真实请求
+            return ("正文", {"input_tokens": 10, "output_tokens": 5}, {})
+
+        monkeypatch.setattr(skeleton, "call_llm", _fake_call_llm)
+        skeleton._execute_llm_with_finalize(
+            "sys",
+            "user",
+            {"model": "m"},
+            10.0,
+            None,
+            256,
+            "max_tokens",
+            None,
+            "m",
+            "cache-key-duration-probe",
+            "probe",
+            False,
+        )
+
+        assert recorded["duration"] == pytest.approx(0.1, abs=0.1), (
+            f"须扣除排队 0.2s（0.3s 墙钟 → 约 0.1s），实际记 {recorded['duration']:.3f}s"
+        )

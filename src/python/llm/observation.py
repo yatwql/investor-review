@@ -87,6 +87,11 @@ class LlmObservation:
         with self._lock:
             self._pacing_wait_seconds += max(0.0, float(seconds))
 
+    def pacing_wait_seconds(self) -> float:
+        """当前累计的端点门禁等待秒数（调用方据此扣除排队，得到真实模型耗时）。"""
+        with self._lock:
+            return round(self._pacing_wait_seconds, 6)
+
     def note_fallback(self) -> None:
         """记录一次 provider 链降级（当前 provider 失败后切下一家）。"""
         with self._lock:

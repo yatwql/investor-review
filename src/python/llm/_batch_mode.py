@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
@@ -200,6 +201,8 @@ def run_batch_mode(
     ok_batches = 0
     failed_batches = 0
     total_batches = 0
+    # 无未缓存批次（全缓存命中）时为 0：没有真实调用，就不该记挂钟
+    duration_seconds = 0.0
 
     if uncached_indices and batch_prompt_fn and response_parser:
         batches = [
@@ -212,6 +215,14 @@ def run_batch_mode(
             len(batches),
             _BATCH_CHUNK_SIZE,
         )
+
+        # 阶段墙钟（扣除端点门禁排队）：批量模块的逐批耗时由并行 workers 分摊，
+        # 拿单批时长没有意义，用「这一段占据管线的时长」才对得上报告耗时段。
+        from src.python.llm.observation import current_llm_observation
+
+        _sink = current_llm_observation()
+        _wait0 = _sink.pacing_wait_seconds() if _sink is not None else 0.0
+        _batch_started = time.monotonic()
 
         with ThreadPoolExecutor(max_workers=min(3, len(batches), _BATCH_MAX_WORKERS)) as ex:
             _fut_map = {
@@ -251,6 +262,9 @@ def run_batch_mode(
                     failed_batches += 1
                     logger.warning("批处理异常: %s", e)
 
+        _wait1 = _sink.pacing_wait_seconds() if _sink is not None else _wait0
+        duration_seconds = max(0.0, (time.monotonic() - _batch_started) - max(0.0, _wait1 - _wait0))
+
     # 批次成败必须回传：全失败时用量字典会退化成零值（与「全缓存命中」同形），
     # 调用方若只看用量就会把「一条也没分析成」记成成功——报告里静默残缺。
     if failed_batches:
@@ -274,6 +288,7 @@ def run_batch_mode(
             "ok_batches": ok_batches,
             "failed_batches": failed_batches,
             "total_batches": total_batches,
+            "duration": round(duration_seconds, 3),
         },
         cached_count,
     )

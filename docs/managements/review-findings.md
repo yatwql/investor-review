@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.5-dev
-> **编号源**：`rf-next = 1075`（新增问题提出后更新为 +1；已用最大 rf-1074，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1076`（新增问题提出后更新为 +1；已用最大 rf-1075，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -44,7 +44,7 @@
 | `src/test/conftest.py` 1155 行（测试登记线 900） | fixture 族按域下沉（行情/LLM/网络/持久化各一模块），conftest 只留 autouse 装配与 marker 注册 |
 | `src/python/llm/generators_orchestrator.py` 905 行（主程序登记线 700） | 生成编排与共享钩子按模块族再分；预检键/指纹段可下沉 `generators_orchestrator_cache.py` |
 | `src/python/report/decision_basis.py` 962 行（主程序登记线 700，红线 1000） | 六段块装配（信号/可信度/风险预算/纪律/结算+按视界表现/约束）仍在单模块；拆分方向：结算批表与按视界表现聚合（`build_settlement_summary`＋`build_performance`＋`_mean`/`_tone_*` 色彩助手）可整体下沉 `decision_basis_settlement.py`（只读账本、无跨段依赖，预计 −180 行）；信号清单与区分度登记（`_build_signal_rows`＋`BACKTEST_CONCLUSIONS`）可再下沉一簇 |
-| `src/python/llm/skeleton.py` 830 行（主程序登记线 700） | 模板数据与渲染逻辑可下沉 `llm/skeleton_*`（骨架模板 / 占位渲染 / 缓存归因 / 回写四簇并存） |
+| `src/python/llm/skeleton.py` 835 行（主程序登记线 700） | 模板数据与渲染逻辑可下沉 `llm/skeleton_*`（骨架模板 / 占位渲染 / 缓存归因 / 回写四簇并存） |
 | `src/python/cli/_handlers.py` 852 行（主程序登记线 700） | 命令处理器按渠道分文件（generate/config/data 三簇），保持入口薄壳 |
 | `src/python/tui/handlers_holdings.py` 855 行（红线 1000） | 面板流程与输入采集高度耦合（共用 `_Session`），拆分收益低于回归面；再涨 ~150 行则按「面板流程 / 输入采集」两段拆，并把 `_market_data` 的会话内记忆一并做进去 |
 | `src/python/fetcher/financial_report.py` 729 行（主程序登记线 700） | 刚过线：再涨则按「索引 / 正文 / 全文定位」三阶下沉（负缓存样板统一在 `cache/_negative.py`） |
@@ -69,6 +69,7 @@
 | **rf-1072** | 兼容面盘点（七类：旧配置项/旧配置文件/旧数据文件/旧数据结构/旧缓存结构/旧缓存文件/旧内部接口）发现 1 处**旧内部接口门面**：`core/data_freshness._detail_value` 是 `core/detail_view.detail_value` 的一行转发（docstring 自述「本函数仅保留旧名」），`holding_status` 也经它取值——改名后保留旧名属多余的兼容残留 |删旧名门面，`data_freshness` 内部与 `holding_status` 一律直调 `detail_value`（单源在 `core/detail_view`）；顺带把 `detect_price_jumps(details)` 形参放宽为 `list \| None`（实现本就以 `details or []` 容忍空入参）并给 3 处 `header_freshness` 调用补 `is not None` 断言 |
 | **rf-1073** | 裸解释器启动的 full 报告整份失败：系统 Python（无 pandas/numpy）生成报告时 `ModuleNotFoundError: No module named 'pandas'` 一路冒泡到 `generate_report`，用户只得到「生成失败」。三处根因：①`scripts/launch.sh`/`launch.ps1` 依赖 `activate`，而激活脚本内烘焙的是创建时的绝对 `VIRTUAL_ENV`——venv 目录搬家后 PATH 前置失效、激活静默无效，脚本里的裸 `python3` 落到系统解释器；②`pandas`/`numpy` 从未在 `requirements.txt`/`pyproject.toml` 声明（仅经 akshare 传递安装）；③`analysis/style_factor_regression.py` 在模块顶层 `import pandas`，而 `report/_report_factor_metrics.py` 的导入语句在 `try` 之外，ImportError 直接击穿数据准备阶段，违反 §1.4.5（该区块应 available=False 降级） | ①两个启动脚本改为直接调用 `.venv` 内解释器（与 venv 位置无关）并在启动前用该解释器 import 重依赖做硬闸，缺依赖给可读错误与修复命令；②两库补进依赖清单（单源契约测试同步）；③计算层重依赖惰性导入（`_numeric_stack()` + `TYPE_CHECKING` 类型注释），编排层把计算层导入纳入 `try` 并捕获 `ImportError` → `available=False` 降级；④`core/doctor.py` 增「关键依赖」自检行与 `interpreter_preflight_error()`，TUI/Web 入口启动即拦截 |
 | **rf-1074** | 空数据契约键集三处维护（本轮修复留下的债）：`style_factor_regression.unavailable_result`、`industry_beta.unavailable_result` 与 `report/_report_factor_metrics` 的降级兜底各写一份字面量键集，且兜底版 `window` 由 `DEFAULT_WINDOW` 退化成 `0`——加一个契约键就要改三处，漏改即渲染期 KeyError 或契约字段缺失。另 `tui.main()` 的前置检查失败只 `print` + `return`，直连 `python src/python/tui/tui.py` 时退出码仍为 0 | 新增 `analysis/unavailable_contracts.py`（纯字典装配、无 numpy/pandas，正因它是「重依赖坏掉时仍须可用」的那层），两个计算模块与编排层兜底全部委托该工厂（`window` 回到 `DEFAULT_WINDOW` 单源）；补三条单源断言（键集逐键相等 / 契约模块无第三方依赖 / 计算层委托）。`tui.main()` 前置失败改 `raise SystemExit(1)` |
+| **rf-1075** | 运行观测三处口径债（`per_module.duration` 含排队、批量模块耗时恒 0、`market_sentiment` 零命中不可判读）：①逐模块 `duration` 记的是 `call_llm` 墙钟，串行端点（`max_concurrency=1`）的排队被算进模型耗时——实测 `expert_review` 记 88.2s 而日志时间戳墙钟约 62s（高估 ~40%），且 `PacingGate` 只记 `min_interval` 等待、不记并发许可等待；②`news_correlation` 走批量骨架，`record_per_module` 未传 `duration`，用量页签恒记 0.0s（实际约 3s），该模块无法归因；③`market_sentiment` 只打「命中 0 条」，事后无法区分「源无条目 / 跟踪标的为空 / 当日确无交集」 | ①`PacingGate` 测量整段过闸等待（含并发许可）并按线程记账（`pop_thread_pacing_wait`），骨架从 `elapsed` 扣除后落 `duration`；观测汇聚器仍记全局白等总量，并新增 `pacing_wait_seconds()` 读口；②`run_batch_mode` 回传本段墙钟（扣排队）→ `batch_usage["duration"]` → 用量落账；③日志补「龙虎榜 N 只 / 连板梯队 M 只 ∩ 跟踪标的 K 只」，并把交易日做成龙虎榜→连板梯队双源兜底（单源缺失时仍给出可读交易日）；补 11 条断言 |
 ### 归档档案
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-08）
 - [`archived_review-findings.0.16.x.md`](../archive/v0.16.x/archived_review-findings.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-11-03）

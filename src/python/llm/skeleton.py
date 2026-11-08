@@ -349,7 +349,10 @@ def _execute_llm_with_finalize(
     clear_last_llm_failure()
 
     def _attempt_once() -> tuple[Any, Any, Any, float]:
+        from src.python.llm.pacing import pop_thread_pacing_wait
+
         _start = time.monotonic()
+        pop_thread_pacing_wait()  # 清零本线程账，只算本次调用排的队
         res, usg, p_info = call_llm(
             system_prompt,
             user_prompt,
@@ -361,7 +364,9 @@ def _execute_llm_with_finalize(
             temperature=temperature,
             model=model,
         )
-        elapsed = time.monotonic() - _start
+        # 扣除端点节流门的排队（间隔/在途并发）：per_module.duration 要回答
+        # 「模型本身花多久」，含排队会把串行端点的等待算进模型耗时（实测高估 ~40%）
+        elapsed = max(0.0, time.monotonic() - _start - pop_thread_pacing_wait())
         res, usg = _handle_truncation(
             res,
             usg,

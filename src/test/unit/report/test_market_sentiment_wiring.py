@@ -16,6 +16,7 @@ import pytest
 from openpyxl import Workbook
 
 from src.python.report import _report_aux_metrics as aux
+from src.python.report import market_sentiment as ms
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
 
@@ -92,6 +93,7 @@ class TestExcelBlock:
         from src.python.report.action_sheet import _write_market_sentiment_block
 
         ws = Workbook().active
+        assert ws is not None  # openpyxl 类型上 Optional，新建工作簿必有活动表
         _write_market_sentiment_block(ws, 1, data, 5)
         return "\n".join(str(c.value) for row in ws.iter_rows() for c in row if c.value is not None)
 
@@ -273,3 +275,29 @@ class TestFullPathInjection:
 
         assert ok is True
         assert seen.get("market_sentiment_data") is self._SENTINEL
+
+
+class TestSourceItemCounts:
+    """命中 0 条的日志须能区分「源无条目 / 跟踪标的为空 / 当日无交集」。"""
+
+    def test_dragon_tiger_stock_count_counts_items(self):
+        dragon = {"stock_items": [{"ticker": "000001"}, {"ticker": "600000"}, "脏值"]}
+
+        assert ms._dragon_tiger_stock_count(dragon) == 2
+
+    def test_ladder_member_count_counts_latest_day_boards(self):
+        ladder = {
+            "item": [
+                {
+                    "date": "2026-09-16",
+                    "boards": {"two_board": [{"ticker": "a"}, {"ticker": "b"}], "three_board": [{}]},
+                },
+                {"date": "2026-09-15", "boards": {"two_board": [{"ticker": "c"}]}},
+            ]
+        }
+
+        assert ms._ladder_member_count(ladder) == 3
+
+    def test_counts_degrade_to_zero_on_missing_sources(self):
+        assert ms._dragon_tiger_stock_count(None) == 0
+        assert ms._ladder_member_count(None) == 0
