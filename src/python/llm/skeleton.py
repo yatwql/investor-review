@@ -349,7 +349,10 @@ def _execute_llm_with_finalize(
     clear_last_llm_failure()
 
     def _attempt_once() -> tuple[Any, Any, Any, float]:
+        from src.python.llm.pacing import pop_thread_pacing_wait
+
         _start = time.monotonic()
+        pop_thread_pacing_wait()  # 清零本线程账，只算本次调用排的队
         res, usg, p_info = call_llm(
             system_prompt,
             user_prompt,
@@ -361,7 +364,9 @@ def _execute_llm_with_finalize(
             temperature=temperature,
             model=model,
         )
-        elapsed = time.monotonic() - _start
+        # 扣除端点节流门的排队（间隔/在途并发）：per_module.duration 要回答
+        # 「模型本身花多久」，含排队会把串行端点的等待算进模型耗时（实测高估 ~40%）
+        elapsed = max(0.0, time.monotonic() - _start - pop_thread_pacing_wait())
         res, usg = _handle_truncation(
             res,
             usg,
@@ -545,7 +550,17 @@ def generate_llm_content(
     from src.python.llm.observation import current_llm_observation
 
     _hit_sink = current_llm_observation()
-    if cache_enabled and not force:
+    from src.python.llm.cache_policy import intraday_reuse_blocked
+
+    # 盘中止复用（与预检同一判定点）：本路径覆盖预检之后才确定键的模块
+    # （self_review / holding_change 等），漏在这里就等于「基础模块重算了、
+    # 后置模块仍复用旧盘中结论」。
+    _reuse_blocked = cache_enabled and not force and intraday_reuse_blocked(module_key or precheck_key, _hit_sink)
+    # 基线记账与是否复用无关：每份报告都要记下本轮键，否则盘中跳过读之后
+    # 「上一轮键」停留在更早的收盘档，下次归因会把换键误报成 ttl_expired。
+    if module_key:
+        _PREV_MODULE_CACHE_KEY[module_key] = precheck_key
+    if cache_enabled and not force and not _reuse_blocked:
         cached = cache_get(precheck_key, cache_ttl)
         if _hit_sink is not None and hasattr(_hit_sink, "note_cache"):
             _hit_sink.note_cache(bool(cached))
@@ -578,8 +593,6 @@ def generate_llm_content(
                 else:
                     _reason = RECOMPUTE_FINGERPRINT_CHANGED
                 _sink.note_recompute_reason(module_key, _reason)
-        if module_key:
-            _PREV_MODULE_CACHE_KEY[module_key] = precheck_key
         if cached:
             return (
                 _handle_cache_hit(
@@ -675,6 +688,11 @@ def _run_standard_mode(
         )
         if appendix:
             _user = _user + "\n\n" + appendix
+        # 口径声明：让模型知道手里的行情是哪个已完成的时点（收盘档复用要求内容按该
+        # 口径陈述，缺这句就会写出「当前盘中」式措辞，与报告时间自相矛盾）
+        from src.python.core.market_hours import market_snapshot_note
+
+        _user = _user + "\n\n" + market_snapshot_note()
 
     # ── 账本上下文回灌（决策跨期反思闭环 + 确定性信号沉淀）──
     # 仅对接收模块（expert_review）、非辩论自定义 prompt 变体生效；

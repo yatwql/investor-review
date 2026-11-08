@@ -60,6 +60,7 @@ __all__ = [
     "get_last_trading_day",
     "get_prev_trading_day",
     "trading_day_as_of",
+    "trading_day_as_of_cached",
 ]
 
 
@@ -269,6 +270,21 @@ def _is_trading_day(date: datetime) -> bool:
     return date.weekday() < 5
 
 
+def _walk_back_to_trading_day(moment: datetime, is_trading: Callable[[datetime], bool]) -> str:
+    """从「盘前归前一交易日」的基准日起回溯，返回最近一个交易日（YYYY-MM-DD）。
+
+    两个公开入口（全量版 :func:`trading_day_as_of` 与只读缓存版
+    :func:`trading_day_as_of_cached`）共用本实现——差异只在 ``is_trading`` 这一个
+    谓词上；各写一份回溯循环时，盘前归日与回溯上限会在两处悄悄分叉。
+    """
+    check = moment - timedelta(days=1) if moment.hour < 9 or moment.hour == 9 and moment.minute < 30 else moment
+    for _ in range(14):  # 最多回溯 14 天（覆盖长假）
+        if is_trading(check):
+            return check.strftime("%Y-%m-%d")
+        check -= timedelta(days=1)
+    return moment.strftime("%Y-%m-%d")
+
+
 def trading_day_as_of(moment: datetime) -> str:
     """给定时点所属交易日（YYYY-MM-DD），含盘前与节假日感知口径。
 
@@ -287,17 +303,31 @@ def trading_day_as_of(moment: datetime) -> str:
     Returns:
         YYYY-MM-DD 格式的所属交易日；回溯 14 天仍未命中（不应到达）时返回 moment 自身日期。
     """
-    # 盘前（< 9:30）基准日设为前一天
-    check = moment - timedelta(days=1) if moment.hour < 9 or moment.hour == 9 and moment.minute < 30 else moment
+    return _walk_back_to_trading_day(moment, _is_trading_day)
 
-    # 从基准日起向前查找最近一个交易日
-    for _ in range(14):  # 最多回溯 14 天（覆盖长假）
-        if _is_trading_day(check):
-            return check.strftime("%Y-%m-%d")
-        check -= timedelta(days=1)
 
-    # 极端回退（不应到达）
-    return moment.strftime("%Y-%m-%d")
+def trading_day_as_of_cached(moment: datetime) -> str:
+    """同 :func:`trading_day_as_of`，但**只读已缓存日历**、绝不触网。
+
+    用途：「运行中元数据」类判定（如 LLM 缓存的行情口径桶）不该因为源不可用或
+    离线环境而中断，也不该为了一个分组标签去拉日历。口径与全量版一致——盘前与
+    非交易日向前回溯到最近交易日；日历缓存不可用时按「排除周六日」近似
+    （与 ``_is_trading_day`` 的回退口径同源，方向上偏保守：节假日会被当成交易日，
+    此时只会让「盘中档不复用」这类保守策略多生效一次，不会误复用）。
+
+    Args:
+        moment: 待判定时点（naive 按北京时区解释）
+
+    Returns:
+        YYYY-MM-DD 格式的所属交易日；回溯 14 天未命中时返回 moment 自身日期。
+    """
+    calendar = set(cached_trading_days())
+
+    def _is_trading(check: datetime) -> bool:
+        # 日历缓存可用 → 以日历为准；不可用 → 排除周末近似（偏保守方向）
+        return check.strftime("%Y-%m-%d") in calendar if calendar else check.weekday() < 5
+
+    return _walk_back_to_trading_day(moment, _is_trading)
 
 
 def get_last_trading_day() -> str:

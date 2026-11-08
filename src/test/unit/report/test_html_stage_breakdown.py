@@ -114,3 +114,89 @@ def test_stage_recorder_optional(tmp_path):
         )
 
     assert path.endswith(".html")
+
+
+class TestCloseHtmlGenerationStage:
+    """收口助手（full / both 共用）的直测：总值 + 慢段分流 + 无 recorder 直返。
+
+    该助手把「整段记一个页面写入」与「按段告警」两件事收成单点，两条生成路径共用；
+    此前只由端到端用例间接触及，分支（无 recorder / 无分段 / 有分段）未被逐条锁住。
+    """
+
+    def test_returns_early_without_recorder(self, caplog):
+        """recorder 为 None（阶段记录未开启）→ 直接返回，不得告警、不得抛异常。"""
+        import logging
+
+        from src.python.report.html_writer import close_html_generation_stage
+
+        with caplog.at_level(logging.WARNING, logger="invest"):
+            close_html_generation_stage(None, 999.0, None)
+        assert caplog.records == [], f"无 recorder 时不应产生任何告警：{[r.getMessage() for r in caplog.records]}"
+
+    def test_records_total_and_warns_on_disk_span(self, tmp_path, caplog):
+        import logging
+
+        from src.python.report.html_writer import close_html_generation_stage
+
+        class _Recorder:
+            def __init__(self):
+                self.recorded = []
+
+            def record(self, name, seconds):
+                self.recorded.append((name, seconds))
+
+            def spans(self):
+                return {"模板渲染": 0.01, "落盘": 99.0}
+
+        rec = _Recorder()
+        target = tmp_path / "r.html"
+        target.write_bytes(b"x" * 1024)
+        with caplog.at_level(logging.WARNING, logger="invest"):
+            close_html_generation_stage(rec, 100.0, str(target))
+
+        assert rec.recorded == [("页面写入", 100.0)], "总值必须记入父阶段（跨版本可比）"
+        messages = [r.getMessage() for r in caplog.records]
+        assert any("HTML 页面写入" in m and "99" in m for m in messages), (
+            f"慢段告警应取「落盘」分段耗时而非总值：{messages}"
+        )
+
+    def test_render_span_warns_with_template_hint(self, caplog):
+        import logging
+
+        from src.python.report.html_writer import close_html_generation_stage
+
+        class _Recorder:
+            def record(self, name, seconds):
+                pass
+
+            def spans(self):
+                return {"模板渲染": 99.0, "落盘": 0.001}
+
+        with caplog.at_level(logging.WARNING, logger="invest"):
+            close_html_generation_stage(_Recorder(), 99.5, None)
+
+        messages = [r.getMessage() for r in caplog.records]
+        render_msgs = [m for m in messages if "HTML 模板渲染" in m]
+        assert render_msgs, f"渲染慢须单独告警：{messages}"
+        # 告警方向必须指向模板（排查提示含「模板内…」），不能沿用落盘的「排查磁盘」口径
+        assert any("排查模板" in m for m in render_msgs), f"渲染段告警方向须指向模板：{render_msgs}"
+        assert not any("排查磁盘" in m for m in render_msgs), f"渲染段不得指向磁盘：{render_msgs}"
+
+    def test_recorder_without_spans_falls_back_to_total(self, caplog):
+        import logging
+
+        from src.python.report.html_writer import close_html_generation_stage
+
+        class _PlainRecorder:
+            def __init__(self):
+                self.recorded = []
+
+            def record(self, name, seconds):
+                self.recorded.append(name)
+
+        rec = _PlainRecorder()
+        with caplog.at_level(logging.WARNING, logger="invest"):
+            close_html_generation_stage(rec, 99.0, None)
+
+        assert rec.recorded == ["页面写入"]
+        assert any("HTML 页面写入" in r.getMessage() for r in caplog.records), "无分段时按总值告警"

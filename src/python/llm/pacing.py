@@ -47,6 +47,9 @@ logger = logging.getLogger("invest")
 #: 端点标识 → PacingPolicy。以 provider name 为键（与 llm_providers.json 条目名对齐）。
 _POLICIES: dict[str, "PacingPolicy"] = {}
 _POLICY_LOCK = threading.Lock()
+
+#: 本线程门禁等待累加器（见 pop_thread_pacing_wait）
+_TLS = threading.local()
 _LOADED = False
 
 
@@ -157,6 +160,26 @@ def reset_policies() -> None:
 # ── 运行时执行器 ─────────────────────────────────────────────
 
 
+# ── 本线程排队时长（供调用方从 elapsed 中扣除排队，得到真实模型耗时） ──
+
+
+def _note_wait(seconds: float) -> None:
+    """把一次门禁等待累加到本线程的待领取账上。"""
+    _TLS.pending_wait = float(getattr(_TLS, "pending_wait", 0.0)) + max(0.0, float(seconds))
+
+
+def pop_thread_pacing_wait() -> float:
+    """取出并清零本线程累计的门禁等待秒数。
+
+    逐调用时长需要「模型耗时」而非「模型耗时 + 排队」：同端点串行（如
+    ``max_concurrency=1``）时排队常常比请求本身还长，不扣除会把模型耗时高估数倍。
+    用线程局部量而非观测汇聚器总量——汇聚器是跨线程累计，并行批量调用时扣除会串味。
+    """
+    waited = float(getattr(_TLS, "pending_wait", 0.0))
+    _TLS.pending_wait = 0.0
+    return waited
+
+
 class PacingGate:
     """把 ``PacingPolicy`` 施加到实际调用上的执行器（线程安全）。
 
@@ -182,19 +205,22 @@ class PacingGate:
     def __enter__(self) -> "PacingGate":
         if self._policy is None:
             return self
+        _entered = time.perf_counter()
         if self._sem is not None:
             self._sem.acquire()
         # 间隔控制（含抖动）：在拿到并发许可之后执行，使间隔真正约束「请求发出」时刻
         if self._policy.min_interval > 0:
-            _started = time.perf_counter()
             _acquire_interval(self._key, self._policy)
-            _waited = time.perf_counter() - _started
-            if _waited > 0:
-                from src.python.llm.observation import current_llm_observation
+        # 等待计入两处：① 观测汇聚器（全局「白等」总量）；② 本线程待领取量
+        # （供调用方从本次调用的 elapsed 里扣除排队，得到真实模型耗时）
+        _waited = time.perf_counter() - _entered
+        if _waited > 0:
+            _note_wait(_waited)
+            from src.python.llm.observation import current_llm_observation
 
-                _sink = current_llm_observation()
-                if _sink is not None:
-                    _sink.note_pacing_wait(_waited)
+            _sink = current_llm_observation()
+            if _sink is not None:
+                _sink.note_pacing_wait(_waited)
         return self
 
     def __exit__(self, *exc: Any) -> bool:

@@ -34,3 +34,47 @@ else:
     MAGENTA = "\033[95m"  # 事件色：LLM 实际调用行（报告运行时“花钱的调用发生了”的唯一视觉信号）
     BOLD = "\033[1m"
     RESET = "\033[0m"
+
+#: 原始转义码表（**不做 TTY 降级**）——供「按自己那条流判定着色能力」的调用方取用。
+#: 上面的 GREEN/RED/... 常量按 **stdout** 判定；写 stderr 的渠道（CLI verbose 进度、
+#: 自检报告）必须用 :func:`codes_for` 按其自身流判定，否则「stdout 被重定向」会让
+#: 本该有色的 stderr 一起失色。转义码字面量只在下面一处定义。
+RAW_CODES: dict[str, str] = {
+    "GREEN": "\033[92m",
+    "RED": "\033[91m",
+    "YELLOW": "\033[93m",
+    "CYAN": "\033[96m",
+    "DIM": "\033[2m",
+    "BLUE": "\033[94m",
+    "ORANGE": "\033[38;5;208m",
+    "MAGENTA": "\033[95m",
+    "BOLD": "\033[1m",
+    "RESET": "\033[0m",
+}
+
+
+def supports_color(stream: object | None = None) -> bool:
+    """给定流（默认 stdout）是否支持着色：``NO_COLOR`` 或非 TTY → False。
+
+    着色能力判定**单源在此**——写 stderr 的渠道（CLI verbose 进度、自检报告）与
+    写 stdout 的渠道共用同一判据，只换传参，不再各自复制 ``NO_COLOR``/``isatty`` 逻辑。
+
+    Args:
+        stream: 目标输出流（如 ``sys.stderr``）；None 时取 stdout。
+    """
+    target = sys.stdout if stream is None else stream
+    if "NO_COLOR" in os.environ:
+        return False
+    return bool(getattr(target, "isatty", lambda: False)())
+
+
+def codes_for(stream: object | None = None) -> dict[str, str]:
+    """按给定流的着色能力返回转义码表；不支持时各项均为空串。
+
+    Args:
+        stream: 目标输出流（如 ``sys.stderr``）；None 时取 stdout。
+
+    Returns:
+        ``{"GREEN": "\033[92m", ...}``（不支持着色时全部为空串，直接拼进字符串即无副作用）。
+    """
+    return dict(RAW_CODES) if supports_color(stream) else dict.fromkeys(RAW_CODES, "")

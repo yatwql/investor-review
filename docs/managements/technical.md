@@ -1,5 +1,5 @@
 # 投资复盘助手 — 技术设计
-> 文档版本：0.17.4
+> 文档版本：0.17.5
 
 ## 目录
 
@@ -1441,6 +1441,11 @@ _write_atomic(fd, tmp_path, final_path)
 
 **方案**：缓存文件名中内嵌 MD5 前 12 位十六进制摘要，输入源数据变化时摘要改变，缓存键自动不匹配。
 
+**行情口径桶（LLM 侧配套）**：行情派生输入在盘中逐分钟变、收盘后冻结，故 LLM 缓存另以
+`market_hours.market_snapshot_bucket()` 标注「本次运行依据哪个已完成时点」——盘中档不复用、
+收盘档（上一交易日收盘 / 上午收盘 / 当日收盘）同档内可复用。判定每份报告一次，桶键进基础模块指纹，
+细则见 `llm-technical.md` §7.6。
+
 ```
 文件名模式: {prefix}_{digest}.json
 示例:       profit_forecast_a1b2c3d4e5f6.json
@@ -2525,8 +2530,8 @@ _dedup_by_title(items)
 当时的规则产物），而是拿 `title_a`/`title_b` 用当前代码重算并按当前阈值重判——阈值从
 `news_dedup` 的 `_CROSS_*` / `_SAME_SRC_BIGRAM_MIN` 读取，相似度口径的唯一实现是
 `news_dedup._pair_similarity`（与链路内判定同源，由等价性用例保证）。因此结论始终反映
-**当前**规则；记录时指纹与当前不同的样本单列「历史规则时代」作参照。此前工具自写一套
-硬编码阈值（候选区 0.30 vs 代码 0.35）与建议文本，长期输出误导性结论。
+**当前**规则；记录时指纹与当前不同的样本单列「历史规则时代」作参照。阈值与建议文本一律从
+`_CROSS_*` 派生，不在工具内另写一套硬编码值（两套阈值并存会输出误导性结论）。
 
 输出：
 
@@ -2726,7 +2731,7 @@ tui/handlers_whatif.py           # [W] 入口：文件选择 + 生效日交互�
 
 ### 4.15 决策头结构化与决策词归一解析
 
-决策词（减仓/加仓/持有）此前只存在于提示词契约与展示层，唯一消费方是决策账本的抽取模块，且以**子串包含**判方向——`不建议加仓` 会被判成 `+1`、`加仓或减仓` 会取靠前词判成 `-1`。误判后果不是显示错一行，而是**按相反方向写入 `data/state/decision_ledger.jsonl`**，日后用真实行情结算时污染命中率统计。本项把决策词从「展示文本」升格为「可解析数据」。
+决策词（减仓/加仓/持有）只应当由单一解析入口判定，但消费方（决策账本抽取）若以**子串包含**判方向——`不建议加仓` 会被判成 `+1`、`加仓或减仓` 会取靠前词判成 `-1`。误判后果不是显示错一行，而是**按相反方向写入 `data/state/decision_ledger.jsonl`**，日后用真实行情结算时污染命中率统计。本项把决策词从「展示文本」升格为「可解析数据」。
 
 **分层（`core/` 为共享层，两个消费方向都无环）**：
 
@@ -2773,7 +2778,7 @@ report/decision_llm_capture.py   # 抽取：结构化优先 → 表格兜底
 
 ### 4.16 确定性数值信号沉淀与实时/非实时标签纪律
 
-市场温度、估值分位、尾部风险、风格因子、再平衡超限这五类评级由确定性算法算出，此前只活在一次报告生成的内存里与当页展示中——报告落盘即散失，跨期无法回答「上期判高估，事后对不对」。本项把这五类评级沉淀为追加型账本 `data/state/signal_ledger.jsonl`（因子目录随功能开关 `factor_catalog` 追加为第 6 类），并给每条记录附**实时/非实时**来源标签，统计与提示词摘要**默认只算实时记录**（借鉴 augur `backtest.py` 的 `data_source` 标签与排行榜默认 `live_only` 纪律），防非实时数据算出的评级冒充真实战绩。
+市场温度、估值分位、尾部风险、风格因子、再平衡超限这五类评级由确定性算法算出；若只活在单次报告生成的内存与当页展示中，报告落盘即散失，跨期无法回答「上期判高估，事后对不对」。本项把这五类评级沉淀为追加型账本 `data/state/signal_ledger.jsonl`（因子目录随功能开关 `factor_catalog` 追加为第 6 类），并给每条记录附**实时/非实时**来源标签，统计与提示词摘要**默认只算实时记录**（借鉴 augur `backtest.py` 的 `data_source` 标签与排行榜默认 `live_only` 纪律），防非实时数据算出的评级冒充真实战绩。
 
 **分层（`core/` 为共享层，两个消费方向都无环）**：
 
@@ -2843,7 +2848,7 @@ llm/skeleton.py            # 摘要注入 expert_review 提示词（开关门控
 | `finite_or(value, fallback=0.0)` | `value or fallback` 的 NaN 安全替代，始终返回 `float`，便于直接参与算术 |
 | `is_finite_number(value)` | 判定谓词（等同 `strict_num(value) is not None`，但读起来不会误写成 `if not value`——`0` 是合法数值却为假） |
 
-**② 收敛既有私有实现**（约 10 处，全部改为委托原语）：
+**② 私有实现一律委托原语**（约 10 处，不得各写一份）：
 
 | 模块 | 归一函数 | 兜底语义（保持不变） |
 |:-----|:---------|:---------------------|
@@ -2863,13 +2868,13 @@ llm/skeleton.py            # 摘要注入 expert_review 提示词（开关门控
 
 #### 4.17.2 A2 失败原因可读（无开关）
 
-**缺陷**：provider 链路失败此前只把 `failure_type` 短标识（`transport` / `empty` / `invalid`）写进降级事件，用户在「数据源可用性矩阵」里看到的是 `tencent: transport`——既不知道是哪个源的展示名，也不知道具体为什么失败。
+**要求**：provider 链路失败的降级事件必须带可读展示名与具体成因。只写 `failure_type` 短标识（`transport` / `empty` / `invalid`）时，用户在「数据源可用性矩阵」里看到的是 `tencent: transport`——既不知道是哪个源的展示名，也不知道具体为什么失败。
 
 **修复**：新增 `fetcher/chain.FailureDiagnostics`（采集「展示名(原因)」条目，`summary()` 渲染为 `腾讯财经(连接超时)；新浪财经(返回空)`，单条原因按 `_REASON_MAX_LEN` 截断），由 `fetcher/{price,fund,industry,index}.py` 在调用链路时构造并随 `DegradationEvent.detail.message` 透传；`report/data_source_matrix._failure_entry()` 渲染时**优先取该人类可读原因**，无原因时回落原 `failure_type` 短标识。
 
 **向后兼容**：`DegradationTracker.record()` / `_record_unsafe()` 新增 `message` 参数默认 `None` → `detail` 保持 `None` → 矩阵输出与改动前**逐字相同**，由显式测试锁定。复用既有 `detail` 字典而非新增字段，与聚合路径（`record_aggregated()` 亦把 `message` 放在 `detail` 内）形状一致，`get_log()` 无需改动。
 
-**展示名一致性**：熔断跳过与未注册两条分支原先写原始 provider id，与其它分支的展示名不一致；现统一把 `entry = provider_fn_map.get(provider_name)` 提到熔断检查之前，取 `label = entry[0] if entry else provider_name`，使同一条降级事件不因失败类型不同而时好时坏地不可读。
+**展示名一致性**：熔断跳过与未注册两条分支也必须写展示名而非原始 provider id；统一把 `entry = provider_fn_map.get(provider_name)` 提到熔断检查之前，取 `label = entry[0] if entry else provider_name`，使同一条降级事件不因失败类型不同而时好时坏地不可读。
 
 #### 4.17.3 B1 系统自检（恒上屏，无开关）
 
@@ -2926,7 +2931,7 @@ llm/skeleton.py            # 摘要注入 expert_review 提示词（开关门控
 
 ### 4.18 决策跨期反思闭环
 
-LLM 的操作建议与确定性调仓信号此前「当次即评、事后无对账」——看多看空的判断无法用真实后续行情验证，判断质量既不沉淀也无从回灌后续分析。本项把决策登记为追加型账本 `data/state/decision_ledger.jsonl`，到期用真实行情结算命中率，再把教训回灌专家复盘提示词，形成「登记 → 结算 → 回灌」闭环（实验开关 `decision_reflection`，默认关）。
+LLM 的操作建议与确定性调仓信号若「当次即评、事后无对账」，看多看空的判断无法用真实后续行情验证，判断质量既不沉淀也无从回灌后续分析。本项把决策登记为追加型账本 `data/state/decision_ledger.jsonl`，到期用真实行情结算命中率，再把教训回灌专家复盘提示词，形成「登记 → 结算 → 回灌」闭环（实验开关 `decision_reflection`，默认关）。
 
 **分层（`core/` 零 report/llm 依赖，两个消费方向都无环）**：
 

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
@@ -235,6 +236,120 @@ def is_midday_break() -> bool:
         return False
     current_min = now.hour * 60 + now.minute
     return _MORNING_END < current_min < _AFTERNOON_START
+
+
+# ── 行情口径桶（LLM 缓存复用判定的时间口径） ──────────────
+# 行情类输入在盘中逐分钟变、收盘后冻结。把「本次运行看到的是哪个已完成时点的
+# 行情」抽象成一个桶：非盘中档（上一交易日收盘 / 上午收盘 / 当日收盘）内的多次
+# 运行读到的是同一份快照，结论可复用；盘中档（09:30–11:30、13:00–15:00）行情在
+# 变，结论一律不复用（宁可多花一次调用，也不让读者拿到十分钟前的盘中结论）。
+# 场外产品只有官方净值（T+1 晚间更新），不参与盘中判定，口径由净值日自然覆盖。
+
+
+@dataclass(frozen=True)
+class MarketSnapshot:
+    """一次运行所依据的行情口径桶。
+
+    Attributes:
+        key: 桶标识（进缓存键/指纹，如 ``close:2026-11-07`` / ``noon:2026-11-08`` /
+            ``intraday:2026-11-08``）
+        label: 人读口径（上屏日志与提示词，如「上一交易日收盘（2026-11-07）」）
+        as_of: 行情基准日（YYYY-MM-DD）
+        intraday: 是否盘中档（True ⇒ 该档结论不得复用）
+    """
+
+    key: str
+    label: str
+    as_of: str
+    intraday: bool
+
+
+#: 桶的进程内 memo：一次运行只判定一次（长驻 TUI 进程按轮重置，见 reset_market_snapshot）
+_snapshot_memo: dict[str, MarketSnapshot | None] = {"bucket": None}
+_snapshot_lock = threading.Lock()
+
+
+def reset_market_snapshot() -> None:
+    """清空桶 memo（每轮报告开始前调用；测试亦用）。"""
+    with _snapshot_lock:
+        _snapshot_memo["bucket"] = None
+
+
+def market_snapshot_bucket(now: datetime | None = None) -> MarketSnapshot:
+    """解析本次运行的行情口径桶（进程内只判定一次）。
+
+    判定规则（北京时间）：
+      - 交易日 09:30–11:30 / 13:00–15:00 → 盘中档（``intraday``，结论不复用）
+      - 交易日 11:30–13:00 → 上午收盘档（当日 11:30 快照）
+      - 交易日 ≥ 15:00 → 当日收盘档
+      - 交易日 09:30 前、非交易日 → 上一交易日收盘档
+
+    Args:
+        now: 判定时点（默认当前北京时间；显式传入时**不写 memo**，供测试与回放）
+
+    Returns:
+        :class:`MarketSnapshot`
+    """
+    explicit = now is not None
+    if not explicit:
+        with _snapshot_lock:
+            if _snapshot_memo["bucket"] is not None:
+                return _snapshot_memo["bucket"]
+
+    moment = now or datetime.now(_BJ_TZ)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=_BJ_TZ)
+
+    today = moment.strftime("%Y-%m-%d")
+    minute = moment.hour * 60 + moment.minute
+    # 交易日判定复用交易日历单源（盘前/节假日回溯到最近交易日），但只读**已缓存**日历：
+    # 桶只是一个口径标签，不该为它触发取数，也不能因源不可用而中断。
+    # 函数内导入是**必需**的：cache._ttl → market_hours → trading_calendar → cache 已成链，
+    # 提到模块顶层即循环导入。
+    from src.python.core.trading_calendar import trading_day_as_of_cached
+
+    as_of_trading_day = trading_day_as_of_cached(moment)
+    is_trading_today = as_of_trading_day == today
+
+    if is_trading_today and (_MORNING_START <= minute < _MORNING_END or _AFTERNOON_START <= minute < _AFTERNOON_END):
+        bucket = MarketSnapshot(
+            key=f"intraday:{today}",
+            label=f"盘中（{today} {moment:%H:%M}）",
+            as_of=today,
+            intraday=True,
+        )
+    elif is_trading_today and _MORNING_END <= minute < _AFTERNOON_START:
+        bucket = MarketSnapshot(
+            key=f"noon:{today}",
+            label=f"上午收盘（{today} 11:30）",
+            as_of=today,
+            intraday=False,
+        )
+    elif is_trading_today and minute >= _AFTERNOON_END:
+        bucket = MarketSnapshot(
+            key=f"close:{today}",
+            label=f"当日收盘（{today}）",
+            as_of=today,
+            intraday=False,
+        )
+    else:
+        bucket = MarketSnapshot(
+            key=f"close:{as_of_trading_day}",
+            label=f"上一交易日收盘（{as_of_trading_day}）",
+            as_of=as_of_trading_day,
+            intraday=False,
+        )
+
+    if not explicit:
+        with _snapshot_lock:
+            _snapshot_memo["bucket"] = bucket
+    return bucket
+
+
+def market_snapshot_note() -> str:
+    """提示词用的一行口径说明（让模型知道手里的行情是哪个时点的）。"""
+    bucket = market_snapshot_bucket()
+    return f"【数据口径】行情为 {bucket.label} 口径；净值类数据以官方最近公布日为准，不随盘中变化。"
 
 
 def is_market_open() -> bool:

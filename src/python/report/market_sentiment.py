@@ -56,13 +56,36 @@ def build_market_sentiment_data(
 
         mark_data_used("sentiment")
 
-    contract = build_market_sentiment(dragon_tiger, ladder, tracked_targets(holdings, penetrated_assets))
+    targets = tracked_targets(holdings, penetrated_assets)
+    contract = build_market_sentiment(dragon_tiger, ladder, targets)
+    # 命中 0 条有三种截然不同的成因：源无条目 / 跟踪标的为空 / 当日确无交集。
+    # 只写「命中 0 条」时事后无法区分（本次实测 0 命中，源侧 72+30 条、跟踪 12 只），
+    # 故把两侧规模一并落日志。
     logger.info(
-        "[market_sentiment] 命中 %d 条（龙虎榜/连板梯队 ∩ 持仓与穿透），交易日 %s",
+        "[market_sentiment] 命中 %d 条（龙虎榜 %d 只 / 连板梯队 %d 只 ∩ 跟踪标的 %d 只），交易日 %s",
         contract["entry_count"],
+        _dragon_tiger_stock_count(dragon_tiger),
+        _ladder_member_count(ladder),
+        len(targets),
         contract["trade_date"] or "未知",
     )
     return contract
+
+
+def _dragon_tiger_stock_count(dragon_tiger: dict[str, Any] | None) -> int:
+    """龙虎榜条目数（文档契约：``stock_items`` 逐只）。"""
+    return sum(1 for item in (dragon_tiger or {}).get("stock_items") or [] if isinstance(item, dict))
+
+
+def _ladder_member_count(ladder: dict[str, Any] | None) -> int:
+    """连板梯队最新一日的成员数（``item[0].boards`` 各板位成员合计）。"""
+    items = [i for i in ((ladder or {}).get("item") or []) if isinstance(i, dict)]
+    if not items:
+        return 0
+    boards = items[0].get("boards") or {}
+    if not isinstance(boards, dict):
+        return 0
+    return sum(len(members) for members in boards.values() if isinstance(members, list))
 
 
 __all__ = ["build_market_sentiment_data"]

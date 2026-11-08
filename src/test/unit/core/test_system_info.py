@@ -25,7 +25,7 @@ pytestmark = [pytest.mark.unit, pytest.mark.unit_core]
 
 
 class TestDisplayPrimitives:
-    """曾在渠道各持一份的展示规则，现为单点实现。"""
+    """展示规则不得由渠道各持一份，收敛为单点实现。"""
 
     def test_simplify_endpoint_takes_host(self):
         assert simplify_endpoint("https://api.anthropic.com/v1/messages") == "api.anthropic.com"

@@ -232,7 +232,7 @@ class TestAnnotatePositionStatus(unittest.TestCase):
         self.assertEqual(items[1]["status"], hs.STATUS_NAV_MISSING)
 
     def test_dict_detail_supported(self):
-        """dict 形式行情明细 → 状态标注一致（_detail_value 兼容 dict/对象）。"""
+        """dict 形式行情明细 → 状态标注一致（detail_value 同时支持 dict 与含属性对象）。"""
         holdings = [_holding("长江电力", "600900")]
         details = [{"code": "600900", "name": "长江电力", "price": 25.0, "price_type": "场内收盘价(T)"}]
         items = hs.annotate_position_status(holdings, details)

@@ -64,7 +64,7 @@ def _make_holdings_xlsx() -> bytes:
     from openpyxl import Workbook
 
     wb = Workbook()
-    ws = wb.active
+    ws = wb.worksheets[0]  # 新建 Workbook 恒有默认表；取 worksheets[0] 避开 Optional
     ws.title = "账户一"
     ws.append(["名称", "代码", "持仓份额", "每份成本"])
     ws.append(["测试基金", "000001", 1000, 1.0])
@@ -138,7 +138,7 @@ def _check_page_render(client, results):
     ok = ok and 'name="use_existing"' in html and 'value="existing"' in html
     ok = ok and 'id="formal-options"' in html and 'id="confirm-overwrite"' in html and 'id="formal-warning"' in html
     # 静态资产可解析：index.html 引用的每个 /static/* 资源都必须返回 200。
-    # 盲区——此前仅查引用串存在（"/static/main.js" in html）不查资源可访问，
+    # 盲区——只查引用串存在（"/static/main.js" in html）而不查资源可访问时，
     # static_url_path 推导漂移致全部资产 404 时整页 JS/CSS 失效、冒烟仍误报通过。
     assets = re.findall(r'(?:src|href)="(/static/[^"?#]+)', html)
     missing = [a for a in assets if client.get(a).status_code != 200]

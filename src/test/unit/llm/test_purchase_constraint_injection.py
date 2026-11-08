@@ -76,7 +76,7 @@ class TestExtractFromPipelineData(unittest.TestCase):
         self._stubs(mock_expert, mock_macro, mock_health, mock_penetration)
         pipeline_data = {"purchase_status_data": {"constraint_block": _BLOCK}}
 
-        generate_all_llm([], [], 0, 0, 0, 0, 0, {}, pipeline_data=pipeline_data)
+        generate_all_llm({}, {}, 0, 0, 0, 0, 0, {}, pipeline_data=pipeline_data)
 
         for name, mock_fn in [
             ("global_macro", mock_macro),
@@ -91,7 +91,7 @@ class TestExtractFromPipelineData(unittest.TestCase):
         """契约缺席（降级/未产出）→ ""（提示词与缓存键双不变）。"""
         self._stubs(mock_expert, mock_macro, mock_health, mock_penetration)
 
-        generate_all_llm([], [], 0, 0, 0, 0, 0, {}, pipeline_data={})
+        generate_all_llm({}, {}, 0, 0, 0, 0, 0, {}, pipeline_data={})
 
         for name, mock_fn in [
             ("global_macro", mock_macro),
@@ -340,8 +340,10 @@ class TestNewsChainContainsBlock(unittest.TestCase):
 
         _, fp_with = preparer_with()
         _, fp_without = preparer_without()
-        assert fp_with == compute_fingerprint([], None, _BLOCK), "未按三参重算"
-        assert fp_without == compute_fingerprint([], None), "空块必须沿用两参原形态"
+        # 穿透资产经 `extract_stable_penetration` 收敛为「稳定字段列表」（None → []），
+        # 故三参/两参重算的期望值同样用空列表，而不是原始 None
+        assert fp_with == compute_fingerprint([], [], _BLOCK), "未按三参重算"
+        assert fp_without == compute_fingerprint([], []), "空块必须沿用两参原形态"
         assert fp_with != fp_without, "块未进新闻缓存指纹"
 
     def test_submit_news_future_passes_block_positionally(self):
@@ -462,3 +464,30 @@ class TestAbsentBlockFallbackPair(unittest.TestCase):
         assert extract_purchase_constraint_block({"purchase_status_data": {}}) == ""
         assert extract_purchase_constraint_block({}) == ""
         assert extract_purchase_constraint_block(None) == ""
+
+
+class TestNewsContextFingerprintExcludesPrices:
+    """新闻关联的上下文指纹只含结构：穿透资产的 mv/ratio_pct 不得进键。"""
+
+    @staticmethod
+    def _holding(code="600900", name="长江电力"):
+        from types import SimpleNamespace
+
+        return SimpleNamespace(code=code, name=name)
+
+    def test_price_fields_do_not_change_key(self):
+        from src.python.llm.generators_news import news_context_fingerprint
+
+        base = [{"name": "某ETF", "codes": ["600900"], "mv": 1000.0, "ratio_pct": 3.2}]
+        moved = [{"name": "某ETF", "codes": ["600900"], "mv": 4321.0, "ratio_pct": 9.9}]
+
+        assert news_context_fingerprint([self._holding()], base) == news_context_fingerprint([self._holding()], moved)
+
+    def test_structure_still_changes_key(self):
+        from src.python.llm.generators_news import news_context_fingerprint
+
+        h = self._holding()
+        assert news_context_fingerprint([h], [{"name": "A", "codes": ["600900"]}]) != news_context_fingerprint(
+            [h], [{"name": "A", "codes": ["600519"]}]
+        )
+        assert news_context_fingerprint([h], None) != news_context_fingerprint([self._holding("000001")], None)

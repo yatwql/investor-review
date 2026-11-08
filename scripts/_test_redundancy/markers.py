@@ -195,7 +195,7 @@ def check_file(filepath: Path, test_dir: Path | None = None, tree: ast.Module | 
     expected = EXPECTED_DIR_MARKERS.get(rel_dir)
     if expected is not None:
         # 通用标记（`unit` / `scenario`）只表达测试层级，不承载域归属：只标 `unit`
-        # 会让目录期望形同虚设（曾放过 `unit/web/` 下只标 `unit_llm` 的错域文件）。
+        # 会让目录期望形同虚设（如 `unit/web/` 下只标 `unit_llm` 的错域文件就会被放过）。
         # 故域标记必须命中其一；期望集若只有通用标记则退回原集合判定。
         domain_expected = expected - _GENERIC_MARKERS
         required = domain_expected or expected

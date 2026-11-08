@@ -146,8 +146,8 @@ def _build_module_fns(
 
     return {
         # 持仓变动复盘归因：只吃持仓变动契约（`pipeline_data["holding_change_data"]`），
-        # 不依赖四模块产出，因此并入并行批而非串行后置——实测其单次 4~25s 原先完全
-        # 叠加在 expert_review 之后的关键路径上。契约缺席/开关关闭时内部直接跳过。
+        # 不依赖四模块产出，因此并入并行批而非串行后置——实测其单次 4~25s 若串行后置，
+        # 会完全叠加在 expert_review 之后的关键路径上。契约缺席/开关关闭时内部直接跳过。
         "holding_change": lambda c, lc: run_holding_change_in_worker(
             pipeline_data,
             lc,

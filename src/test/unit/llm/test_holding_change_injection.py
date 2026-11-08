@@ -228,7 +228,14 @@ class TestFingerprintConditionalJoin(unittest.TestCase):
             penetration_deep_fingerprint,
         )
 
-        for fn in (global_macro_fingerprint, expert_review_fingerprint, health_check_fingerprint):
+        # 全球政经局势不看标的价格：块含市值/盈亏差（价格派生），一律不入其键——
+        # 入了就会让 24h TTL 在每轮行情刷新后失效
+        gm_base = global_macro_fingerprint(self._inputs())
+        assert global_macro_fingerprint(self._inputs(holding_change_block="")) == gm_base
+        assert global_macro_fingerprint(self._inputs(holding_change_block=_BLOCK)) == gm_base, (
+            "global_macro 的键不得含持仓变动复盘块（价格派生）"
+        )
+        for fn in (expert_review_fingerprint, health_check_fingerprint):
             base = fn(self._inputs())
             assert fn(self._inputs(holding_change_block="")) == base, f"{fn.__name__}: 空块改变了键"
             assert fn(self._inputs(holding_change_block=_BLOCK)) != base, f"{fn.__name__}: 非空块未进键"

@@ -260,8 +260,8 @@ def call_single_provider(
     ``http_client`` 缺省（None）时自建一次性兜底客户端，调用结束后关闭。
     分发层（``_llm_dispatch._execute``）为并行 worker 装配共享客户端，但
     **串行后置模块**（生成后自检、持仓变动复盘归因）不经该装配、以 None
-    进入——此前 None 直达 provider 层 ``assert client is not None``，
-    AssertionError 又被 ``call_llm`` 的 per-provider ``except Exception``
+    进入——若 None 直达 provider 层 ``assert client is not None``，
+    AssertionError 会被 ``call_llm`` 的 per-provider ``except Exception``
     吞掉，表现为「provider 异常，切换下一 provider」整链秒败、模块内容
     静默丢失（本函数是多链与 legacy 两路的唯一汇聚点，兜底收口于此）。
     """

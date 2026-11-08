@@ -52,7 +52,7 @@ def resolve_output_dir(config: dict | None = None, override: str | None = None) 
 
     三渠道（CLI/TUI/Web）报告产物定位的唯一入口——渠道层不得自行写
     ``config.get("output_dir") or get_default(...) or "reports"`` 这类回退链
-    （曾在 12 处各写一份：改默认值或加绝对化规则时必然漏改）。
+    （分散多处各写一份时，改默认值或加绝对化规则必然漏改）。
 
     Args:
         config: 可选显式配置（渠道上下文传入其缓存配置）；不传时读全局配置。

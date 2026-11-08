@@ -117,7 +117,7 @@
 
 ## Data States — 数据状态与空态呈现
 
-> 三档空态族与文案口径**已落地**（2026-10-08，20 partial 逐一核对）；契约测试见 `src/test/unit/report/test_report_empty_states.py`。
+> 三档空态族与文案口径已定稿（20 个 partial 逐一核对）；契约测试见 `src/test/unit/report/test_report_empty_states.py`。
 
 - **三档空态族**（类名即契约）：
   - **章节级 `empty-section`**：整章无数据——淡底虚线框、居中、muted（主模板与 partial 分布共 19 处）。
@@ -159,4 +159,4 @@
 ## Known Gaps — 未覆盖面（随任务推进更新）
 
 - 报告 `--focus` token 已就位，应用点为组件状态矩阵（该项未覆盖）；工作台旧名 `--color-*` 兼容映射已到期删除（负向锁见 `test_design_tokens`）。
-- 样式护栏机检（`check-style-guardrails`）：E 级判 finding；W 级观察项经样式收敛批次（2026-10-13）归零（裸色值 132→0 / 圆角档外 8→0，含误报修复与豁免域精确化），存量白名单 15 条带理由登记于脚本 `_RAW_COLOR_EXEMPTIONS`。W1 归零口径含「引号内整行豁免」（为 JS 图表配置设计）——HTML 内联色值由增设的 W3 独立观察，存量登记：**W3 已收口**（2026-10-20：40 处内联色全部 token 化归零——新增报告侧 `--heat-*`/`--corr-*`/`--cell-na-bg`/`--alloc-*`/`--danger-text` 组件派生 token（Colors 表登记，暗色配对同步），升为 E 级 finding）、**W4 档外字号 8 处**（工作台 `0.95rem≈15.2px` 非 15px 整值）、**W5 档外间距 172 处**（6/10/14/18px 存量），三维均只减不增（`TestBaselineNoGrowth` 2026-10-17 批次基线）；内联/档外新增一律走 token 或先入本段登记。**管控定档**：运行域=unit 测试快反馈（E 级+基线断言）+ 发布门禁 release.py gate（E 级拦/W 级统计留档，2026-10-13 纳入）；纳入 pre-commit/CI guards 须独立决策；白名单只减不增（腐化自动警告）；收敛优先于豁免。观察数只减不增由 `TestBaselineNoGrowth` 基线断言机制化。
+- 样式护栏机检（`check-style-guardrails`）：E 级判 finding；W 级观察项当前均为零（裸色值 0 / 圆角档外 0，另含误报修复与豁免域精确化），存量白名单 15 条带理由登记于脚本 `_RAW_COLOR_EXEMPTIONS`。W1 归零口径含「引号内整行豁免」（为 JS 图表配置设计）——HTML 内联色值由增设的 W3 独立观察，存量登记：**W3 归零**（内联色已全部 token 化——新增报告侧 `--heat-*`/`--corr-*`/`--cell-na-bg`/`--alloc-*`/`--danger-text` 组件派生 token（Colors 表登记，暗色配对同步），升为 E 级 finding）、**W4 档外字号 8 处**（工作台 `0.95rem≈15.2px` 非 15px 整值）、**W5 档外间距 172 处**（6/10/14/18px 存量），三维均只减不增（`TestBaselineNoGrowth` 2026-10-17 批次基线）；内联/档外新增一律走 token 或先入本段登记。**管控定档**：运行域=unit 测试快反馈（E 级+基线断言）+ 发布门禁 release.py gate（E 级拦/W 级统计留档，2026-10-13 纳入）；纳入 pre-commit/CI guards 须独立决策；白名单只减不增（腐化自动警告）；收敛优先于豁免。观察数只减不增由 `TestBaselineNoGrowth` 基线断言机制化。

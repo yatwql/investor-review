@@ -19,6 +19,8 @@ from unittest.mock import patch
 
 import pytest
 
+from bs4.element import Tag
+
 from src.test.unit.report.test_html_report_structure import (
     _REPORT_SECTION_DEFAULT,
     _build_minimal_render_data,
@@ -35,7 +37,14 @@ def _order_with_relationship() -> list[dict]:
     return [dict(sec) for sec in _REPORT_SECTION_DEFAULT]
 
 
-def _render_correlation(correlation_data) -> "BeautifulSoup":
+def _require_section(root, anchor: str = "sec-position_structure") -> Tag:
+    """取章节节点；缺失即判用例失败（避免对 Optional 直接取文本）。"""
+    node = root.find(id=anchor)
+    assert isinstance(node, Tag), f"章节节点应存在：{anchor}"
+    return node
+
+
+def _render_correlation(correlation_data) -> Tag:
     """渲染 position_structure 可见、其余隐藏的模板。"""
     order = _order_with_relationship()
     numbers = {sec["key"]: sec["number"] for sec in order}
@@ -80,8 +89,8 @@ def _correlation_data(**extra) -> dict:
 class TestHtmlCorrelationSection(unittest.TestCase):
     """持仓关系矩阵章节·相关性区块 HTML 呈现测试。"""
 
-    def _section(self, correlation_data):
-        return _render_correlation(correlation_data).find(id="sec-position_structure")
+    def _section(self, correlation_data) -> Tag:
+        return _require_section(_render_correlation(correlation_data))
 
     def test_full_rendering_when_available(self):
         """available=True → 汇总卡 + 相关度最高 + 热力矩阵 + 配对明细 + 说明。"""
@@ -206,14 +215,14 @@ def _overlap_result(**extra) -> dict:
 class TestHtmlMergedRelationshipSection(unittest.TestCase):
     """持仓关系矩阵章节·一章两区块（重合度 + 相关性）HTML 呈现测试。"""
 
-    def _render_merged(self, overlap_matrix, correlation_data) -> "BeautifulSoup":
+    def _render_merged(self, overlap_matrix, correlation_data) -> Tag:
         order = _order_with_relationship()
         numbers = {sec["key"]: sec["number"] for sec in order}
         sv_dict = {sec["key"]: (sec["key"] == "position_structure") for sec in order}
         data = _build_minimal_render_data(order, numbers, sv_dict)
         data["overlap_matrix"] = overlap_matrix
         data["position_relationship_data"] = correlation_data
-        return _render_template(data).find(id="sec-position_structure")
+        return _require_section(_render_template(data))
 
     def test_both_blocks_render_in_merged_section(self):
         """重合度 + 相关性同时提供 → 同一章节内两个子区块依次呈现。"""
@@ -283,7 +292,7 @@ def _rolling_data(**extra) -> dict:
         },
         "notes": [
             "组合平均相关性 = 每个滚动端点上全部两两 Pearson r 的均值（参与对重叠样本 ≥ 60 期才计入）",
-            "120 日窗完整重叠自 2026-09-01 起，此前端点按可得区间（<120 期）计算",
+            "120 日窗完整重叠自 2026-09-01 起，更早端点按可得区间（<120 期）计算",
         ],
     }
     d.update(extra)
@@ -301,8 +310,8 @@ class TestHtmlRollingTrend(unittest.TestCase):
     def _section_html(self, correlation_data) -> str:
         return str(self._section(correlation_data))
 
-    def _section(self, correlation_data):
-        return _render_correlation(correlation_data).find(id="sec-position_structure")
+    def _section(self, correlation_data) -> Tag:
+        return _require_section(_render_correlation(correlation_data))
 
     def test_rolling_block_renders_chart_table_and_notes(self):
         """滚动就绪 → 趋势标题 + 图布/绘制脚本 + 焦点品对表 + 口径句全渲染。"""
@@ -388,6 +397,7 @@ class TestCorrelationRollingWiring(unittest.TestCase):
         ) as mock_fetch:
             result = compute_correlation_data(self._holdings(), {}, reporter)
 
+        assert result is not None, "基金深度分析开启时应返回契约 dict"
         assert result["available"] is True
         rolling = result.get("rolling")
         assert rolling and rolling["available"] is True
@@ -415,6 +425,7 @@ class TestCorrelationRollingWiring(unittest.TestCase):
             ),
         ):
             result = compute_correlation_data(self._holdings(), {}, reporter)
+            assert result is not None
 
         assert result["available"] is True
         assert result["rolling"] is None
@@ -432,6 +443,7 @@ class TestCorrelationRollingWiring(unittest.TestCase):
             return_value=None,
         ):
             result = compute_correlation_data(self._holdings(), {}, reporter)
+            assert result is not None
 
         assert result["available"] is False
         assert result["rolling"] is None
@@ -492,6 +504,7 @@ class TestCorrelationRollingWiring(unittest.TestCase):
             ),
         ):
             result = compute_correlation_data(self._holdings(), {}, reporter)
+            assert result is not None
 
         rolling = result["rolling"]
         assert rolling["available"] is True

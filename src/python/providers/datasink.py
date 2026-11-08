@@ -240,7 +240,7 @@ def _get_with_transient_retry(path: str, query: dict[str, Any], *, timeout: floa
 
 
 #: 探测未命中的负缓存实例：键族与命中计数统一走 `cache.NegativeCache`（不再自持 get/set
-#: 与计数样板）；命中即「这类探测此前确认缺失」，跨报告复用、不再逐篇重发。
+#: 与计数样板）；命中即「这类探测已确认缺失」，跨报告复用、不逐篇重发。
 PROBE_MISS = NegativeCache(
     "财报章节探测缺失",
     "datasink_probe_miss_",
@@ -286,7 +286,7 @@ def _request(path: str, params: dict[str, Any], *, timeout: float | None = None)
     miss_key = _probe_miss_key(path, params)
     if miss_key and PROBE_MISS.probe(miss_key):
         logger.debug("[datasink] 探测负缓存命中（已确认缺失，跳过请求）：%s", path)
-        set_last_reason("该章节此前确认缺失（负缓存）")
+        set_last_reason("该章节已确认缺失（负缓存）")
         return None
 
     query = {k: v for k, v in params.items() if v not in (None, "")}

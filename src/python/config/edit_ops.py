@@ -50,7 +50,7 @@ class ConfigEditError(ValueError):
 # 用大小写敏感子串匹配，UPPER_SNAKE 会匹配不过）。
 # ── LLM 调优参数（llm_settings.json 顶层标量）─────────────────────
 # 这些键是「用户可以合理调整」的运行参数：默认值有依据（见 _llm_settings_defaults），
-# 但端点抖动/费用考量时需要能改。此前只能手改 JSON（无校验、无面板入口）。
+# 但端点抖动/费用考量时需要能改——手改 JSON 无校验、无面板入口。
 # 范围（min/max）即校验边界——超出直接拒绝并说明，不静默裁剪。
 LLM_TUNING_SPECS: dict[str, dict] = {
     "llm_max_thinking_concurrency": {
@@ -485,10 +485,11 @@ def apply_config_edit(payload: dict) -> dict:
         ConfigEditError: 键/值/action 校验失败（Web 映射 400，TUI 映射提示行）。
         OSError / Exception: 写入失败（Web 映射 500，调用方记日志）。
     """
-    key = payload.get("key")
-    entry = config_edit_whitelist.get(key)
-    if entry is None:
-        raise ConfigEditError(f"配置键不在白名单: {key}")
+    raw_key = payload.get("key")
+    entry = config_edit_whitelist.get(raw_key) if isinstance(raw_key, str) else None
+    if not isinstance(raw_key, str) or entry is None:
+        raise ConfigEditError(f"配置键不在白名单: {raw_key}")
+    key = raw_key  # 已确认 str（下游按 str 键写盘）
 
     if entry["writer"] in _ACTION_WRITERS:
         backup_path = config_backup_file(_target_path(entry["target"]))
@@ -517,10 +518,11 @@ def preview_config_edit(payload: dict) -> dict:
     Raises:
         ConfigEditError: 未知键 / 动作型键 / 值校验失败。
     """
-    key = payload.get("key")
-    entry = config_edit_whitelist.get(key)
-    if entry is None:
-        raise ConfigEditError(f"配置键不在白名单: {key}")
+    raw_key = payload.get("key")
+    entry = config_edit_whitelist.get(raw_key) if isinstance(raw_key, str) else None
+    if not isinstance(raw_key, str) or entry is None:
+        raise ConfigEditError(f"配置键不在白名单: {raw_key}")
+    key = raw_key  # 已确认 str（下游按 str 键校验取值）
     if entry["writer"] in _ACTION_WRITERS:
         raise ConfigEditError(f"{key} 是动作型键，不能直接赋值（请用 TUI/Web 或专用参数）")
     return {"key": key, "value": _normalize_plain_value(key, payload.get("value"), entry)}

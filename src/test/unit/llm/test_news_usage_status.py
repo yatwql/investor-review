@@ -207,3 +207,30 @@ def test_module_cost_uses_numeric_precision():
     recorded = sum(_session_usage["per_module"]["news_correlation"]["costs"].values())
     assert recorded == pytest.approx(expected, abs=1e-12), "逐模块费用须与数值口径一致（不得经展示串回归）"
     assert recorded != pytest.approx(round(expected, 3), abs=1e-12), "展示串回读会把费用截到 3 位小数"
+
+
+def test_batch_module_duration_recorded_from_skeleton():
+    """批量模块的耗时必须落账（此前恒为 0.0，用量页签无法归因该模块）。"""
+    _finalize(
+        {"input": 1200, "output": 300, "cache_hit": 0, "duration": 3.25},
+        analysis_count=2,
+    )
+
+    assert _session_usage["per_module"]["news_correlation"]["duration"] == pytest.approx(3.25, abs=1e-9)
+
+
+def test_batch_mode_reports_elapsed_duration():
+    """批量骨架须回传本段墙钟（扣排队），0 只应出现在「全缓存、无真实调用」时。"""
+    from src.python.llm import _batch_mode
+
+    with patch.object(_batch_mode, "_execute_and_merge_batch", side_effect=_slow_batch):
+        usage = _run_batch_mode_with((None, None, None))
+
+    assert usage["duration"] > 0.0, f"有真实批次时必须回传耗时，实际 {usage['duration']}"
+
+
+def _slow_batch(*_args, **_kwargs):
+    import time as _time
+
+    _time.sleep(0.02)
+    return (10, 5, 0, 1)

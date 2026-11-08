@@ -38,7 +38,36 @@ from src.python.llm.module_fingerprint import (
 )
 from src.python.llm.prompts import CACHE_PREFIX_LLM
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_llm, pytest.mark.llm]
+pytestmark = [
+    pytest.mark.unit,
+    pytest.mark.unit_llm,
+    pytest.mark.llm,
+]
+
+
+#: 键形后缀：行情口径桶键（盘中/午间/收盘各一档；本文件由 `_frozen_market_bucket`
+#: 固定为 ``close:2026-11-06``，故基线可复现）。后缀整体属于「键形」，随档变化是
+#: 预期行为，仅在桶键常量本身被改动时才需要刷新本表。
+_BUCKET_SUFFIX = "_404174e2503c"
+
+
+@pytest.fixture(autouse=True)
+def _frozen_market_bucket(monkeypatch):
+    """冻结行情口径桶（收盘档 2026-11-06）。
+
+    桶键随钟面变化（盘中/午间/收盘各一档），若不冻结，黄金基线表会随运行时刻漂移。
+    本文件的断言都只关心「同桶下键的增减」，故此处置为常量。
+    """
+    from src.python.core import market_hours
+
+    frozen = market_hours.MarketSnapshot(
+        key="close:2026-11-06",
+        label="上一交易日收盘（2026-11-06）",
+        as_of="2026-11-06",
+        intraday=False,
+    )
+    monkeypatch.setattr(market_hours, "market_snapshot_bucket", lambda now=None: frozen)
+
 
 _MODULE_KEYS = ("global_macro", "expert_review", "health_check", "penetration_deep")
 
@@ -656,7 +685,7 @@ _DEBATE_TIMELY_BLOCKS = {
 # 条件并入之前以本文件样例输入录制的辩论基础指纹（四块皆空时键必须与引入前
 # 逐字节一致——抓「空串 + 分隔符改变哈希」陷阱，存量辩论缓存不无谓失效）。
 # 后缀逻辑有意变更时应同步更新（黄金值例外登记）。
-_DEBATE_PRE_WIRE_BASELINE = "437755c22ee6_c"
+_DEBATE_PRE_WIRE_BASELINE = "437755c22ee6_c" + _BUCKET_SUFFIX
 
 
 def test_debate_appendix_blocks_empty_equals_pre_wire_baseline():
@@ -715,10 +744,11 @@ _PURCHASE_BLOCK_CHANGED = _PURCHASE_BLOCK.replace("100 元", "200 元")
 #: 空块基线（接线前形态）：随提示词文本版本盐递增同步刷新（当前 `rate-caliber-4`）；
 #: 结构后缀 `_c` 不应随盐变化——后缀增减即为键形漂移，属需排查的异常。
 _PRE_WIRE_BASELINE = {
+    # global_macro 键里没有价格，故不带行情口径桶后缀（跨时段复用是安全的）
     "global_macro": "df8fb2929da0",
-    "expert_review": "437755c22ee6_c",
-    "health_check": "e06878f7600a",
-    "penetration_deep": "12f59e5d9751",
+    "expert_review": "437755c22ee6_c" + _BUCKET_SUFFIX,
+    "health_check": "e06878f7600a" + _BUCKET_SUFFIX,
+    "penetration_deep": "12f59e5d9751" + _BUCKET_SUFFIX,
 }
 
 
@@ -773,3 +803,117 @@ def test_fact_check_rules_version_enters_module_fingerprints(monkeypatch):
 
     for module_key in sorted(_MODULE_KEYS):
         assert _write_fingerprint(module_key) != baseline[module_key], f"{module_key}: 规则版本未进指纹"
+
+
+def test_market_bucket_key_enters_fingerprint(monkeypatch):
+    """收盘档与盘中档的键必须不同：否则盘中写下的缓存会被收盘档读到。"""
+    from src.python.core import market_hours
+    from src.python.llm.module_fingerprint import expert_review_fingerprint
+
+    base = ModuleFingerprintInputs(
+        total_mv=_TOTAL_MV,
+        total_cost=_TOTAL_COST,
+        total_profit=_TOTAL_PROFIT,
+        total_today_profit=_TODAY_PROFIT,
+        holdings_details=_HOLDINGS,
+        categories=dict(_CATEGORIES),
+        history_data=_HISTORY,
+    )
+    closed = expert_review_fingerprint(base)
+    monkeypatch.setattr(
+        market_hours,
+        "market_snapshot_bucket",
+        lambda now=None: market_hours.MarketSnapshot(
+            key="intraday:2026-11-06", label="盘中（2026-11-06 10:00）", as_of="2026-11-06", intraday=True
+        ),
+    )
+    intraday = expert_review_fingerprint(base)
+
+    assert closed != intraday
+
+
+class TestNoPriceModules:
+    """全球政经局势 / 财经热点关联的键不含持仓价格信息（结论与个股价格无关）。"""
+
+    @staticmethod
+    def _inputs(**kw):
+        return ModuleFingerprintInputs(
+            total_mv=_TOTAL_MV,
+            holdings_details=_HOLDINGS,
+            categories=dict(_CATEGORIES),
+            history_data=_HISTORY,
+            **kw,
+        )
+
+    def test_global_macro_ignores_bucket(self, monkeypatch):
+        """键里没有价格 → 不需要按行情快照分档，跨档复用安全。"""
+        from src.python.core import market_hours
+        from src.python.llm.module_fingerprint import global_macro_fingerprint
+
+        closed = global_macro_fingerprint(self._inputs())
+        monkeypatch.setattr(
+            market_hours,
+            "market_snapshot_bucket",
+            lambda now=None: market_hours.MarketSnapshot(
+                key="intraday:2026-11-06", label="盘中", as_of="2026-11-06", intraday=True
+            ),
+        )
+        assert global_macro_fingerprint(self._inputs()) == closed
+
+    def test_global_macro_ignores_holding_change_block(self):
+        """持仓变动复盘块含市值/盈亏差（价格派生），不得进该模块键。"""
+        from src.python.llm.module_fingerprint import global_macro_fingerprint
+
+        base = global_macro_fingerprint(self._inputs())
+        assert global_macro_fingerprint(self._inputs(holding_change_block="【持仓变动】市值差 +3821.5 元")) == base
+
+    def test_global_macro_still_tracks_structure_and_purchase_block(self):
+        """去价格 ≠ 去结构：换品种 / 换申购限购约束仍须换键。"""
+        from src.python.llm.module_fingerprint import global_macro_fingerprint
+
+        base = global_macro_fingerprint(self._inputs())
+        assert global_macro_fingerprint(self._inputs(purchase_block="限大额：单日 100 元")) != base
+        other = [dict(_HOLDINGS[0], code="000001", name="平安银行"), *_HOLDINGS[1:]]
+        changed = ModuleFingerprintInputs(
+            total_mv=_TOTAL_MV,
+            holdings_details=other,
+            categories=dict(_CATEGORIES),
+            history_data=_HISTORY,
+        )
+        assert global_macro_fingerprint(changed) != base
+
+
+@pytest.mark.parametrize("module_key", sorted(_MODULE_KEYS))
+def test_bucket_suffix_follows_price_classification(module_key, monkeypatch):
+    """桶后缀的挂载必须由「价格相关性分类」决定，不得各指纹函数手工分叉。
+
+    分类单源是 `cache_policy.PRICE_INDEPENDENT_MODULES`：价格相关模块随档换键，
+    价格无关模块跨档同键（否则分类只写在注释里，实现随时漂移）。
+    """
+    from src.python.core import market_hours
+    from src.python.llm.cache_policy import is_price_sensitive_module
+
+    def _inputs():
+        return ModuleFingerprintInputs(
+            total_mv=_TOTAL_MV,
+            holdings_details=_HOLDINGS,
+            categories=dict(_CATEGORIES),
+            history_data=_HISTORY,
+        )
+
+    builder = MODULE_FINGERPRINT_BUILDERS[module_key]
+    base = builder(_inputs())
+
+    monkeypatch.setattr(
+        market_hours,
+        "market_snapshot_bucket",
+        lambda now=None: market_hours.MarketSnapshot(
+            key="intraday:2026-11-06", label="盘中（2026-11-06 10:00）", as_of="2026-11-06", intraday=True
+        ),
+    )
+    switched = builder(_inputs())
+
+    if is_price_sensitive_module(module_key):
+        assert switched != base, f"{module_key}: 价格相关模块必须随行情档换键"
+    else:
+        assert switched == base, f"{module_key}: 价格无关模块不得随行情档换键"

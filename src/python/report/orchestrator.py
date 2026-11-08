@@ -152,7 +152,7 @@ def _generate_report_impl(
     result = ReportResult()
 
     # 生成入口静默自动清理过期缓存（尽力而为：清理失败绝不影响生成——无人值守
-    # CLI 定时任务此前无任何自动清理入口，过期缓存文件只增不减）
+    # CLI 定时任务无自动清理入口时，过期缓存文件只增不减）
     from src.python.cache import auto_cleanup_expired
 
     removed = auto_cleanup_expired()
@@ -285,6 +285,10 @@ def generate_report(
 
     参数语义见 :func:`_generate_report_impl`。
     """
+    # 行情口径桶每轮判定一次（长驻 TUI 进程可能跨时段连续出报告，memo 必须按轮失效）
+    from src.python.core.market_hours import reset_market_snapshot
+
+    reset_market_snapshot()
     try:
         return _generate_report_impl(
             holdings,

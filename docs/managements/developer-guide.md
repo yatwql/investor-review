@@ -1,6 +1,6 @@
 # 开发者指南
 
-> 文档版本：0.17.4
+> 文档版本：0.17.5
 
 ## 概述
 
@@ -103,13 +103,13 @@
 
 **⑥ 诊断开关（`showCacheMissNotices: true`）**
 
-开启后上屏显著缓存未命中、缓存保活成功、**压缩用量**、provider 恢复四类通知。这是排查「额度去哪了」的主观测口：压缩一次要读整个上下文，其用量此前完全不可见。
+开启后上屏显著缓存未命中、缓存保活成功、**压缩用量**、provider 恢复四类通知。这是排查「额度去哪了」的主观测口：压缩一次要读整个上下文，其 token 用量在此可见。
 
 **未改动**：`thinkingLevelMap`（内置 `low/high/max` 已够用，用 `/thinking` 切档）、`compat`（`thinkingFormat` 等由 pi 内置目录提供）、`input`（flash 为纯文本，视觉实验版另有一个模型）、`samplingParams`（仅对 OpenAI 兼容传输生效；订阅端点走 Anthropic/兼容协议时该参数不适用，故未对它们下发）。
 
 **⑦ 静态检查：模板不把 Jinja 写进 CSS 值位置**
 
-报告模板（`src/static/tmpl/`）是 **Jinja2** 而非合法 HTML。曾经的写法把 Jinja 表达式放进 CSS 值位置（`style="order: {{ n }}"`、`style="color: {{ x | profit_color }}"`），HTML 语言服务把属性值当 CSS 扫，单模板稳定报几十条 `at-rule or selector expected` / `property value expected`——纯解析误报，与模板逻辑无关。
+报告模板（`src/static/tmpl/`）是 **Jinja2** 而非合法 HTML。把 Jinja 表达式写进 CSS 值位置（`style="order: {{ n }}"`、`style="color: {{ x | profit_color }}"`）时，HTML 语言服务会把属性值当 CSS 扫，单模板稳定报几十条 `at-rule or selector expected` / `property value expected`——纯解析误报，与模板逻辑无关。
 
 现约定三条，避免误报也避免「同一事实两处定义」：
 
@@ -447,7 +447,7 @@ P0 问题必须在 commit 前解决，否则代码不应进入版本控制。P1 
 - **全场景回归（`--mode regression`）** — commit 前可选的全场景补充验证。覆盖全部 `scenario` 业务场景测试（S0a/S0b/S0d + S1-S33 + T1-T21），确保端到端用户路径不被破坏。推荐在改动了跨模块路径或数据流后补充运行。
 - **合入验证（`--mode verify` / P1）** — 准备合并到 master 前必须执行。覆盖 `unit_core`（核心基础设施：缓存引擎、数据模型、注册表）、`unit_providers`（数据源 Provider：腾讯、东方财富、天天基金等）、`unit_fetcher`（数据获取调度：价格、指数、行业分类）、`unit_config`（配置管理）、`unit_news`（新闻聚合）、`unit_llm`（LLM 模块）、`unit_analysis`（分析计算：流动性/再平衡/汇率/债券收益率等）、`unit_scripts`（工程脚本：历史痕迹/版本一致性/任务编号检查）、`unit_web`（Web 入口：上传/运行/进度/产物）、`unit_qa`（报告对话式追问：上下文提取/会话服务/报告页路由门）、`unit_report`（报告生成：Excel/HTML/模板/管线）十一个单元模块。确保数据从抓取→缓存→计算的整条管道通畅且正确。并行执行。场景测试已在 P0 dev-verify（基础场景）和 P2 verify,regression（全场景）中覆盖，P1 不重复。
 - **发布验证（`--mode regression`）** — 发布版本（打 tag/release）前必须执行。覆盖全部场景回归测试。
-  > 注：**简化口径已采纳（2026-10-07，详见 [testplan.md](testplan.md) → §6.3 脚注）**：本项目发布流程强制 `dev → merge → tag master`，P1 合入门禁（`--mode verify`）与 CI `master` 档（同提交 verify）已双重覆盖单元验证，tag 档 CI 同步只跑 `regression`；直接从 dev 打 tag（绕过 P1）属流程违规。若流程约束放宽（允许直接发布 dev），须恢复 `--mode verify,regression`。
+  > 注：**简化口径**（详见 [testplan.md](testplan.md) → §6.3 脚注）：本项目发布流程强制 `dev → merge → tag master`，P1 合入门禁（`--mode verify`）与 CI `master` 档（同提交 verify）已双重覆盖单元验证，tag 档 CI 同步只跑 `regression`；直接从 dev 打 tag（绕过 P1）属流程违规。若流程约束放宽（允许直接发布 dev），须恢复 `--mode verify,regression`。
 
 > `regression` 与 `scenario` 底层使用相同的标记表达式（`-m "scenario"`），前者是语义别名——强调"提交前快速回归"的用途定位；后者是分类名——强调"业务场景测试"的数据性质。两者可互相替代，但建议按使用场合选用对应名称以增强代码意图可读性。
 
@@ -509,9 +509,9 @@ P0 问题必须在 commit 前解决，否则代码不应进入版本控制。P1 
   1. `pytest.ini` 的 `addopts = -m "not live"` 在收集期直接排除；
   2. `conftest.py` 的 `_skip_live_unless_requested` autouse fixture 默认跳过（`-m live` 收集到也 skip）；
   3. `_block_external_network` 阻断 fixture 对非 live 项一律拦死真实网络。
-- **非 live 用例的断网机制（2026-09-26 收紧）**：守卫只阻断**建连**（`socket.socket.connect`/`connect_ex`、`create_connection`、`getaddrinfo`），**不阻断 `socket.socket()` 构造**——否则会误伤第三方库的**导入期**探测（urllib3 导入期构造 socket 且仅被 `except Exception` 包住，硬化后会直接使库导入失败）。抛出的 `NetworkBlockedInTests` 继承 `BaseException`（而非 `RuntimeError`）：provider/fetcher 普遍用 `except Exception` 降级，用 `Exception` 子类会被静静吞掉，使漏 mock 退化成“验证网络被阻断后的降级”并白等链路瞬时重试退避（实测 unit 模式 1072 次未 mock 尝试 / 300 次退避睡眠 / 累计 149.3s 空等）。
+- **非 live 用例的断网机制**：守卫只阻断**建连**（`socket.socket.connect`/`connect_ex`、`create_connection`、`getaddrinfo`），**不阻断 `socket.socket()` 构造**——否则会误伤第三方库的**导入期**探测（urllib3 导入期构造 socket 且仅被 `except Exception` 包住，硬化后会直接使库导入失败）。抛出的 `NetworkBlockedInTests` 继承 `BaseException`（而非 `RuntimeError`）：provider/fetcher 普遍用 `except Exception` 降级，用 `Exception` 子类会被静静吞掉，使漏 mock 退化成“验证网络被阻断后的降级”并白等链路瞬时重试退避（实测 unit 模式 1072 次未 mock 尝试 / 300 次退避睡眠 / 累计 149.3s 空等）。
 - **不依赖外部数据的文件写 `offline_external_sources`**：报告/编排/集成类用例的**附带依赖**（交易日历/行业数据/行情/健康探针/akshare 直连路径）常在未被 mock 时被真实访问。这类文件在模块级加 `pytest.mark.usefixtures("offline_external_sources")`，由 `src/test/_network_guard.py::apply_offline_stubs` 把仓内 HTTP 出口（`httpx.Client`）、交易日历、akshare（`sys.modules` 级）换成“即时取不到”，并把 `fetcher.chain._TRANSIENT_RETRY_BACKOFF`（链路级）与 provider 级重试策略（腾讯/东方财富 K 线、财务指标多期）退避一并置 0（仓内既有测试惯例）——链路口径仍为“源不可用→降级”，但零网络、零等待。需要验证某源真实行为的用例**必须自行 mock**，不得用本 fixture 遮掩。
-- **等待型 `sleep` 由离线桩统一接管（2026-10-21）**：同 fixture 另把 `core.throttle` / `core.retry` / `providers.cninfo` / `providers.datasink` 的**模块级 `time`** 换成 `_NoWaitClock` 代理——`sleep()` 变空操作（间隔节流、多策略退避、429 限速重试窗口不再白等），`monotonic`/`perf_counter` 原样透传（间隔判定与超时判据仍用真实时钟，零等待不等于零判据）。作用域只有这四个模块对象，因此**测试自身的 `time.sleep`**、以及**验证等待语义的用例**（`test_throttle` / `test_phase_timeout` / `test_batch::TestRateLimiter` / `test_handlers::test_queue_full_429` / provider 的退避断言）完全不受影响；未声明离线的文件等待语义原样保留。实测 `dev-verify` 墙钟中位 37.3s → 24.0s（−36%），用例数与断言强度不变。
+- **等待型 `sleep` 由离线桩统一接管**：同 fixture 另把 `core.throttle` / `core.retry` / `providers.cninfo` / `providers.datasink` 的**模块级 `time`** 换成 `_NoWaitClock` 代理——`sleep()` 变空操作（间隔节流、多策略退避、429 限速重试窗口不再白等），`monotonic`/`perf_counter` 原样透传（间隔判定与超时判据仍用真实时钟，零等待不等于零判据）。作用域只有这四个模块对象，因此**测试自身的 `time.sleep`**、以及**验证等待语义的用例**（`test_throttle` / `test_phase_timeout` / `test_batch::TestRateLimiter` / `test_handlers::test_queue_full_429` / provider 的退避断言）完全不受影响；未声明离线的文件等待语义原样保留。实测 `dev-verify` 墙钟中位 37.3s → 24.0s（−36%），用例数与断言强度不变。
 - **内容**：覆盖行情（A 股/ETF/场外基金/中美指数）、新闻源（东方财富/财联社/新浪/华尔街见闻）、基金（历史净值/排名/基准）、akshare 交易日历共 **14 个用例**（行情 5 / 新闻 4 / 基金 3 / 交易日历 2）。
 - **断言原则**：只校验返回「结构」（字段存在、类型、非空），**不校验具体数值**，容忍真实行情波动（休市、涨跌、数据源改字段）。
 - **不含 LLM 真实调用**（防费用）——LLM 连通性由运行时数据源健康检查覆盖。
@@ -1045,7 +1045,7 @@ INVEST_CACHE_DIR=docs/tmp/screenshots/demo/data/cache \    # 缓存改落（不�
 
 **追踪类 DEBUG 的两条纪律**：① 同一状态不重复刷（市场时段判定按「结果变化」记，进程级去重）；② 同一 key 的命中/写入只记首见一次（其余由 `_stats` 命中率与报告「缓存命中率」行承担汇总），否则单周就能刷出万行。
 
-**缓存逐键日志只到 DEBUG**：`缓存未命中（无此缓存文件）` / `缓存已过期` 在真实报告里逐文档 × 逐缓存键出现，曾占单次运行日志 10%~30%，而单条几乎不携带信息。现口径：逐键明细降 DEBUG（每进程每 key 首见一次，排查时把级别调到 DEBUG 即恢复逐键视图），INFO 由运行收尾的 `cache._stats.log_cache_summary()` **一行**承担——命中/未命中总量 + 未命中前缀 Top5；同一前缀未命中 ≥5 次另升一条 WARNING（那是「每轮重取同一批键」的真实信号，如每份报告都为同一文档重探章节清单）。缓存清理的「共 0 个文件」同样降 DEBUG。
+**缓存逐键日志只到 DEBUG**：`缓存未命中（无此缓存文件）` / `缓存已过期` 会逐文档 × 逐缓存键出现，单次运行可占日志的 10%~30%，而单条几乎不携带信息。现口径：逐键明细降 DEBUG（每进程每 key 首见一次，排查时把级别调到 DEBUG 即恢复逐键视图），INFO 由运行收尾的 `cache._stats.log_cache_summary()` **一行**承担——命中/未命中总量 + 未命中前缀 Top5；同一前缀未命中 ≥5 次另升一条 WARNING（那是「每轮重取同一批键」的真实信号，如每份报告都为同一文档重探章节清单）。缓存清理的「共 0 个文件」同样降 DEBUG。
 
 **LLM 总时间预算**：`llm_settings.json → llm_total_time_budget_sec`（秒，`0`=不启用）。超预算后**不再启动新模块**（已在跑的模块不打断），日志回显已用时与预算值，报告按已生成内容呈现。用于兜住「单模块卡住 + 重试叠加」把一次 full 拖成小时级（审计实测曾出现 6,623s 的 LLM+新闻阶段）。
 
@@ -1518,7 +1518,7 @@ registry 的测试在 `src/test/unit/core/test_registry.py`，验证 TTL 默认�
 
 ### 外部借鉴前置比对清单
 
-引入外部项目（开源仓库、方案、文章）的做法前，**必须先对照本仓库现状**——实测教训：已有多项借鉴（LLM 输出自检、多空双视角辩论、Prompt 模板外置、多源新闻交叉验证）的立项前提被「本仓库已有实现」推翻，属可避免的往返成本（该清单即为此固化的纪律）。
+引入外部项目（开源仓库、方案、文章）的做法前，**必须先对照本仓库现状**——已有多项借鉴（LLM 输出自检、多空双视角辩论、Prompt 模板外置、多源新闻交叉验证）的立项前提被「本仓库已有实现」推翻，属可避免的往返成本（该清单即为此固化的纪律）。
 
 设计文档（`docs/plan/`）开头须逐条填写结论：
 
@@ -1680,7 +1680,7 @@ CI 有 5 类 job（`test` 按 Python 3.11/3.12/3.13 跑三份矩阵 / `guards` /
 | `pyproject.toml` → `[project.optional-dependencies]` | extras（color / svg / test）：开发与可选能力依赖 |
 | `requirements.txt` | 同一批直接依赖（约束逐字相同）+ flask 传递依赖锁定 + 开发/工具依赖 |
 
-**两侧都出现的包约束必须一致**，包括 extras 里那批开发工具（`pytest` / `pytest-mock` / `pytest-html` 曾出现 `>=9.1` vs `>=8.0` 的漂移——启动脚本装出的环境与 CI 跑的是两套 pytest 语义，差异不可复现）。只在 `pyproject` extras 声明、`requirements.txt` 未列的包（如 `ruff`）不在该约束内。
+**两侧都出现的包约束必须一致**，包括 extras 里那批开发工具（`pytest` / `pytest-mock` / `pytest-html` 漂移成 `>=9.1` vs `>=8.0` 时，启动脚本装出的环境与 CI 跑的是两套 pytest 语义，差异不可复现）。只在 `pyproject` extras 声明、`requirements.txt` 未列的包（如 `ruff`）不在该约束内。
 
 新增依赖时的判定：是运行时直接依赖 → **两处都写且约束逐字相同**；是 extras 依赖 → `pyproject` 的对应 extras 写，若 `requirements.txt` 也列则**同约束**；是传递锁定/开发工具 → 只写 `requirements.txt`，并同时加进上述用例的 `_EXTRAS_ONLY` 白名单（否则用例报「未分类的包」）。
 
@@ -1723,7 +1723,7 @@ CI 有 5 类 job（`test` 按 Python 3.11/3.12/3.13 跑三份矩阵 / `guards` /
 | 启动 | `launch.sh` / `launch.ps1`（TUI 与 `web` 子命令）/ `cli.sh` / `llm.sh` 及其 `.ps1` 版 | 免解释器前缀的常用入口 |
 | CLI 子命令 | `report` / `cache` / `whatif` / `config` / `check-sources` / `health-history` / `view-logs` / `doctor` / `cassettes` / `settle-decisions` | 用户侧命令行入口（详见 [CLI 手册](../manuals/how-to-use-cli-mode.md)；`config` 为持久化配置编辑，`settle-decisions` 为决策账本多视界结算） |
 
-> 改名/合并脚本时按**五处同步**自查（本次改名的长尾教训）：① 同名测试文件；② `scripts-reference` 一览与详情小节；③ `folders.md` 目录树；④ CI/钩子/`release.py`/`test-runner` 等调用点；⑤ 文档与代码注释里的命令示例。机检覆盖 ②③④（一览覆盖、目录树双向、脚本存在性），①⑤ 靠本清单。
+> 改名/合并脚本时按**五处同步**自查：① 同名测试文件；② `scripts-reference` 一览与详情小节；③ `folders.md` 目录树；④ CI/钩子/`release.py`/`test-runner` 等调用点；⑤ 文档与代码注释里的命令示例。机检覆盖 ②③④（一览覆盖、目录树双向、脚本存在性），①⑤ 靠本清单。
 >
 > **结构规则**：`scripts/` 顶层只放可直接运行的入口；共享库进 `_shared/`，单入口实现放 `_<语义名>/`，评测实现包用 `_eval_<x>/` 与 `eval-<x>.py` 对应——新增共享代码不得放顶层文件。
 >

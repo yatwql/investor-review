@@ -57,7 +57,7 @@ def normalize_release_title(title: str) -> str:
 
     - `release: vX.Y.Z —— 主题`（带 release: 标签）
     - `vX.Y.Z —— 主题` / `vX.Y.Z-dev —— 主题`（裸版本+破折号，人工写标题时最
-      自然的写法；此前只剥第一类，会拼出重复两遍版本号的提交标题）
+      自然的写法；只剥第一类会拼出重复两遍版本号的提交标题）
 
     剥离后为空（title 本身就是前缀）则按原样使用。
     """

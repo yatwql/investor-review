@@ -4,6 +4,8 @@
       → 输出风格暴露 β / t 显著性 / 风格归属占比 / 基准对照。
 
 - 无数据获取、无报告依赖，纯 pandas/numpy（日志走 logging，不用 print）。
+- pandas/numpy 惰性导入（`_numeric_stack()`）：两库缺失时本模块导入本身不得失败，
+  由编排层捕获 ImportError 后按 §1.4.5 让该区块降级，绝不拖垮整份报告。
 - 因子代理指数代码与新鲜度常量在本模块定义，供编排层（report/orchestrator.py）引用。
 - 数据不足/因子停更 → available=false，绝不硬算（§1.4.5 数据降级治理）。
 - 代码类型判定：因子指数不注册 _A_INDICES（避免污染实时指数行情循环 fetch_indices），
@@ -13,15 +15,32 @@
 from __future__ import annotations
 
 import logging
-
-import numpy as np
-import pandas as pd
+from typing import TYPE_CHECKING
 
 from src.python.analysis._math_utils import _t_critical_95
+from src.python.analysis.unavailable_contracts import factor_unavailable_result
 from src.python.core.constants import DEFAULT_WINDOW
 from src.python.core.trading_calendar import count_trading_days_elapsed
 
 logger = logging.getLogger("invest")
+
+if TYPE_CHECKING:  # 仅供类型注释（运行时惰性导入，缺库时本模块仍可导入）
+    import numpy as np
+    import pandas as pd
+
+
+def _numeric_stack():
+    """惰性导入 numpy/pandas 并返回 ``(np, pd)``。
+
+    两库是纯计算层的重依赖（随 akshare 一并安装）。两库缺失时本模块仍须可
+    导入——调用方据此把该区块降级为 available=False，而不是让整份报告在
+    数据准备阶段崩溃（§1.4.5）。
+    """
+    import numpy as np
+    import pandas as pd
+
+    return np, pd
+
 
 # ═══════════════════════════════════════════════════════════════
 #  因子常量（MVP 固定 3 因子）
@@ -63,29 +82,18 @@ MIN_FACTORS: int = 2
 def unavailable_result(status: str, sample_count: int = 0, stale_factors: list[str] | None = None) -> dict:
     """返回不可用结果（数据契约，available=False）。
 
+    键集单源在 ``analysis.unavailable_contracts``（编排层在计算层导入失败时也要
+    用同一份空契约，不能各自写字面量）。
+
     Args:
-        status: "insufficient"（数据不足）或 "source_failed"（数据源故障）。
+        status: "insufficient"（数据不足）或 "source_failed"（数据源/依赖故障）。
         sample_count: 对齐后有效样本数（数据不足时为实际值）。
         stale_factors: 本次剔除的停更/不可用因子。
 
     Returns:
         含全部数据契约键的空结果字典。
     """
-    return {
-        "available": False,
-        "status": status,
-        "betas": {},
-        "t_stats": {},
-        "significant": {},
-        "style_allocation": {},
-        "baseline_betas": {},
-        "factor_correlations": {},
-        "correlation_note": "",
-        "alpha": 0.0,
-        "window": DEFAULT_WINDOW,
-        "sample_count": sample_count,
-        "stale_factors": stale_factors or [],
-    }
+    return factor_unavailable_result(status, sample_count=sample_count, stale_factors=stale_factors)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -207,6 +215,7 @@ def filter_stale_factor_klines(
     """
     if not factor_klines:
         return {}, []
+    _np, pd = _numeric_stack()
     try:
         today = pd.Timestamp(today_str)
     except (ValueError, TypeError):
@@ -254,6 +263,7 @@ def _ols_regression(y: np.ndarray, x: np.ndarray) -> dict:
     Returns:
         {"beta": list, "t_stats": list, "df": int}；数据不足时 beta/t_stats 为 None。
     """
+    np, _pd = _numeric_stack()
     n, k = x.shape
     if n < k + 1:
         return {"beta": None, "t_stats": None, "df": n - k}
@@ -289,6 +299,7 @@ def _align_series(
     Returns:
         DataFrame，index 为日期，列为因子 + "portfolio"（+ 可选 "baseline"）。
     """
+    _np, pd = _numeric_stack()
     pdf = pd.DataFrame(portfolio_returns)
     if pdf.empty or "date" not in pdf.columns or "return" not in pdf.columns:
         return pd.DataFrame()
@@ -344,6 +355,7 @@ def compute_factor_exposure(
          "style_allocation", "baseline_betas", "factor_correlations",
          "correlation_note", "alpha", "window", "sample_count", "stale_factors"}
     """
+    np, pd = _numeric_stack()
     active_factors = {f: bars for f, bars in factor_returns.items() if bars}
     if not active_factors:
         return unavailable_result("insufficient", sample_count=0)

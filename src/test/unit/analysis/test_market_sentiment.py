@@ -134,3 +134,32 @@ class TestDegradedContracts:
         assert out["available"] is True
         assert out["rows"][0]["net_value_yi"] is None
         assert out["rows"][0]["concepts"] == ""
+
+
+class TestTradeDateAndSizing:
+    """交易日兜底与「命中 0 条」的可判读口径。"""
+
+    def test_trade_date_falls_back_to_ladder_date(self):
+        """龙虎榜缺失、连板梯队可用时，契约仍须给出可读交易日（不得显示「未知」）。"""
+        ladder = {"window": {"date_list": ["2026-09-16"]}, "item": [{"date": "2026-09-16", "boards": {}}]}
+
+        contract = build_market_sentiment(None, ladder, {})
+
+        assert contract["available"] is True
+        assert contract["trade_date"] == "2026-09-16"
+
+    def test_trade_date_prefers_dragon_tiger(self):
+        """两源都在时以龙虎榜交易日为准（其 trade_date 是该源的真实成交日）。"""
+        dragon = {"trade_date": "2026-09-15", "stock_items": []}
+        ladder = {"window": {"date_list": ["2026-09-16"]}, "item": [{"date": "2026-09-16", "boards": {}}]}
+
+        assert build_market_sentiment(dragon, ladder, {})["trade_date"] == "2026-09-15"
+
+    def test_zero_hit_keeps_reason_and_counts(self):
+        """零命中不是故障：available 仍为真、reason 说明「当日无交集」。"""
+        dragon = {"trade_date": "2026-09-16", "stock_items": [{"ticker": "000001", "name": "平安银行"}]}
+        contract = build_market_sentiment(dragon, None, {"600900": {"name": "长江电力", "holding_kind": "直接持有"}})
+
+        assert contract["available"] is True
+        assert contract["entry_count"] == 0
+        assert "无" in contract["reason"]

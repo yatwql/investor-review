@@ -1,11 +1,11 @@
 """提示词信号预消化模块 — 数值进 LLM 前预消化为带方向标注的一句话信号。
 
-职责：把**算法已经算出、但此前只走渲染层**的确定性结论（行业资金流向方向、
+职责：把**算法已经算出、却只走渲染层**的确定性结论（行业资金流向方向、
 市场温度档位、持仓估值分位、尾部风险幅度、持仓基本面档位、叙事与数字背离项）
 在进入提示词之前，用确定性规则写成一到多行「结论行」，让模型读到方向判断而非
 裸数值自行解读。
 
-典型缺口：行业资金流向原先拼成「主力净流入-5,000,000」——label 固定但数值
+典型缺口：行业资金流向若拼成「主力净流入-5,000,000」——label 固定但数值
 带负号，方向只能靠读者自行推断符号含义；且数据源未排序，截取的前 5 行没有
 任何排名语义。本模块统一以「主力净流入/主力净流出 + 非负量」表达方向。
 
@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Any
+from typing import Any, TypeGuard
 
 from src.python.llm.fingerprint import compute_fingerprint
 from src.python.llm.prompts_core import _fmt_wan
@@ -165,11 +165,12 @@ _DIGEST_DIVERGENCE_NOTE = "（存在「叙事与数字背离」项：请在结�
 # ═══════════════════════════════════════════════════════════════
 
 
-def _is_number(value: Any) -> bool:
-    """可用数值判定：排除 bool 与 NaN/±inf。
+def _is_number(value: Any) -> TypeGuard[float]:
+    """可用数值判定：排除 bool 与 NaN/±inf（判定为真即收窄为 float）。
 
     bool 是 int 的子类（``True`` 会被当成 1 元）；NaN/±inf 格式化后是 ``nan``/``inf``
     这类文字，进提示词比裸数值更糟——两者都按「无此字段」处理，交由降级路径。
+    ``TypeGuard`` 让调用点在 ``if _is_number(x):`` 之后直接按数值运算，不必各自再收窄。
     """
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 

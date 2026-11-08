@@ -233,10 +233,10 @@ _DEFAULT_CONFIG = {
         "industry_workers": 8,  # 行业分类批量并发数
         "datasink_workers": 3,  # 财报取数并发数（免费档 3 请求/秒，≥3 才吃满；2 时 6 标的要 3 波）
         "akshare_workers": 2,  # akshare 财务指标取数并发数（财务指标章 + 基金重仓 ROE 推演）
-        "index_workers": 5,  # 指数历史批量并发数（基准/风格指数个数；原先硬编码 5）
-        "market_price_workers": 8,  # 行情缓存未命中时的实时取价并发数（原先硬编码 8）
-        "fund_style_workers": 8,  # 基金重仓股市值/PE 批量（push2 降级路径，原先硬编码 8）
-        "factor_workers": 6,  # 风格因子/行业 Beta 的持仓历史与指数 K 线并发数（原先硬编码 6）
+        "index_workers": 5,  # 指数历史批量并发数（基准/风格指数个数）
+        "market_price_workers": 8,  # 行情缓存未命中时的实时取价并发数
+        "fund_style_workers": 8,  # 基金重仓股市值/PE 批量（push2 降级路径）
+        "factor_workers": 6,  # 风格因子/行业 Beta 的持仓历史与指数 K 线并发数
     },
     "batch_rate_limit": {  # Provider 级别请求间隔（秒），0=不限速
         "tencent": 0.0,

@@ -11,8 +11,8 @@
 - **键名单一来源**：可强刷模块键 = 中央注册表 ``settings_suffix`` 的子集，
   中文标签经 ``core.registry.get_llm_module_names()`` 派生，渠道不自持副本。
 - **全局 force 与现状兼容**：``resolve_force_scope(True, None)`` 返回全集，
-  与旧 ``force=True`` 全量强刷行为一致（新闻关联 LLM 增强此前不受 force
-  控制，本模块将其纳入强刷域——「强制重新生成 LLM 内容」理应含新闻增强）。
+  与 ``force=True`` 全量强刷行为一致（新闻关联 LLM 增强须纳入 force
+  强刷域——「强制重新生成 LLM 内容」理应含新闻增强）。
 """
 
 from __future__ import annotations

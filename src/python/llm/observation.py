@@ -29,6 +29,7 @@ __all__ = [
     "RECOMPUTE_FINGERPRINT_CHANGED",
     "RECOMPUTE_TTL_EXPIRED",
     "RECOMPUTE_CACHE_MISS",
+    "RECOMPUTE_INTRADAY_NO_REUSE",
     "RECOMPUTE_REASONS",
 ]
 
@@ -41,6 +42,8 @@ RECOMPUTE_FINGERPRINT_CHANGED = "fingerprint_changed"
 RECOMPUTE_TTL_EXPIRED = "ttl_expired"
 #: 无上轮可比对的冷启动键（骨架路径专用，保守归类）
 RECOMPUTE_CACHE_MISS = "cache_miss"
+#: 盘中档按策略不复用（行情逐分钟变，读者不能拿到十分钟前的盘中结论）
+RECOMPUTE_INTRADAY_NO_REUSE = "intraday_no_reuse"
 
 #: 全部合法归因值：写入方只许用这里列出的字符串，新增原因必须登记在此（否则周报统计口径漂移）
 RECOMPUTE_REASONS: tuple[str, ...] = (
@@ -48,6 +51,7 @@ RECOMPUTE_REASONS: tuple[str, ...] = (
     RECOMPUTE_FINGERPRINT_CHANGED,
     RECOMPUTE_TTL_EXPIRED,
     RECOMPUTE_CACHE_MISS,
+    RECOMPUTE_INTRADAY_NO_REUSE,
 )
 
 _sink_lock = threading.Lock()
@@ -86,6 +90,11 @@ class LlmObservation:
         """记录端点节流门的等待秒数（间隔/并发约束造成的排队）。"""
         with self._lock:
             self._pacing_wait_seconds += max(0.0, float(seconds))
+
+    def pacing_wait_seconds(self) -> float:
+        """当前累计的端点门禁等待秒数（调用方据此扣除排队，得到真实模型耗时）。"""
+        with self._lock:
+            return round(self._pacing_wait_seconds, 6)
 
     def note_fallback(self) -> None:
         """记录一次 provider 链降级（当前 provider 失败后切下一家）。"""

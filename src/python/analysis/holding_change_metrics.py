@@ -301,8 +301,8 @@ def _date_in_window(report_date: str, period_from: str, period_to: str) -> bool:
     return start <= day <= end
 
 
-def _ymd(ts: str) -> str:
-    """任意时间戳形态 → YYYYMMDD（无法解析返回空串）。"""
+def _ymd(ts: Any) -> str:
+    """任意时间戳形态 → YYYYMMDD（无法解析返回空串；入参可为契约里的任意类型）。"""
     s = str(ts or "").strip()
     if len(s) >= 10 and s[4] == "-":
         return s[:10].replace("-", "")
@@ -364,7 +364,7 @@ def _contribution_breakdown(events: list[dict[str, Any]]) -> dict[str, Any]:
             shares_part = (s1 - s0) * p0
             price_part = s1 * ((v1 / s1) - p0) if s1 > 0 else 0.0
         elif v0 == 0:
-            # 从无到有：新增全额计入份额贡献（价格轴此前不存在）
+            # 从无到有：新增全额计入份额贡献（价格轴无基数）
             shares_part = delta
             price_part = 0.0
         else:

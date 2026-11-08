@@ -201,7 +201,8 @@ def build_market_sentiment(
     return {
         "available": True,
         "reason": "" if rows else "当日无持仓/穿透标的命中龙虎榜或连板梯队",
-        "trade_date": str((dragon_tiger or {}).get("trade_date") or ""),
+        # 交易日双源兜底：龙虎榜缺失而连板在时，仍应给出可读日期（否则概览显示「未知」）
+        "trade_date": str((dragon_tiger or {}).get("trade_date") or _ladder_latest_date(ladder) or ""),
         "summary": {
             "board_caps": {_BOARD_LABELS.get(k, k): safe_num(v) for k, v in board_caps.items()},
             "lhb_stock_count": safe_num((dragon_tiger or {}).get("stock_count")),

@@ -1,7 +1,7 @@
 """LLM 模块调用（HTTP 客户端工厂 / 模块映射 / prompt 构建与真实调用）。
 
 持仓侧派生（品种分类 / 组合核心数值 / 数据集加载）不在本模块实现——唯一实现是
-``holdings.py``，本模块直接复用：两份副本曾随 ``fact_checker`` 内部结构调整各自失效
+``holdings.py``，本模块直接复用：两份副本会随 ``fact_checker`` 内部结构调整各自失效
 （其中一份引用了已搬走的 ``fact_checker._calc_portfolio_values`` 而静默不可用）。
 """
 
@@ -104,6 +104,7 @@ def _call_llm_module(
                 {},
                 total_mv,
                 total_profit,
+                total_cost,
                 categories,
             )
             return f"[SYSTEM]\n{_SYSTEM_GLOBAL_MACRO}\n\n[USER]\n{prompt}", {"dry_run": True}
@@ -137,6 +138,7 @@ def _call_llm_module(
     # ── 真实 LLM 调用 ──
     http_client = _get_http_client()
     try:
+        cached = False  # 各模块分支自带返回值；未进入任何分支时按「未命中缓存」计
         if module_name == "expert_review":
             content, cached = generate_expert_review(
                 total_mv,
@@ -158,6 +160,7 @@ def _call_llm_module(
                 us_indices,
                 total_mv,
                 total_profit,
+                total_cost,
                 categories,
                 force=force,
                 http_client=http_client,

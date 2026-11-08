@@ -82,9 +82,9 @@ FEATURES_FILE = os.path.join(PROJECT_ROOT, "data/config/features.json")
 #   GROUP_STANDALONE     —— 独立章节与回放：新增整页签或多期回放
 #   GROUP_CHAPTER_OPTIONS—— 章节内选项：由 [C] 作为章节子项渲染（辩论两项）
 # **生命周期是另一根轴**：``FeatureSwitchDef.experimental``（末位默认 False 字段）。
-# 此前「默认值」「是否实验项」「分组」三者纠缠在一个 group 字段上：转正会连带
+# 「默认值」「是否实验项」「分组」三者不得纠缠在一个 group 字段上：转正会连带
 # 摘掉面板入口、
-# 组内默认态混合时标签写不准。解耦后：作用域由 group 定、生命周期由
+# 组内默认态混合时标签写不准。故解耦：作用域由 group 定、生命周期由
 # experimental 定、取值由 default 定——``--experiment`` 取值域与页脚实验自述
 # 只看 experimental，「转正」= experimental 置 False（作用域也变时再改 group）。
 
@@ -107,8 +107,8 @@ FEATURES_FILE = os.path.join(PROJECT_ROOT, "data/config/features.json")
 #   - 匿名化模式 → config.json 的 anonymization.mode
 # 注：报告增强子模块（数据质量/行业Beta/候选比较/成本流水/估值分位/市场温度/财报摘要/
 # 财务指标）登记于本注册表 GROUP_FUND_STYLE / GROUP_STANDALONE 分组，取值落 features.json。
-# 声明了却无人读取的开关会让用户照文档配置后毫无效果（本注册表曾含 16 项此类
-# 陈旧开关，已全部移除）。新增开关必须同时接线到消费点，回归测试见
+# 声明了却无人读取的开关会让用户照文档配置后毫无效果（注册表不允许存在此类
+# 陈旧开关）。新增开关必须同时接线到消费点，回归测试见
 # test_features.py::TestRegistryLiveness。
 #
 # ``affects_report`` 是**产物自述的准入口径**：开启该开关后报告产物的内容是否可能

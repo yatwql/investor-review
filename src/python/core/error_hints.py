@@ -1,8 +1,8 @@
 """异常 → 用户提示的唯一映射（三渠道共性诊断规则）。
 
 判定口径：把「同一故障该怎么跟用户说」从渠道层收敛到这里——TUI 上屏、CLI 的错误行、
-Web 的信封 message 都取同一句话，避免同一故障在三个渠道三种说法（此前关键词表只写在
-`tui/tui_handlers.print_error_with_hint` 里，Web 走 error_code、CLI 直接打印异常串）。
+Web 的信封 message 都取同一句话，避免同一故障在三个渠道三种说法（关键词表若只写在
+`tui/tui_handlers.print_error_with_hint` 里，Web 走 error_code、CLI 直接打印异常串，说法就分叉）。
 
 纯函数、零依赖（只读异常类型与消息文本），可安全被任意层导入。
 """

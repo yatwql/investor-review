@@ -80,7 +80,10 @@ class TestHallucinationDetection:
         """LLM 声称的组合总收益率与实际偏离（20% vs 9.73%）。"""
         text = "组合累计收益达到 20.0%"
         issues, total, passed, corrections = check_numerical_consistency(text, _STD_HOLDINGS_DETAILS)
+        # 必须点名「组合累计收益率」与实际值：否则任意无关告警都能让本用例转绿（测不出该口径）
         assert len(issues) >= 1, "应检测到组合收益率偏离"
+        assert "累计收益率" in issues[0], f"告警应对照组合累计收益率口径：{issues[0]}"
+        assert "9.7%" in issues[0], f"告警应引用实际值而非仅报告偏离：{issues[0]}"
         assert len(corrections) >= 1, "偏离应生成数值修正"
         logger.info("组合收益率偏离检出: %s", issues)
 
@@ -119,6 +122,8 @@ class TestHallucinationDetection:
         # 10.0% 在组合总收益率容差内 → 通过
         # 20.0% → 句中含 600036 → 对比个股 8.2% → 告警
         assert len(issues) >= 1, "个股错误应被检出"
+        # 命中的必须是个股那一句（600036），而非组合收益率 10.0% 被误判
+        assert "600036" in issues[0], f"告警应指向涉事个股：{issues[0]}"
         assert len(corrections) >= 1, "个股收益偏离应生成数值修正"
 
     def test_attribution_sentence_skipped(self):
@@ -146,6 +151,7 @@ class TestHallucinationDetection:
         text = "参考品种 002837（英维克）的走势"
         issues, total, passed, _ = check_symbol_existence(text, _STD_HOLDINGS_DETAILS)
         assert len(issues) >= 1, "应检测到不存在的品种代码"
+        assert "002837" in issues[0], f"告警应点名涉事代码：{issues[0]}"
 
     def test_valid_code(self):
         """LLM 引用的持仓代码都在持仓中，应通过。"""

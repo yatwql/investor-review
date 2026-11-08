@@ -199,7 +199,12 @@ def _load_settings_document(raw: str, path: str) -> dict:
     Raises:
         LLMSchemaError: 根元素/版本/段结构不符（消息含文件名、版本与重新生成指引）
     """
-    document = json.loads(strip_json_comments(raw))
+    try:
+        document = json.loads(strip_json_comments(raw))
+    except json.JSONDecodeError:
+        # 解析失败原样上抛：调用方（read_llm_settings_file / load_llm_settings）按「读取失败」
+        # 记原因并回落默认值，异常类型与消息须保持可诊断（含行/列），故不在此改写。
+        raise
     _llm_schema.validate_document(document, filename=os.path.basename(path))
     from src.python.config._validation_llm import sanitize_document
 
@@ -239,8 +244,8 @@ def read_llm_settings_file() -> tuple[dict, str] | None:
 
     与 :func:`get_llm_config` 的分工：后者是「合并默认值 + providers/key」后的运行期
     有效配置；本函数只回文件里真实写了什么（配置面板展示「当前落盘值」、写前合并用）。
-    三渠道（TUI 配置面板 / Web 配置面板 / 编辑层）共用——此前 TUI 与 Web 各自
-    open + strip + parse 一份，新增键或改合并规则时容易分叉。
+    三渠道（TUI 配置面板 / Web 配置面板 / 编辑层）共用——渠道各自
+    open + strip + parse 一份时，新增键或改合并规则必然分叉。
 
     Returns:
         ``(settings, path)``；文件缺失/解析失败返回 None（调用方决定提示方式）。
@@ -254,7 +259,7 @@ def read_llm_settings_file() -> tuple[dict, str] | None:
         logger.error("[ERR] %s", e)
         return None
     except (OSError, json.JSONDecodeError) as e:
-        # 必须带出原因：原先静默返回 None，面板只看到「读取失败，按默认展示」，
+        # 必须带出原因：只返回 None 时面板只看到「读取失败，按默认展示」，
         # 现场无法区分「文件被占/半写」「JSONC 解析失败」还是「编码问题」。
         logger.warning("llm_settings.json 读取失败（%s: %s），按默认值处理: %s", type(e).__name__, e, path)
         return None
@@ -287,7 +292,10 @@ def write_llm_settings(settings: dict, path: str) -> None:
         logger.error("[ERR] %s", e)
         raise
 
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+    except OSError as e:
+        raise OSError(f"无法创建配置目录 {os.path.dirname(path)}: {e}") from e
     current_flat = _llm_schema.flatten(_llm_schema.merge_defaults(document, _DEFAULTS_NESTED))
     patch_updates: dict[str, Any] = {}
     structural: dict[str, Any] = {}

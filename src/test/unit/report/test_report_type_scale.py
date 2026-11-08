@@ -272,8 +272,8 @@ class TestReportCssRulesetBaseline:
     动到视觉」所需的信号。改动样式时须显式复核并更新常量（评审动作，不是自动豁免）。
     """
 
-    #: 归一化「选择器→声明」多重集 sha256（2026-11-05 公共样式抽离批次标定）
-    _RULESET_HASH = "9190e9f16ca369b6b72623f698779eb86de7a7e20e5d83948a1b5430df669474"
+    #: 归一化「选择器→声明」多重集 sha256（删 3 条未使用的 bg-* 工具类后重标定）
+    _RULESET_HASH = "69337d3170f246683070204bd8c19f04cf1b4245dd1f8db8c9687140d261fe25"
 
     def _ruleset_hash(self) -> tuple[str, int, int]:
         import hashlib

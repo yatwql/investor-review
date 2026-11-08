@@ -6,7 +6,7 @@
   - **写侧**：``generators.py`` 各生成函数的 ``_fingerprint`` 闭包（经 ``skeleton.py``
     的 ``_run_standard_mode`` 组装同一形态的键）
 
-历史教训：两侧原先靠「注释声明同调」维护，每逢新增影响提示词或内容的输入
+风险：两侧靠「注释声明同调」维护时，每逢新增影响提示词或内容的输入
 （风险信号摘要、信号预消化后缀、决策教训后缀、辩论增强后缀…），都要在两处手工
 各改一遍。任一侧漏改即产生**读写键永不同源**——预检 read 落空、每次报告全量派发，
 且不报错、只表现为静默的性能与日志噪声（如 ``history_data`` 与辩论增强后缀两处
@@ -59,6 +59,7 @@ from src.python.llm.rate_caliber import PROMPT_SCHEMA_VERSION
 
 __all__ = [
     "ModuleFingerprintInputs",
+    "market_bucket_cache_suffix",
     "debate_feature_cache_suffix",
     "fingerprint_components",
     "diff_fingerprint_components",
@@ -157,7 +158,7 @@ def _pipeline_block_cache_suffix(pipeline_data: dict | None) -> str:
 
     复盘与辩论提示词都会带上【环比变化】【数据质量降级】两段（构建器
     ``_build_difpipeline_data_block`` / ``_build_data_degradation_block``），
-    但这两段此前不参与指纹——持仓未动而降级事件集变化时键不变，预检命中旧键，
+    但这两段若不参与指纹——持仓未动而降级事件集变化时键不变，预检命中旧键，
     报告继续陈述「某数据源不可用」（或漏报新故障），且不报错。
 
     与 ``_signal_digest_cache_suffix`` 同法：调用**提示词侧同一构建器**取文本再
@@ -288,12 +289,33 @@ def generation_params_suffix(module: str) -> str:
     return "_" + compute_fingerprint(*parts)
 
 
-def global_macro_fingerprint(inputs: ModuleFingerprintInputs) -> str:
-    """全球政经局势：持仓结构 + 分类结构 + 统一附录**口径类**块 + 版本盐。
+def market_bucket_cache_suffix() -> str:
+    """行情口径桶后缀 —— 进四个基础模块与辩论键的指纹。
 
-    **不入键**（行情/时效类，仍进提示词，由 TTL 豁免）：指数行情、总市值/盈亏、
-    竞争语境块、事件窗分歧例块、调仓纪律回放引用块。本模块 TTL 为 24h，把分钟频
-    变动的行情与 15 分钟刷新的新闻锁进键后，24h TTL 实际从未生效。
+    为什么要进键：收盘档（上一交易日收盘 / 上午收盘 / 当日收盘）之间行情快照不同，
+    同一份持仓在两档下的输入并不等价；进键让「档变了」显式换键，而不是靠块文本
+    逐字节比较去猜。盘中档虽按策略不复用，键里仍带档标识——否则盘中写下的缓存
+    会被收盘档读到（键相同、内容却是盘中口径）。
+    """
+    from src.python.core.market_hours import market_snapshot_bucket
+
+    return "_" + compute_fingerprint(market_snapshot_bucket().key)
+
+
+def global_macro_fingerprint(inputs: ModuleFingerprintInputs) -> str:
+    """全球政经局势：持仓结构 + 分类结构 + 申购限购块 + 版本盐（**不含任何价格**）。
+
+    本模块谈的是全球政经与宏观环境，结论不依赖持仓标的的具体价格，故键里只留
+    「我的组合由哪些品种构成」这一层事实：
+
+    **不入键**（仍进提示词，时效由 TTL 兜底）：指数/美股行情、总市值/盈亏、竞争语境块、
+    事件窗分歧例块、调仓纪律回放块，以及**持仓变动复盘块**（含跨快照市值差/盈亏差，
+    属价格派生）——它一变就换键会让 24h TTL 实际从未生效。
+    ``purchase_block`` 只含限购额度/申购状态/下一开放日，与报价无关，属可执行性硬约束，
+    故保留在键内。
+
+    同因：**不带行情口径桶后缀**——键里既然没有价格，就没有「按行情快照分档」的必要，
+    跨时段复用是安全的（`module_fingerprint.market_bucket_cache_suffix()` 只给含价格的模块）。
     """
     _parts = [
         extract_stable_holdings(inputs.holdings_details),
@@ -305,8 +327,6 @@ def global_macro_fingerprint(inputs: ModuleFingerprintInputs) -> str:
     ]
     if inputs.purchase_block:
         _parts.append(inputs.purchase_block)
-    if inputs.holding_change_block:
-        _parts.append(inputs.holding_change_block)
     return compute_fingerprint(*_parts) + generation_params_suffix("global_macro")
 
 
@@ -341,6 +361,7 @@ def expert_review_fingerprint(inputs: ModuleFingerprintInputs) -> str:
     _fp += _pipeline_block_cache_suffix(inputs.pipeline_data)
     _fp += signal_ledger.summary_cache_suffix()
     _fp += scenario_mandate_cache_suffix()
+    _fp += market_bucket_cache_suffix()
     _fp += generation_params_suffix("expert_review")
     return _fp
 
@@ -378,6 +399,7 @@ def debate_procon_fingerprint(inputs: ModuleFingerprintInputs) -> str:
         compute_fingerprint(*_parts)
         + debate_feature_cache_suffix()
         + _pipeline_block_cache_suffix(inputs.pipeline_data)
+        + market_bucket_cache_suffix()
         + generation_params_suffix("expert_review")
     )
 
@@ -392,7 +414,7 @@ def debate_synthesis_fingerprint(inputs: ModuleFingerprintInputs, synthesis_prom
     ``_build_debate_synthesis_prompt`` 一次性渲染。既然提示词就是这三者的函数，
     键直接取该渲染结果——无需逐项枚举入哈希的来源，也就不会漏项。
 
-    此前本键另起一套：截取 pro/con **前 200 字符**摘要再拼接。两处后果——
+    本键不得另起一套摘要：只截取 pro/con **前 200 字符**再拼接会有两处后果——
     正文差异落在 200 字符之后时键不动（命中按旧正文生成的综合结论），仅改
     config（情景名/描述、集中度阈值）而开关位不变时键同样不动。
 
@@ -439,6 +461,7 @@ def health_check_fingerprint(inputs: ModuleFingerprintInputs) -> str:
     _fp = compute_fingerprint(*_parts)
     _fp += _signal_digest_cache_suffix(inputs.pipeline_data)
     _fp += _pipeline_block_cache_suffix(inputs.pipeline_data)
+    _fp += market_bucket_cache_suffix()
     _fp += generation_params_suffix("health_check")
     return _fp
 
@@ -467,8 +490,12 @@ def penetration_deep_fingerprint(inputs: ModuleFingerprintInputs) -> str:
     ]
     if _extra:
         # 条件并入：口径类块进提示词即进键；两块均空时不追加 part（逐字节回退）
-        return compute_fingerprint(_base, *_extra) + generation_params_suffix("penetration_deep")
-    return _base + generation_params_suffix("penetration_deep")
+        return (
+            compute_fingerprint(_base, *_extra)
+            + market_bucket_cache_suffix()
+            + generation_params_suffix("penetration_deep")
+        )
+    return _base + market_bucket_cache_suffix() + generation_params_suffix("penetration_deep")
 
 
 def self_review_fingerprint(

@@ -133,7 +133,7 @@ class TestCacheMissVisibility:
         assert hits[0].args[0] == "absent"
 
     def test_missing_file_not_logged_at_info(self, tmp_path, monkeypatch, caplog):
-        """INFO 通道不再逐键刷屏（真实运行里曾占日志 10%~30%）。"""
+        """INFO 通道不逐键刷屏（真实运行里可占日志 10%~30%）。"""
         from src.python.cache import _store
 
         monkeypatch.setattr(_store, "_cache_path", lambda key: str(tmp_path / f"{key}.json"))

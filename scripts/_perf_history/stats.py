@@ -272,7 +272,7 @@ def _group_by_version_type(
 ) -> tuple[dict[tuple[str, str], list[dict[str, Any]]], dict[tuple[str, str], str]]:
     """按（报告类型, 版本）分组，并给出每组首次运行时间（组序基准）。
 
-    版本演进总表与同版本漂移共用同一分组口径（原先两处各写一遍分组 +
+    版本演进总表与同版本漂移共用同一分组口径（两处各写一遍分组会口径漂移 +
     「首次运行时间」排序键，新增维度时容易一处改一处漏）。
 
     Returns:

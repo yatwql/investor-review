@@ -219,7 +219,7 @@ class TestMsToDateStr:
 @pytest.mark.unit
 @pytest.mark.unit_core
 class TestFormatSize:
-    """`format_size` —— 三渠道唯一的尺寸格式化（此前 TUI 三处 + CLI 一处各写一份）。"""
+    """`format_size` —— 三渠道唯一的尺寸格式化（TUI 三处 + CLI 一处各写一份会不一致）。"""
 
     @pytest.mark.parametrize(
         ("value", "expected"),

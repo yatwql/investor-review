@@ -6,12 +6,17 @@
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 import unittest
 from unittest.mock import patch
 
 import pytest
 
-pytestmark = [pytest.mark.integration, pytest.mark.integration_contract]
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.integration_contract,
+]
 
 # generate_all_llm 返回元组：不含 debate_info 时的长度
 _TUPLE_LEN_WITHOUT_DEBATE = 8
@@ -138,7 +143,8 @@ class TestDebatePipelineProconEnabled(unittest.TestCase):
 
         # 正反辩论启用 → 含 debate_info 的元组
         self.assertEqual(len(result), _TUPLE_LEN_WITH_DEBATE)
-        debate_info = result[_DEBATE_INFO_INDEX]
+        # 元组长度随辩论开关变化，动态下标取值（静态类型上是定长 tuple）
+        debate_info = cast(Any, result)[_DEBATE_INFO_INDEX]
         self.assertIsNotNone(debate_info)
         if debate_info:
             self.assertIn("pro_text", debate_info)

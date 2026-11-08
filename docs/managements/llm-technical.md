@@ -1,7 +1,7 @@
 # LLM 集成层技术设计
 
 > **文档定位**：本文是 `technical.md` 的 LLM 分部（规则层），只给 LLM 集成层架构、契约与判据；运行/调试/发布等操作流程见 `developer-guide.md`，脚本参数见 `scripts-reference.md`，需求口径见 `requirements.md`。
-> 文档版本：0.17.4
+> 文档版本：0.17.5
 
 本文档是 `technical.md` 的 LLM 集成层专项技术设计补充，对应 `technical.md` §5（LLM 集成层概要设计）。
 `technical.md` §5 提供 LLM 层的总体架构、模块清单、调用链概览、多 Provider 链模式概要及关键机制速览；
@@ -185,6 +185,7 @@ skeleton.py:generate_llm_content()
 | `rate_caliber.py` | 工具 | 收益率口径标签的唯一声明点（持仓 / 组合 / 区间标签 + 口径说明）；`PROMPT_SCHEMA_VERSION` 为提示词文本版本，并入 `build_llm_fingerprint()`，静态文案改动也换缓存键 | `LABEL_POSITION` / `LABEL_PORTFOLIO` / `LABEL_INTERVAL` / `CALIBER_NOTE` / `PROMPT_SCHEMA_VERSION` |
 | `prompts_signals.py` | 工具 | 信号预消化：行业资金流向段方向标注与分方向排名（无开关，默认路径）+ 算法评级信号块（市场温度/估值分位/尾部风险/持仓基本面/叙事与数字背离 → `信号：…` 行，`deterministic_signal` 开关（读侧注入面），判定收敛于缓存后缀函数保证读写键同源） | `_build_sector_flow_block()` / `_build_signal_digest_block()` / `_signal_digest_cache_suffix()` |
 | `fingerprint.py` | 工具 | LLM 缓存指纹计算、稳定性字段提取、TTL 查询 | `compute_fingerprint()` / `build_llm_fingerprint()` |
+| `cache_policy.py` | 策略 | **缓存复用策略的唯一判定点**：盘中档不复用（预检与骨架两条路径共用同一判定/日志/归因） | `intraday_reuse_blocked()` |
 | `force_scope.py` | 工具 | 模块级强刷范围：可强刷键清单（注册表 settings_suffix 子集）+ `resolve_force_scope` 粒度优先归一与未知键校验 + `is_module_forced`；全局 force 与模块子集在 `generate_all_llm` 入口归一为模块键集合，不改缓存键构造 | `resolve_force_scope()` / `is_module_forced()` |
 | `module_fingerprint.py` | 工具 | **模块指纹的唯一事实来源（预检侧与写侧同源）**：四模块指纹构造器 + 输入闭包 + 注册表，两侧都调用同一函数，结构性消除「预检键 ≠ 写侧键」的漂移；另提供**组件级哈希审计**（逐输入分量的哈希与相对上次报告的变化定位；**变化定位恒开打 INFO**，逐组件哈希快照仅 DEBUG） | `MODULE_FINGERPRINT_BUILDERS` / `ModuleFingerprintInputs` / `*_fingerprint()` / `fingerprint_components()` / `diff_fingerprint_components()` |
 | `session.py` | 工具 | 会话级 Token 累计、模块级记录、格式化输出 | `track_session_usage()` / `get_session_usage()` |
@@ -893,7 +894,7 @@ penetrated_assets ──→ extract_stable_penetration()
 
 **辩论综合键（`debate_synthesis_fingerprint`）**：取「辩论基础指纹 + **综合提示词全文**」。综合提示词 = 白脸/黑脸**全文** + 条件推理情景段（`debate.conditional.scenarios` 驱动）+ 集中度问答段（`debate.concentration_qa.threshold` 驱动，内建段落），由 `_build_debate_synthesis_prompt()` 一次性渲染。既然提示词就是这三者的函数，键直接取该渲染结果，无需逐项枚举入哈希的来源、也就不会漏项。此前本键另起一套：截取 pro/con **前 200 字符**摘要 + 开关位字母后缀，两处后果——正文差异落在 200 字符之后时键不动，仅改 config（情景名/描述、集中度阈值）而开关位不变时键同样不动；两种情形都命中按旧正文/旧配置生成的综合结论且不报错。
 
-**数据质量段的成本口径**：该段曾按「纳入后数据源抖动期间事件集持续变化会让该模块反复未命中（TTL 24h 下的重算成本）」的理由不纳入指纹；核查显示三点前提均不成立——① 事件集是**本进程内**的降级日志（`DegradationTracker._events` 只存内存、不落盘，且每份报告入口经 `begin_report()` 清空），该块因而是**本次运行的数据源画像**而非「一日累计」；② 该块已是聚合结果（仅失败源与计数，无时间戳/消息/`detail`）；③ 本模块指纹本就含 `total_today_profit`，交易日内持仓一有盈亏变化即换键，24h TTL 从不是真实驻留期。故纳入的边际额外失效接近零，而收益是消除一类**静默的错误结论**：源恢复后重出报告不再复用故障期间缓存的健康判断（详见 `review-findings.md` 已解决区）。
+**数据质量段的成本口径**：该段纳入指纹（不纳入的三个前提均不成立）——① 事件集是**本进程内**的降级日志（`DegradationTracker._events` 只存内存、不落盘，且每份报告入口经 `begin_report()` 清空），该块因而是**本次运行的数据源画像**而非「一日累计」；② 该块已是聚合结果（仅失败源与计数，无时间戳/消息/`detail`）；③ 本模块指纹本就含 `total_today_profit`，交易日内持仓一有盈亏变化即换键，24h TTL 从不是真实驻留期。故纳入的边际额外失效接近零，而收益是消除一类**静默的错误结论**：源恢复后重出报告不再复用故障期间缓存的健康判断（详见 `review-findings.md` 已解决区）。
 
 上述纪律由 `src/test/unit/llm/test_module_fingerprint.py` 锁定：既断言「进了提示词必须进键」（含预检侧同源），也断言「未进提示词的模块不得被并入」。
 
@@ -935,6 +936,8 @@ penetrated_assets ──→ extract_stable_penetration()
 **预估口径**：`forecast_run_cost` 的默认路径用历史实际费用样本给出区间（命中样本费用为 0，故下限可为 0）；**强制重新生成范围内**的模块保证真调用，改按静态单价计价，不吃缓存折扣（`forced_low/forced_high` 单列）。预估始终是**上限性质**：它不预检当前指纹，因此不会因为「这次大概会命中」而下调金额。
 
 ### 7.3 TTL 分辨率
+
+> TTL 回答「能用多久」，行情口径桶回答「能不能用」：盘中档先于 TTL 生效（见 §7.6）。
 
 `get_ttl(data_type)` 的解析顺序（**与缓存键无关，不做按 key 抖动**）：
 
@@ -996,6 +999,60 @@ cache_get(optimistic_key, ttl) → 命中 → 直接返回（+ 缓存标记）
 
 **缓存写入**：API 调用成功后，以**实际返回的 provider_name** 写入缓存（而非链首），确保缓存键与实际 Provider 一致。
 
+### 7.6 行情口径桶与盘中复用策略
+
+**问题**：指纹里含行情派生块（申购限购约束 / 持仓变动复盘 / 环比与降级块），这些块在盘中逐分钟
+变、收盘后冻结。若不做时间口径区分，同一份持仓在盘中反复出报告就是「每次都换键、每次都重算」；
+反过来若一律复用，交易时段内读者会拿到十分钟前的盘中结论。
+
+**方案**：`core/market_hours.market_snapshot_bucket()` 把「本次运行看到的是哪个**已完成**时点」抽成
+一个桶，**每轮报告判定一次**（`report/orchestrator.generate_report` 入口重置 memo）：
+
+| 时点（北京时间） | 桶键 | 复用 |
+|:--|:--|:--|
+| 交易日 09:30–11:30 / 13:00–15:00 | `intraday:<当日>` | **不复用**（跳过缓存读，照常写） |
+| 交易日 11:30–13:00 | `noon:<当日>` | 可复用（当日 11:30 快照） |
+| 交易日 ≥ 15:00 | `close:<当日>` | 可复用 |
+| 交易日 09:30 前、非交易日 | `close:<上一交易日>` | 可复用 |
+
+- **闸门位置**：预检（`generators_orchestrator._precheck_one_cache`）与骨架
+  （`skeleton.generate_llm_content`）两处，后者覆盖预检之后才确定键的模块（`self_review` /
+  `holding_change`）——只拦一处等于「基础模块重算了、后置模块仍复用盘中结论」。
+- **归因**：盘中跳过读而写入的未命中归因为 `intraday_no_reuse`（`observation.RECOMPUTE_REASONS`
+  的合法取值之一），与「指纹变化 / TTL 到点 / 强制重算」区分开。
+- **进键**：桶键作为后缀并入四个基础模块与辩论白脸/黑脸的指纹（`module_fingerprint.market_bucket_cache_suffix()`）。
+  盘中档虽不复用，键里仍带档标识，避免盘中写下的缓存被收盘档读到。
+- **口径声明**：统一 prompt 附录之后追加一行 `【数据口径】行情为 <桶 label> 口径…`
+  （`market_hours.market_snapshot_note()`），使收盘档复用出的结论按该档陈述，不写出「当前盘中」式措辞。
+- **场外净值**：只有官方净值（T+1 晚间更新），不参与盘中判定；其口径由净值日自然覆盖。
+- **每轮日志**：预检摘要旁固定一行 `[LLM 预检] 行情口径：<label>（桶 <key>，盘中不复用/已完成时点可复用）`。
+
+**指纹分两类（`cache_policy.PRICE_INDEPENDENT_MODULES` 是唯一事实来源）**：
+
+| 类别 | 模块 | 键里有什么 | 行情口径桶后缀 | 盘中 |
+|:--|:--|:--|:--|:--|
+| 价格无关 | `global_macro`、`news_correlation` | 结构：品种/代码/成本、分类、申购限购约束（限额/状态/开放日）、新闻标题前 80 字、穿透 name/codes | **不带** | 可复用 |
+| 价格相关 | `expert_review`、`health_check`、`penetration_deep`、生成后自检、持仓变动复盘、辩论三键 | 上列结构 + 价格派生块（风险信号、市值/盈亏差、穿透占比、环比降级） | 带 | **不复用** |
+
+- 判据是「结论是否随标的价格变化」；新模块默认归入**价格相关**（误判只多算一次，反向会复用旧价格结论）。
+- 分类驱动两处行为：① 是否追加行情口径桶后缀；② 盘中是否跳过缓存读（`intraday_reuse_blocked()`）。
+- 价格无关模块跨档复用是安全的：磁盘上收盘档写下的缓存，盘中再次运行直接命中。
+
+**边界（口径已定，不再作为缺陷重开）**：
+
+- **行情派生块留在键里**（`purchase_block` / `holding_change_block` / 环比降级块 / `metrics` 等）。
+  价格一变，这些块的值就变，键随之改变、四个基础模块重算——这是**正确性要求**而非待优化的浪费：
+  这些数字直接驱动后续判定，复用按旧数字生成的结论比多花一次调用更糟。
+- **桶只做口径分档，不是省钱机制**：它保证「同一份已完成的价格快照」在两次运行间被判为同一输入，
+  从而可以复用；它**不**把价格变动从键里抹掉。因此：
+  - 收盘档的复用收益只在价格确实冻结的时段成立（周末、净值已更新完的时段）；
+  - QDII / 美股净值 T+1 夜间回流会触发一次重算，属预期行为；
+  - 盘中档一律重算（`intraday_no_reuse`），与「价格一直在变」同一逻辑。
+- **与价格无关的块若仍漂移**（如账本/信号摘要随运行增长），属独立议题：那类块进键意味着
+  「输入真的变了」，降噪方案只能落在块本身（是否进键、是否按日分桶），不得借桶机制掩盖。
+
+[↑ 回到顶部](#目录)
+
 [↑ 回到顶部](#目录)
 
 ---
@@ -1028,7 +1085,7 @@ cache_get(optimistic_key, ttl) → 命中 → 直接返回（+ 缓存标记）
 
 #### 确定性信号注入面（`deterministic_signal`，默认开启）
 
-把**算法已经算出、但此前只走渲染层**的确定性结论在进提示词前写成带方向标注的「结论行」，让模型读到方向判断而非裸数值自行解读。`prompts_signals.py` 只读既有数据契约、不写 pipeline_data、不新增键：
+把**算法已经算出、却只走渲染层**的确定性结论在进提示词前写成带方向标注的「结论行」，让模型读到方向判断而非裸数值自行解读。`prompts_signals.py` 只读既有数据契约、不写 pipeline_data、不新增键：
 
 | 信号 | 来源契约 | 方向词轴 | 说明 |
 |:--|:--|:--|:--|
@@ -1472,7 +1529,7 @@ LLM 集成层与系统其他组件的接口：
 
 **覆盖判据**：指纹须覆盖「提示词里真的出现的段落」，而非「与持仓相关的数据」。故 `competitive_context` / `metrics` 只进**提示词确实包含它们**的模块（`global_macro` / `expert_review` / 辩论三键），`health_check` / `penetration_deep` 的提示词不含这两段、指纹也不并入（并入即纯成本失效）；`data_quality_text` 反之只进 `health_check`，同样是「只进真的含该段的模块」。
 
-历史教训：该纪律此前靠「两侧注释声明同调」维持，每逢新增输入都要两处手工各改一遍，漏改即产生**读写键永不同源**——预检 read 落空、每次报告全量派发，不报错、只表现为静默的性能与日志噪声（`history_data` 风险信号与辩论增强后缀各发生过一次）。反方向的漏改则产生**覆盖不足**——输入进了提示词却没进指纹，键不变、预检命中旧键、复用按旧数据算出的结论，同样不报错（`competitive_context` / `metrics` 发生过一次）。故本条纪律的落实方式是**结构性收敛而非复查纪律**：任何一方若再自行拼接模块指纹、或对同一输入各自渲染，即属违规。
+风险机制：若靠「两侧注释声明同调」维持，每逢新增输入都需两处手工各改一遍，漏改即产生**读写键永不同源**——预检 read 落空、每次报告全量派发，不报错、只表现为静默的性能与日志噪声（如 `history_data` 风险信号与辩论增强后缀）。反方向的漏改则产生**覆盖不足**——输入进了提示词却没进指纹，键不变、预检命中旧键、复用按旧数据算出的结论，同样不报错（如 `competitive_context` / `metrics`）。故本条纪律的落实方式是**结构性收敛而非复查纪律**：任何一方若再自行拼接模块指纹、或对同一输入各自渲染，即属违规。
 
 开关类后缀（`decision_reflection` 教训区块指纹、`deterministic_signal` 信号块指纹与确定性信号摘要 → `_sg`、辩论增强 → `_c`（决策头后缀 `_dh` 已随旧缓存兼容一并移除）恒含，不参与开关判定）**开关判定一律收敛在指纹构造器内部**：关闭时返回 `""`（键不变、不误伤旧缓存），开启时两侧同步换键——只改一侧会让预检命中旧键而跳过重生成，开关形同虚设。同源与覆盖保证由 `src/test/unit/llm/test_module_fingerprint.py` 锁定（断言预检键 == 写侧键、覆盖四模块 × 多场景；断言「进了提示词必须进键」与「未进提示词的模块不得被并入」），「一次渲染」由 `test_generate_all_llm.py::TestCompetitiveContextRenderedOnce` 与 `TestDataQualityBlockRenderedOnce` 以「渲染次数 == 1」+ 同一实例断言（`assertIs`）锁定。
 
@@ -1524,10 +1581,13 @@ LLM 集成层与系统其他组件的接口：
 
 | 模块 | 指纹依赖（稳定字段） | 排除字段 |
 |:-----|:-------------------|:---------|
-| `global_macro` | 指数收盘价 + 持仓汇总 + 竞争语境块 | 无排除 |
+| `global_macro` | 持仓结构（品种/份额/成本）+ 分类结构 + 申购限购块（限额/状态/开放日，无价格） | 指数/美股行情、总市值与盈亏、竞争语境、事件窗与回放块、**持仓变动复盘块**（含市值/盈亏差）、行情口径桶 |
 | `expert_review` | 品种/份额/成本 + 风险信号摘要 + 竞争语境块 + 量化指标 + 开关类后缀 | 行情价/涨跌幅/净值日期 |
 | `health_check` | 品种/份额/成本 + 风险信号摘要 + 数据质量详细状态块 + 信号预消化后缀 | 行情价/涨跌幅/净值日期 |
 | `penetration_deep` | 品种/份额/成本 + 穿透 mv/ratio/sector（`full_penetration=True`） | 行情价/涨跌幅 |
-| `news_correlation` | 标题前 80 字 + 持仓指纹 | 全文细节 |
+| `news_correlation` | 标题前 80 字 + 持仓指纹（品种/代码）+ 穿透 name/codes + 申购限购块 | 全文细节、穿透 mv/ratio_pct（价格派生）、行情感生字段 |
+
+> `expert_review` / `health_check` / `penetration_deep` 与辩论白脸/黑脸另带**行情口径桶**后缀（`market_bucket_cache_suffix()`，见 §7.6）——同上表字段一起决定键。
+> `global_macro` / `news_correlation` 的键里没有价格，故**不带**桶后缀：跨时段复用在语义上安全。
 
 [↑ 回到顶部](#目录)

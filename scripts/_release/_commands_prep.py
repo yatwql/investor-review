@@ -153,8 +153,12 @@ def _prepare_impl(args: argparse.Namespace, env, runner=None) -> int:
         print(f"      prepare 不跨版本发布：发布版恒等于开发链推导值（{dev_version} → {derived}）。")
         print(f"      要发 {args.version}，先把开发链切到 {args.version}-dev，再跑不带 --version 的 prepare：")
         print(f"      ① 改 src/python/core/constants.py 的 APP_VERSION 为 {args.version}-dev")
-        print("      ② 跑 .venv/bin/python scripts/check-version-consistency.py --fix（收口 15 处版本头）")
-        print(f"      ③ 把 changelog 开发段头与 rf 台账「开发期已修复」节头改为 {args.version}-dev")
+        print(
+            "      ② 跑 .venv/bin/python scripts/check-version-consistency.py --fix（收口 16 处版本头（含 rf 台账「开发期已修复」节头））"
+        )
+        print(
+            f"      ③ 把 changelog 开发段头改为 {args.version}-dev（rf 节头由 check-version-consistency --fix 自动同步）"
+        )
         print("      ④ 提交后依次跑 archive-init（首次进新小版本）→ check → prepare")
         return 2
     date = args.date or _dt.date.today().isoformat()

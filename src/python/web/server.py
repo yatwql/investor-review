@@ -231,6 +231,14 @@ def main() -> int:
     setup_logger()
     log_app_boundary("启动", "Web模式")
 
+    # 启动硬闸：缺重依赖立即给可读错误（否则跑到数据准备阶段才报 ModuleNotFoundError）
+    from src.python.core.doctor import interpreter_preflight_error
+
+    preflight_error = interpreter_preflight_error()
+    if preflight_error:
+        logger.error(preflight_error)
+        return 1
+
     from src.python.config import init_config
 
     init_config(config_path=args.config)

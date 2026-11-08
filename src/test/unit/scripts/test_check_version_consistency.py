@@ -266,3 +266,41 @@ class TestAutoFixEvolutionHead:
         p = tmp_path / "doc.md"
         p.write_text("| 当前开发版（0.11.12-dev · HEAD） |", encoding="utf-8")
         assert version_script._auto_fix_evolution_head(p, "0.11.12-dev") is False
+
+
+# ── rf_dev_section：主台账「开发期已修复（X-dev）」节头 ↔ 当前开发链 ─────
+
+
+class TestRfDevSection:
+    """回归：切版后「开发期已修复（X-dev）」节头滞留上一版（归档搬料源指错批次）。
+
+    实测发生过：发布切开发版后节头仍滞留上一版，逐版沿用无人拦下。
+    """
+
+    def test_matching_section_head_passes(self, version_script):
+        text = "## 已解决问题\n\n### 开发期已修复（0.17.5-dev）\n"
+        assert version_script._check_rf_dev_section(text, "0.17.5-dev") is True
+
+    def test_stale_section_head_rejected(self, version_script):
+        text = "## 已解决问题\n\n### 开发期已修复（0.17.4-dev）\n"
+        assert version_script._check_rf_dev_section(text, "0.17.5-dev") is False
+
+    def test_release_form_version_compares_dev_label(self, version_script):
+        """APP_VERSION 处于发布形态（X.Y.Z）时按 X.Y.Z-dev 比对，prepare 阶段不误报。"""
+        text = "### 开发期已修复（0.17.4-dev）\n"
+        assert version_script._check_rf_dev_section(text, "0.17.4") is True
+
+    def test_missing_section_passes(self, version_script):
+        """本版无自审条目时该节可缺失（归档 gate 另有放行口径），不阻断切版。"""
+        assert version_script._check_rf_dev_section("## 已解决问题\n\n### 归档档案\n", "0.17.5-dev") is True
+
+    def test_auto_fix_rewrites_stale_head(self, version_script, tmp_path):
+        p = tmp_path / "review-findings.md"
+        p.write_text("### 开发期已修复（0.17.4-dev）\n\n| # | 问题 |\n", encoding="utf-8")
+        assert version_script._auto_fix_rf_dev_section(p, "0.17.5-dev") is True
+        assert "### 开发期已修复（0.17.5-dev）" in p.read_text(encoding="utf-8")
+
+    def test_auto_fix_noop_when_matching(self, version_script, tmp_path):
+        p = tmp_path / "review-findings.md"
+        p.write_text("### 开发期已修复（0.17.5-dev）\n", encoding="utf-8")
+        assert version_script._auto_fix_rf_dev_section(p, "0.17.5-dev") is False

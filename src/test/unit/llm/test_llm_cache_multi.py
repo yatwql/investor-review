@@ -12,7 +12,11 @@ import unittest
 from unittest.mock import MagicMock, patch
 import pytest
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_llm, pytest.mark.llm]
+pytestmark = [
+    pytest.mark.unit,
+    pytest.mark.unit_llm,
+    pytest.mark.llm,
+]
 
 
 class TestBuildProviderCacheKey(unittest.TestCase):
@@ -282,7 +286,8 @@ class TestPrecheckSummaryLog:
         }
         with caplog.at_level(logging.INFO, logger="invest"):
             _log_precheck_summary(results, {}, cache_info)
-        line = next(r.getMessage() for r in caplog.records if "[LLM 预检]" in r.getMessage())
+        # 同一段还有一行「行情口径」（本轮按哪个快照判定复用），此处按内容取汇总行
+        line = next(r.getMessage() for r in caplog.records if "基础模块命中" in r.getMessage())
         assert "命中 1/3" in line
         assert "global_macro" in line
         assert "expert_review" in line  # 真未命中

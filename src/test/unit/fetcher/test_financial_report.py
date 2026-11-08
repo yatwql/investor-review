@@ -707,7 +707,7 @@ class TestSourceNormalization:
         assert calls == [999001002]
 
     def test_fulltext_ladder_passes_source_and_meta(self, monkeypatch):
-        """全文阶 _fetch_document 必须带 source/meta（漏传曾致单次生成 1 次跨源 404）。"""
+        """全文阶 _fetch_document 必须带 source/meta（漏传会致单次生成 1 次跨源 404）。"""
         from src.python.fetcher import financial_report as fr
 
         seen: dict = {}

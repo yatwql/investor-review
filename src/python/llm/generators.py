@@ -191,15 +191,18 @@ def generate_debate_procon(
     _lc = llm_config or get_llm_config()
     debate_cfg = (_lc or {}).get("debate", {})
     procon_cfg = debate_cfg.get("procon", {})
-    _debate_defaults = get_llm_setting_default("debate") or {}
+    _debate_raw = get_llm_setting_default("debate")
+    _debate_defaults: dict[str, Any] = _debate_raw if isinstance(_debate_raw, dict) else {}
     _procon_defaults = _debate_defaults.get("procon") or {}
     _per_call_max_tokens = procon_cfg.get("per_call_max_tokens")
     _synthesis_temperature = procon_cfg.get("synthesis_temperature", _procon_defaults.get("synthesis_temperature"))
 
     # 每阶段输出上限兜底：配置缺省/为 null 时用 18432（原 8192 在智囊团复盘三段式下偏紧，
     # 实测 pro 段即被截断触发重试；思考型模型还会先把预算吃在 thinking 上，故再上调 50%）
-    _max_tokens = (
-        _per_call_max_tokens if _per_call_max_tokens is not None else _procon_defaults.get("per_call_max_tokens")
+    _max_tokens = int(
+        _per_call_max_tokens
+        if _per_call_max_tokens is not None
+        else (_procon_defaults.get("per_call_max_tokens") or 18432)
     )
     _timeout = debate_cfg.get("per_call_timeout_override", _debate_defaults.get("per_call_timeout_override"))
 
@@ -451,7 +454,7 @@ def generate_self_review(
     )
     if not _result[1]:
         # 未命中时逐段摘要（8 位）落日志：自检键并入六类输入，只看总键无法判断
-        # 「哪一段变了」——缺这条只能靠反复试跑反推（该键曾出现同输入隔次未命中）。
+        # 「哪一段变了」——缺这条只能靠反复试跑反推（同输入隔次未命中时无从定位）。
         from src.python.llm.module_fingerprint import self_review_fingerprint_parts
 
         _parts = self_review_fingerprint_parts(
@@ -463,7 +466,8 @@ def generate_self_review(
         )
         # `outputs` 合并摘要之外另列逐模块摘要：四模块产出是自检键里唯一会随上游
         # 重算/事实校验回写而变化的段，只看合并摘要无法判断是哪一段变了。
-        _per_module = _parts.get("outputs") or {}
+        _per_module_raw = _parts.get("outputs")
+        _per_module: dict[str, Any] = _per_module_raw if isinstance(_per_module_raw, dict) else {}
         logger.info(
             "[llm/self_review] 未命中缓存，输入分段摘要：%s；逐模块：%s",
             " ".join(f"{name}={compute_fingerprint(value)[:8]}" for name, value in _parts.items()),

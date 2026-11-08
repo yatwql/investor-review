@@ -201,7 +201,7 @@ def test_fingerprint_ignores_empty_outputs():
     assert a == b
 
 
-# ── 真实构建路径（此前仅被 monkeypatch 覆盖，缺口补齐）────────
+# ── 真实构建路径（不经 monkeypatch，覆盖真实构建入口）────────
 
 
 def test_prompt_builder_includes_module_texts_and_digests():

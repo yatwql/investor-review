@@ -345,10 +345,14 @@ def _precheck_one_cache(
             module_key or cache_info["key"],
         )
         return (None, False)
-    cached = cache_get(cache_info["key"], cache_info["ttl"])
+    from src.python.llm.cache_policy import intraday_reuse_blocked
     from src.python.llm.observation import current_llm_observation
 
     _sink = current_llm_observation()
+    if intraday_reuse_blocked(module_key or cache_info["key"], _sink):
+        return (None, False)
+
+    cached = cache_get(cache_info["key"], cache_info["ttl"])
     if _sink is not None:
         _sink.note_cache(bool(cached))
     if not cached:
@@ -424,6 +428,16 @@ def _log_precheck_summary(
     # `holding_change` 的键要等上游产出才确定，其命中与归因由骨架路径记录，
     # 汇总在 perf 的 `cache_hits/cache_misses` 里——故此处标注「基础模块」，
     # 避免把「4/4」误读为「本次运行没有任何 LLM 调用」。
+    # 口径行：本轮按哪个行情快照判定复用（收盘档可复用、盘中档一律不复用）
+    from src.python.core.market_hours import market_snapshot_bucket
+
+    _bucket = market_snapshot_bucket()
+    logger.info(
+        "[LLM 预检] 行情口径：%s（桶 %s，%s）",
+        _bucket.label,
+        _bucket.key,
+        "盘中不复用" if _bucket.intraday else "已完成时点可复用",
+    )
     logger.info(
         "[LLM 预检] 基础模块命中 %d/%d：%s；未命中：%s；重新生成（跳过缓存）：%s；未命中原因：%s",
         len(hits),
@@ -705,7 +719,7 @@ def generate_all_llm(
         needs["expert_review"] = depth_gate(is_llm_module_enabled(llm_config, "expert_review"), "expert_review", _depth)
 
     # ── 持仓变动复盘归因并入并行批 ──────────────────────
-    # 只吃持仓变动契约、不依赖四模块产出，无串行后置的必要；其单次 4~25s 原先完全
+    # 只吃持仓变动契约、不依赖四模块产出，无串行后置的必要；其单次 4~25s 若串行后置会完全
     # 叠加在 expert_review 之后的关键路径上。契约缺席/开关关闭由模块内部跳过。
     needs.setdefault("holding_change", True)
 
@@ -896,7 +910,7 @@ def generate_all_llm(
     from src.python.llm.fingerprint_baseline import save_baseline
 
     save_baseline(
-        _LAST_FP_COMPONENTS,
+        _LAST_FP_COMPONENTS or {},
         {mk: str((info.get("key") or "")) for mk, info in (cache_info or {}).items() if isinstance(info, dict)},
     )
     _raw_debate_info = _debate_info_container[0] if _has_debate else None

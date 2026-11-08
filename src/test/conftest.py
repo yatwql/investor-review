@@ -210,6 +210,21 @@ def _isolate_process_wide_state_paths(tmp_path_factory):
 
 
 @pytest.fixture(autouse=True)
+def _reset_market_snapshot_bucket():
+    """每个用例前清空行情口径桶 memo。
+
+    桶是「一份报告判定一次」的进程级状态：不清会让用例互相遮蔽（先跑的用例把 memo
+    填好，后面本该读交易日历的用例直接命中 memo → 漏声明离线也能过），表现为
+    「整套跑绿、单跑某文件红」这种顺序依赖。清掉后每个用例的判定都是真的。
+    """
+    from src.python.core.market_hours import reset_market_snapshot
+
+    reset_market_snapshot()
+    yield
+    reset_market_snapshot()
+
+
+@pytest.fixture(autouse=True)
 def _isolate_sensitive_paths(tmp_path, monkeypatch, _doctor_probe_targets):
     """自动将 config.json 和缓存目录重定向到临时目录。
 

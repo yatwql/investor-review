@@ -67,8 +67,10 @@ def _get_app_version() -> str:
 #                     （folders.md 滚动读数，发版须随版本头同步刷新）
 #     "release_tag"   → 版本演进对照「最近发布 tag」列（表头 + 说明行全部出现处）
 #                     == changelog 头部「最近发布 [X.Y.Z]（日期）」发布指针
+#     "rf_dev_section" → 主台账「### 开发期已修复（X-dev）」节头版本号 == 当前开发链版本
+#                     （节缺失视为无条目、不阻断；存在则必须同步，防切版后节头滞留上一版）
 
-CHECKS: list[tuple[Path, str, tuple[str, ...]]] = []
+CHECKS: list[tuple[Path, str, tuple[str | Path, ...]]] = []
 
 
 def add_exact(path: Path, pattern: str):
@@ -112,6 +114,8 @@ CHECKS.append(
     )
 )
 add_header(MANAGEMENTS_DIR / "test-coverage.md")
+# review-findings.md「开发期已修复（X-dev）」节头（rf 台账归档步的搬料源，切版即须同步）
+CHECKS.append((MANAGEMENTS_DIR / "review-findings.md", "rf_dev_section", ()))
 # changelog 无「文档版本：」头，用 [X.Y.Z] 标题行 contains 校验
 add_contains(MANAGEMENTS_DIR / "changelog.md", "[{v}]")
 add_header(MANAGEMENTS_DIR / "developer-guide.md")
@@ -196,9 +200,36 @@ _RELEASE_COL_RE = re.compile(
 
 
 def _latest_release_pointer(changelog_text: str) -> tuple[str, str] | None:
-    """从 changelog 头部提取发布指针（版本, 日期）；无指针行返回 None。"""
     m = _RELEASE_PTR_RE.search(changelog_text)
     return (m.group(1), m.group(2)) if m else None
+
+
+def _dev_label(version: str) -> str:
+    """把 APP_VERSION 归一为开发链标签（发布形态 X.Y.Z 补 `-dev`，已是 -dev 原样返回）。"""
+    return version if version.endswith("-dev") else f"{version}-dev"
+
+
+_RF_DEV_HEAD_RE = re.compile(r"^### 开发期已修复（(?P<dev>\d+\.\d+\.\d+(?:-dev)?)）[ \t]*$", re.MULTILINE)
+
+
+def _check_rf_dev_section(text: str, version: str) -> bool:
+    """校验主台账「### 开发期已修复（X-dev）」节头 == 当前开发链版本。
+
+    该节是 `release.py prepare` 归档步的搬料源，节头滞留上一版会让归档读到错误批次。
+    节缺失（本版无自审条目）时不阻断：prepare 的 gate 对无节情形另有放行口径。
+    """
+    m = _RF_DEV_HEAD_RE.search(text)
+    return m is None or m.group("dev") == _dev_label(version)
+
+
+def _auto_fix_rf_dev_section(path: Path, version: str) -> bool:
+    """把主台账「开发期已修复（X-dev）」节头改写为当前开发链版本。"""
+    text = path.read_text(encoding="utf-8")
+    new_text, count = _RF_DEV_HEAD_RE.subn(f"### 开发期已修复（{_dev_label(version)}）", text, count=1)
+    if count > 0 and new_text != text:
+        path.write_text(new_text, encoding="utf-8")
+        return True
+    return False
 
 
 def _check_release_tag(text: str, changelog_text: str) -> bool:
@@ -302,10 +333,15 @@ def main() -> None:
                     fixed += 1
                     ok = True
         elif assert_type == "exact":
-            pattern = args[0].replace("{v}", re.escape(version))
-            ok = bool(re.search(pattern, text, re.MULTILINE))
+            pattern_arg = args[0]
+            if not isinstance(pattern_arg, str):  # 注册错误（参数应为模式串）
+                ok = False
+            else:
+                pattern = pattern_arg.replace("{v}", re.escape(version))
+                ok = bool(re.search(pattern, text, re.MULTILINE))
         elif assert_type == "contains":
-            ok = _check_contains(text, args, version)
+            patterns = tuple(a for a in args if isinstance(a, str))
+            ok = _check_contains(text, patterns, version)
         elif assert_type == "header":
             ok = _check_header(text, version)
             if not ok and do_fix:
@@ -321,11 +357,22 @@ def main() -> None:
                     fixed += 1
                     ok = True
         elif assert_type == "release_tag":
-            changelog_text = args[0].read_text(encoding="utf-8")
-            ok = _check_release_tag(text, changelog_text)
+            changelog_path = args[0]
+            if not isinstance(changelog_path, Path):  # 注册错误（参数应为 changelog 路径）
+                ok = False
+            else:
+                changelog_text = changelog_path.read_text(encoding="utf-8")
+                ok = _check_release_tag(text, changelog_text)
+                if not ok and do_fix:
+                    if _auto_fix_release_tag(full_path, changelog_path):
+                        print(f"  [OK] {rel} — 已自动同步「最近发布 tag」为 changelog 发布指针")
+                        fixed += 1
+                        ok = True
+        elif assert_type == "rf_dev_section":
+            ok = _check_rf_dev_section(text, version)
             if not ok and do_fix:
-                if _auto_fix_release_tag(full_path, args[0]):
-                    print(f"  [OK] {rel} — 已自动同步「最近发布 tag」为 changelog 发布指针")
+                if _auto_fix_rf_dev_section(full_path, version):
+                    print(f"  [OK] {rel} — 已自动修正「开发期已修复」节头为 {_dev_label(version)}")
                     fixed += 1
                     ok = True
         else:
@@ -346,6 +393,12 @@ def main() -> None:
                     f"{rel}: 版本演进对照「当前开发版」列头版本号未同步，期望 `{version}`"
                     if ci_mode
                     else f"  [ERR] {rel} — 版本演进对照「当前开发版」列头版本号未同步，期望 `{version}`"
+                )
+            elif assert_type == "rf_dev_section":
+                print(
+                    f"{rel}: 主台账「开发期已修复」节头未同步，期望 `### 开发期已修复（{_dev_label(version)}）`"
+                    if ci_mode
+                    else f"  [ERR] {rel} — 主台账「开发期已修复」节头未同步，期望 `### 开发期已修复（{_dev_label(version)}）`（可用 --fix 自动同步）"
                 )
             elif assert_type == "release_tag":
                 print(

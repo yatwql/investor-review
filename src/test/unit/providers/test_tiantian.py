@@ -646,7 +646,7 @@ class TestCalcRatingFromEntry(unittest.TestCase):
     def test_percentile_direction_matches_rank_complement(self):
         """百分位口径回归：上游值越高越好（恒等于 100 − rank/total×100），两侧评级须一致。
 
-        取自实测样本（240012 / 096001 / 011506），此前方向取反会让同一只基金在
+        取自实测样本（240012 / 096001 / 011506），方向取反会让同一只基金在
         「百分位路径」与「排名路径」得出相反评级。"""
         cases = [
             ("1.51", "1765", "1792", "较差"),

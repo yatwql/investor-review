@@ -21,6 +21,7 @@ from __future__ import annotations
 import logging
 
 from src.python.analysis.style_factor_regression import compute_factor_exposure
+from src.python.analysis.unavailable_contracts import industry_unavailable_result
 from src.python.core.constants import DEFAULT_WINDOW
 
 logger = logging.getLogger("invest")
@@ -68,26 +69,17 @@ def industry_index_for(industry: str) -> str | None:
 def unavailable_result(status: str, sample_count: int = 0) -> dict:
     """返回不可用结果（数据子契约，available=False）。
 
+    键集单源在 ``analysis.unavailable_contracts``（编排层在计算层导入失败时也要
+    用同一份空契约，不能各自写字面量）。
+
     Args:
-        status: "insufficient"（数据不足）或 "source_failed"（数据源故障）。
+        status: "insufficient"（数据不足）或 "source_failed"（数据源/依赖故障）。
         sample_count: 对齐后有效样本数（数据不足时为实际值）。
 
     Returns:
         含全部行业 Beta 键的空结果字典。
     """
-    return {
-        "available": False,
-        "status": status,
-        "exposure": {},  # {industry: pct}
-        "betas": {},  # {industry: beta}
-        "alphas": {},  # {industry: alpha}
-        "t_stats": {},  # {industry: t}
-        "significant": {},  # {industry: bool}
-        "correlations": {},  # {industry: r}
-        "unmapped_industries": [],  # 有暴露但无指数映射的行业
-        "window": DEFAULT_WINDOW,
-        "sample_count": sample_count,
-    }
+    return industry_unavailable_result(status, sample_count=sample_count)
 
 
 # ═══════════════════════════════════════════════════════════════

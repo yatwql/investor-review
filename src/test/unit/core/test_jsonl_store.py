@@ -82,7 +82,7 @@ class TestAppendJsonlAtomic:
     def test_returns_false_when_tempfile_creation_fails(self, tmp_path, monkeypatch):
         """临时文件都建不出来（目录只读/磁盘满）→ 返回 False，不抛异常。
 
-        此路径曾因 `mkstemp` 失败后仍去 `os.remove(tmp_path)` 而抛 NameError。
+        此路径若在 `mkstemp` 失败后仍去 `os.remove(tmp_path)` 会抛 NameError。
         """
         import tempfile as _tempfile
 
