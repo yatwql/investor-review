@@ -205,3 +205,71 @@ class TestRunContextIsolation:
             assert "demo" in marker[0]
         finally:
             logger.handlers.clear()
+
+
+class TestMachineIp:
+    """主机 IP 展示：优先默认出口网卡，回环只作兜底。"""
+
+    @staticmethod
+    def _fake_socket(route_ip: str):
+        """构造假 socket：UDP connect 后 getsockname 返回给定地址。"""
+
+        class _FakeSock:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def connect(self, addr):
+                return None
+
+            def getsockname(self):
+                return (route_ip, 54321)
+
+        return mock.Mock(return_value=_FakeSock())
+
+    def test_prefers_default_route_address_over_loopback(self, monkeypatch):
+        """Linux 上 gethostbyname(gethostname()) 常直接回 127.0.1.1，
+        默认路由地址必须优先（此前 TUI/CLI 只显示回环即由此而来）。"""
+        monkeypatch.setattr(log_mod.socket, "socket", self._fake_socket("192.168.1.100"))
+        monkeypatch.setattr(log_mod.socket, "gethostname", lambda: "box")
+        monkeypatch.setattr(log_mod.socket, "gethostbyname", lambda _h: "127.0.1.1")
+        monkeypatch.setattr(log_mod.socket, "gethostbyname_ex", lambda _h: ("box", [], ["127.0.1.1"]))
+        assert log_mod.get_machine_ip() == "192.168.1.100"
+
+    def test_hostname_candidates_skip_loopback(self, monkeypatch):
+        """无默认路由时，从主机名解析出的多个地址里挑非回环。"""
+
+        def _raise(*_a, **_k):
+            raise OSError("no route")
+
+        monkeypatch.setattr(log_mod.socket, "socket", mock.Mock(side_effect=_raise))
+        monkeypatch.setattr(log_mod.socket, "gethostname", lambda: "box")
+        monkeypatch.setattr(log_mod.socket, "gethostbyname", lambda _h: "127.0.0.1")
+        monkeypatch.setattr(
+            log_mod.socket,
+            "gethostbyname_ex",
+            lambda _h: ("box", ["box.lan"], ["127.0.0.1", "10.0.0.7"]),
+        )
+        assert log_mod.get_machine_ip() == "10.0.0.7"
+
+    def test_loopback_kept_when_only_candidate(self, monkeypatch):
+        """离线单机只有回环可用时，回环仍是正确的可访问地址，不作废。"""
+
+        def _raise(*_a, **_k):
+            raise OSError("no route")
+
+        monkeypatch.setattr(log_mod.socket, "socket", mock.Mock(side_effect=_raise))
+        monkeypatch.setattr(log_mod.socket, "gethostname", lambda: "box")
+        monkeypatch.setattr(log_mod.socket, "gethostbyname", lambda _h: "127.0.0.1")
+        monkeypatch.setattr(log_mod.socket, "gethostbyname_ex", lambda _h: ("box", [], ["127.0.0.1"]))
+        assert log_mod.get_machine_ip() == "127.0.0.1"
+
+    def test_unknown_when_all_lookups_fail(self, monkeypatch):
+        def _raise(*_a, **_k):
+            raise OSError("boom")
+
+        monkeypatch.setattr(log_mod.socket, "socket", mock.Mock(side_effect=_raise))
+        monkeypatch.setattr(log_mod.socket, "gethostname", mock.Mock(side_effect=_raise))
+        assert log_mod.get_machine_ip() == "unknown"

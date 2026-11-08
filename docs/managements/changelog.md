@@ -16,6 +16,14 @@
   `is_otc_code_overlap`，与 `price_kind`/`analysis/rebalance.py` 等处口径同一源（消除「代码类型判定中心化」约束下的分散判定）。
   行为不变，补「非 6 位码恒 False」形态用例锁住门槛。
 
+- **主机 IP 展示不再恒为回环** —— 三端（TUI 首页摘要 / CLI 启动日志 / Web 系统信息）
+  共用的 `core/logger.py::get_machine_ip` 原为 `gethostbyname(gethostname())`，在
+  `/etc/hosts` 把主机名映射到 `127.0.0.1`/`127.0.1.1` 的机器上恒显示回环，对「在哪台
+  机器的哪个地址访问」没有信息量。改为按可靠性降序取首个非回环地址：默认出口网卡
+  （UDP `connect` 只建路由不发包）→ 主机名解析出的全部 IPv4 → 仅回环可用时仍返回
+  回环（离线单机场景它仍是正确地址）→ 全失败 `unknown`。测试网络守卫以
+  `BaseException` 子类阻断外部建连，该兜底路径不得让其冒成启动失败。
+
 
 （本次发布内容见下方归档索引）
 
