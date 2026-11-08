@@ -16,7 +16,7 @@
 | 源代码合计 | — | 597 | 153,029 | 主程序 + 模板 + 脚本 + SVG |
 | 测试代码 | Python | 717 | 197,548 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
 | 测试用例 | — | — | 13,496 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
-| 用户文档 | Markdown | 15 | 7,060 | 含 README.md；行数为 README + manuals 之和 |
+| 用户文档 | Markdown | 15 | 7,064 | 含 README.md；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 14 | 6,827 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
 | 项目文档 | Markdown | 213 | 73,363 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
 | ├ managements/ | 管理文档 | 13 | 14,085 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
