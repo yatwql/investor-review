@@ -3,38 +3,32 @@
 from __future__ import annotations
 
 import logging
-import os
 import sys
 from collections.abc import Callable
 from typing import Any
 
+from src.python.core.ansi_colors import codes_for, supports_color
 from src.python.report.progress import ProgressReporter
 
 _logger = logging.getLogger("invest")
 
-# ── ANSI 颜色常量（用于 verbose stderr 输出 — 本地维护，不依赖 ansi_colors） ──
-
-_GREEN = "\033[92m"
-_RED = "\033[91m"
-_YELLOW = "\033[93m"
-_CYAN = "\033[96m"
-_RESET = "\033[0m"
+# ── 颜色：转义码单一来源在 core/ansi_colors，本模块只按 **stderr** 判定着色能力 ──
+# （ansi_colors 的模块级常量按 stdout 判定；CLI verbose 写 stderr，须各自判定）
 
 
 def _should_color() -> bool:
-    """检测 stderr 是否支持 ANSI 颜色输出。
+    """检测 stderr 是否支持 ANSI 颜色输出（判据单源：core/ansi_colors.supports_color）。
 
-    基于 stderr.isatty()（而非 stdout）+ NO_COLOR 环境变量，
-    适用于 CLI 模式的标准错误输出。
+    按 stderr 而非 stdout 判定——CLI verbose 进度写标准错误，stdout 被重定向时
+    不该让 stderr 一起失色。
     """
-    if "NO_COLOR" in os.environ:
-        return False
-    return sys.stderr.isatty()
+    return supports_color(sys.stderr)
 
 
 def _clr(text: str, color: str) -> str:
-    """如果支持颜色，返回着色文本；否则返回纯文本。"""
-    return f"{color}{text}{_RESET}" if _should_color() else text
+    """按 stderr 的着色能力给 text 上色（``color`` 为转义码名，如 ``"CYAN"``）。"""
+    codes = codes_for(sys.stderr)
+    return f"{codes.get(color, '')}{text}{codes.get('RESET', '')}"
 
 
 def _fmt_duration(seconds: float) -> str:
@@ -81,25 +75,25 @@ class CliProgressReporter(ProgressReporter):
         """进行中消息 — 记录 INFO 日志；verbose 时同步到 stderr（[..] 前缀）。"""
         _logger.info(msg)
         if self._verbose:
-            print(f"  {_clr('[..]', _CYAN)} {msg}", file=sys.stderr)
+            print(f"  {_clr('[..]', 'CYAN')} {msg}", file=sys.stderr)
 
     def ok(self, msg: str) -> None:
         """成功消息 — 记录 INFO 日志；verbose 时同步到 stderr（[OK] 前缀）。"""
         _logger.info(msg)
         if self._verbose:
-            print(f"  {_clr('[OK]', _GREEN)} {msg}", file=sys.stderr)
+            print(f"  {_clr('[OK]', 'GREEN')} {msg}", file=sys.stderr)
 
     def warn(self, msg: str) -> None:
         """警告消息 — 记录 WARNING 日志；verbose 时同步到 stderr（[!] 前缀）。"""
         _logger.warning(msg)
         if self._verbose:
-            print(f"  {_clr('[!]', _YELLOW)} {msg}", file=sys.stderr)
+            print(f"  {_clr('[!]', 'YELLOW')} {msg}", file=sys.stderr)
 
     def error(self, msg: str) -> None:
         """错误消息 — 记录 ERROR 日志；verbose 时同步到 stderr（[ERR] 前缀）。"""
         _logger.error(msg)
         if self._verbose:
-            print(f"  {_clr('[ERR]', _RED)} {msg}", file=sys.stderr)
+            print(f"  {_clr('[ERR]', 'RED')} {msg}", file=sys.stderr)
 
     def add_error(self, msg: str) -> None:
         """记录非致命错误。"""
@@ -204,7 +198,7 @@ class CliProgressReporter(ProgressReporter):
 # ── 运行收尾资源摘要（LLM 成本 / 缓存命中率） ─────────────────
 
 
-def _emit_summary_lines(reporter: CliProgressReporter, lines: list[str], color: str = _CYAN) -> None:
+def _emit_summary_lines(reporter: CliProgressReporter, lines: list[str], color: str = "CYAN") -> None:
     """将收尾摘要行写入 logging，verbose 时同步到 stderr（带颜色）。"""
     for line in lines:
         _logger.info(line)

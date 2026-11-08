@@ -45,6 +45,10 @@
   三条工具类无任何引用（SVG 用的是 `.fill-alloc-*`），按死样式删除并重标定报告页 CSS 规则集哈希；
   `close_html_generation_stage`（full/both 共用收口）此前只有端到端间接触及，补 4 条直测锁住其分支——
   无 recorder 静默返回、有分段时按「落盘」耗时告警、渲染慢指向模板而非磁盘、无分段时回落总值。
+- **控制台着色回归「色源单源」约束**（rf-1071）：`core/ansi_colors` 新增 `RAW_CODES` 与
+  `supports_color(stream)` / `codes_for(stream)`（按**指定流**判定着色能力），`core/doctor.py` 与
+  `report/cli_progress.py` 改为调用前者——此前两模块各自硬写 `\033[...` 转义码并各自复制
+  `NO_COLOR`/`isatty` 判定，改配色或降级口径必漏改一处。
 
 （本次发布内容见下方归档索引）
 

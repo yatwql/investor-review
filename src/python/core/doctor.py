@@ -29,6 +29,7 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
+from src.python.core.ansi_colors import RAW_CODES
 from src.python.core.constants import APP_NAME, APP_VERSION, PROJECT_ROOT
 
 # 自检分组顺序（渲染时按此顺序输出，便于稳定对比两次自检结果）
@@ -686,8 +687,10 @@ def format_doctor_report(results: list[dict[str, Any]], *, use_color: bool = Fal
         "只读诊断，不改动任何文件，结论仅供参考",
         "─" * 55,
     ]
-    ok_mark = "\033[32m[OK]\033[0m" if use_color else "[OK]"
-    bad_mark = "\033[31m[ERR]\033[0m" if use_color else "[ERR]"
+    # use_color 由调用方按自身渠道判定（交互终端 / NO_COLOR 已在上面收口），此处照办
+    _codes = RAW_CODES if use_color else {}
+    ok_mark = f"{_codes.get('GREEN', '')}[OK]{_codes.get('RESET', '')}"
+    bad_mark = f"{_codes.get('RED', '')}[ERR]{_codes.get('RESET', '')}"
 
     current_group = None
     for item in results:
