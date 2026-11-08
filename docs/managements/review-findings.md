@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.6-dev
-> **编号源**：`rf-next = 1084`（新增问题提出后更新为 +1；已用最大 rf-1081，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1085`（新增问题提出后更新为 +1；已用最大 rf-1081，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -64,6 +64,7 @@
 | **rf-1081** | 面板可见性须跨渠道同源：`panel_visible=False` 的开关（判断依据 / LLM 输出评级 / 候选基金比较）若只按 TUI 过滤，Web 配置面仍按 `switches_in_group` 全量下发，两渠道开关清单即分叉；另有两处同批清理：`tui/handlers_holdings` 里单笔回显函数已无调用点（死代码），以及「行情口径桶」的测试冻结逻辑在 3 个文件里各写一份 `MarketSnapshot` 字面量（档位 label 会各处漂移） | 新增 `_feature_registry.panel_switches(panel)`（组序 + 可见性过滤）作为面板类渠道的唯一取数口，`panel_option_numbers` 复用、Web 配置面改用它过滤；删除死函数；新增 `src/test/_market_clock.py`（`freeze_market_bucket` / `freeze_intraday`）替换各处字面量桩 |
 | **rf-1082** | `init_config` 新增「缺失即按模板铺出 `logger.json` / `llm_pricing_ref.json`」，但无用例锁定该行为（新行为无回归）；另 `test_init_template_writes_relative_paths` 只屏蔽了原本两处写盘入口，新增两处在它临时还原真实路径的分支里会把文件写进仓库 `data/config/`（测试隔离漏洞，文件被删时静默恢复） | 补两条用例：缺失即铺出且有注释模板、已存在不改写（幂等）；该用例的写盘屏蔽补齐到四处 `_ensure_llm_settings_file` / `_ensure_llm_providers_file` / `ensure_logger_file` / `ensure_llm_pricing_file` |
 | **rf-1083** | 归因口径收口为「只看模块键是否变化」后，`llm-technical.md` 仍在描述已不存在的「模块→组件映射表」（文档与实现分叉）；同批拆分用例时丢了 `TestSkeletonPathAttribution` 类头（骨架路径归因的来由注释），且 `_cache_fixtures.degradation_events` 构造器无人调用（死测试设施） | 文档改为「唯一判据是键变化，组件哈希只服务诊断可读性」；恢复类头；补回归：降级事件变化只让 `health_check` 归因为 `fingerprint_changed`（数据质量变了不得计作「只是到点」），顺带重新启用该构造器 |
+| **rf-1084** | 面板分块口径漂移：rf-1079 把 `whatif_trade_cost` 从 `[C]`「关联产物」迁入 `[S]`「持仓与交易」后，注册表已无 `artifact` 条目、`[S]` 编号整体重排，但 8 份文档仍按旧口径描述（`[C]`「四块含关联产物」/`[S]` 1-4·5-8·9-11·15-20 旧编号/「四组章内内容」/`--chapter` 可覆盖关联产物/R-WIF-13 分组），读者会按错面板找入口 | 全量核对后按实现单源重写：`[C]` 统一为三块（顶层 / LLM / 整章，并注明 `artifact` 分块位保留、空块自动跳过）；`[S]` 编号改为 1-5 / 6-9 / 10-11 / 12-14 / 15-18（`decision_basis` / `module_quality_gate` 内置常开不占编号）；关联产物入口统一指向 `[S]` 持仓与交易组（含 `--chapter` 与 R-WIF-13 表述） |
 
 ### 归档档案
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-08）

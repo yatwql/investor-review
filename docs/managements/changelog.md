@@ -14,6 +14,8 @@
 
 ### 修复
 
+- **面板分块与编号全量对齐**（rf-1084）：`whatif_trade_cost` 迁入 `[S]` 后，8 份文档仍按旧口径（`[C]` 四块含关联产物、`[S]` 旧编号、`--chapter` 可覆盖关联产物、R-WIF-13 分组）。文档统一为：`[C]` 三块（顶层 / LLM / 整章，`artifact` 分块位保留但空块跳过）、`[S]` 编号 1-18（机制组内置常开项不占编号）、关联产物入口一律指向 `[S]` 持仓与交易组。
+
 - **归因判据收口后的文档与回归收口**（rf-1083）：未命中归因已改为只看「模块键是否变化」，`llm-technical.md` 仍在描述已不存在的「模块→组件映射表」，且拆分归因用例时丢了 `TestSkeletonPathAttribution` 类头（骨架路径归因的来由注释），`_cache_fixtures.degradation_events` 构造器随之无人调用。文档改为「唯一判据是键变化，组件哈希只服务诊断」；恢复类头并补一条回归：降级事件变化只让 `health_check` 归因为 `fingerprint_changed`（数据质量变了不能当「只是到点」）。
 - **初始化铺出的可编辑配置文件补覆盖与写盘防护**（rf-1082）：`init_config` 新增「缺失即按模板铺出 `logger.json` / `llm_pricing_ref.json`」，但无用例锁定该行为；且 `test_init_template_writes_relative_paths` 只屏蔽了原有的两处写盘入口，新增两处在临时还原真实路径的分支里会写进仓库 `data/config/`。补两条用例（缺失即铺出、已存在不改写），并把四处写盘入口一并屏蔽。
 - **面板开关清单跨渠道单源 + 两处清理**（rf-1081）：`panel_visible=False` 的开关此前只在 TUI 隐藏，Web 配置面仍全量下发；现统一经新增的 `panel_switches(panel)` 取数（含可见性过滤），`panel_option_numbers` 复用同一入口。顺带删除 `tui/handlers_holdings` 里零引用的单笔回显函数，并把「行情口径桶」测试桩收口到 `src/test/_market_clock.py`（档位 key/label 单源）。
