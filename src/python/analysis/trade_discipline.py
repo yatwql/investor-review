@@ -55,8 +55,10 @@ def resolve_discipline_config(discipline_config: dict[str, Any] | None) -> dict[
     """
     if discipline_config is None:
         config = get_config()
-        discipline_config = config.get("discipline", {})
-    result = dict(discipline_config)
+        # 配置读取失败/缺段时按空 dict 处理（下游 setdefault 铺默认值）
+        section = config.get("discipline") if isinstance(config, dict) else None
+        discipline_config = section if isinstance(section, dict) else {}
+    result: dict[str, Any] = dict(discipline_config)
     result.setdefault("take_profit_pct", _DEFAULT_TAKE_PROFIT_PCT)
     result.setdefault("stop_loss_pct", _DEFAULT_STOP_LOSS_PCT)
     result.setdefault("drawdown_pct", _DEFAULT_DRAWDOWN_PCT)

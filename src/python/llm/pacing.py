@@ -223,10 +223,10 @@ class PacingGate:
                 _sink.note_pacing_wait(_waited)
         return self
 
-    def __exit__(self, *exc: Any) -> bool:
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
+        """释放并发许可；不吞异常（返回 None 表示不抑制）。"""
         if self._sem is not None:
             self._sem.release()
-        return False
 
 
 # ── 内部：共享 RateLimiter / 信号量池 ────────────────────────

@@ -78,7 +78,9 @@ def _build_scenario_entry(
     ci_upper_pct = None
     ci_lower_amt = None
     ci_upper_amt = None
-    if ci_available and market_chg != 0:
+    # ci_available 只说明「是否有 CI 区间」，值本身仍可能缺席（beta 有值但 CI 未算出）：
+    # 以值判空为准，否则 None * float 直接抛 TypeError 把整张情景表带倒
+    if ci_available and market_chg != 0 and beta_ci_lower is not None and beta_ci_upper is not None:
         if market_chg > 0:
             ci_lower_pct = beta_ci_lower * market_chg
             ci_upper_pct = beta_ci_upper * market_chg

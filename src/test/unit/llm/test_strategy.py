@@ -203,13 +203,13 @@ class TestCostFirstStrategy(unittest.TestCase):
     @patch(
         "src.python.llm.pricing.PRICING_MERGED",
         {
-            "cheap-model": {"input_price": 1, "output_price": 2},
-            "mid-model": {"input_price": 5, "output_price": 5},
-            "pricey-model": {"input_price": 10, "output_price": 20},
+            "cheap-model": {"input": 1.0, "output": 2.0},
+            "mid-model": {"input": 5.0, "output": 5.0},
+            "pricey-model": {"input": 10.0, "output": 20.0},
         },
     )
     def test_cost_first_cheapest_first(self, *_):
-        """按 input_price + output_price 升序。"""
+        """按计价表单价合计（input + output）升序。"""
         providers = self._make_providers(
             [
                 ("p3", "pricey-model"),
@@ -224,7 +224,7 @@ class TestCostFirstStrategy(unittest.TestCase):
     @patch(
         "src.python.llm.pricing.PRICING_MERGED",
         {
-            "cheap-model": {"input_price": 1, "output_price": 2},
+            "cheap-model": {"input": 1.0, "output": 2.0},
         },
     )
     def test_cost_first_unknown_last(self, *_):
@@ -267,6 +267,32 @@ class TestCostFirstStrategy(unittest.TestCase):
         result = resolve_provider_chain(providers, strategy="cost_first")
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["name"], "only")
+
+    def test_cost_first_order_follows_real_pricing_table(self):
+        """真值单源：按**真实**定价表单价合计排序，模型名大小写不敏感。
+
+        回归背景：单价键曾读作 ``input_price``/``output_price``（计价表里不存在），
+        导致所有模型得分 inf、策略静默退化为「保持原序」；旧用例靠假键名反而把这个
+        错哄住了。此处直接以真实定价表为本，键名/大小写口径一错即红。
+        """
+        from src.python.llm.pricing import PRICING_MERGED
+
+        scored: list[tuple[str, float]] = []
+        for model, entry in PRICING_MERGED.items():
+            rate_in, rate_out = entry.get("input"), entry.get("output")
+            if isinstance(rate_in, (int, float)) and isinstance(rate_out, (int, float)):
+                scored.append((model, float(rate_in) + float(rate_out)))
+        if len(scored) < 2:
+            self.skipTest("定价表不足两个可比较模型")
+        scored.sort(key=lambda item: item[1])
+        cheapest, pricey = scored[0][0], scored[-1][0]
+        if scored[0][1] == scored[-1][1]:
+            self.skipTest("定价表单价全相同，无法区分排序")
+
+        # 传入顺序与价格顺序相反，并故意用大写模型名验证口径归一
+        providers = self._make_providers([("p_pricey", pricey.upper()), ("p_cheap", cheapest)])
+        names = [p["name"] for p in resolve_provider_chain(providers, strategy="cost_first")]
+        self.assertEqual(names, ["p_cheap", "p_pricey"])
 
 
 if __name__ == "__main__":

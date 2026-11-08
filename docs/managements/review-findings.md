@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.7-dev
-> **编号源**：`rf-next = 1089`（新增问题提出后更新为 +1；已用最大 rf-1088，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1092`（新增问题提出后更新为 +1；已用最大 rf-1091，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -60,6 +60,9 @@
 | # | 问题 | 修复方向 |
 |---|------|----------|
 | **rf-1088** | `core/holdings_editor.py::ambiguous_price_kind` 内联 ``len(raw) == 6 and raw.startswith("00")`` 做代码形态/重叠区判定，属代码类型判定分散（违反「代码类型判定中心化」约束） | 改用 ``code_utils`` 的 ``is_six_digit_code`` + ``is_otc_code_overlap``；补「非 6 位码恒 False」形态用例 |
+| **rf-1089** | `llm/pricing.py::_is_holiday` 经 `trading_calendar._is_trading_day` 判节假日，日历缓存缺失时会真实取数（akshare）；撤离线声明后无日历缓存的机器上整批 LLM 缓存用例被网络守卫拦成硬失败 | 改读 `cached_trading_days()`（只读缓存、绝不取数），无缓存按「非节假日」降级；补「只读缓存 / 无缓存降级 / 周末不查日历 / 异常降级」4 例回归 |
+| **rf-1090** | `llm/strategy.py::_apply_cost_first` 读 `input_price`/`output_price`（计价表实际键为 `input`/`output`），所有模型得分恒 `inf`，`cost_first` 策略静默退化为「保持原序」；旧用例用同款假键名把错哄住了 | 改读真实键 + 模型名小写归一，缺价/子表按未知排末尾；用例改用真实键名，并新增「以真实定价表为真值」的顺序断言 |
+| **rf-1091** | 类型债清理：`api_base._attempt` 的 `result` 可能未绑定（`PacingGate.__exit__` 声明为 `bool` 即可被推断为吞异常）、`analysis/scenario.py` CI 区间值可能为 None 仍参与乘法、`analysis/rebalance.py`/`trade_discipline.py` 配置段可能为 None 却被 `dict()`/下标、`tui_keys` 的 msvcrt 平台桩与 `fd` 可空、`holding_change_review` 方向值 `get` 重载不匹配 | 逐个按「值判空 + 显式类型收窄」修：`__exit__` 改 `-> None`、`_attempt` 结果与返回下沉进 `with`、CI/配置段先 `isinstance` 收窄、msvcrt 走 `getattr` 降级、方向值 `isinstance(int)` 判定；无行为变更，均由既有用例与静态检查复核 |
 
 ### 归档档案
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-08）

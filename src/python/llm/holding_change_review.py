@@ -31,6 +31,9 @@ logger = logging.getLogger("invest")
 
 HOLDING_CHANGE_MODULE_KEY = "holding_change"
 
+#: 账本方向值 → 上屏中文（1 看多 / -1 看空；其余值或类型不符一律按「中性」）
+_DIRECTION_TEXT: dict[int, str] = {1: "看多", -1: "看空"}
+
 # ── 运行作用域载体：结果写回契约字段，不设模块级全局 ────────────
 # llm_review 由 build_holding_change_panel 初始化为 None；本模块成功后覆写为
 # HTML 文本（markdown_to_html + 尾部标识行，generate_llm_module 统一骨架，
@@ -138,7 +141,7 @@ def _build_signal_window_block(contract: dict[str, Any]) -> str:
         if not day or not (window_start <= day <= window_end):
             continue
         direction = sig.get("direction")
-        dir_text = {1: "看多", -1: "看空"}.get(direction, "中性")
+        dir_text = _DIRECTION_TEXT.get(direction, "中性") if isinstance(direction, int) else "中性"
         rows.add(
             (
                 report_date,

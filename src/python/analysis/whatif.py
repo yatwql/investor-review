@@ -273,7 +273,7 @@ def build_whatif_data(
         c = cand_idx.get(code)
         if b is None:
             action = "新增"
-            name = c["name"]
+            name = c["name"] if c else ""  # all_codes 为两侧键并集，c 缺席仅作类型层防御
         elif c is None:
             action = "清仓"
             name = b["name"]

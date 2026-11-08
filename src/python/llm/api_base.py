@@ -451,11 +451,13 @@ def call_llm_with_retry(
     last: dict[str, tuple[str, Any]] = {}
 
     def _attempt() -> tuple[str, Any]:
-        # 端点级节流：仅在配置声明了 pacing 时生效（无声明 → 零开销直通）
+        # 端点级节流：仅在配置声明了 pacing 时生效（无声明 → 零开销直通）。
+        # 结果写入与返回均放在 with 内：若上下文管理器将来吞掉异常（__exit__ 返回 True），
+        # 也不能走到「result 未赋值」的分支。
         with PacingGate(endpoint_key):
             result = _attempt_api_call(client, url, headers, payload, timeout, endpoint_key)
-        last["result"] = result
-        return result
+            last["result"] = result
+            return result
 
     def _on_retry(failed_attempt: int, delay: float, _exc: BaseException | None) -> None:
         from src.python.llm.observation import current_llm_observation
