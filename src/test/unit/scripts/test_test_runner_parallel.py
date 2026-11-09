@@ -54,6 +54,35 @@ class TestResolveParallelLevel:
         assert pytest_env.resolve_parallel_level(None) == "medium"
 
 
+class TestPerTestTimeout:
+    """单用例超时看门狗：设了环境变量才启用（默认不启用，避免慢机器误杀）。"""
+
+    _CFG = {"marker": "unit", "parallel": False, "timeout_sec": 60}
+
+    def _args(self, monkeypatch, value: str | None) -> list[str]:
+        if value is None:
+            monkeypatch.delenv(pytest_env.PER_TEST_TIMEOUT_ENV, raising=False)
+        else:
+            monkeypatch.setenv(pytest_env.PER_TEST_TIMEOUT_ENV, value)
+        return pytest_env._build_pytest_args(self._CFG, "unit", False, False, None)
+
+    def test_disabled_by_default(self, monkeypatch):
+        """未设环境变量 → 不加 `--timeout`（慢机器上不应被默认看门狗误杀）。"""
+        args = self._args(monkeypatch, None)
+        assert not any(a.startswith("--timeout") for a in args)
+
+    def test_enabled_by_env(self, monkeypatch):
+        """设了环境变量 → 加 `--timeout=<秒>` 与 thread 方法（超时即失败并带堆栈）。"""
+        args = self._args(monkeypatch, "120")
+        assert "--timeout=120" in args
+        assert "--timeout-method=thread" in args
+
+    def test_blank_value_ignored(self, monkeypatch):
+        """空白值视为未启用（不产生 `--timeout=` 空参）。"""
+        args = self._args(monkeypatch, "   ")
+        assert not any(a.startswith("--timeout") for a in args)
+
+
 class TestWorkerCount:
     """worker 数 = 核数 × 系数，medium 封顶 8。"""
 

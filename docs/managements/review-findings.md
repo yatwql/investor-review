@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.7-dev
-> **编号源**：`rf-next = 1100`（新增问题提出后更新为 +1；已用最大 rf-1099，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1101`（新增问题提出后更新为 +1；已用最大 rf-1100，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -77,6 +77,7 @@
 | **rf-1097** | **门禁链路越来越慢**（实测每次提交 ≈61.5s：钩子 13.5s + `dev-verify` 45.5s），且 `--parallel high` 无增益（16 worker 仍 45.5s → 非 CPU 瓶颈）：① `check-types` 全量 pyright 13.7s/次；② `dev-verify` 内有 5 个「真实仓库守护冒烟」用例与钩子对同一棵树重复跑同一守护（≈20s）；③ 若干 report 用例套着真实重试退避等待（单文件 22s） | 三层提速且不降覆盖：① `check-types --changed` 只查变更文件（14s → 0.5~2s；变更 >25 个或取不到 git 清单时回落全量），钩子用快车道，**CI guards 与 P2 恒全量**；② 真实仓库冒烟加 `real_repo` 标记并从 `dev-verify` 排除（`verify`/CI 仍全跑）；③ 按「加离线桩前后计时」重新校准离线声明，为 4 个真受退避等待拖慢的文件恢复声明。实测 `dev-verify` 45.5s → 33.2s，钩子 13.5s → ≈5s |
 | **rf-1098** | 并行档位缺少可固定入口与上限：worker = 核数 × 系数且 medium 无上限（32 核会开到 16，实测偏慢），慢机器只能每次命令行带参数，并行度也不可解释（输出只报 worker 数） | medium 封顶 8、新增 `TEST_RUNNER_PARALLEL` 环境变量（优先级 CLI > 环境 > 缺省）、worker 少于核数时提示可提升方式；补 9 例用例（级别优先级/非法值回落/封顶/high 不封顶/low 下限）；scripts-reference 补选择建议 |
 | **rf-1099** | **Windows 上 `standard`/`unit` 档 720s 超时**：`tui_keys._get_key_windows()` 无 `isatty` 前置判定（Linux 分支有），非交互 stdin（pytest/管道/重定向）下 `msvcrt.getch()` 会一直阻塞到有按键，整档测试跑不完；`dev-verify` 不含 `unit_ui` 故本地与 CI（Linux）结构性看不见 | 把 `isatty` 判定提到 `import msvcrt` 之前（与 Linux 分支同口径，非 Windows 也可被测试覆盖），非 tty 直接返回 `KEY_UNKNOWN`；Windows 分支既有用例补 tty 前提，新增「非 tty 不等键」回归 |
+| **rf-1100** | 整档超时（720s）只给出一句「测试超时」，不指明**哪个用例**卡住——排障只能靠反复二分或 `-v` 刷屏；慢机器（Windows）上「卡住」与「真慢」也无法区分 | 新增可选单用例看门狗：`TEST_RUNNER_PER_TEST_TIMEOUT=<秒>` 时给 pytest 传 `--timeout / --timeout-method=thread`（`pytest-timeout` 入 `.[test]` 可选依赖，**未设变量不启用**，避免慢机误杀），超时用例即被点名并打印堆栈；补 3 例用例（默认不启用 / 设值启用 / 空白忽略）；scripts-reference 补「整档超时怎么定位」 |
 
 ### 归档档案
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-08）

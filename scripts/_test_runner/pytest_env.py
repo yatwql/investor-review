@@ -86,6 +86,11 @@ _PARALLEL_FACTOR: dict[str, float] = {
 #: 不必每次命令行带参（ANSI 前缀与 `--parallel` 优先级：CLI > 本变量 > medium）
 PARALLEL_ENV = "TEST_RUNNER_PARALLEL"
 
+#: 单用例超时（秒）：设了就为每个用例加看门狗，超时即失败并打印该用例的堆栈——
+#: 把「整档 720s 超时」变成「用例 X 超时」的可定位结论。缺省不启用（慢机器上过短会误杀；
+#: 排障时显式给值，如 ``TEST_RUNNER_PER_TEST_TIMEOUT=120``）。
+PER_TEST_TIMEOUT_ENV = "TEST_RUNNER_PER_TEST_TIMEOUT"
+
 #: medium 档的 worker 上限：实测 16 核上 8 worker 最优、16 worker 反而慢 17%
 #: （xdist 进程争抢 + 磁盘/杀软扫描），故默认档不再随核数无上限放大；
 #: 显式 `--parallel high` 仍按 100% 核数执行（用户明确要求时尊重其选择）
@@ -172,6 +177,11 @@ def _build_pytest_args(
         print(f"      [..] 并行 worker={workers}（级别: {level}{hint}）")
     elif parallel_enabled:
         print("      [!] pytest-xdist 未安装，降级单线程执行")
+
+    per_test_timeout = (os.environ.get(PER_TEST_TIMEOUT_ENV) or "").strip()
+    if per_test_timeout:
+        args.extend([f"--timeout={per_test_timeout}", "--timeout-method=thread"])
+        print(f"      [..] 单用例超时看门狗: {per_test_timeout}s（{PER_TEST_TIMEOUT_ENV}）")
 
     if html_available:
         args.extend(["--html", _phase_report_path(mode_key, phase_tag), "--self-contained-html"])

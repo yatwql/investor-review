@@ -191,6 +191,9 @@ pytest 的 `-m` 标记表达式封装层，按 `--mode` 选择预定义组合。
 # xdist 并行级别（单模式内 worker 数）：缺省 medium = 50% 核数且封顶 8；也可用环境变量固定
 TEST_RUNNER_PARALLEL=high .venv/bin/python scripts/test-runner.py --mode dev-verify
 
+# 排障：给每个用例加超时看门狗（超时即失败并打印该用例堆栈，整档不再只报"720s 超时"）
+TEST_RUNNER_PER_TEST_TIMEOUT=120 .venv/bin/python scripts/test-runner.py --mode unit
+
 # 跨机器耗时采集 + 自动更新 test-coverage.md 环境耗时对照（含机器信息采集）
 .venv/bin/python scripts/test-runner.py --mode bench --update-docs
 
@@ -209,6 +212,11 @@ TEST_RUNNER_PARALLEL=high .venv/bin/python scripts/test-runner.py --mode dev-ver
 > 加磁盘/杀软扫描）；显式 `--parallel high` 仍按 100% 核数。慢盘/慢 CPU 机器（典型 Windows：
 > 进程启动与 Defender 实时扫描是主开销）可先 `TEST_RUNNER_PARALLEL=high` 或 `=low` 各跑一次
 > 对比再固定，并把仓库与 `.venv` 加入杀软排除项。
+>
+> **整档超时怎么定位**：某档报「720s 超时」时先分清是**卡住**还是**真慢**——
+> `TEST_RUNNER_PER_TEST_TIMEOUT=120` 给每个用例加看门狗，超时用例会被点名并打印堆栈
+> （插件 `pytest-timeout` 同步进 `.[test]` 可选依赖，未设该变量时不启用，避免慢机器误杀）；
+> 只想看塞住的那个文件，也可直接 `-m "<档位 marker>" -x -v` 跑子集。
 >
 > **`test-reports/archives/` 轮转**：每次运行把 `latest/` 归档为
 > `archives/<YYYYMMDD>/<HHMMSS>/`，长年累积会吃满本地磁盘与 CI runner（实测 31 份 ≈ 17G）。

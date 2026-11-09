@@ -56,6 +56,7 @@ from _test_runner.modes import (  # noqa: F401
 )
 from _test_runner.pytest_env import (  # noqa: F401
     PARALLEL_ENV,
+    PER_TEST_TIMEOUT_ENV,
     _PARALLEL_FACTOR,
     resolve_parallel_level,
     _check_pytest_html,

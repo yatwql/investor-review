@@ -18,6 +18,10 @@
 
 ### 修复
 
+- **整档超时可定位到具体用例（rf-1100）** —— 新增 `TEST_RUNNER_PER_TEST_TIMEOUT=<秒>`：
+  设值后为每个用例加 `pytest-timeout` 看门狗（超时即失败并打印该用例堆栈），未设值不启用
+  （避免慢机器误杀）；`pytest-timeout` 入 `.[test]` 依赖，`scripts-reference.md` 补排障步骤。
+
 - **Windows 非交互环境按键读取不再阻塞（rf-1099）** —— `tui_keys._get_key_windows()` 缺 `isatty`
   前置判定（Linux 分支已有），非交互 stdin 下 `msvcrt.getch()` 会一直等键，表现为 `standard`/`unit`
   整档跑到 720s 超时；现判定提到 `import msvcrt` 之前，非 tty 直接返回 `KEY_UNKNOWN`，并补回归用例。
