@@ -13,9 +13,13 @@ import os
 import pytest
 
 # 伪终端与 termios 仅 POSIX 提供：Windows 上模块级 import 会让整档收集失败
-# （表现为 `ERROR collecting ...`），故用 importorskip 在本平台静默整模块跳过
-pty = pytest.importorskip("pty", reason="状态条边缘用例依赖伪终端，仅 POSIX 可用")
-termios = pytest.importorskip("termios", reason="termios 仅 POSIX 可用")
+# （表现为 `ERROR collecting ...`）。这里用 **模块级 skip**（而非 importorskip）：
+# 判定只看 os.name，与被导入模块是否存在无关，收集期行为确定
+if os.name == "nt":
+    pytest.skip("状态条边缘用例依赖伪终端（pty/termios），仅 POSIX 可用", allow_module_level=True)
+
+import pty  # noqa: E402
+import termios  # noqa: E402
 
 from src.python.tui.live_status import LiveStatusBar, status_bar_text  # noqa: E402
 
