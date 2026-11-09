@@ -13,7 +13,7 @@ from src.test.unit.web.test_handlers import (
     _fake_executor,
 )
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_web, pytest.mark.usefixtures("offline_external_sources")]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_web]
 
 
 @pytest.fixture()

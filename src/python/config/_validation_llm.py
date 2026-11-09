@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from src.python.core.registry import get_known_enabled_llm_keys
 
@@ -111,7 +112,9 @@ def param_violation(param: str, value: object) -> str | None:
         return None
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return f"配置项 {param} 应为数值（当前 {value!r}，合法范围 {_range_text(bounds)}）"
-    low, high = bounds
+    low, high = bounds[0], bounds[1]
+    if not isinstance(low, (int, float)) or not isinstance(high, (int, float)):
+        return None  # 区间声明自身不是数值（配置表缺陷）：不拿它判用户值
     if not low <= value <= high:
         return f"配置项 {param} 取值 {value!r} 超出范围 {_range_text(bounds)}"
     return None
@@ -154,14 +157,15 @@ def sanitize_document(document: dict, defaults: dict) -> tuple[dict, list[str]]:
         if not isinstance(module, dict):
             continue
         checks = [(param, module.get(param)) for param in ("temperature", "max_tokens", "timeout")]
-        thinking = module.get("thinking") if isinstance(module.get("thinking"), dict) else {}
+        thinking_node = module.get("thinking")
+        thinking: dict[str, Any] = thinking_node if isinstance(thinking_node, dict) else {}
         checks += [
             ("thinking.budget", thinking.get("budget")),
             ("thinking.effort", thinking.get("effort")),
         ]
-        debate_procon = (
-            ((module.get("debate") or {}).get("procon") or {}) if isinstance(module.get("debate"), dict) else {}
-        )
+        debate = module.get("debate")
+        procon_node = debate.get("procon") if isinstance(debate, dict) else None
+        debate_procon = procon_node if isinstance(procon_node, dict) else {}
         checks.append(("debate.procon.synthesis_temperature", debate_procon.get("synthesis_temperature")))
 
         for param, value in checks:
@@ -174,7 +178,14 @@ def sanitize_document(document: dict, defaults: dict) -> tuple[dict, list[str]]:
                 thinking[param.split(".", 1)[1]] = fallback
                 module["thinking"] = thinking
             elif param.startswith("debate."):
-                procon = module.setdefault("debate", {}).setdefault("procon", {})
+                debate = module.get("debate")
+                if not isinstance(debate, dict):
+                    debate = {}
+                    module["debate"] = debate
+                procon = debate.get("procon")
+                if not isinstance(procon, dict):
+                    procon = {}
+                    debate["procon"] = procon
                 procon["synthesis_temperature"] = fallback
             elif fallback is None:
                 module.pop(param, None)

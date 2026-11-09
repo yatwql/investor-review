@@ -149,9 +149,12 @@ def solve_xirr(
     """
     if not amounts or not dates or len(amounts) != len(dates):
         return None
-    parsed = [_as_date(d) for d in dates]
-    if any(d is None for d in parsed):
-        return None
+    parsed: list[_dt.date] = []
+    for value in dates:
+        day = _as_date(value)
+        if day is None:  # 日期非法：与「现金流不可解」同口径返回 None
+            return None
+        parsed.append(day)
     base = parsed[0]
     ts = [(d - base).days / _DAYS_PER_YEAR for d in parsed]
     if all(abs(t) < _EPS for t in ts):
@@ -475,7 +478,9 @@ def build_approximate_fund_flow_data(
             continue
         synthetic.append(
             TradeRecord(
-                date=start_date or end,
+                # TradeRecord.date 的契约是 YYYY-MM-DD 字符串（下游 _as_date 两者都收，
+                # 但字段口径不破：构造处统一落字符串）
+                date=(start_date or end).isoformat(),
                 code=h.code,
                 action="buy",
                 shares=h.shares,

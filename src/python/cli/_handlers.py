@@ -551,10 +551,14 @@ def _handle_check_sources() -> int:
 
 
 def _use_ansi_color() -> bool:
-    """终端是否支持 ANSI 着色（无 TTY / 设了 NO_COLOR / 非 UTF-8 编码时降级）。"""
-    if os.environ.get("NO_COLOR"):
-        return False
-    if not sys.stdout.isatty():
+    """终端是否支持 ANSI 着色（单源判据 + CLI 自己的编码前提）。
+
+    ``NO_COLOR`` / 非 TTY 的判定统一走 ``core.ansi_colors.supports_color``（三渠道
+    共用一份）；CLI 额外要求 stdout 是 UTF-8——cp936 控制台上色会输成乱码，故另加。
+    """
+    from src.python.core.ansi_colors import supports_color
+
+    if not supports_color():
         return False
     return bool(sys.stdout.encoding and sys.stdout.encoding.upper() in ("UTF-8", "UTF8"))
 

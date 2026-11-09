@@ -142,18 +142,19 @@ def resolve_provider_endpoint(entry: dict, llm_config: dict | None = None) -> st
 
 
 def _resolve_first_provider_model_endpoint(
-    llm_config: dict,
+    llm_config: dict | None,
     module_key: str,
 ) -> tuple[str | None, str]:
     """从多链配置的首个 chain entry 解析 model 和 endpoint。
 
     仅当存在 _provider_list 且 module_key 非空时生效。
-    非多链模式返回 (None, "")。
+    非多链模式（含 llm_config 缺失）返回 (None, "")。
 
     Returns:
         (model_name, endpoint) — model 为解析后的模型名（含 credentials_ref），
         endpoint 为解析后的 API 地址
     """
+    llm_config = llm_config or {}
     provider_list = llm_config.get("_provider_list")
     if not provider_list or not module_key:
         return (None, "")

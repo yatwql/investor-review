@@ -11,11 +11,12 @@ import re
 import stat
 
 from src.python.core.constants import PROJECT_ROOT
+from src.python.core.path_utils import resolve_project_path
 
 logger = logging.getLogger("invest")
 
 # 项目根路径从 constants.py 统一导入，确保路径来源唯一
-_ROOT_CACHE_DIR = os.path.join(PROJECT_ROOT, "data/cache")
+_ROOT_CACHE_DIR = os.path.join(PROJECT_ROOT, "data", "cache")
 
 #: 非真实运行（演示截图 / 性能基准）的缓存隔离：显式指定时改落该目录。
 #: 不隔离时演示 run 与真实 run 共享同一份缓存：演示持仓的取数结果（行情/新闻去重锚点/
@@ -28,7 +29,7 @@ def _resolve_cache_dir() -> str:
     override = os.environ.get(_CACHE_DIR_ENV, "").strip()
     if not override:
         return _ROOT_CACHE_DIR
-    return override if os.path.isabs(override) else os.path.join(PROJECT_ROOT, override)
+    return resolve_project_path(override)
 
 
 _CACHE_DIR = _resolve_cache_dir()
@@ -49,7 +50,7 @@ _VERSION_STAMP_RE = re.compile(r"_v\d+$")
 def _cache_path(key: str) -> str:
     """返回缓存文件完整路径（始终带 .json 后缀，由 get/set 决定是否追加 .gz）。"""
     # 防止目录穿越
-    safe_name = key.replace("/", "_").replace("\\", "_").replace("..", "_")
+    safe_name = key.replace("/", "_").replace("\\", "_").replace(":", "_").replace("..", "_")
     return os.path.join(_CACHE_DIR, f"{safe_name}_{_CACHE_KEY_VERSION}.json")
 
 

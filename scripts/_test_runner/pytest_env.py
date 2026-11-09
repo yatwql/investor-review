@@ -19,14 +19,19 @@ def _check_pytest_html() -> bool:
         return False
 
 
+def _check_pytest_timeout() -> bool:
+    """检查 pytest-timeout 是否已安装（缺它时传 `--timeout` 会让 pytest 直接用法错误退出）。"""
+    import importlib.util
+
+    return importlib.util.find_spec("pytest_timeout") is not None
+
+
 def _check_pytest_cov() -> bool:
     """检查 pytest-cov 是否已安装。"""
-    try:
-        import pytest_cov  # noqa: F401
+    # 可选依赖只探测是否可解析（不导入：插件导入有副作用，且 pyright 无该包的类型信息）
+    import importlib.util
 
-        return True
-    except ImportError:
-        return False
+    return importlib.util.find_spec("pytest_cov") is not None
 
 
 def _extract_count(text: str, pattern: str) -> int:
@@ -84,6 +89,33 @@ _PARALLEL_FACTOR: dict[str, float] = {
 }
 
 
+#: 环境变量覆盖并行级别（与 `--parallel` 同义）：慢盘/慢 CPU 机器上可一次性固定，
+#: 不必每次命令行带参（ANSI 前缀与 `--parallel` 优先级：CLI > 本变量 > medium）
+PARALLEL_ENV = "TEST_RUNNER_PARALLEL"
+
+#: 单用例超时（秒）：设了就为每个用例加看门狗，超时即失败并打印该用例的堆栈——
+#: 把「整档 720s 超时」变成「用例 X 超时」的可定位结论。缺省不启用（慢机器上过短会误杀；
+#: 排障时显式给值，如 ``TEST_RUNNER_PER_TEST_TIMEOUT=120``）。
+PER_TEST_TIMEOUT_ENV = "TEST_RUNNER_PER_TEST_TIMEOUT"
+
+#: medium 档的 worker 上限：实测 16 核上 8 worker 最优、16 worker 反而慢 17%
+#: （xdist 进程争抢 + 磁盘/杀软扫描），故默认档不再随核数无上限放大；
+#: 显式 `--parallel high` 仍按 100% 核数执行（用户明确要求时尊重其选择）
+_MEDIUM_WORKER_CAP = 8
+
+
+def resolve_parallel_level(cli_level: str | None) -> str:
+    """并行级别解析：CLI > `TEST_RUNNER_PARALLEL` > 缺省 medium。
+
+    Returns:
+        ``"high"`` / ``"medium"`` / ``"low"``（非法环境变量值按 medium 处理）。
+    """
+    if cli_level:
+        return cli_level
+    raw = (os.environ.get(PARALLEL_ENV) or "").strip().lower()
+    return raw if raw in _PARALLEL_FACTOR else "medium"
+
+
 def _calc_parallel_workers(level: str | bool) -> str:
     """根据并行级别计算 worker 数。
 
@@ -94,13 +126,14 @@ def _calc_parallel_workers(level: str | bool) -> str:
     Returns:
         "-n" 参数的字符串值，如 "8"、"4"、"2"
     """
-    if level is True:
-        level = "medium"
-    factor = _PARALLEL_FACTOR.get(level, 0.5)
+    level_key = "medium" if level is True else str(level)
+    factor = _PARALLEL_FACTOR.get(level_key, 0.5)
     n_cores = os.cpu_count() or 4
     workers = max(1, int(n_cores * factor))
-    if level == "low":
+    if level_key == "low":
         workers = max(2, workers)
+    elif level_key == "medium":
+        workers = min(workers, _MEDIUM_WORKER_CAP)
     return str(workers)
 
 
@@ -141,12 +174,26 @@ def _build_pytest_args(
     # ── 并行执行 ──
     parallel_enabled = mode_cfg.get("parallel", False)
     if parallel_enabled and _check_xdist():
-        level = parallel_level or "medium"
+        level = resolve_parallel_level(parallel_level)
         workers = _calc_parallel_workers(level)
         args.extend(["-n", workers])
-        print(f"      [..] 并行 worker={workers}（级别: {level}）")
+        hint = ""
+        n_cores = os.cpu_count() or 0
+        if level != "high" and n_cores and int(workers) < n_cores:
+            hint = f"；如需更多并发：--parallel high 或设 {PARALLEL_ENV}=high"
+        print(f"      [..] 并行 worker={workers}（级别: {level}{hint}）")
     elif parallel_enabled:
         print("      [!] pytest-xdist 未安装，降级单线程执行")
+
+    per_test_timeout = (os.environ.get(PER_TEST_TIMEOUT_ENV) or "").strip()
+    if per_test_timeout:
+        if _check_pytest_timeout():
+            args.extend([f"--timeout={per_test_timeout}", "--timeout-method=thread"])
+            print(f"      [..] 单用例超时看门狗: {per_test_timeout}s（{PER_TEST_TIMEOUT_ENV}）")
+        else:
+            # 缺插件时**不传**该参数：否则 pytest 以用法错误（退出码 4）秒退，
+            # 表现为「0 passed, 0 failed (0.0s)」，把真实测试跑丢
+            print(f'      [!] 已忽略 {PER_TEST_TIMEOUT_ENV}：未安装 pytest-timeout（安装：pip install -e ".[test]"）')
 
     if html_available:
         args.extend(["--html", _phase_report_path(mode_key, phase_tag), "--self-contained-html"])

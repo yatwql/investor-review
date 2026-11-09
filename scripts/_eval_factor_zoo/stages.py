@@ -188,7 +188,10 @@ def stage_signals(out_dir: Path) -> dict[str, Any]:
     started = time.perf_counter()
 
     computable = fields_report["computable"]
-    catalog = _read_json(out_dir / "factor_catalog.json")["catalog"]
+    catalog_doc = _read_json(out_dir / "factor_catalog.json")
+    catalog = catalog_doc.get("catalog") if isinstance(catalog_doc, dict) else None
+    if not isinstance(catalog, list):
+        raise SystemExit(f"[ERR] factor_catalog.json 缺 catalog 列表: {out_dir}")
     label_by_slug = {c["slug"]: c for c in catalog}
 
     # ── 因子横截面日均值序列 ──
@@ -299,7 +302,13 @@ def _pool_mean_returns(bars_by_code: dict[str, list[dict]], index_bars: list[dic
     for code, bars in bars_by_code.items():
         closes = _closes(bars)
         rets = _daily_returns(closes)
-        per_code[code] = {bars[i].get("date"): rets[i] for i in range(len(bars)) if rets[i] == rets[i]}
+        series: dict[str, float] = {}
+        for i in range(len(bars)):
+            day = bars[i].get("date")
+            if not isinstance(day, str) or rets[i] != rets[i]:
+                continue  # 日期缺失/NaN 收益不入序列
+            series[day] = rets[i]
+        per_code[code] = series
     dates = sorted({d for series in per_code.values() for d in series})
     mean: dict[str, float] = {}
     for date in dates:

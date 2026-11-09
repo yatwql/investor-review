@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 logger = logging.getLogger("invest")
 
@@ -46,8 +47,15 @@ def _collect_health_checks(
     """
     if health_future is None:
         return
+    _result_fn = getattr(health_future, "result", None)
+    if not callable(_result_fn):  # 非 Future 实现：本收口不适用，直接跳过
+        return
     try:
-        results = health_future.result(timeout=30)
+        raw_results = _result_fn(timeout=30)
+        # 鸭子类型取回的结果不做类型假设：非 list / 非 dict 条目逐层剔除（本收口只写盘+登记）
+        if not isinstance(raw_results, list):
+            return
+        results: list[dict[str, Any]] = [item for item in raw_results if isinstance(item, dict)]
         if not results:
             return
         from src.python.core.perf import save_health_check_snapshot

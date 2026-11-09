@@ -18,7 +18,7 @@ import pytest
 
 from src.python.core.registry import NAV_GROUPS, _REPORT_SECTION_DEFAULT, get_report_section_order
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_report, pytest.mark.usefixtures("offline_external_sources")]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
 
 _LINK_RE = re.compile(r'=HYPERLINK\("#\'(.+?)\'!A1","')
 

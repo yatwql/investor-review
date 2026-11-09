@@ -350,6 +350,12 @@ def test_ambiguous_price_kind_detects_00_overlap(code: str, name: str, ambiguous
     assert ambiguous_price_kind(code, name) is ambiguous
 
 
+@pytest.mark.parametrize("code", ["", "00", "0001", "00582", "00A1"])
+def test_ambiguous_price_kind_gate_ignores_non_six_digit_codes(code: str):
+    """代码形态不合法 → 恒 False（形态与重叠区判定复用 code_utils 原语，不自建前缀判据）。"""
+    assert ambiguous_price_kind(code, "易方达蓝筹精选混合") is False
+
+
 @pytest.mark.parametrize(
     ("code", "name", "declared", "expected"),
     [

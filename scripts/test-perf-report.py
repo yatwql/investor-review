@@ -356,11 +356,15 @@ def _install_offline_network() -> None:
     def _blocked(*_args: object, **_kwargs: object) -> None:
         raise OSError("test-perf-report: 基准运行按设计禁网")
 
-    _socket.socket.connect = _blocked
-    _socket.socket.connect_ex = _blocked
-    _socket.create_connection = _blocked
-    _socket.getaddrinfo = _blocked
-    _time.sleep = lambda _seconds: None
+    # 运行期替换标准库函数（测试专用桩）：属性不在类型声明里，走 setattr
+    for _target, _attr in (
+        (_socket.socket, "connect"),
+        (_socket.socket, "connect_ex"),
+        (_socket, "create_connection"),
+        (_socket, "getaddrinfo"),
+    ):
+        setattr(_target, _attr, _blocked)
+    setattr(_time, "sleep", lambda _seconds: None)  # 基准运行不真睡
 
 
 def run_perf_test() -> tuple[dict[str, float], PerfSample, PerfSample]:

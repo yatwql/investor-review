@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 
 import pytest
 
@@ -89,7 +90,7 @@ class TestDeletedConfigRebuilds:
         path = tmp_path / "logger.json"
         assert ensure_logger_file(str(path)) is True, "缺失时应写入默认模板"
         values = read_logger_config(str(path))
-        assert values["level"] == "INFO" and values["path"].startswith("/")
+        assert values["level"] == "INFO" and os.path.isabs(values["path"])
         assert ensure_logger_file(str(path)) is False, "已存在时不重复写（幂等）"
 
     def test_pricing_template_rebuilds_and_loads(self, tmp_path, monkeypatch):

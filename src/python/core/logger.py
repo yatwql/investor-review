@@ -7,6 +7,7 @@ import sys
 from logging.handlers import RotatingFileHandler
 
 from src.python.core.constants import PROJECT_ROOT
+from src.python.core.path_utils import resolve_project_path
 from src.python.core.ansi_colors import MAGENTA, RED, RESET, YELLOW
 
 # 日志文件路径（始终以项目根目录为基准，不受 CWD 影响）
@@ -113,9 +114,7 @@ def _apply_logger_config(config: dict) -> None:
     """把配置写入模块级生效值（路径绝对化；测试进程固定 test.log）。"""
     global _LOG_FILE, _LOG_MAX_BYTES, _LOG_BACKUP_COUNT, _CONSOLE_COLOR
     global _CONFIG_FILE_LEVEL, _CONFIG_CONSOLE_LEVEL
-    path = config["path"]
-    if not os.path.isabs(path):
-        path = os.path.join(PROJECT_ROOT, path)
+    path = resolve_project_path(config["path"])
     _LOG_FILE = os.path.join(_LOG_BASE, "test.log") if _is_pytest else _apply_env_log_path(path)
     _LOG_MAX_BYTES = int(config["max_bytes"])
     _LOG_BACKUP_COUNT = int(config["backup_count"])
@@ -251,7 +250,7 @@ def _apply_env_log_path(path: str) -> str:
     override = os.environ.get(_LOG_PATH_ENV, "").strip()
     if not override:
         return path
-    return override if os.path.isabs(override) else os.path.join(PROJECT_ROOT, override)
+    return resolve_project_path(override)
 
 
 _apply_logger_config(_read_logger_config_file())
@@ -319,12 +318,56 @@ def setup_logger(name: str = "invest") -> logging.Logger:
     return logger
 
 
+"""Get the local host address, falling back to 'unknown'.
+
+`gethostbyname(gethostname())` alone usually answers loopback (`127.0.0.1`
+直接来自 /etc/hosts，Debian 系更是 `127.0.1.1`），对「在哪台机器的哪个地址上
+访问」没有信息量。按可靠性降序取首个非回环地址：
+
+1. UDP `connect` 一个公网地址（只建路由不发包，无流量）→ 默认出口网卡的本地地址；
+2. 主机名解析出的全部 IPv4（`gethostbyname_ex`）里挑非回环；
+3. 以上都只有回环时返回回环（离线/单机场景它仍是正确的可访问地址）；
+4. 全部失败返回 'unknown'。
+"""
+
+
+def _is_loopback(ip: str) -> bool:
+    return not ip or ip.startswith("127.") or ip == "0.0.0.0"
+
+
 def get_machine_ip() -> str:
-    """获取本机 IP 地址，失败时返回 'unknown'。"""
+    """获取本机 IP 地址（优先非回环），失败时返回 'unknown'。"""
+    candidates: list[str] = []
+
+    # 1) 默认出口网卡地址（UDP connect 不发包）
     try:
-        return socket.gethostbyname(socket.gethostname())
-    except Exception:
-        return "unknown"
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            probe.connect(("8.8.8.8", 80))
+            candidates.append(probe.getsockname()[0])
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
+        # 探测失败原因不止 OSError：测试网络守卫以 BaseException 子类阻断外部建连，
+        # 只做展示兜底的地方不得让它冒成启动失败。
+        pass
+
+    # 2) 主机名解析出的全部地址
+    try:
+        hostname = socket.gethostname()
+        candidates.append(socket.gethostbyname(hostname))
+        candidates.extend(socket.gethostbyname_ex(hostname)[2])
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
+        pass
+
+    for ip in candidates:
+        if not _is_loopback(ip):
+            return ip
+    for ip in candidates:
+        if ip:
+            return ip
+    return "unknown"
 
 
 def log_app_boundary(event: str, mode: str) -> None:

@@ -240,7 +240,12 @@ def run_schedule_replay(
     cost_basis = {r["code"]: r["cost"] for r in rows}
     names = {r["code"]: r["name"] for r in rows}
 
-    end_navs = {c: float(nav_at[c][-1]) for c in codes if nav_at[c][-1] is not None}
+    end_navs: dict[str, float] = {}
+    for code in codes:
+        last_nav = nav_at[code][-1]
+        if last_nav is None:  # 末位缺值：交给下方「锚点后仍有品种缺失净值」分支收口
+            continue
+        end_navs[code] = float(last_nav)
     if len(end_navs) != len(codes):
         return _unavailable("锚点后仍有品种缺失净值（末日目标不可计算）", schedule=parsed)
     target = _resolve_target_weights(parsed, rows, end_navs, notes)
@@ -277,16 +282,20 @@ def run_schedule_replay(
     def rebalance(idx: int) -> None:
         nonlocal cash, unknown_fee_legs, unmodeled_legs
         date = dates[idx]
-        navs_d = {c: nav_at[c][idx] for c in codes}
-        if any(v is None or v <= 0 for v in navs_d.values()):
-            return
+        # 当日净值先归一成非可空 float：缺值/非正即放弃本次再平衡（与原 any(...) 判定同义）
+        navs_d: dict[str, float] = {}
+        for c in codes:
+            nav = nav_at[c][idx]
+            if nav is None or nav <= 0:
+                return
+            navs_d[c] = float(nav)
         value = day_value(sim_shares, idx, cash)
         if value <= 0:
             return
-        before = [{"code": c, "market_value": sim_shares[c] * float(navs_d[c])} for c in codes]
+        before = [{"code": c, "market_value": sim_shares[c] * navs_d[c]} for c in codes]
         changes: list[dict[str, Any]] = []
         for c in codes:
-            nav_d = float(navs_d[c])
+            nav_d = navs_d[c]
             new_shares = round(value * target.get(c, 0.0) / nav_d, 2)
             delta = new_shares - sim_shares[c]
             if abs(delta) < 1e-6:
@@ -318,10 +327,7 @@ def run_schedule_replay(
             )
         turnover = turnover_rate(
             before,
-            [
-                {"code": c, "market_value": float(navs_d[c]) * round(value * target.get(c, 0.0) / float(navs_d[c]), 2)}
-                for c in codes
-            ],
+            [{"code": c, "market_value": navs_d[c] * round(value * target.get(c, 0.0) / navs_d[c], 2)} for c in codes],
         )
         period_cost = 0.0
         cost_known = True
@@ -356,7 +362,7 @@ def run_schedule_replay(
         for ch in changes:
             c = ch["code"]
             delta = float(ch["cand_shares"]) - float(ch["base_shares"])
-            cash -= delta * float(navs_d[c])
+            cash -= delta * navs_d[c]
             sim_shares[c] = float(ch["cand_shares"])
             if delta > 0:
                 lots.setdefault(c, []).append({"start_date": date, "shares": delta})
@@ -385,9 +391,15 @@ def run_schedule_replay(
         else:  # threshold：逐日评估偏离，≥ 阈值全量回归
             value = day_value(sim_shares, idx, cash)
             if value > 0:
-                navs_d = {c: nav_at[c][idx] for c in codes}
-                if all(v is not None and v > 0 for v in navs_d.values()):
-                    drift = max(abs(sim_shares[c] * float(navs_d[c]) / value - target.get(c, 0.0)) for c in codes)
+                # 当日净值逐品种收窄成非可空 float；任一缺值即跳过本日阈值评估
+                day_navs: dict[str, float] = {}
+                for c in codes:
+                    nav = nav_at[c][idx]
+                    if nav is None or nav <= 0:
+                        break
+                    day_navs[c] = float(nav)
+                else:
+                    drift = max(abs(sim_shares[c] * day_navs[c] / value - target.get(c, 0.0)) for c in codes)
                     if threshold is not None and drift >= threshold:
                         rebalance(idx)
         # 逐日记录当日收盘后净值（调仓已在当日 NAV 下完成，成本同日扣除）

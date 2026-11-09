@@ -21,6 +21,7 @@ import argparse
 import io
 import re
 import sys
+from typing import Any, cast
 from collections import Counter
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -275,7 +276,8 @@ def main() -> None:
     # 输出强制 UTF-8：中文分组名在 cp936 Windows 上会按 GBK 编码写出，
     # 而消费方（`_doc_drift/_shared.py::_collect_test_snapshot`）按 UTF-8 解码
     # → UnicodeDecodeError（与仓库「文本 I/O 显式 encoding」纪律一致）。
-    sys.stdout.reconfigure(encoding="utf-8")
+    # TextIO 协议不含 reconfigure（仅 TextIOWrapper 有）：按具体实现取用
+    cast(Any, sys.stdout).reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(
         description="测试覆盖计数收集（pytest --collect-only 快照，供 test-coverage.md 更新）"
     )

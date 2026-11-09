@@ -18,6 +18,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from openpyxl.cell.cell import MergedCell
 from openpyxl.styles import Font, PatternFill
 from openpyxl.worksheet.worksheet import Worksheet
 
@@ -177,7 +178,8 @@ def _write_overlap_block(
         return row
 
     # ── 表头：基金A / 基金B / 各基金代码列 ──
-    headers = ["", ""] + [fund_names.get(c, c) if fund_names else c for c in funds]
+    # 表头一律 str（名称缺失时回落代码，二者都可能是 None/非串）
+    headers = ["", ""] + [str((fund_names or {}).get(c) or c) for c in funds]
     write_header_row(ws, row, headers)
     for col_idx in range(3, n + 3):
         ws.cell(row=row, column=col_idx).fill = _FILL_HEADER
@@ -260,6 +262,8 @@ def _write_correlation_block(
         ws.cell(row=row, column=1, value=f"{names.get(ci, ci)} ({ci})")
         for j, cj in enumerate(codes):
             cell = ws.cell(row=row, column=2 + j)
+            if isinstance(cell, MergedCell):
+                continue  # 被合并吞掉的从属格只读（锚点格另行写入）
             if j == i:
                 cell.value = 1.00
                 cell.number_format = "0.00"

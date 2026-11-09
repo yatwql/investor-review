@@ -199,7 +199,7 @@ def _cat_num_formats(
     has_flow: bool = False, has_purchase: bool = False, has_cost_pos: bool = False
 ) -> list[str | None]:
     """区块②每列的 Excel 数字格式（10 列 + 可选成本流水子列/申购状态/成本区间位置）。"""
-    fmt = [
+    fmt: list[str | None] = [
         "",  # 1  资产属性
         "",  # 2  投资分类
         "",  # 3  名称

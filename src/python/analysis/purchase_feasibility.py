@@ -56,10 +56,18 @@ def evaluate_purchase_feasibility(
         # 索引准入只收限大额/暂停申购；其他状态（防御分支）无判定
         return None
     limit = entry.get("limit")
-    amount_ok = isinstance(amount, (int, float)) and math.isfinite(amount) and amount > 0
-    limit_ok = isinstance(limit, (int, float)) and math.isfinite(limit) and limit > 0
-    if not (amount_ok and limit_ok):
-        # 金额/限额任一未知（含 0 元限额，解析层已单点转 None）→ 不给天数
+    # 金额/限额任一未知（含 0 元限额，解析层已单点转 None）→ 不给天数。
+    # 合写否定条件让两支同时收窄为非可空数值（布尔标志不参与类型收窄）
+    if (
+        isinstance(amount, bool)
+        or not isinstance(amount, (int, float))
+        or not math.isfinite(amount)
+        or amount <= 0
+        or isinstance(limit, bool)
+        or not isinstance(limit, (int, float))
+        or not math.isfinite(limit)
+        or limit <= 0
+    ):
         return {**base, "kind": "limited", "amount": None, "days": None, "feasible": None}
     days = math.ceil(amount / limit)
     return {

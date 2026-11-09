@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -182,6 +183,7 @@ class TestEndToEndCli:
             errors="replace",
             cwd=str(dirpath),
             timeout=300,
+            env={**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"},
         )
         return proc.returncode, proc.stdout + proc.stderr
 

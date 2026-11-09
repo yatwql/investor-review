@@ -19,8 +19,20 @@ from src.test.unit.llm._cache_fixtures import LLM_REPLY_DEFAULT, make_inputs, ru
 pytestmark = [
     pytest.mark.unit,
     pytest.mark.unit_llm,
-    pytest.mark.usefixtures("offline_external_sources"),
 ]
+
+
+@pytest.fixture(autouse=True)
+def _freeze_market_bucket_for_cache_asserts(monkeypatch):
+    """缓存命中断言与钟面无关：统一钉在收盘档。
+
+    行情口径桶随钟面变化（盘中档禁止复用价格相关模块），不钉死时同一批断言在
+    交易时段必红、收盘后转绿——时间相关用例的典型不稳定形态。
+    """
+    from src.test._market_clock import freeze_market_bucket
+
+    freeze_market_bucket(monkeypatch)
+
 
 #: 数值与持仓/历史数据不一致的正文（历史最大回撤 19.0% vs 实际 -15.0%）→ 必然触发修正
 _REPLY_WITH_WRONG_NUMBERS = (

@@ -18,7 +18,7 @@ from src.python.web.app import create_app
 from src.python.web.runs import RunManager
 import src.python.web.upload as upload
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_web, pytest.mark.usefixtures("offline_external_sources")]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_web]
 
 _HOLDINGS = [{"名称": "测试基金", "代码": "000001", "份额": 1000.0, "成本": 1.0}]
 

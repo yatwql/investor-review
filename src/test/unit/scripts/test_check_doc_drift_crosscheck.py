@@ -641,6 +641,7 @@ class TestGeneratedArtifacts:
 # ═══ 真实仓库冒烟 ═══
 
 
+@pytest.mark.real_repo
 class TestRealRepoSmoke:
     def test_current_repo_consistent(self, drift):
         findings = drift.run_checks()
@@ -650,6 +651,7 @@ class TestRealRepoSmoke:
 # ═══ 统计快照自动同步（--sync） ═══
 
 
+@pytest.mark.real_repo
 class TestProjectStatsSync:
     """sync_project_stats —— 实测数字自动回写 folders.md 统计表。
 

@@ -59,7 +59,6 @@ def _load_baseline() -> dict[str, list[str]]:
     return json.loads(BASELINE_FILE.read_text(encoding="utf-8"))
 
 
-@pytest.mark.usefixtures("offline_external_sources")
 class TestMenuLayoutGolden:
     """主菜单版式逐行基线（宽 / 窄两档）。"""
 
@@ -82,7 +81,6 @@ class TestMenuLayoutGolden:
         assert missing == [], f"版式基线缺少分组标题：{missing}"
 
 
-@pytest.mark.usefixtures("offline_external_sources")
 class TestPipeOutputClean:
     """管道 / 非 TTY 输出不得含原地重绘控制字符。"""
 

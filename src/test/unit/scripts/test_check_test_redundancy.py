@@ -27,7 +27,6 @@ from src.test._script_loader import load_script
 pytestmark = [
     pytest.mark.unit,
     pytest.mark.unit_scripts,
-    pytest.mark.usefixtures("offline_external_sources"),
 ]
 
 
@@ -312,7 +311,10 @@ class TestHardcodedEvolvingTotals:
 # ═══ 真实仓库冒烟 ═══
 
 
+@pytest.mark.real_repo
 class TestRealRepoSmoke:
+    """真实仓库全量扫描（与 pre-commit 钩子同一守护、同一棵树：见 conftest 的 real_repo 说明）。"""
+
     def test_current_repo_clean(self, redundancy):
         findings, stats = redundancy.run_checks()
         assert findings == []
@@ -592,6 +594,7 @@ class TestLedgerDateBombs:
         )
         assert len(self._find(redundancy, src)) == 2
 
+    @pytest.mark.real_repo
     def test_real_repo_has_no_ledger_date_bombs(self, redundancy):
         """仓库现状自检：账本用例日期都从当天派生（回归防线）。"""
         findings, _stats = redundancy.run_checks()

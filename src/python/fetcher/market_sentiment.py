@@ -25,7 +25,12 @@ LADDER_CACHE_KEY = "sentiment_ladder"
 
 def credential_missing() -> str | None:
     """同花顺凭据就绪判定（缺什么、去哪申请，文案由凭据登记点提供）。"""
-    return hithink.missing_credential(hithink.SOURCE_ID)
+    spec = hithink.missing_credential(hithink.SOURCE_ID)
+    if spec is None:
+        return None
+    # 凭据登记点只给结构化声明：上屏文案在此单点拼装（环境变量名 + 申请入口）
+    apply_url = getattr(spec, "apply_url", "") or ""
+    return f"缺少环境变量 {spec.env_var}（申请入口：{apply_url}）" if apply_url else f"缺少环境变量 {spec.env_var}"
 
 
 def fetch_dragon_tiger() -> dict[str, Any] | None:

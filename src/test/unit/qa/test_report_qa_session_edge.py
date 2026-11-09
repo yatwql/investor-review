@@ -11,7 +11,6 @@ pytestmark = [
     pytest.mark.unit,
     pytest.mark.unit_qa,
     pytest.mark.edge,
-    pytest.mark.usefixtures("offline_external_sources"),
 ]
 
 _MOCK_CONFIG = {"provider": "openai", "model": "test-model"}

@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_scripts, pytest.mark.usefixtures("offline_external_sources")]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_scripts]
 
 
 @pytest.fixture(name="mod")
@@ -143,7 +143,7 @@ class TestTargetFiles:
         out = mod._target_files([str(root)])
         assert out
         assert out == sorted(out)
-        assert all(f.startswith(str(root)) for f in out)
+        assert all(Path(f).as_posix().startswith(root.as_posix()) for f in out)
         assert all("__pycache__" not in f.split("/") for f in out)
         assert all(f.rsplit("/", 1)[-1].startswith("test_") for f in out)
 

@@ -32,6 +32,7 @@ import argparse
 import re
 import sys
 import xml.etree.ElementTree as ET
+from typing import Any
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # scripts/ 共享模块（_checklib）
@@ -74,13 +75,27 @@ def _char_w(ch: str, fs: float, bold: bool) -> float:
     return fs * 0.6 * scale
 
 
+def _num_attr(el: ET.Element, key: str, default: float | None = None) -> float:
+    """取元素上的数值属性（SVG 属性都是字符串）。
+
+    缺失且给了 default → 用 default；缺失且无 default、或值非法 → 抛异常，
+    由调用方按「跳过该元素」处理（畸形 SVG 不应让整份检查崩掉）。
+    """
+    raw = el.get(key)
+    if raw is None:
+        if default is not None:
+            return default
+        raise ValueError(f"元素缺属性 {key}")
+    return float(raw)
+
+
 def _text_box(text_el: ET.Element) -> tuple[float, float, float, float, str, float]:
     """文本元素 → ``(x0, y0, x1, y1, 内容, 字号)``（按 text-anchor 展开水平范围）。"""
-    fs = float(text_el.get("font-size", 15))
+    fs = _num_attr(text_el, "font-size", 15.0)
     bold = text_el.get("font-weight") in ("700", "bold")
     content = text_el.text or ""
     width = sum(_char_w(ch, fs, bold) for ch in content)
-    x = float(text_el.get("x"))
+    x = _num_attr(text_el, "x")
     anchor = text_el.get("text-anchor", "start")
     if anchor == "middle":
         x0, x1 = x - width / 2, x + width / 2
@@ -88,13 +103,13 @@ def _text_box(text_el: ET.Element) -> tuple[float, float, float, float, str, flo
         x0, x1 = x - width, x
     else:
         x0, x1 = x, x + width
-    y = float(text_el.get("y"))
+    y = _num_attr(text_el, "y")
     return x0, y - fs * 0.95, x1, y + fs * 0.12, content, fs
 
 
 def _rect_box(rect_el: ET.Element) -> tuple[float, float, float, float]:
-    x, y = float(rect_el.get("x")), float(rect_el.get("y"))
-    w, h = float(rect_el.get("width")), float(rect_el.get("height"))
+    x, y = _num_attr(rect_el, "x"), _num_attr(rect_el, "y")
+    w, h = _num_attr(rect_el, "width"), _num_attr(rect_el, "height")
     return x, y, x + w, y + h
 
 
@@ -201,7 +216,7 @@ def _print_geom_report(path: Path, findings: list[str], notes: list[str]) -> Non
 # ═══════════════════════════════════════════════════════════════
 
 
-def _require_pillow():
+def _require_pillow() -> Any:
     """按需导入 Pillow；缺失时给出可执行指引并返回 None。"""
     try:
         from PIL import Image  # type: ignore[import-not-found]

@@ -25,7 +25,11 @@ _REPO_ROOT = Path(__file__).resolve().parents[4]
 _LAUNCH_SH = _REPO_ROOT / "scripts" / "launch.sh"
 _BASH = shutil.which("bash") or "/bin/bash"
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_scripts]
+pytestmark = [
+    pytest.mark.unit,
+    pytest.mark.unit_scripts,
+    pytest.mark.skipif(os.name != "posix", reason="launch.sh 依赖 bash + POSIX .venv/bin 布局"),
+]
 
 
 def _stub_interpreter(passthrough: bool = True) -> str:

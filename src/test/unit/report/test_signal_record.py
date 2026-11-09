@@ -19,7 +19,7 @@ from src.python.core import signal_ledger as sl
 from src.python.core.decision_ledger import DIRECTION_FLAT, DIRECTION_LONG, DIRECTION_SHORT
 from src.python.report import signal_record
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_report, pytest.mark.usefixtures("offline_external_sources")]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
 
 #: 账本样本基准日：信号账本写侧按 730 天保留期裁剪（`append_signals` →
 #: `prune_jsonl_by_age`），写死绝对日期会在保留期过后被当作过期记录清掉，

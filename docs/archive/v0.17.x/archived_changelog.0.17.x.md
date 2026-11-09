@@ -1,8 +1,8 @@
 # 变更日志归档 — v0.17.x
 
-> 归档时间：2026-11-08（v0.17.6 发布并入；已并入 7 段：v0.17.0（11-04）、v0.17.1（11-05）、v0.17.2（11-05）、v0.17.3（11-06）、v0.17.4（11-08）、v0.17.5（11-08）、v0.17.6（11-08））
+> 归档时间：2026-11-09（v0.17.7 发布并入；已并入 8 段：v0.17.0（11-04）、v0.17.1（11-05）、v0.17.2（11-05）、v0.17.3（11-06）、v0.17.4（11-08）、v0.17.5（11-08）、v0.17.6（11-08）、v0.17.7（11-09））
 > 原始文件：`docs/managements/changelog.md`
-> 涵盖版本：v0.17.0 ~ v0.17.6（2026-11-04 ~ 2026-11-08）
+> 涵盖版本：v0.17.0 ~ v0.17.7（2026-11-04 ~ 2026-11-09）
 > 归档内容：由 `release.py prepare` 自动迁入各发布段
 
 ---
@@ -212,3 +212,150 @@
 - **面板开关清单跨渠道单源 + 两处清理**（rf-1081）：`panel_visible=False` 的开关此前只在 TUI 隐藏，Web 配置面仍全量下发；现统一经新增的 `panel_switches(panel)` 取数（含可见性过滤），`panel_option_numbers` 复用同一入口。顺带删除 `tui/handlers_holdings` 里零引用的单笔回显函数，并把「行情口径桶」测试桩收口到 `src/test/_market_clock.py`（档位 key/label 单源）。
 - **成本流水近似分支的数值防护**（rf-1080）：无流水时（开关开）`_build_flow_data` 把明细 `price` 原样收进`current_prices`，非数值会让下游 `final_value > 0` 抛 `TypeError`，异常冒泡导致整份 HTML 报告失败。改为只收正数值市价；并补两条真实现回归（近似分支跑通、非数值市价被过滤）。
 - **`[S]` / `[C]` 面板按语义收口**（rf-1079）：判断依据与 LLM 输出评级不再占面板编号（默认常开、日常无需调，仍可用 `features.json` 覆写）；候选基金比较改**自动项**（配置了候选池即生效，不上面板）；首页执行摘要卡转正默认开；市场情绪与资金热点标记「需凭据」。`What-if 交易成本对比` 由 `[C]`「关联产物」迁入 `[S]` 持仓与交易（它只给既有调仓页签加成本层、不新增章节），`[C]` 回归纯章节面板。守护脚本与用例夹具补「空块」容忍。
+
+## [0.17.7] - 2026-11-09
+
+### 新增
+
+- **TUI 首页最下方显示本机 IP** —— 主菜单帧末新增一行弱化展示（`本机 IP 192.168.1.5`），
+  数据取自 `core/logger.get_machine_ip` 单源（优先非回环网卡），与页头状态行共用 45 秒
+  TTL 记忆化（首页逐帧重绘，不重复探测）；探测不到时整行降级为 `本机 IP —`，按列宽折行
+  且计入原地重绘行数。用途：在手机/另一台机器上访问本机时不必再去系统里查地址。
+  契约行见 `DESIGN-TUI.md` 反馈表，手册见 `how-to-use-tui-menu.md`。
+
+### 修复
+
+- **控制台着色收口补完 + 判据补用例（rf-1106）** —— `core/ansi_colors.py` 原有两份转义码字面量（模块级
+  `GREEN/RED/…` 一套 + `RAW_CODES` 一套，注释却称「只在一处定义」），现以 `RAW_CODES` 为唯一来源、模块常量
+  由 `_stdout_code()` 派生；`cli/_handlers._use_ansi_color()` 不再自写 `NO_COLOR`/`isatty`，改为委托
+  `supports_color()` 后只补自己的 UTF-8 编码前提；新增 `test/unit/core/test_ansi_colors.py` 9 例
+  （NO_COLOR / 非 TTY / 按传入流判定 / `codes_for` 降级全空 / 常量与 `RAW_CODES` 同源 / CLI 委托 + 编码前提）；
+  `scripts-reference.md` 补 `DOC_DRIFT_SNAPSHOT_SHADOW` 诊断开关。
+- **归档体积闸门统计口径 + 行情桶时区换算（rf-1105）** —— ① `_test_runner/retention.py` 体积闸门里
+  删不掉的归档被摘出保留集后未回填，导致返回的「保留 N 次 / X MiB」比磁盘实际值偏小（次数闸门那侧
+  有回填，两处口径不一致）→ 记入 `stuck` 并在循环后回填；② `market_hours.market_snapshot_bucket`
+  对带时区的入参不换算北京时区，UTC 15:00（北京 23:00）会被判成「当日收盘档」→ 改走
+  `astimezone(BEIJING_TZ)` 再取时分。两处均补回归用例（含「UTC 03:45 = 北京 11:45 → 午休档」）。
+- **键名沙箱化补回归 + 平台闸门收口（rf-1104）** —— `cache/_paths.py` 的键名沙箱化（转义 `:`，
+  修「负缓存 mark 在 Windows 因非法文件名静默写不出」）此前无用例锁住，补 4 例（`:` / 分隔符 /
+  `..` 不越出缓存目录 / 版本戳与 `.json` 后缀保留）；`test_tui_keys.py`、`test_tui_menu_loop.py`
+  里逐方法复写的 11 份平台判定（`unittest.skipIf(os.name …)`，措辞已分叉）收口为模块级 mark
+  （`_POSIX_ONLY` / `_POSIX_RAW_TERMIOS` / `_WINDOWS_ONLY` / `_POSIX_TTY`），skip 语义不变；
+  `proc.stderr.readline()` 前显式收窄 Optional（pyright `reportOptionalMemberAccess`）。
+- **路径绝对化与守护域口径收口（rf-1103）** —— 三处同构副本：①「配置/环境变量给的路径按项目根
+  绝对化」在 5 处各写一份（`cache/_paths`、`config/_logging`、`core/logger` 两处、
+  `core/datasource_credential`），归一与否不一致（`./logs`、`data//cache` 原样落盘，空串落成
+  `PROJECT_ROOT/`）→ 新增 `core/path_utils.resolve_project_path` 单源（绝对原样 / 相对拼项目根并
+  `normpath` / 空串落项目根），并加 AST 守卫用例：产品代码再写 `isabs ? … : join(PROJECT_ROOT, …)` 即红；
+  ② `check-types.py` 的 `GUARDED_PREFIXES` 不再另写一份，由 `DEFAULT_TARGETS` 派生；
+  ③ `runner.py` 的 pytest 退出码提示提为模块级常量，环境变量名改为引用 `pytest_env` 的
+  `PARALLEL_ENV` / `PER_TEST_TIMEOUT_ENV`（不再重写字面量）。另修 `test-coverage.md` 核心基础设施
+  列表里已不存在的 `filesystem` 模块名。
+- **Windows 上 41 个测试失败清零（跨平台可移植性）** —— 两类根因：路径分隔符与平台专属用例。
+  生产侧 `cache/_paths.py` 的缓存目录字面量改用原生分隔 + `normpath`、`_cache_path` 转义冒号
+  （Windows 文件名非法致负缓存 mark 静默失败）；`markers.py::_get_relative_dir` 改 `as_posix()`
+  与 `EXPECTED_DIR_MARKERS` 的 `/` 键一致；`demo_workspace.scrub_cli_paths` 同时抹两种分隔符并归一。
+  测试侧断言改平台中立（绝对路径 / venv 路径用 `isabs`/`startswith` 归一），POSIX 专属用例
+  （termios 按键、原地重绘、伪终端状态、`launch.sh`、`bash -n`、symlink）在 Windows 正确 skip；
+  子进程注入 `PYTHONUTF8=1` 修中文乱码断言。
+- **pytest 非测试失败退出码给出可执行提示（rf-1102）** —— 退出码 2/3/4/5 原只表现为
+  「0 passed, 0 failed (0.0s)」，看不出是用法错误（缺 `pytest-timeout`、`TEST_RUNNER_*` 残留）
+  还是未收集到用例；现按退出码说明原因并回放输出末 8 行。
+  同时 `TEST_RUNNER_PER_TEST_TIMEOUT` 在未装 `pytest-timeout` 时改为忽略并告警——原来会传
+  `--timeout` 让 pytest 以用法错误秒退（表现为「0 passed, 0 failed (0.0s)」）。
+
+- **Windows 收集期不再被 POSIX 专属导入打断（rf-1101）** —— `test_live_status_edge.py` 模块顶层
+  `import pty`/`import termios` 在 Windows 上导致 `ERROR collecting`，整档 `unit`/`regression` 变错误；
+  现改为模块级跳过（`pytest.importorskip` 判定与被导入模块是否存在无关，收集期行为确定）+ conftest
+  收集门（`collect_ignore`：导入探测失败即整文件不进收集，模块级副作用不会变成 error），并新增 AST
+  守卫用例：`src/test` 模块级出现 POSIX 专属导入即红（`try/except`、`importorskip`、函数体内三类写法不误报）。
+
+- **测试模式描述标出门禁归属** —— `test-runner.py --help` 与进度行里的模式描述原把 `regression`
+  写成「提交前快速验证」（实为 P2 发布门禁）、`unit`/`standard` 未说明归属，易误在提交前跑重档；
+  现按门禁标注：`dev-verify`=P0、`verify`=P1 合入、`regression`=P2 发布，`standard` 明确「无门禁位」。
+
+- **CI 侧类型守护与格式基线补齐** —— `scripts/_assets/social_preview.py` 的 `cairosvg` 属可选资产
+  依赖（`.[svg]`），CI 的 test 依赖面不含它，类型守护因此在 CI 报「无法解析」；导入行改按可选依赖
+  标注（缺失仍由 `except` 分支给安装指引，本地装有该包时等价），另补 4 个 llm 测试文件的 `pytestmark`
+  折行——本地钩子的 format 探针非阻塞、CI `format` job 阻塞，此前差异会让本地绿树在 CI 变红。
+
+- **整档超时可定位到具体用例（rf-1100）** —— 新增 `TEST_RUNNER_PER_TEST_TIMEOUT=<秒>`：
+  设值后为每个用例加 `pytest-timeout` 看门狗（超时即失败并打印该用例堆栈），未设值不启用
+  （避免慢机器误杀）；`pytest-timeout` 入 `.[test]` 依赖，`scripts-reference.md` 补排障步骤。
+
+- **Windows 非交互环境按键读取不再阻塞（rf-1099）** —— `tui_keys._get_key_windows()` 缺 `isatty`
+  前置判定（Linux 分支已有），非交互 stdin 下 `msvcrt.getch()` 会一直等键，表现为 `standard`/`unit`
+  整档跑到 720s 超时；现判定提到 `import msvcrt` 之前，非 tty 直接返回 `KEY_UNKNOWN`，并补回归用例。
+
+- **并行档位可固定且不再无上限放大（rf-1098）** —— worker 数仍按核数×档位系数计算，但缺省档
+  `medium` 封顶 8（实测 16 核上 8 worker 最优、16 反而慢约 17%）；新增 `TEST_RUNNER_PARALLEL`
+  环境变量固定档位（优先级 `--parallel` > 环境变量 > 缺省），worker 少于核数时输出提示可提升方式；
+  `scripts-reference.md` 补「并行级别怎么选」（含 Windows 上杀软排除建议）。
+
+- **门禁链路提速三层（不降覆盖，rf-1097）** —— `check-types.py` 新增 `--changed`（钩子只查本次变更文件，
+  回退规则：变更 >25 个或取不到 git 清单即跑全量；CI guards 与 P2 始终全量）；`dev-verify` 排除
+  `real_repo` 标记的真实仓库守护冒烟（钩子已对同一棵树跑过，`verify`/CI 仍全跑）；按计时重新校准
+  离线声明。实测 `dev-verify` 45.5s → 33.2s、钩子 13.5s → ≈5s。
+
+- **时间相关缓存用例去钟面依赖（rf-1096）** —— 11 个 LLM 缓存用例断言「同产出第二次命中缓存」，
+  却未钉死行情口径桶（盘中档禁止复用价格相关模块），09:00–15:00 跑必红、收盘后转绿；统一注入
+  autouse「钉收盘档」fixture，llm 全档 1679 通过。
+
+- **`scripts/` 类型错误清零，类型守护域扩到入口脚本（rf-1093）** —— 顶层脚本 50 处 pyright error
+  逐簇清掉（`sys.stdout.reconfigure` 用 `cast` 取具体实现、`ctypes.windll`/`msvcrt` 平台桩走
+  `getattr`、动态 target 的 `build_parser` 判空、AST 节点用 `getattr(node, "lineno", 0)`、
+  `check-doc-traces` 的分支内赋值先落默认值），`[tool.pyright] include` 与 `check-types` 受检域
+  从 `src/python` 扩为 `src/python` + `scripts`。
+
+- **测试归档保留期清理（rf-1095）** —— `test-reports/archives/` 长期无轮转（实测 31 份 ≈ 17G）。
+  新增 `scripts/_test_runner/retention.py`：次数闸门（保留最近 N 次，缺省 10）+ 体积闸门
+  （总量上限，缺省 2 GiB），两侧均可用 `--keep-runs` / `--archive-cap-mb` 覆盖或关闭；清理在
+  `test-runner.py` 启动前静默执行，删除失败只告警且不计入已删，空日期层目录一并回收。
+
+- **类型谓词单源化 + 陈旧离线声明清理（rf-1094）** —— 全仓 5 份「有限真数值」谓词
+  （`analysis/holding_change_events`、`analysis/trade_cost_model`、`llm/prompts_signals`、
+  `report/chart_data_builder` 各一份 + `core/num_utils.is_finite_number`）收敛为
+  `core.num_utils.is_finite_number`（升级 `TypeGuard[int | float]`），各模块只引用不复制；
+  同时按「撤声明 → 单跑该文件 → 全绿即陈旧」的试跑法清掉 66 处陈旧
+  `offline_external_sources`（保留 61 处确有附带依赖者），恢复「离线桩不得遮盖真实外部访问」。
+  另修 `analysis/factor_evaluator` 的 ±inf 语义回归（改用 `value_present` 口径，inf 保留）、
+  `core/cassette` 索引的目录竞态兜底。
+
+- **类型检查落地为门禁（rf-1092）** —— `src/python` 的 pyright 错误由 83 处清零（可空值逐点收窄、
+  数值归一统一走 `core.num_utils` 的 `safe_num`/`finite_or`、谓词升级 `TypeGuard`、平台桩走
+  `getattr` 降级、`PacingGate.__exit__` 改 `-> None`、`cache._store` 用 `builtin_set` 避开同名遮蔽），
+  并新增 `scripts/check-types.py`（0 通过 / 1 环境缺失 / 2 有 finding）入 pre-commit 与 CI `guards`；
+  规则基线落 `pyproject.toml [tool.pyright]`（受检域 `src/python`，`src/test` 刻意不入域——单测
+  mock 噪声远多于缺陷收益，由 pytest 运行时守卫）。`scripts/` 入口脚本残余 52 处另立项（rf-1093）。
+
+- **计价节假日判定只读缓存交易日历（rf-1089）** —— `llm/pricing.py::_is_holiday` 原经
+  `trading_calendar._is_trading_day` 判定，日历缓存缺失时会真实取数（akshare）；计价发生在
+  每次 LLM 调用收尾，为此拉一次远端日历既慢又与本次调用无关，且无日历缓存的机器 / CI 上
+  会把整批 LLM 缓存用例拦成网络守卫硬失败。改为只读 `cached_trading_days()`（不触网），
+  无缓存时按「非周末即交易日」降级；补 4 例回归（不触网 / 无缓存降级 / 周末不查日历 / 异常降级）。
+
+- **`cost_first` 策略单价键纠错（rf-1090）** —— `llm/strategy.py::_apply_cost_first` 原读
+  `input_price`/`output_price`，而计价表实际键为 `input`/`output`：所有模型得分恒 `inf`，
+  `cost_first` 静默退化为「保持原序」（旧用例用同款假键名把错哄住）。改读真实键 + 模型名小写
+  归一，缺价/币种子表按未知排末尾；用例改用真实键名，并新增以**真实定价表**为真值的顺序断言。
+
+- **一行静态检查清出的真实隐患（rf-1091）** —— `api_base._attempt` 的 `result` 可能未绑定
+  （`PacingGate.__exit__` 声明 `-> bool` 即可被推断为吞异常，现已改 `-> None`）、
+  `analysis/scenario.py` 的 CI 区间值可能为 None 仍参与乘法、`analysis/rebalance.py` /
+  `trade_discipline.py` 配置段可能为 None 却直接 `dict()` / 下标、`tui_keys` 的 msvcrt 平台桩
+  与 `fd` 可空、`holding_change_review` 方向值 `get` 重载不匹配。均为「值判空 + 显式收窄」修复，
+  无行为变更。
+
+- **代码类型判定回归中心化（rf-1088）** —— `core/holdings_editor.py::ambiguous_price_kind`
+  原内联 `len(raw) == 6 and raw.startswith("00")` 自行判代码形态与 00 重叠区，属架构约束
+  「代码类型判定中心化」违规；改用 `code_utils.is_six_digit_code` +
+  `is_otc_code_overlap`，与 `price_kind`/`analysis/rebalance.py` 等处口径同一源（消除「代码类型判定中心化」约束下的分散判定）。
+  行为不变，补「非 6 位码恒 False」形态用例锁住门槛。
+
+- **主机 IP 展示不再恒为回环** —— 三端（TUI 首页摘要 / CLI 启动日志 / Web 系统信息）
+  共用的 `core/logger.py::get_machine_ip` 原为 `gethostbyname(gethostname())`，在
+  `/etc/hosts` 把主机名映射到 `127.0.0.1`/`127.0.1.1` 的机器上恒显示回环，对「在哪台
+  机器的哪个地址访问」没有信息量。改为按可靠性降序取首个非回环地址：默认出口网卡
+  （UDP `connect` 只建路由不发包）→ 主机名解析出的全部 IPv4 → 仅回环可用时仍返回
+  回环（离线单机场景它仍是正确地址）→ 全失败 `unknown`。测试网络守卫以
+  `BaseException` 子类阻断外部建连，该兜底路径不得让其冒成启动失败。

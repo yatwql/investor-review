@@ -16,7 +16,7 @@ from src.python.core.models import Holding
 from src.python.report import penetration as pene
 import pytest
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_report, pytest.mark.usefixtures("offline_external_sources")]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
 
 
 # ═══════════════════════════════════════════════════════════

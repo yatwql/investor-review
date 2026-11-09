@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+
 from src.python.analysis._factor_formulas import compute_factor_values
 from src.python.fetcher.factor_catalog_loader import (
     load_factor_catalog,
@@ -119,9 +120,15 @@ def _apply_scalar(
     key = required_value_key(item, field_kind)
     values: list[float] = []
     for code in codes_all:
-        value = (source.get(code) or {}).get(key)
-        if value_present(value):
-            values.append(float(value))
+        raw = (source.get(code) or {}).get(key)
+        # 口径与 value_present 一致：None/NaN 视为缺失，±inf 保留（强度类因子可合法发散）；
+        # 标量可能是数值字符串（上游 JSON 口径不统一），故仅对可转换类型再做 float()
+        if not value_present(raw) or isinstance(raw, bool) or not isinstance(raw, (int, float, str)):
+            continue
+        try:
+            values.append(float(raw))
+        except (TypeError, ValueError):
+            continue
     row["codes_ok"] = len(values)
     if len(values) >= MIN_CODES_PER_DAY:
         row["value"] = sum(values) / len(values)

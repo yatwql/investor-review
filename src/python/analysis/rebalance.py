@@ -92,8 +92,10 @@ def resolve_rebalance_config(rebalance_config: dict[str, Any] | None) -> dict[st
     """
     if rebalance_config is None:
         config = get_config()
-        rebalance_config = config.get("rebalance", {})
-    result = dict(rebalance_config)
+        # 配置读取失败/缺段时按空 dict 处理（下游 setdefault 铺默认值）
+        section = config.get("rebalance") if isinstance(config, dict) else None
+        rebalance_config = section if isinstance(section, dict) else {}
+    result: dict[str, Any] = dict(rebalance_config)
 
     profile = result.get("profile", get_default("rebalance.profile"))
     if profile in _REBALANCE_PROFILES:

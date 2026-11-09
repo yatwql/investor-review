@@ -12,7 +12,7 @@ import pytest
 
 from src.python.llm import fingerprint_baseline as fb
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_llm, pytest.mark.usefixtures("offline_external_sources")]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_llm]
 
 
 class TestSnapshotStorage:

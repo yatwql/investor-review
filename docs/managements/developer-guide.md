@@ -1,6 +1,6 @@
 # 开发者指南
 
-> 文档版本：0.17.6
+> 文档版本：0.17.7
 
 ## 概述
 
@@ -173,6 +173,7 @@ ln -sf "$PWD/.pi/models.json" ~/.pi/agent/models.json
 .venv/bin/python scripts/check-script-contract.py --ci       # scripts 顶层脚本契约（退出码声明/CLI 面/显式 encoding/测试覆盖）
 .venv/bin/python scripts/check-import-surface.py --ci         # 导入面契约（兼容注释/私有 `__all__`/跨包私有导入/动态导入字面量 + 例外表自审）
 .venv/bin/python scripts/check-file-length.py --ci         # 单文件行数红线（主程序/脚本 >1000 行 / 测试 >1200 行 + 膨胀登记表同实）
+.venv/bin/python scripts/check-types.py --ci               # pyright 类型错误（受检域 src/python + scripts；规则基线与排除项在 pyproject.toml [tool.pyright]；钩子以 --changed 快车道只查本次变更文件，变更 >25 个或取不到 git 清单则回落全量，CI guards 与 P2 恒全量）
 ```
 
 > **`--sync` 统计快照口径（CI 分叉坑）**：`check-doc-drift --sync`（及 pre-commit 自动回写）按**工作区**实测写入 `folders.md` 行数，而 CI 的 `check-doc-drift` 按 **committed** 树实测——若受检目录存在**长期不提交的修改**（本地游离改动），本地已同步的数字会在 CI 上判「不一致」，连带 guards / test / portability 三个 job 同时红。提交前确认受检文件全部纳入本次提交；有长期游离修改时先提交它们、再 `--sync`。
@@ -199,13 +200,14 @@ ln -sf "$PWD/.pi/models.json" ~/.pi/agent/models.json
 .venv/bin/python scripts/check-file-length.py --ci
 .venv/bin/python scripts/check-import-surface.py --ci
 .venv/bin/python scripts/check-script-contract.py --ci
+.venv/bin/python scripts/check-types.py --ci
 ```
 
 **辅助（非阻塞）**：`.venv/bin/ruff check`（lint 基线，选择项与刻意豁免均在 `pyproject.toml` 显式声明）+ `.venv/bin/ruff format --check`（代码格式一致性）——问题可经 `.venv/bin/ruff check --fix` / `.venv/bin/ruff format` 自动修复，不阻止合并/发布。当前两者均为零告警基线，新增代码应在提交前保持干净。
 
 **归档区冻结**：`docs/` 下为历史快照（含各版本归档里的脚本副本），**不得被 lint/format 重排**。配置已声明 `extend-exclude` + `force-exclude = true`——后者是关键：ruff 的 `exclude` 只在整树扫描时生效，命令行显式给目录（`ruff format docs`）会绕过它、把归档脚本一并重排（实测曾误改 7 个文件）。因此需要格式化的只能是 `src/` / `scripts/` 等活代码路径；契约由 `src/test/unit/test_ruff_exclude_contract.py` 锁定。
 
-**CI 同步执行（`.github/workflows/ci.yml`）**：三档测试按分支/标签分流——`dev` 推送跑 P0（`dev-verify`）、`master` 推送或 PR 跑 P1（`verify`）、打 `v*` tag 跑 P2（`regression`），矩阵覆盖 Python 3.11/3.12/3.13；另有三个独立 job：`guards`（**阻塞**，10 个 `--ci` 守护脚本即上方 P0/P2 清单全量——job 内按 pre-commit 同款后台并行回放，任一守护非零退出折叠为 FAIL 分组并使 job 红；守护经 src.python 链依赖项目运行时包（如 check-doc-drift → httpx），故 editable 安装保留）、`portability`（**阻塞**，非 UTF-8 locale + 隐式编码双探针，见下方「编码/locale 自检」）与 `format`（非阻塞，`ruff format --check src/python/ src/test/ scripts/` + `ruff check`；三条路径必须与本地整树基线同口径——只查 `src/python`+`scripts` 会放行测试文件的格式漂移）。
+**CI 同步执行（`.github/workflows/ci.yml`）**：三档测试按分支/标签分流——`dev` 推送跑 P0（`dev-verify`）、`master` 推送或 PR 跑 P1（`verify`）、打 `v*` tag 跑 P2（`regression`），矩阵覆盖 Python 3.11/3.12/3.13；另有三个独立 job：`guards`（**阻塞**，13 个 `--ci` 守护脚本即上方 P0/P2 清单全量（含 `check-types.py`，job 内另装 pyright 作解析器）——job 内按 pre-commit 同款后台并行回放，任一守护非零退出折叠为 FAIL 分组并使 job 红；守护经 src.python 链依赖项目运行时包（如 check-doc-drift → httpx），故 editable 安装保留）、`portability`（**阻塞**，非 UTF-8 locale + 隐式编码双探针，见下方「编码/locale 自检」）与 `format`（非阻塞，`ruff format --check src/python/ src/test/ scripts/` + `ruff check`；三条路径必须与本地整树基线同口径——只查 `src/python`+`scripts` 会放行测试文件的格式漂移）。
 
 ### 编码/locale 自检（旧 pip 回退解码 / 隐式编码）
 
@@ -327,10 +329,10 @@ pip install pytest-cov coverage
 # 集成测试（含场景 + 模块间契约/缓存/TUI 路由）
 .venv/bin/python scripts/test-runner.py --mode integration
 
-# 全量单元测试（含 edge/data）
+# 全量单元测试（含 edge/data）——P1 合入门禁等价全集，不是提交前档
 .venv/bin/python scripts/test-runner.py --mode unit
 
-# 常规单元测试（排除 edge/data）
+# 常规单元测试（排除 edge/data）——无门禁位，仅供手工抽查
 .venv/bin/python scripts/test-runner.py --mode standard
 
 # ===== ② 专项验证（定向覆盖） =====
@@ -443,7 +445,7 @@ P0 问题必须在 commit 前解决，否则代码不应进入版本控制。P1 
 
 项目推荐的四道质量门禁，按开发阶段逐级收紧：
 
-- **提交前门禁（`--mode dev-verify` / P0）** — commit 前必须执行。组合 9 个 unit 子模块（unit_core/unit_providers/unit_fetcher/unit_news/unit_analysis/unit_scripts/unit_web/unit_qa/unit_report，并行）+ 基础业务场景（`scenario_basic`），排除 edge/data 和极限场景。是编辑-验证循环中的正式屏障。
+- **提交前门禁（`--mode dev-verify` / P0）** — commit 前必须执行。组合 9 个 unit 子模块（unit_core/unit_providers/unit_fetcher/unit_news/unit_analysis/unit_scripts/unit_web/unit_qa/unit_report，并行）+ 基础业务场景（`scenario_basic`），排除 edge/data、`real_repo`（钩子与 CI `guards` 已同源跑过）和极限场景。是编辑-验证循环中的正式屏障。
 - **全场景回归（`--mode regression`）** — commit 前可选的全场景补充验证。覆盖全部 `scenario` 业务场景测试（S0a/S0b/S0d + S1-S33 + T1-T21），确保端到端用户路径不被破坏。推荐在改动了跨模块路径或数据流后补充运行。
 - **合入验证（`--mode verify` / P1）** — 准备合并到 master 前必须执行。覆盖 `unit_core`（核心基础设施：缓存引擎、数据模型、注册表）、`unit_providers`（数据源 Provider：腾讯、东方财富、天天基金等）、`unit_fetcher`（数据获取调度：价格、指数、行业分类）、`unit_config`（配置管理）、`unit_news`（新闻聚合）、`unit_llm`（LLM 模块）、`unit_analysis`（分析计算：流动性/再平衡/汇率/债券收益率等）、`unit_scripts`（工程脚本：历史痕迹/版本一致性/任务编号检查）、`unit_web`（Web 入口：上传/运行/进度/产物）、`unit_qa`（报告对话式追问：上下文提取/会话服务/报告页路由门）、`unit_report`（报告生成：Excel/HTML/模板/管线）十一个单元模块。确保数据从抓取→缓存→计算的整条管道通畅且正确。并行执行。场景测试已在 P0 dev-verify（基础场景）和 P2 verify,regression（全场景）中覆盖，P1 不重复。
 - **发布验证（`--mode regression`）** — 发布版本（打 tag/release）前必须执行。覆盖全部场景回归测试。
@@ -494,7 +496,7 @@ P0 问题必须在 commit 前解决，否则代码不应进入版本控制。P1 
 
 - **`--mode regression`** 与 `--mode scenario` 完全相同，但语义定位为"提交前回归验证"。建议在 git hook 或 CI 前置检查中使用此名称，使流水线意图更加清晰。
 - **`--mode integration`** 覆盖场景测试 + 集成测试（`scenario or integration`）。在全部业务场景基础上，增加模块间验证：接口契约、错误隔离、新闻流水线、缓存一致性、TUI 路由。用于修改了跨模块调用关系后的定向回归。CI test job 以 `pytest -m integration` 恒跑纯集成契约档（50+ 例 / ~5s，不依赖分支条件），本地改跨模块时仍建议先行 `--mode integration`。
-- **`--mode dev-verify`** 提交前门禁模式（P0），组合 9 个 unit 子模块（unit_core/unit_providers/unit_fetcher/unit_news/unit_analysis/unit_scripts/unit_web/unit_qa/unit_report，排除 edge/data）并行 + 基础业务场景（`scenario_basic`）。约 20s，适合开发者改完代码后随时跑。不包含极限场景（scenario_extreme）和 LLM/日期/容错等专项场景。
+- **`--mode dev-verify`** 提交前门禁模式（P0），组合 9 个 unit 子模块（unit_core/unit_providers/unit_fetcher/unit_news/unit_analysis/unit_scripts/unit_web/unit_qa/unit_report，排除 edge/data 与 `real_repo`）并行 + 基础业务场景（`scenario_basic`）。约 33s，适合开发者改完代码后随时跑。不包含极限场景（scenario_extreme）和 LLM/日期/容错等专项场景。
 - **`--mode verify`** 合入门禁模式（`unit_core or unit_providers or unit_fetcher or unit_config or unit_news or unit_llm or unit_analysis or unit_scripts or unit_web or unit_qa or unit_report`），包含核心基础设施 + 数据源 Provider + 数据获取调度 + 配置管理 + 新闻聚合 + LLM 模块 + 分析计算 + 工程脚本 + Web 入口 + 报告对话式追问 + 报告生成的单元测试，共约 10s（并行执行）。场景测试由 P0 dev-verify（基础场景）和 P2 verify,regression（全场景）覆盖。
 
 ##### 专项验证系列（`edge` / `data` / `smoke`）

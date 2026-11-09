@@ -10,28 +10,28 @@ from collections.abc import Callable, Collection
 MODES: dict[str, dict] = {
     "unit": {
         "marker": "unit",
-        "desc": "全量单元测试（含 edge/data）",
+        "desc": "全量单元测试（含 edge/data）——P1 合入门禁的等价全集，不是提交前档",
         "timeout_sec": 720,
         "order": 1,
         "parallel": True,
     },
     "standard": {
         "marker": "unit and not (edge or data)",
-        "desc": "常规单元测试（排除 edge/data 标记）",
+        "desc": "常规单元测试（排除 edge/data）——无门禁位（≈ P1 verify 去掉 edge/data，仅供手工抽查）",
         "timeout_sec": 720,
         "order": 2,
         "parallel": True,
     },
     "scenario": {
         "marker": "scenario",
-        "desc": "业务场景集成测试（S0-S33 + T1-T21）",
+        "desc": "业务场景集成测试（S0-S33 + T1-T21）——P2 regression 与 P0 基础场景的来源",
         "timeout_sec": 600,
         "order": 3,
         "parallel": False,
     },
     "regression": {
         "marker": "scenario",
-        "desc": "回归测试（场景模式，提交前快速验证）",
+        "desc": "回归测试（场景模式）——P2 发布门禁",
         "timeout_sec": 1200,
         "order": 4,
         "parallel": False,
@@ -50,7 +50,9 @@ MODES: dict[str, dict] = {
         # 用例集合精确一致（零重叠零遗漏）。timeout = 原两阶段 300s×2 预算总和不变。
         "phases": [
             {
-                "marker": "((unit_core or unit_providers or unit_fetcher or unit_news or unit_analysis or unit_scripts or unit_web or unit_qa or unit_report) and not (edge or data)) or scenario_basic",
+                # real_repo = 真实仓库全量扫描的守护冒烟：pre-commit 钩子与 CI guards 已对同一棵
+                # 工作树跑过同一守护，放进 P0 等于每提交重跑一遍（实测占 dev-verify 约 20s/45s）
+                "marker": "(((unit_core or unit_providers or unit_fetcher or unit_news or unit_analysis or unit_scripts or unit_web or unit_qa or unit_report) and not (edge or data)) or scenario_basic) and not real_repo",
                 "desc": "核心模块单元 + 基础业务场景（单轮；耗时参考 docs/managements/test-coverage.md 环境耗时对照）",
                 "timeout_sec": 600,
                 "parallel": True,
@@ -59,7 +61,7 @@ MODES: dict[str, dict] = {
     },
     "verify": {
         "marker": "unit_core or unit_providers or unit_fetcher or unit_config or unit_news or unit_llm or unit_analysis or unit_scripts or unit_web or unit_qa or unit_report or unit_cli or unit_ui",
-        "desc": "合入验证（全部 unit_* 域单元测试，含 TUI/CLI——2026-10-17 起目录归域即进门禁，见技术设计 §4.23；不含场景——场景由 P0+P2 覆盖）",
+        "desc": "合入验证（全部 unit_* 域单元测试，含 TUI/CLI——目录归域即进门禁，见技术设计 §4.23；不含场景——场景由 P0+P2 覆盖）",
         "timeout_sec": 300,
         "order": 6,
         "parallel": True,

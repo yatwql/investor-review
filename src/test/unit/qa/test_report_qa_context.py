@@ -16,7 +16,7 @@ from src.python.qa.context import (
     extract_report_qa_context,
 )
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_qa, pytest.mark.usefixtures("offline_external_sources")]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_qa]
 
 
 class TestSectionExtraction:

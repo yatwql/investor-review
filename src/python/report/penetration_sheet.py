@@ -412,7 +412,7 @@ def _num_formats(ncols: int = _NCOLS) -> list[str | None]:
     Args:
         ncols: 总列数（估值分位开关开启时为 11）。
     """
-    formats = [
+    formats: list[str | None] = [
         "",  # 1  排名
         "",  # 2  名称
         "",  # 3  代码

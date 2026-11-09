@@ -20,7 +20,6 @@ pytestmark = [
     pytest.mark.unit,
     pytest.mark.unit_analysis,
     pytest.mark.edge,
-    pytest.mark.usefixtures("offline_external_sources"),
 ]
 
 

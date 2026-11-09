@@ -12,6 +12,7 @@ import os
 import tempfile
 import threading
 import time
+from builtins import set as builtin_set
 from typing import Any
 
 from ._io import _read_cache_data, _write_atomic
@@ -25,7 +26,9 @@ _cache_lock = threading.Lock()
 # 命中/写入的 DEBUG 追踪按 key **每进程首见一次**：同一 key 反复命中是常态
 # （实测单周 1.8 万行），全量逐条记录只会挤掉真正有用的日志；命中率汇总另有
 # `_stats` 计数与报告「缓存命中率」行，追踪粒度不受影响。
-_log_seen: set[str] = set()
+# 模块末尾定义了对外 API `set(key, data)`，会在本模块作用域遮蔽内置 `set`：
+# 故显式用 `builtin_set` 别名取内置类，避免依赖「定义在文件末尾」这一隐含条件
+_log_seen: builtin_set[str] = builtin_set()
 _log_seen_lock = threading.Lock()
 
 
@@ -112,7 +115,12 @@ def set(key: str, data: Any) -> None:
         data: 任意可 JSON 序列化的数据
     """
     path = _cache_path(key)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+    except OSError:
+        # 目录不可建（权限不足/磁盘满）：缓存属旁路，降级为不写，不阻断主流程
+        logger.warning("缓存写入失败 %s: 无法创建缓存目录", key)
+        return
 
     payload = {"_ts": time.time(), "_data": data}
     try:

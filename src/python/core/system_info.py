@@ -162,7 +162,8 @@ def build_system_info() -> dict:
     # 在面板与 README 截图里也只是噪声。运行时解析仍走绝对路径，不受影响。
     info["holdings_dir"] = display_path(holdings_dir) or "未设置"
     info["holdings_filename"] = holdings_filename or "未设置"
-    info["output_dir"] = display_path(config.get("output_dir") or get_default("output_dir"))
+    # 配置值可能是任何类型（手改/旧文件）：上屏前一律字面化为 str
+    info["output_dir"] = display_path(str(config.get("output_dir") or get_default("output_dir") or ""))
     info["news_top_count"] = config.get("news_top_count") or get_default("news_top_count")
     holdings_path = ""
     if config_readable:

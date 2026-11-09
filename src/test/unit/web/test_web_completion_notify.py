@@ -20,7 +20,7 @@ from src.python.core.completion_notify import LATEST_HTML_NAME, LATEST_XLSX_NAME
 from src.python.web.run_generation import _notify_web_completion, _run_generation
 from src.python.web.runs import RunState
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_web, pytest.mark.usefixtures("offline_external_sources")]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_web]
 
 
 def _state(errors=None, output_dir=None):

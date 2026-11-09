@@ -51,6 +51,7 @@ class TestStatusBarText:
 class TestSupported:
     """环境判据矩阵：POSIX + TTY + 未禁用纯文本模式。"""
 
+    @pytest.mark.skipif(os.name != "posix", reason="状态条需 POSIX + TTY")
     def test_true_on_posix_tty(self):
         assert LiveStatusBar.supported(_TtyStream()) is True
 

@@ -296,8 +296,12 @@ def scrub_cli_paths(lines: list[str]) -> list[str]:
     out: list[str] = []
     for line in lines:
         for prefix in prefixes:
-            line = line.replace(prefix + os.sep, "").replace(prefix, "")
-        out.append(line)
+            # 输入可能是混合分隔符的路径（repo 根用原生分隔、其余用 `/`），两种都抹；
+            # 抹完后把残余的原生分隔符归一为上屏用的 `/`。
+            for sep in ("/", os.sep):
+                line = line.replace(prefix + sep, "")
+            line = line.replace(prefix, "")
+        out.append(line.replace(os.sep, "/"))
     return out
 
 
@@ -322,7 +326,7 @@ def capture_report_text(output_root: Path | None = None) -> str:
     }
     guarded = tuple(REPO_ROOT / rel for rel in GUARDED_STATE_DIRS)
     snap = snapshot_paths(guarded)
-    master, slave = pty.openpty()
+    master, slave = pty.openpty()  # type: ignore[attr-defined]  # pty 仅 POSIX，Windows typeshed 无此属性
     try:
         proc = subprocess.Popen(
             report_command(config),

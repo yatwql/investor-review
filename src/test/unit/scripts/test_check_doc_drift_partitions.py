@@ -14,7 +14,6 @@ from src.test.unit.scripts.test_check_doc_drift import (
 pytestmark = [
     pytest.mark.unit,
     pytest.mark.unit_scripts,
-    pytest.mark.usefixtures("offline_external_sources"),
 ]
 
 

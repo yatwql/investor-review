@@ -28,6 +28,7 @@ _BASH = shutil.which("bash") or "/bin/bash"
 
 @pytest.mark.unit
 @pytest.mark.unit_scripts
+@pytest.mark.skipif(os.name != "posix", reason="launch.sh 依赖 bash + POSIX .venv/bin 布局")
 class TestLaunchScriptUnboundVariableRegression:
     """`launch.sh` 在 `set -u` 下对可缺省变量的引用必须带默认值。"""
 
@@ -83,6 +84,7 @@ class TestLaunchScriptUnboundVariableRegression:
 
 @pytest.mark.unit
 @pytest.mark.unit_scripts
+@pytest.mark.skipif(os.name != "posix", reason="launch.sh 依赖 bash + POSIX .venv/bin 布局")
 class TestLaunchScriptReadOnlyVenvRegression:
     """只读外部虚拟环境下启动不得因「依赖标记写不进去」而中止。
 

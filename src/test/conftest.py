@@ -26,6 +26,15 @@ from src.test._path_isolation import (
 )
 from src.test._network_guard import BLOCKED_NETWORK_MSG, NetworkBlockedInTests, apply_offline_stubs
 
+# ── 平台收集门（非 POSIX 直接不收集伪终端用例）────────────────────────
+# `pty`/`termios` 仅 POSIX 提供：这类测试文件即使自身做了跳过保护，也要**不进收集**
+# 才彻底杜绝 `ERROR collecting`（收集期任何模块级副作用都可能变错误，而 CI 跑 Linux
+# 结构性看不见）。判定按模块可导入性，不依赖文件名约定。
+try:  # pragma: no cover - 非 POSIX 分支在 CI 上不可达
+    import pty as _pty_probe  # noqa: F401
+except ImportError:  # pragma: no cover - 同上
+    collect_ignore = ["unit/ui/test_live_status_edge.py"]
+
 # ── 项目自定义标记全集（与 pytest_configure 注册的标记保持一致）──
 
 _KNOWN_MARKERS: set[str] = {
@@ -65,6 +74,7 @@ _KNOWN_MARKERS: set[str] = {
     # 跨领域标记
     "llm",
     "edge",
+    "real_repo",
     "smoke",
     "data",
     "integration",
@@ -136,6 +146,11 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "unit_ui: TUI/UI 交互单元测试")
     config.addinivalue_line("markers", "unit_analysis: 分析计算模块单元测试（流动性/再平衡/汇率/无风险利率）")
     config.addinivalue_line("markers", "unit_scripts: scripts/ 工程脚本单元测试（历史痕迹检查/版本一致性等）")
+    config.addinivalue_line(
+        "markers",
+        "real_repo: 真实仓库全量扫描的守护冒烟（pre-commit 钩子与 CI guards 已对同一棵工作树跑过同一守护，"
+        "故不进 dev-verify，只在 verify / CI 全量档执行）",
+    )
     config.addinivalue_line("markers", "unit_web: Web 入口（src/python/web/）单元测试")
     config.addinivalue_line("markers", "unit_qa: 报告对话式追问（src/python/qa/）单元测试")
     config.addinivalue_line("markers", "llm: LLM 相关测试（全部 mock，无需 API key）")

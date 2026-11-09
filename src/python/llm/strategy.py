@@ -154,10 +154,11 @@ def _apply_weighted(provider_list: list[dict]) -> list[dict]:
 
 
 def _apply_cost_first(provider_list: list[dict]) -> list[dict]:
-    """按模型 input_price + output_price 升序排列。
+    """按模型单价合计（``input`` + ``output`` 每分钟 token 价）升序排列。
 
     未知模型（定价表无数据）cost_score = float("inf")，排末尾。
-    全部未知时保持原序。
+    全部未知时保持原序。单价读计价表真实键（``input`` / ``output``），与
+    ``pricing.estimate_cost`` 同源—读错键会让所有模型都得 inf，策略静默退化为「原序」。
     """
     try:
         from src.python.llm.pricing import PRICING_MERGED, reload_pricing
@@ -168,16 +169,19 @@ def _apply_cost_first(provider_list: list[dict]) -> list[dict]:
         pass
 
     def _get_cost_score(p: dict) -> float:
-        model = p.get("model", "")
+        model = str(p.get("model") or "").lower()  # 定价表键小写（与 _match_pricing 同口径）
         try:
             from src.python.llm.pricing import PRICING_MERGED
 
-            pricing = PRICING_MERGED.get(model)
-            if pricing:
-                return pricing.get("input_price", 0) + pricing.get("output_price", 0)
-        except (ImportError, AttributeError):
-            pass
-        return float("inf")
+            entry = PRICING_MERGED.get(model)
+            if not entry:
+                return float("inf")
+            rates = [entry.get("input"), entry.get("output")]
+            if any(not isinstance(rate, (int, float)) for rate in rates):
+                return float("inf")  # 缺价/币种子表（非标量）不计入按价排序
+            return float(sum(rates))  # type: ignore[arg-type] — 已逐个验 isinstance
+        except (ImportError, AttributeError, TypeError, ValueError):
+            return float("inf")
 
     # 已知与未知分组，已知按 cost 升序，未知保持原序
     known = [p for p in provider_list if _get_cost_score(p) != float("inf")]

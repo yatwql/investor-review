@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 
 from src.python.report._snapshot import capture_snapshot, fetch_history_data
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_report, pytest.mark.usefixtures("offline_external_sources")]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
 
 
 class TestCaptureSnapshot:

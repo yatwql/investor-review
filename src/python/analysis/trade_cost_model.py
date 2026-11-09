@@ -29,7 +29,6 @@
 
 from __future__ import annotations
 
-import math
 from typing import Any, Callable
 
 from src.python.analysis.fee_schedule_model import (
@@ -50,6 +49,7 @@ from src.python.analysis.fee_schedule_model import (
 )
 from src.python.analysis.portfolio_evolution import _dedup_by_date
 from src.python.core.constants import SIDE_BUY, SIDE_SELL
+from src.python.core.num_utils import is_finite_number
 
 # ── 常量 ────────────────────────────────────────────────
 
@@ -105,7 +105,7 @@ def rebuild_position_lots(snapshots: list[Any]) -> dict[str, list[dict[str, Any]
                 if not code:
                     continue
                 shares = getattr(h, "shares", None)
-                if not _finite(shares):
+                if not is_finite_number(shares):
                     invalid.add(code)
                     continue
                 curr[code] = curr.get(code, 0.0) + float(shares)
@@ -145,10 +145,6 @@ def _period_date(timestamp: str | None) -> str:
     if len(ts) >= 8 and ts[:8].isdigit():
         return f"{ts[:4]}-{ts[4:6]}-{ts[6:8]}"
     return ""
-
-
-def _finite(value: Any) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
 def _consume_fifo(code_lots: list[dict[str, Any]], shares: float) -> None:

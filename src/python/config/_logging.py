@@ -14,6 +14,7 @@ from typing import Any
 from src.python.core.json_comments import strip_json_comments
 from src.python.core.atomic_write import write_text_atomic
 from src.python.core.constants import PROJECT_ROOT
+from src.python.core.path_utils import resolve_project_path
 
 logger = logging.getLogger("invest")
 
@@ -147,7 +148,8 @@ def read_logger_config(path: str | None = None) -> dict[str, Any]:
 
 
 def _absolute_path(path: str) -> str:
-    return path if os.path.isabs(path) else os.path.join(PROJECT_ROOT, path)
+    """相对路径按项目根绝对化（单源在 ``core.path_utils.resolve_project_path``）。"""
+    return resolve_project_path(path)
 
 
 def _render(values: dict[str, Any]) -> str:

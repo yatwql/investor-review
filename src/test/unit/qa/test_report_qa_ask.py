@@ -15,7 +15,7 @@ from src.python.config._core import invalidate_config_cache
 from src.python.web.app import create_app
 from src.python.web.runs import RunManager
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_qa, pytest.mark.usefixtures("offline_external_sources")]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_qa]
 
 
 @pytest.fixture

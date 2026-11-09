@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from typing import Any
 
 from src.python.core.num_utils import finite_or
@@ -105,13 +106,11 @@ def _benchmark_returns(benchmarks: Any) -> list[tuple[str, float]]:
         if not isinstance(item, dict):
             continue
         raw = item.get("total_return_pct")
-        # bool 是 int 子类但语义上不是收益率；仅接受 int/float（字符串一律跳过，
-        # 且不可用 finite_or(None) —— 其内部 float(None) 会抛 TypeError）
-        if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+        # bool 是 int 子类但语义上不是收益率；仅接受 int/float（字符串一律跳过）。
+        # 上一行 isinstance 已收窄为非 bool 数值，直接 float() 即可（非有限值不参与统计）。
+        if isinstance(raw, bool) or not isinstance(raw, (int, float)) or not math.isfinite(raw):
             continue
-        value = finite_or(raw, None)
-        if value is None:
-            continue
+        value = float(raw)
         name = str(item.get("name") or item.get("code") or "基准")
-        out.append((name, float(value)))
+        out.append((name, value))
     return out

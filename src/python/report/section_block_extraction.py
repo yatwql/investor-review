@@ -67,12 +67,12 @@ def extract_html_block_titles(partial_paths: Iterable[Path]) -> set[str]:
                     visible_markers.add(marker.group(0).strip())
         for match in _RE_BOLD_DIV.finditer(text):
             raw = match.group(1)
-            if not _MARKER_RE.match(raw):  # 无序号加粗行 = 块内小标签，不计
+            marker = _MARKER_RE.match(raw)
+            if marker is None:  # 无序号加粗行 = 块内小标签，不计
                 continue
             norm = normalize_block_title(raw)
             if norm:
                 visible.add(norm)
-                marker = _MARKER_RE.match(raw)
                 visible_markers.add(marker.group(0).strip())
         for match in _RE_COMMENT.finditer(text):
             body = match.group(2).strip("─ ")

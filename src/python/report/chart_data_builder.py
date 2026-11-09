@@ -16,7 +16,7 @@ from typing import Any
 
 from src.python.analysis.crisis_annotation import CRISIS_INTERVALS
 from src.python.core.code_utils import is_a_share_stock, is_exchange_fund_code
-from src.python.core.num_utils import finite_or
+from src.python.core.num_utils import finite_or, is_finite_number
 from src.python.report.downsample import downsample_bars
 
 logger = logging.getLogger("invest")
@@ -426,7 +426,7 @@ def _build_radar_dataset(
 
     # 保留全部轴；None → "N/A"（非 0，§4.12 / §6.6 契约：指标缺失显示 N/A）
     labels = [name for _, name, _ in axes]
-    values = [float(value) if _is_valid_metric(value) else "N/A" for _, _, value in axes]
+    values = [float(value) if is_finite_number(value) else "N/A" for _, _, value in axes]
 
     if not labels:
         return _empty_dataset()
@@ -448,11 +448,6 @@ def _extract_rate(win_rate: Any) -> float | None:
     if isinstance(win_rate, dict):
         return win_rate.get("win_rate")
     return win_rate
-
-
-def _is_valid_metric(value: Any) -> bool:
-    """指标值是否有效（float/int 且非 None）。"""
-    return isinstance(value, (int, float)) and value is not None
 
 
 def _build_excess_rolling_dataset(risk_adjusted_excess_data: dict | None) -> dict:

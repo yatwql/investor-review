@@ -10,9 +10,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any, ClassVar
 
-from src.python.core.num_utils import safe_num
+from src.python.core.num_utils import finite_or
 from src.python.fetcher.source_adapter import SourceAdapter, register_adapter
 from src.python.providers import eastmoney, tencent, hithink
 from src.python.providers import sina as sina_provider
@@ -26,7 +27,7 @@ class TencentQuoteAdapter(SourceAdapter):
     source_id: ClassVar[str] = "tencent"
     display_name: ClassVar[str] = "腾讯财经"
     # 腾讯源自报的市值/市盈率缺失时按 0.0 处理（与既有转换函数一致）
-    defaults: ClassVar[dict[str, Any]] = {"market_cap": 0.0, "pe": 0.0}
+    defaults: ClassVar[Mapping[str, Any]] = {"market_cap": 0.0, "pe": 0.0}
 
     def extract_data(self, query: dict[str, Any]) -> Any:
         return tencent.fetch_price(**query)
@@ -41,7 +42,7 @@ class SinaQuoteAdapter(SourceAdapter):
     domain: ClassVar[str] = DOMAIN_QUOTE
     source_id: ClassVar[str] = "sina"
     display_name: ClassVar[str] = "新浪财经"
-    defaults: ClassVar[dict[str, Any]] = {"market_cap": None, "pe": None}
+    defaults: ClassVar[Mapping[str, Any]] = {"market_cap": None, "pe": None}
 
     def extract_data(self, query: dict[str, Any]) -> Any:
         return sina_provider.fetch_price(**query)
@@ -56,7 +57,7 @@ class _OtcNavQuoteAdapter(SourceAdapter):
     """
 
     domain: ClassVar[str] = DOMAIN_QUOTE
-    aliases: ClassVar[dict[str, str]] = {
+    aliases: ClassVar[Mapping[str, str]] = {
         "nav": "price",
         "yesterday_nav": "yesterday_close",
         "nav_date": "price_date",
@@ -64,7 +65,8 @@ class _OtcNavQuoteAdapter(SourceAdapter):
 
     def transform_data(self, raw: Any, source: str = "") -> dict[str, Any] | None:
         """净值无效（缺失或 <= 0）视为无数据，交由链路尝试下一个源。"""
-        if not isinstance(raw, dict) or safe_num(raw.get("nav"), default=0.0) <= 0:
+        # 净值缺失/非数值按 0 处理（finite_or 恒返回 float，避免 None <= 0 的比较）
+        if not isinstance(raw, dict) or finite_or(raw.get("nav")) <= 0:
             return None
         return super().transform_data(raw, source)
 
@@ -98,14 +100,17 @@ class HithinkQuoteAdapter(SourceAdapter):
     domain: ClassVar[str] = DOMAIN_QUOTE
     source_id: ClassVar[str] = "hithink"
     display_name: ClassVar[str] = hithink.DISPLAY_NAME
-    aliases: ClassVar[dict[str, str]] = {
+    aliases: ClassVar[Mapping[str, str]] = {
         "last_price": "price",
         "prev_price": "yesterday_close",
     }
-    defaults: ClassVar[dict[str, Any]] = {"market_cap": None, "pe": None}
+    defaults: ClassVar[Mapping[str, Any]] = {"market_cap": None, "pe": None}
 
     def extract_data(self, query: dict[str, Any]) -> Any:
-        return hithink.fetch_price(query.get("code"))
+        code = query.get("code")
+        if not isinstance(code, str) or not code:
+            return None  # 缺代码属调用方契约错误：按无数据交下一链路，不发无效请求
+        return hithink.fetch_price(code)
 
 
 register_adapter(TencentQuoteAdapter())

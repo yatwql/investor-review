@@ -49,6 +49,7 @@
 | `check-version-consistency.py` | 发布 | 版本号全局一致性检查（P0/P2 守护脚本 + 发布流程必跑） |
 | `check-style-guardrails.py` | 质量 | 设计护栏机检（DESIGN.md 护栏样式面；E 级：强调色越权/明暗同步/双面 token 对表判 finding，W 级：裸色值/圆角档位观察统计——未入 pre-commit 钩子与 CI guards；**发布门禁**（release.py gate）已纳入，开发期快反馈由 unit 测试承担） |
 | `check-script-contract.py` | 质量 | scripts 顶层脚本契约机检（退出码声明 ⊆ {0,2} 白名单、check-* 统一 `add_common_args` CLI 面、文本 I/O 显式 encoding、脚本↔测试覆盖映射，四条规则；**已入域**：钩子只随 `scripts/` 变更触发，CI `guards` 与 P2 恒全量） |
+| `check-types.py` | 质量 | pyright 类型错误守护（受检域 `src/python` + `scripts`，规则基线与 `exclude` 在 `pyproject.toml` 的 `[tool.pyright]`；`src/test` 刻意不入域——单测 mock 噪声远多于缺陷收益，由 pytest 运行时守卫；退出码 0 通过 / 1 环境缺失（pyright 与 npx 皆不可用）/ 2 有 finding；**已入域**：钩子只随 `src/python/`、本脚本或 `pyproject.toml` 变更触发，CI `guards` 与 P2 恒全量） |
 | `release.py` | 发布 | 发布流程分步编排（check / archive-init〔新小版本归档骨架：三份归档 + 目录树块 + 三处索引行，幂等〕/ prepare〔含台账与设计文件归档迁移；不跨版本发布，`--version` 与推导值不一致即中止并给指引〕/ refresh / evolution / gate / publish〔提交前按 pre-commit 钩子同源参数 `--sync --ci --with-test-count` 同步统计快照，失败即中止；`--title` 自带的 `release: v… —— ` 或裸 `v… —— ` 前缀自动剥离，避免提交标题重版版本号〕/ devbump〔切版 + 默认推送 + **发布闭环校验**：tag 在 master 历史内、master 的 `APP_VERSION` 为发布版、本分支为下一开发版，不一致退出 1；无 tag 仅告警〕，每步独立可审阅、失败即停；refresh 纯文档变更跳过 bench+collect（`--force-refresh` 强制）、bench 默认只测发布子集四档且按「场景档先、长尾档后」排序（`--full-bench` 全量、`--bench-jobs N` 调并行度）、gate 守护清单并行且随核数收敛 ≤4 路并断言归档已迁完、gate 戳存逐文件代码哈希（publish 点名 gate 后改动并说明重跑 verify）；check 预演 changelog 派生（只算不写）；publish 提交/合并/tag/推送分段计时；每命令（含 devbump）耗时与失败原因（`failure`：失败步/报告目录/失败用例名）入 `logs/release.jsonl`；devbump 切版后清空上一版迁档占位节） |
 | `test-perf-report.py` | 评测 | 端到端报告生成管线性能基准（独立脚本，mock 外部数据源） |
 | `perf-history.py` | 运维 | 性能历史趋势查看（读取 perf_history.jsonl → 版本演进总表 + P95/P99 分位概览 + 离群/尾部归因 + 异常运行/同版本漂移 + 秒每品种归一化 + 并发预算段（档位/预算/峰值/缩容合计，标注跨档位不可直接比耗时）+ 时段聚合（耗时与费用合计/环比/缩容列）/机读输出（llm_cost、by_period 费用字段、CSV 增 budget/peak/clamps 三列）；实现拆在 `_perf_history/`——`stats.py` 统计原语 / `data.py` 派生 / `report.py` 渲染 / `cli.py` 入口，主入口只留 docstring 与 re-export） |
@@ -187,6 +188,12 @@ pytest 的 `-m` 标记表达式封装层，按 `--mode` 选择预定义组合。
 # 多档并行采集（可选；默认 4 核+ 为 2、弱机为 1，自适应）
 .venv/bin/python scripts/test-runner.py --mode dev-verify,regression --jobs 2
 
+# xdist 并行级别（单模式内 worker 数）：缺省 medium = 50% 核数且封顶 8；也可用环境变量固定
+TEST_RUNNER_PARALLEL=high .venv/bin/python scripts/test-runner.py --mode dev-verify
+
+# 排障：给每个用例加超时看门狗（超时即失败并打印该用例堆栈，整档不再只报"720s 超时"）
+TEST_RUNNER_PER_TEST_TIMEOUT=120 .venv/bin/python scripts/test-runner.py --mode unit
+
 # 跨机器耗时采集 + 自动更新 test-coverage.md 环境耗时对照（含机器信息采集）
 .venv/bin/python scripts/test-runner.py --mode bench --update-docs
 
@@ -195,7 +202,28 @@ pytest 的 `-m` 标记表达式封装层，按 `--mode` 选择预定义组合。
 
 # CI portability job 的本地等价复现（隐式编码严格档 + 需求文件 locale 解码）
 .venv/bin/python scripts/test-runner.py --mode portability
+
+# 归档保留期清理的两个闸门（缺省「留最近 10 次 / 总量 2 GiB」，<=0 关闭对应闸门）
+.venv/bin/python scripts/test-runner.py --mode unit --keep-runs 5 --archive-cap-mb 1024
 ```
+
+> **并行级别怎么选**：worker 数 = 核数 × 档位系数（high 100% / medium 50% / low 25%），
+> 缺省 medium 并**封顶 8**——实测 16 核上 8 worker 最优、16 worker 反而慢约 17%（xdist 进程争抢
+> 加磁盘/杀软扫描）；显式 `--parallel high` 仍按 100% 核数。慢盘/慢 CPU 机器（典型 Windows：
+> 进程启动与 Defender 实时扫描是主开销）可先 `TEST_RUNNER_PARALLEL=high` 或 `=low` 各跑一次
+> 对比再固定，并把仓库与 `.venv` 加入杀软排除项。
+>
+> **整档超时怎么定位**：某档报「720s 超时」时先分清是**卡住**还是**真慢**——
+> `TEST_RUNNER_PER_TEST_TIMEOUT=120` 给每个用例加看门狗，超时用例会被点名并打印堆栈
+> （插件 `pytest-timeout` 同步进 `.[test]` 可选依赖，未设该变量时不启用，避免慢机器误杀）；
+> 只想看塞住的那个文件，也可直接 `-m "<档位 marker>" -x -v` 跑子集。
+>
+> **`test-reports/archives/` 轮转**：每次运行把 `latest/` 归档为
+> `archives/<YYYYMMDD>/<HHMMSS>/`，长年累积会吃满本地磁盘与 CI runner（实测 31 份 ≈ 17G）。
+> 启动前按双闸门静默裁剪：**次数闸门**（保留最近 `--keep-runs` 次，缺省 10）+ **体积闸门**
+> （保留集总量上限 `--archive-cap-mb` MiB，缺省 2048，从最旧继续删到达标）。实现见
+> `scripts/_test_runner/retention.py`；删除失败只告警、不计入已删，空的日期层目录一并回收；
+> 清理属旁路，任何异常都不阻断测试。
 
 `--mode portability` 是唯一的**非 pytest 模式**：它跑两道探针（`PYTHONWARNDEFAULTENCODING=1` 单元套件、
 需求文件 BOM/PEP263 判定 + `LC_ALL=C` 下 `pip install --dry-run` 烟测），计数量按**探针项数**而非用例数；
@@ -447,6 +475,10 @@ Web 模式全链路可复跑冒烟验证（上传→生成→进度→产物，F
 > `docs/managements/` 或 `src/test/` 时自动调用（见「install-hooks.sh」条）。其余类目
 > （清单/默认值/目录树/归档索引）的漂移仍需人工按提示修正。
 
+> **快照增量与影子双算**：测试用例计数快照改为「未变文件复用缓存、变更文件重收集」的增量口径；
+> 增量与全量会并行双算、以全量为准逐项比对，连续多次一致后才停用影子。排查口径差异时用
+> `DOC_DRIFT_SNAPSHOT_SHADOW=1`（强制开）/`=0`（强制关）定位是增量逻辑错还是缓存脏。
+>
 > 按设计豁免的文档：`changelog.md` / `review-findings.md`（如实引用旧数字作为变更记录）与
 > 版本快照类文档（历次发布的归档快照）不参与计数与默认值断言扫描。修正提示：报告里的数字就是
 > 实测值，直接按提示改文档即可；目录树缺条目时按所属子包位置补一行（含简短职责说明）。
@@ -461,7 +493,7 @@ Web 模式全链路可复跑冒烟验证（上传→生成→进度→产物，F
 |:--|:--|:--|:--|
 | 机械层 | 文件路径、需求 ID、任务编号、json 键、CLI 选项是否存在 | 跑六件套（doc-drift / doc-links / version-consistency / requirement-trace / task-numbering / doc-traces）+ 路径与 ID 存在性扫描 | 已全覆盖 |
 | 结构层 | 目录与章节顺序、TOC 层级、列表编号连续性、分区归属 | `check-doc-links` 编号/层级序列 + 人工对标题树 | 大部分 |
-| 断言层 | 计数、默认值、阈值、清单、菜单键、日期、单位 | 先按权威源统一对账（即上面二十一项），再对未绑定的断言做抽取对码（本节下文） | 需按类扩规则 |
+| 断言层 | 计数、默认值、阈值、清单、菜单键、日期、单位 | 先按权威源统一对账（即上面二十七项），再对未绑定的断言做抽取对码（本节下文） | 需按类扩规则 |
 | 散文层 | 机制叙述、因果解释、操作步骤 | 标识符对码 + 人工通读 | 仅部分（见下文） |
 
 **断言层：未绑定断言的抽取对码。** 机检覆盖不到的数值散在散文里，用「抽取 → 对码」代替逐句读：
@@ -818,6 +850,49 @@ sh .githooks/install-hooks.sh --off   # 停用
 处置：按规则号补声明 / 补 `add_common_args` / 补 `encoding=` / 补测试引用或登记豁免；确属特例才加白名单，并在注释写清理由。
 
 > **何时跑**：`git commit` 触及 `scripts/` 时由钩子自动执行（**勿手动重复**）；发布门禁（P2）与 CI `guards` 恒全量兜底。
+
+**`check-types.py` — 类型检查守护（pyright）**
+
+**设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
+
+类型错误里混着真实缺陷（`cost_first` 单价键读错导致策略静默退化、上下文管理器 `__exit__`
+声明 `bool` 使 `result` 可能未绑定、配置段 `None` 直接下标、CI 区间 `None` 参与乘法），
+但项目此前没有任何类型门禁——只能靠偶发人工扫描发现。本守护把「产品代码零 ERROR 级诊断」
+变成可回归的约束：
+
+1. **受检域**：`src/python` + `scripts`（`[tool.pyright] include`）——产品代码与入口/守护脚本
+   的类型错误同样是缺陷；`scripts/` 的历史噪声已清零（50 处：流对象 `reconfigure`、
+   平台桩 `ctypes.windll`/`msvcrt`、动态 target 的 `build_parser`、AST 节点 `lineno` 等）。
+   `src/test` 刻意排除——单测天然大量 mock/行内 dict，静态噪音远多于缺陷收益，其正确性由
+   pytest 运行时守卫。
+2. **判据**：只计 `ERROR` 级诊断（pyright 默认级别即可，不自造阈值）；`WARNING`/`INFORMATION`
+   不入 finding。
+3. **依赖解析**：`[tool.pyright] venvPath`/`venv` 指向项目虚拟环境，否则 pandas/akshare/flask
+   等第三方导入会被判缺失（会掩盖真实错误）。
+4. **解析器来源**：优先 PATH 上的 `pyright`（`pip install pyright` 即可，CI guards job 安装），
+   否则退回 `npx --no-install pyright`；两者皆无按**环境缺失**退出 1（不静默放过）。
+
+**已入域**（守护清单成员）：pre-commit 在 `src/python/` 变更时并行触发，CI `guards` job 与 P2
+门禁恒全量覆盖（该 job 直接 `pip install pyright` 作解析器）。**推送前本地可先跑**（约 10s）。
+
+**使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
+
+```bash
+.venv/bin/python scripts/check-types.py                    # 检查全守护域（src/python）
+.venv/bin/python scripts/check-types.py -v                 # 附带解析器与诊断统计
+.venv/bin/python scripts/check-types.py --ci               # CI 模式（只输出 文件:行:列 规则）
+.venv/bin/python scripts/check-types.py src/python/llm     # 显式路径（单模块快反馈；exclude 仍生效）
+```
+
+退出码：0 无 ERROR 级诊断；1 环境缺失（pyright 与 npx 皆不可用，或 pyright 未返回 JSON 报告）；
+2 发现类型错误。
+
+处置：`文件:行:列 规则: 说明` 逐条修——**优先**加值判空 / `isinstance` 收窄 / `TypeGuard`
+谓词，**不要**用 `# type: ignore` 蒙住（真噪声才忽略，且必须写清理由）。数值归一用
+`core.num_utils` 的 `safe_num` / `finite_or`（同一处口径），不要各写 `float(x)` + `except`。
+
+> **何时跑**：`git commit` 触及 `src/python/`、本脚本或 `pyproject.toml` 时由钩子自动执行
+> （**勿手动重复**）；改单个模块时可显式给路径做快反馈；发布门禁（P2）与 CI `guards` 恒全量兜底。
 
 **`check-import-surface.py` — 导入面契约检查**
 

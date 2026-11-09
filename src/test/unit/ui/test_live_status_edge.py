@@ -9,12 +9,22 @@
 from __future__ import annotations
 
 import os
-import pty
-import termios
 
 import pytest
 
-from src.python.tui.live_status import LiveStatusBar, status_bar_text
+# 伪终端与 termios 仅 POSIX 提供：Windows 上模块级 import 会让整档收集失败
+# （表现为 `ERROR collecting ...`）。这里用 **模块级 skip**（而非 importorskip）：
+# 判定只看 os.name，与被导入模块是否存在无关，收集期行为确定
+if os.name == "nt":
+    pytest.skip("状态条边缘用例依赖伪终端（pty/termios），仅 POSIX 可用", allow_module_level=True)
+
+try:
+    import pty  # noqa: E402
+    import termios  # noqa: E402
+except ImportError:  # 兜底：os.name 非 nt 但平台缺 POSIX 模块（如受限容器）
+    pytest.skip("伪终端依赖不可用（缺 pty/termios），仅 POSIX 环境可跑", allow_module_level=True)
+
+from src.python.tui.live_status import LiveStatusBar, status_bar_text  # noqa: E402
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_ui, pytest.mark.edge]
 

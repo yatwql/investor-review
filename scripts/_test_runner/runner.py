@@ -8,9 +8,25 @@ import subprocess
 
 from _test_runner.paths import _ARCHIVES_DIR, _LATEST_DIR, _PROJECT_ROOT, _REPORTS_DIR
 from _test_runner.modes import MODES
-from _test_runner.pytest_env import _build_pytest_args, _check_pytest_html, _parse_pytest_output
+from _test_runner.pytest_env import (
+    PARALLEL_ENV,
+    PER_TEST_TIMEOUT_ENV,
+    _build_pytest_args,
+    _check_pytest_html,
+    _parse_pytest_output,
+)
 import time as _time
 from datetime import datetime
+
+#: pytest 非测试失败退出码 → 可执行原因（否则只看到「0 passed, 0 failed（0.0s）」）。
+#: 环境变量名引用 `pytest_env` 常量，不在此重写字面量。
+_PYTEST_EXIT_HINTS: dict[int, str] = {
+    2: "被中断（Ctrl+C / 会话结束）",
+    3: "内部错误（pytest 崩溃）",
+    4: "用法错误：参数不被识别——常见于缺插件（如 pytest-timeout 未装却传了 --timeout）"
+    f"或环境变量残留（{PER_TEST_TIMEOUT_ENV} / {PARALLEL_ENV}）",
+    5: "未收集到用例：marker 表达式与当前测试树不匹配（或收集期被全部跳过）",
+}
 
 
 def _ensure_dirs(path: str) -> None:
@@ -148,6 +164,14 @@ def run_mode(
             for kw in ("passed", "failed", "FAILED", "ERROR", "error", "warning", "===", "short test summary")
         ):
             print(f"    {stripped}")
+
+    # pytest 非测试失败的退出码：给出可执行原因
+    hint = _PYTEST_EXIT_HINTS.get(proc.returncode)
+    if hint:
+        print(f"  [ERR] {mode_key}: pytest 退出码 {proc.returncode} — {hint}")
+        tail = [ln for ln in output.splitlines() if ln.strip()][-8:]
+        for line in tail:
+            print(f"    {line.strip()}")
 
     # 结果概览
     ok = proc.returncode == 0

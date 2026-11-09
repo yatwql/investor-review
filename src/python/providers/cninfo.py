@@ -439,7 +439,8 @@ def fetch_report_listings(code: str) -> list[dict[str, Any]] | None:
             "isHLtitle": "true",
         },
     )
-    announcements = (payload or {}).get("announcements")
+    payload_dict = payload if isinstance(payload, dict) else {}
+    announcements = payload_dict.get("announcements")
     if not isinstance(announcements, list) or not announcements:
         return None
     items: list[dict[str, Any]] = []

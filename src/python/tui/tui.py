@@ -139,8 +139,18 @@ class _FrameLineCounter:
         return self._stream.flush()
 
 
+def _print_machine_ip_footer() -> None:
+    """首页最下方一行本机 IP（弱化色；按列宽折行，窄屏不越右边界）。"""
+    from src.python.core.ansi_colors import DIM, RESET
+    from src.python.tui.status_line import machine_ip_line
+    from src.python.tui.text_layout import terminal_columns, wrap_with_prefix
+
+    lines = wrap_with_prefix("  ", machine_ip_line(), terminal_columns())
+    print("\n".join(f"{DIM}{line}{RESET}" for line in lines))
+
+
 def _render_menu_frame(sel: int, filter_text: str = "") -> int:
-    """渲染一整帧首页（页眉 + 配置摘要 + 菜单），返回本帧占用行数。"""
+    """渲染一整帧首页（页眉 + 配置摘要 + 菜单 + 页脚 IP），返回本帧占用行数。"""
     counter = _FrameLineCounter(sys.stdout)
     original = sys.stdout
     sys.stdout = counter
@@ -148,6 +158,7 @@ def _render_menu_frame(sel: int, filter_text: str = "") -> int:
         print_header()
         show_config()
         render_menu(sel, filter_text)
+        _print_machine_ip_footer()
     finally:
         sys.stdout = original
     return counter.lines

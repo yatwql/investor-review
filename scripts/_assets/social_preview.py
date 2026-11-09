@@ -61,7 +61,9 @@ class RenderDeps:
 def _load_render_deps() -> RenderDeps:
     """导入渲染依赖；缺失时抛 RenderDependencyError（附安装指引）。"""
     try:
-        import cairosvg
+        # cairosvg 属可选资产依赖（`.[svg]`），CI 的 test 依赖面不含它：
+        # 此处按「可选依赖」标注，缺失由下面的 except 分支给出安装指引
+        import cairosvg  # type: ignore[import-not-found]
         from PIL import Image
     except ImportError as e:  # pragma: no cover - 依赖齐备的环境走不到
         raise RenderDependencyError(f"{_INSTALL_HINT}（{e}）") from e

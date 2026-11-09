@@ -14,7 +14,7 @@ from src.test.unit.report.test_fund_performance import (
     _MockDetailRow,
 )
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_report, pytest.mark.usefixtures("offline_external_sources")]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
 
 
 class TestWriteFundPerformanceSheet(unittest.TestCase):

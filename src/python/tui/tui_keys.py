@@ -198,10 +198,20 @@ def get_key() -> str:
 
 
 def _get_key_windows() -> str:
+    # 非交互输入（pytest / 管道 / 重定向 stdin）不得阻塞等键：`msvcrt.getch()` 会一直
+    # 挂到有按键为止，与 Linux 分支的 isatty 前置判定同口径（此判定先于 import，
+    # 非 Windows 上也能被测试覆盖）
+    if not sys.stdin.isatty():
+        return KEY_UNKNOWN
     import msvcrt  # Windows 标准库，无需额外安装
 
+    # 类型检查环境（Linux 上的 msvcrt 桞）缺 getch 声明：按可选取，缺失即降级
+    getch = getattr(msvcrt, "getch", None)
+    if getch is None:
+        return KEY_UNKNOWN
+
     try:
-        ch = msvcrt.getch()
+        ch = getch()
     except KeyboardInterrupt:
         return KEY_CTRL_C
 
@@ -213,7 +223,7 @@ def _get_key_windows() -> str:
         return KEY_ESC
     if ch in (b"\xe0", b"\x00"):  # 方向键/功能键前缀
         try:
-            ch2 = msvcrt.getch()
+            ch2 = getch()
         except KeyboardInterrupt:
             return KEY_CTRL_C
         mapping = {b"H": KEY_UP, b"P": KEY_DOWN}
@@ -238,17 +248,21 @@ def _get_key_linux() -> str:
     except ImportError:
         return KEY_UNKNOWN
     ch = ""
-    fd = None
+    fd: int | None = None
     old = None
     try:
-        fd = sys.stdin.fileno()
-        old = termios.tcgetattr(fd)  # type: ignore[attr-defined]
-        tty.setraw(fd)  # type: ignore[attr-defined]
-        ch = _read_key_char(fd)  # 原始字节读取：select(fd) 真实性依赖字节留在内核
+        _fd = sys.stdin.fileno()  # int：先落局部再赋给外层（保持 except 分支下的 None 语义）
+        fd = _fd
+        old = termios.tcgetattr(_fd)  # type: ignore[attr-defined]
+        tty.setraw(_fd)  # type: ignore[attr-defined]
+        ch = _read_key_char(_fd)  # 原始字节读取：select(fd) 真实性依赖字节留在内核
     except (termios.error, ValueError, OSError):  # type: ignore[attr-defined]
         pass
     except KeyboardInterrupt:
         ch = "\x03"  # 让下游 KEY_CTRL_C 分支处理
+
+    if fd is None:  # fileno 不可用（罕见的非真终端）：与 isatty 不过同口径
+        return KEY_UNKNOWN
 
     try:
         if ch == "\x03":
@@ -395,9 +409,13 @@ def _input_choice_windows(prompt: str, arrows: bool = False) -> str | None:
     import msvcrt  # Windows 标准库，无需额外安装
 
     print(prompt, end="", flush=True)
+    # 同 getch：类型检查环境的 msvcrt 桞缺 getwch 声明，缺失即降级为普通 input
+    getwch = getattr(msvcrt, "getwch", None)
+    if getwch is None:
+        return input(prompt).strip()
     buf = ""
     while True:
-        ch = msvcrt.getwch()
+        ch = getwch()
         if ch in ("\r", "\n"):
             print(flush=True)
             return buf.strip()
@@ -407,7 +425,7 @@ def _input_choice_windows(prompt: str, arrows: bool = False) -> str | None:
             print(flush=True)
             return None
         if ch in ("\x00", "\xe0"):  # 方向键/功能键双字节前缀：arrows 开启且行为空时返回 ↑/↓
-            ch2 = msvcrt.getwch()
+            ch2 = getwch()
             if arrows and not buf:
                 if ch2 == "H":
                     print(flush=True)

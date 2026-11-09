@@ -26,7 +26,7 @@ from src.python.report import _holdings_detail_blocks as hdb
 from src.python.report import holdings_detail_sheet as hds
 import pytest
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_report, pytest.mark.usefixtures("offline_external_sources")]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
 
 
 # ═══════════════════════════════════════════════════════════

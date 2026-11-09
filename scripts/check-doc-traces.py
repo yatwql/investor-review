@@ -333,6 +333,13 @@ def scan_file(
     # 模式子集 + 并集预筛按域取一次（缓存），行内只做并集快筛 + 精确分支
     base_patterns: tuple[tuple[re.Pattern[str], str, str], ...]
     base_prefilter: re.Pattern[str]
+    # 常规域的三个 bundle 只在「非归档常规域」分支构建；其余域不读取它们，
+    # 这里先给占位绑定，避免静态分析把「分支内赋值」判成可能未绑定
+    plain_bundle: tuple[tuple[tuple[re.Pattern[str], str, str], ...], re.Pattern[str]] = _pattern_bundle(
+        _REGULAR_CATEGORIES, cipher_ok
+    )
+    tree_bundle = plain_bundle
+    folders_tree_bundle = plain_bundle
     if archive:
         base_patterns, base_prefilter = _pattern_bundle(DOMAIN_ARCHIVE, False)
     elif task_record:
@@ -346,6 +353,7 @@ def scan_file(
         plain_bundle = _pattern_bundle(_REGULAR_CATEGORIES, cipher_ok)
         tree_bundle = _pattern_bundle(_ALL_CATEGORIES, cipher_ok)
         folders_tree_bundle = _pattern_bundle(_ALL_CATEGORIES, cipher_ok, include_tree_only=True)
+        base_patterns, base_prefilter = plain_bundle  # 常规域的非树行默认组
     in_code_block = False
     tree_stack: list[str] = []  # folders.md 目录树目录栈（按深度维护，行分域用）
     for lineno, line in enumerate(text.splitlines(), 1):
@@ -367,6 +375,9 @@ def scan_file(
                     print(f"    (codeblock) L{lineno}: {stripped[:60]}")
                 continue
         is_tree = bool(_TREE_LINE.match(stripped))
+        # 默认域（任务/归档记录行亦用此组）：先落默认值，下面按分支覆盖，
+        # 避免「各分支各赋值」被静态分析判成可能未绑定
+        line_patterns, prefilter = base_patterns, base_prefilter
         if chapter_only or task_record:
             # 任务/变更日志域不走 _is_excluded（表格/链接行豁免会吃掉复盘叙事），
             # 但章节计数豁免是整行语义（暗号不算暗号）——命中则整行跳过
@@ -374,15 +385,12 @@ def scan_file(
                 if verbose and chapter_only:
                     print(f"    (ch-excluded) L{lineno}: {stripped[:80]}")
                 continue
-            line_patterns, prefilter = base_patterns, base_prefilter
         else:
             if not is_tree and _is_excluded(stripped):
                 if verbose:
                     print(f"    (excluded) L{lineno}: {stripped[:80]}")
                 continue
-            if archive:
-                line_patterns, prefilter = base_patterns, base_prefilter
-            else:
+            if not archive:
                 line_patterns, prefilter = tree_bundle if is_tree else plain_bundle
         eff_task, eff_archive = task_record, archive
         # folders.md 树行按路径分域：docs/archive/ 子树=归档记录域（仅复盘

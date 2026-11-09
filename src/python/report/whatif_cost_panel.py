@@ -285,7 +285,8 @@ def _resolve_benchmark(
 
     from src.python.analysis.whatif_backtest import compute_backtest_days
 
-    days = compute_backtest_days(effective_date) or max(120, len(labels) * 2)
+    # 生效日未知（缺交易日）时按「标签数 ×2 且不少于 120 天」兜底窗口
+    days = (compute_backtest_days(effective_date) if effective_date else None) or max(120, len(labels) * 2)
     try:
         bars = index_history_getter(resolved["code"], days)
     except Exception:  # noqa: BLE001 — 行情取数失败 → status=unavailable（只出成本后对比）

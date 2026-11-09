@@ -117,14 +117,13 @@ def _align_series(
         return None
     b_vals = _locf(dates, b_map)
     c_vals = _locf(dates, c_map)
-    anchor = next(
-        (
-            i
-            for i in range(len(dates))
-            if b_vals[i] is not None and c_vals[i] is not None and b_vals[i] > 0 and c_vals[i] > 0
-        ),
-        None,
-    )
+
+    def _anchored(index: int) -> bool:
+        """该日两侧都有正值（锚点要求）；取值绑到局部，未定值不在重复下标上判。"""
+        b_val, c_val = b_vals[index], c_vals[index]
+        return b_val is not None and c_val is not None and b_val > 0 and c_val > 0
+
+    anchor = next((i for i in range(len(dates)) if _anchored(i)), None)
     if anchor is None:
         return None
     return dates[anchor:], b_vals[anchor:], c_vals[anchor:]  # type: ignore[return-value]

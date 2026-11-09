@@ -299,6 +299,10 @@ def market_snapshot_bucket(now: datetime | None = None) -> MarketSnapshot:
     moment = now or datetime.now(_BJ_TZ)
     if moment.tzinfo is None:
         moment = moment.replace(tzinfo=_BJ_TZ)
+    else:
+        # 已带时区时先换北京时区再取时分：否则 UTC 15:00（= 北京 23:00）会被当成
+        # 当日收盘档，实际是另一个交易日的口径。
+        moment = moment.astimezone(_BJ_TZ)
 
     today = moment.strftime("%Y-%m-%d")
     minute = moment.hour * 60 + moment.minute

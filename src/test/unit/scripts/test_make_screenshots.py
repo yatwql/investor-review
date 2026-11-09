@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -119,6 +120,7 @@ class TestDemoWorkspace:
         assert command[-1] == "--yes"
 
     @pytest.mark.unit_scripts
+    @pytest.mark.skipif(os.name != "posix", reason="symlink 重指需 POSIX 软链，Windows 需开发者模式")
     def test_stale_src_symlink_is_repointed_to_current_repo(self, demo, tmp_path):
         """回归：演示根 src 软链指向旧仓库路径时，重跑 demo 必须自愈。
 
@@ -154,7 +156,7 @@ class TestCliText:
     @pytest.mark.unit_scripts
     def test_scrubs_repo_root_to_relative(self, demo):
 
-        line = f"[INFO] 耗时已记录到 {demo.REPO_ROOT}/data/state/perf_history.jsonl"
+        line = f"[INFO] 耗时已记录到 {demo.REPO_ROOT / 'data' / 'state' / 'perf_history.jsonl'}"
         assert demo.clean_cli_text(line) == ["[INFO] 耗时已记录到 data/state/perf_history.jsonl"]
 
     @pytest.mark.unit_scripts

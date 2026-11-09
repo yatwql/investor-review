@@ -12,6 +12,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from src.python.core.num_utils import finite_or
+
 logger = logging.getLogger("invest")
 
 __all__ = [
@@ -151,7 +153,8 @@ def compute_drawdown_warning(
             "alert_level": str,            # "normal" / "warning" / "critical"
         }
     """
-    drawdown_series = [b.get("drawdown_pct", 0) or 0 for b in bars]
+    # 回撤序列统一归一为有限 float：`x or 0` 会把「数值字符串」原样带进后续浮点统计
+    drawdown_series: list[float] = [finite_or(b.get("drawdown_pct")) for b in bars]
     if not drawdown_series:
         return {
             "name": name,

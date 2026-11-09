@@ -15,7 +15,7 @@ from openpyxl import Workbook
 from src.python.core.models import Holding
 from src.python.report import holdings_detail_sheet as hds
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_report, pytest.mark.usefixtures("offline_external_sources")]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
 
 
 class TestWeightedAvgCost(unittest.TestCase):

@@ -46,6 +46,7 @@ _EXIT_CODE_WHITELIST: dict[str, frozenset[int]] = {
     "check-code-traces.py": frozenset({0, 1, 2, 3}),  # 分级退出码：1 = HIGH，3 = 仅 LOW
     "check-doc-traces.py": frozenset({0, 1, 2}),  # 分级退出码：1 = HIGH，2 = 仅 LOW
     "check-version-consistency.py": frozenset({0, 1, 2}),  # 1 = 事实源不可读
+    "check-types.py": frozenset({0, 1, 2}),  # 1 = 环境缺失（pyright 与 npx 皆不可用）
 }
 
 #: 规则② 特例：钩子入口读环境变量/stdin，无 `-v`/`--ci` CLI 面（内部自行调用 `--ci`）
@@ -147,8 +148,9 @@ def encoding_violations(path: Path) -> list[str]:
             mode: str | None = None
             if len(node.args) >= 2 and isinstance(node.args[1], ast.Constant) and isinstance(node.args[1].value, str):
                 mode = node.args[1].value
-            if isinstance(keywords.get("mode"), ast.Constant) and isinstance(keywords["mode"].value, str):
-                mode = keywords["mode"].value
+            mode_kw = keywords.get("mode")  # ast.Constant 才有 .value：先收窄再取
+            if isinstance(mode_kw, ast.Constant) and isinstance(mode_kw.value, str):
+                mode = mode_kw.value
             if mode is not None and "b" in mode:
                 continue
             violations.append(f"L{node.lineno} open() 未声明 encoding=")

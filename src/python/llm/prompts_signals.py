@@ -28,9 +28,9 @@
 from __future__ import annotations
 
 import logging
-import math
-from typing import Any, TypeGuard
+from typing import Any
 
+from src.python.core.num_utils import is_finite_number
 from src.python.llm.fingerprint import compute_fingerprint
 from src.python.llm.prompts_core import _fmt_wan
 
@@ -49,7 +49,6 @@ __all__ = [
     "NARRATIVE_DIVERGENCE_LIMIT",
     "TAIL_RISK_VAR95_HIGH",
     "TAIL_RISK_VAR95_MEDIUM",
-    "_is_number",
     "_flow_verdict",
     "_format_signal",
     "_fmt_amount",
@@ -165,16 +164,6 @@ _DIGEST_DIVERGENCE_NOTE = "（存在「叙事与数字背离」项：请在结�
 # ═══════════════════════════════════════════════════════════════
 
 
-def _is_number(value: Any) -> TypeGuard[float]:
-    """可用数值判定：排除 bool 与 NaN/±inf（判定为真即收窄为 float）。
-
-    bool 是 int 的子类（``True`` 会被当成 1 元）；NaN/±inf 格式化后是 ``nan``/``inf``
-    这类文字，进提示词比裸数值更糟——两者都按「无此字段」处理，交由降级路径。
-    ``TypeGuard`` 让调用点在 ``if _is_number(x):`` 之后直接按数值运算，不必各自再收窄。
-    """
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
-
-
 def _flow_verdict(net_amount: Any) -> str:
     """主力净额 → 方向词。
 
@@ -184,7 +173,7 @@ def _flow_verdict(net_amount: Any) -> str:
     Returns:
         ``SIGNAL_BULLISH``（净流入）/ ``SIGNAL_BEARISH``（净流出）/ ``SIGNAL_NEUTRAL``。
     """
-    if not _is_number(net_amount):
+    if not is_finite_number(net_amount):
         return SIGNAL_NEUTRAL
     if net_amount > 0:
         return SIGNAL_BULLISH
@@ -225,12 +214,12 @@ def _sector_flow_lines(rows: list[dict]) -> list[str]:
         _word = _FLOW_WORD_BY_VERDICT[_flow_verdict(_net)]
         _parts = [str(_s.get("name", ""))]
         _chg = _s.get("change_pct")
-        if _is_number(_chg):
+        if is_finite_number(_chg):
             _parts.append(f"涨跌{_chg:+.2f}%")
-        if _is_number(_net):
+        if is_finite_number(_net):
             _parts.append(f"{_word}{_fmt_amount(abs(_net))}")
         _net_pct = _s.get("main_net_inflow_pct")
-        if _is_number(_net_pct):
+        if is_finite_number(_net_pct):
             _parts.append(f"净占比{_net_pct:+.2f}%")
         lines.append("  ".join(_parts))
     return lines
@@ -257,7 +246,7 @@ def _build_sector_flow_block(sector_flow: list[dict] | None) -> str:
 
     def _net(row: dict) -> float:
         _v = row.get("main_net_inflow")
-        return float(_v) if _is_number(_v) else 0.0
+        return float(_v) if is_finite_number(_v) else 0.0
 
     inflows: list[dict] = []
     outflows: list[dict] = []
@@ -306,7 +295,7 @@ def _temperature_signal(pipeline_data: dict) -> str | None:
         TIER_OVERVALUED: SIGNAL_BEARISH,
     }.get(tier, SIGNAL_NEUTRAL)
     score = data.get("score")
-    detail = f"{tier}，温度分 {score:.1f}" if _is_number(score) else tier
+    detail = f"{tier}，温度分 {score:.1f}" if is_finite_number(score) else tier
     index_name = data.get("index_name") or "基准指数"
     return _format_signal(f"市场温度（{index_name}）", verdict, detail)
 
@@ -357,7 +346,7 @@ def _tail_risk_signal(pipeline_data: dict) -> str | None:
     if not isinstance(data, dict) or not data.get("available"):
         return None
     var95 = data.get("var95")
-    if not _is_number(var95):
+    if not is_finite_number(var95):
         return None
     if var95 >= TAIL_RISK_VAR95_HIGH:
         verdict = SIGNAL_RISK_HIGH
@@ -368,10 +357,10 @@ def _tail_risk_signal(pipeline_data: dict) -> str | None:
 
     parts = [f"VaR95 {var95:.2f}%"]
     drop = data.get("max_single_day_drop")
-    if _is_number(drop):
+    if is_finite_number(drop):
         parts.append(f"最大单日跌幅 {drop:.2f}%")
     days = data.get("consecutive_down_days")
-    if _is_number(days) and days > 0:
+    if is_finite_number(days) and days > 0:
         parts.append(f"最长连跌 {int(days)} 日")
     return _format_signal("尾部风险", verdict, "，".join(parts))
 
@@ -403,7 +392,7 @@ def _fundamental_signal(pipeline_data: dict) -> str | None:
     else:
         verdict = SIGNAL_BULLISH if sides[0] > 0 else SIGNAL_BEARISH
 
-    roes = [float(r["roe"]) for r in rows if _is_number(r.get("roe"))]
+    roes = [float(r["roe"]) for r in rows if is_finite_number(r.get("roe"))]
     parts = [f"质量档 优/良 {good} 只、弱 {weak} 只"]
     if up or down:
         parts.append(f"年度趋势 增长 {up}、下滑 {down}")
@@ -436,7 +425,7 @@ def _numeric_direction(row: dict) -> str:
         return DIRECTION_WEAK
     for key in ("net_profit_yoy", "revenue_yoy"):
         value = row.get(key)
-        if _is_number(value):
+        if is_finite_number(value):
             if value > _YOY_FLAT_BOUND:
                 return DIRECTION_STRONG
             if value < -_YOY_FLAT_BOUND:
@@ -482,7 +471,7 @@ def _narrative_divergence_signal(pipeline_data: dict) -> str | None:
         name = str(row.get("name") or metric.get("name") or code)
         evidence = [f"叙事偏{tone}"]
         yoy = metric.get("net_profit_yoy")
-        if _is_number(yoy):
+        if is_finite_number(yoy):
             evidence.append(f"归母净利同比 {yoy * 100:+.1f}%")
         trend = metric.get("trend")
         if trend:

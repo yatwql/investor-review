@@ -633,9 +633,10 @@ class TestCacheDirIsolation(unittest.TestCase):
 
         from src.python.cache import _paths
 
-        with patch.dict(os.environ, {_paths._CACHE_DIR_ENV: "/tmp/democache-abs"}):
+        abs_dir = os.path.abspath("democache-abs")
+        with patch.dict(os.environ, {_paths._CACHE_DIR_ENV: abs_dir}):
             resolved = _paths._resolve_cache_dir()
-        self.assertEqual(resolved, "/tmp/democache-abs")
+        self.assertEqual(resolved, abs_dir)
 
     def test_default_is_project_data_cache(self):
         from unittest.mock import patch

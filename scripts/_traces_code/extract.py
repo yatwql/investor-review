@@ -66,7 +66,7 @@ def _py_identifier_names(tree: ast.AST) -> Iterator[tuple[int, str]]:
             names.append(node.asname or node.name.split(".")[0])
         for name in names:
             if name:
-                yield node.lineno, name
+                yield getattr(node, "lineno", 0), name
 
 
 _JS_DECL_RE = re.compile(r"\b(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)\b")

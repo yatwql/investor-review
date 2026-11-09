@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from openpyxl.cell.cell import MergedCell
 from openpyxl.styles import Font, PatternFill
 from openpyxl.worksheet.worksheet import Worksheet
 
@@ -117,7 +118,9 @@ def write_whatif_summary_sheet(ws: Worksheet, whatif_data: dict[str, Any] | None
             formats=[None, _fmt, _fmt, _fmt],
         )
         # 箭头列在变化量列内拼上方向（HTML 侧用字符，Excel 侧用文字）
-        ws.cell(row=row - 1, column=4).value = f"{s.get('delta', 0)} {s.get('arrow', '')}"
+        delta_cell = ws.cell(row=row - 1, column=4)
+        if not isinstance(delta_cell, MergedCell):  # 合并从属格只读
+            delta_cell.value = f"{s.get('delta', 0)} {s.get('arrow', '')}"
 
     # ── 口径说明 ──
     row += 1
@@ -348,9 +351,9 @@ def write_whatif_backtest_sheet(ws: Worksheet, whatif_data: dict[str, Any] | Non
         )
         # 变化列拼方向箭头（与摘要页一致）
         delta_v = m.get("delta")
-        ws.cell(row=row - 1, column=4).value = (
-            f"{delta_v} {m.get('arrow', '')}" if delta_v is not None else f"-- {m.get('arrow', '')}"
-        )
+        delta_cell = ws.cell(row=row - 1, column=4)
+        if not isinstance(delta_cell, MergedCell):  # 合并从属格只读
+            delta_cell.value = f"{delta_v} {m.get('arrow', '')}" if delta_v is not None else f"-- {m.get('arrow', '')}"
 
     # ── 归一化净值与回撤序列 ──
     row += 1

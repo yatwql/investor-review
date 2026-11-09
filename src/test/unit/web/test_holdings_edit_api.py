@@ -22,7 +22,7 @@ from src.python.core.reader import read_flow_sheets, read_holdings
 from src.python.web.app import create_app
 from src.python.web.runs import RunManager
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_web, pytest.mark.usefixtures("offline_external_sources")]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_web]
 
 
 def _make_holdings_file(path: Path) -> Path:
