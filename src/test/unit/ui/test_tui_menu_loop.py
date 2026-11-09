@@ -1,6 +1,7 @@
 """test_tui_menu 兄弟分片（loop）：主循环退出通道与窄屏直达导航。"""
 
 from __future__ import annotations
+import os
 import unittest
 from unittest.mock import MagicMock, patch
 from src.python.tui.tui_menu import (
@@ -230,6 +231,7 @@ class TestNarrowMainLoopDirectNav(unittest.TestCase):
         self.assertEqual(fired, ["exit"])
         self.assertEqual(renders, 2)
 
+    @unittest.skipIf(os.name != "posix", "原地重绘需 POSIX TTY")
     def test_narrow_arrow_inplace_repaint_on_tty(self):
         """TTY 窄屏方向键走原地重绘分支：清帧助手被调用，仍在内层循环（不追加新屏）。"""
         fired, renders, _, _, cleared = self._drive(["KEY_DOWN", "0"], columns=40, tty=True)
@@ -282,6 +284,7 @@ class TestNarrowMainLoopDirectNav(unittest.TestCase):
         self.assertEqual(fired, ["exit"])
         self.assertEqual(out.count("再按一次 Esc 退出"), 2, "两次独立 Esc 首按（确认态已被方向键解除）")
 
+    @unittest.skipIf(os.name != "posix", "原地重绘需 POSIX TTY")
     def test_wide_arrow_inplace_repaint_on_tty(self):
         """宽屏 TTY 方向键同样原地重绘：宽/窄导航手感一致，不滚屏堆积。"""
         fired, renders, _, _, cleared = self._drive(["KEY_DOWN", "0"], columns=100, tty=True)
@@ -289,6 +292,7 @@ class TestNarrowMainLoopDirectNav(unittest.TestCase):
         self.assertEqual(renders, 2)
         cleared.assert_called_once()
 
+    @unittest.skipIf(os.name != "posix", "原地重绘需 POSIX TTY")
     def test_hint_lines_included_in_inplace_clear(self):
         """反馈行并入原地重绘清除范围：清帧调用 = 帧行数 + 反馈行数（防清帧错位）。"""
         fired, renders, _, out, cleared = self._drive(["KEY_ESC", "KEY_DOWN", "0"], columns=40, tty=True)

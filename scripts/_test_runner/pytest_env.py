@@ -193,10 +193,7 @@ def _build_pytest_args(
         else:
             # 缺插件时**不传**该参数：否则 pytest 以用法错误（退出码 4）秒退，
             # 表现为「0 passed, 0 failed (0.0s)」，把真实测试跑丢
-            print(
-                f"      [!] 已忽略 {PER_TEST_TIMEOUT_ENV}：未安装 pytest-timeout"
-                "（安装：pip install -e \".[test]\"）"
-            )
+            print(f'      [!] 已忽略 {PER_TEST_TIMEOUT_ENV}：未安装 pytest-timeout（安装：pip install -e ".[test]"）')
 
     if html_available:
         args.extend(["--html", _phase_report_path(mode_key, phase_tag), "--self-contained-html"])

@@ -158,7 +158,7 @@ def _get_relative_dir(filepath: Path, test_dir: Path | None = None) -> str:
     """
     rel_dir = filepath.relative_to(test_dir or TEST_DIR)
     parent = rel_dir.parent
-    return str(parent) if parent != Path(".") else ""
+    return parent.as_posix() if parent != Path(".") else ""
 
 
 def check_file(filepath: Path, test_dir: Path | None = None, tree: ast.Module | None = None) -> list[str]:

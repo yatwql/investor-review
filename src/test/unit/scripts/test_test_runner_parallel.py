@@ -73,6 +73,7 @@ class TestPerTestTimeout:
 
     def test_enabled_by_env(self, monkeypatch):
         """设了环境变量 → 加 `--timeout=<秒>` 与 thread 方法（超时即失败并带堆栈）。"""
+        pytest.importorskip("pytest_timeout", reason="需安装 pytest-timeout 才启用看门狗")
         args = self._args(monkeypatch, "120")
         assert "--timeout=120" in args
         assert "--timeout-method=thread" in args

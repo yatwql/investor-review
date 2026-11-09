@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
@@ -181,6 +182,7 @@ class TestShellNounsetPositionalParam:
 class TestShellSyntax:
     """全部受检脚本须通过 `bash -n` 语法检查（防改坏）。"""
 
+    @pytest.mark.skipif(os.name != "posix", reason="bash -n 需 POSIX bash，Windows 的 WSL/Git bash 无法读 Windows 路径")
     def test_bash_syntax_check(self):
         for path in _SCRIPTS_DIR.glob("*.sh"):
             proc = subprocess.run(

@@ -162,7 +162,10 @@ class TestPidProbePlatformSafety:
 
         monkeypatch.setattr(server.os, "name", "nt", raising=False)
         monkeypatch.setattr(server.os, "kill", _forbidden)
-        assert server._pid_alive(12345) is None  # 非 Windows 容器里 OpenProcess 不可用 → 无法判定
+        # Windows 分支走 OpenProcess，绝不调 os.kill（`_forbidden` 一旦被调即抛）。
+        # 真 Windows 上 pid 不存在返回 False；非 Windows 容器里 OpenProcess 不可用返回 None——
+        # 两者都说明没有走 os.kill 路径。
+        assert server._pid_alive(12345) in (False, None)
 
     def test_posix_path_uses_signal_zero(self, monkeypatch):
         calls = []

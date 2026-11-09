@@ -376,6 +376,7 @@ class TestInputChoice(unittest.TestCase):
             patch("src.python.tui.tui_keys.os.read", side_effect=read_bytes),
         )
 
+    @unittest.skipIf(os.name != "posix", "Linux only（raw 模式 + termios）")
     def test_linux_esc_cancels_immediately(self) -> None:
         """孤立 Esc（超时无后继字节）→ None：误入子菜单即时返回上一步。"""
         stdin, _tcg, _tcs, _raw, _read = self._linux_env([b"\x1b"])
@@ -391,6 +392,7 @@ class TestInputChoice(unittest.TestCase):
             mock_stdin.fileno.return_value = 99
             self.assertIsNone(_input_choice_linux("  > "))
 
+    @unittest.skipIf(os.name != "posix", "Linux only（raw 模式 + termios）")
     def test_linux_residue_sequence_swallowed(self) -> None:
         """孤 Esc 后迟到的方向键序列：整段吞掉不进输入行，随后输入正常。"""
         stdin, _tcg, _tcs, _raw, _read = self._linux_env([b"\x1b"])
@@ -418,6 +420,7 @@ class TestInputChoice(unittest.TestCase):
             mock_stdin.fileno.return_value = 99
             self.assertEqual(_input_choice_linux("  > "), "3")
 
+    @unittest.skipIf(os.name != "posix", "Linux only（raw 模式 + termios）")
     def test_linux_enter_submits_line(self) -> None:
         """逐字节输入 + 回车 → strip 后的行内容。"""
         stdin, _tcg, _tcs, _raw, _read = self._linux_env([b"3", b"\r"])
@@ -426,6 +429,7 @@ class TestInputChoice(unittest.TestCase):
             mock_stdin.fileno.return_value = 99
             self.assertEqual(_input_choice_linux("  > "), "3")
 
+    @unittest.skipIf(os.name != "posix", "Linux only（raw 模式 + termios）")
     def test_linux_backspace_edits_last_char(self) -> None:
         """退格回剥最后一个字符。"""
         stdin, _tcg, _tcs, _raw, _read = self._linux_env([b"3", b"4", b"\x7f", b"\r"])
@@ -434,6 +438,7 @@ class TestInputChoice(unittest.TestCase):
             mock_stdin.fileno.return_value = 99
             self.assertEqual(_input_choice_linux("  > "), "3")
 
+    @unittest.skipIf(os.name != "posix", "Linux only（raw 模式 + termios）")
     def test_linux_ctrl_c_raises_interrupt(self) -> None:
         """raw 模式下 Ctrl+C 转发为 KeyboardInterrupt（与调用方 except 分支衔接）。"""
         stdin, _tcg, _tcs, _raw, _read = self._linux_env([b"\x03"])
@@ -443,6 +448,7 @@ class TestInputChoice(unittest.TestCase):
             with self.assertRaises(KeyboardInterrupt):
                 _input_choice_linux("  > ")
 
+    @unittest.skipIf(os.name != "posix", "Linux only（raw 模式 + termios）")
     def test_linux_arrows_return_nav_keys(self) -> None:
         """arrows=True 且行为空：↑/↓ 序列返回方向键键名（列表面板导航）。"""
         for seq, expect in (([b"\x1b", b"[", b"A"], KEY_UP), ([b"\x1b", b"[", b"B"], KEY_DOWN)):
@@ -459,6 +465,7 @@ class TestInputChoice(unittest.TestCase):
                 mock_stdin.fileno.return_value = 99
                 self.assertEqual(_input_choice_linux("  > ", arrows=True), expect)
 
+    @unittest.skipIf(os.name != "posix", "Linux only（raw 模式 + termios）")
     def test_linux_arrows_swallowed_when_line_has_content(self) -> None:
         """行内已有内容：方向键序列仍吞掉（保行编辑），Enter 提交原行。"""
         stdin, _tcg, _tcs, _raw, _read = self._linux_env([b"3", b"\x1b", b"[", b"B", b"\r"])
@@ -474,6 +481,7 @@ class TestInputChoice(unittest.TestCase):
             mock_stdin.fileno.return_value = 99
             self.assertEqual(_input_choice_linux("  > ", arrows=True), "3")
 
+    @unittest.skipIf(os.name != "posix", "Linux only（raw 模式 + termios）")
     def test_linux_arrows_disabled_swallows_sequences(self) -> None:
         """默认（arrows=False）：方向键序列整段吞掉（既有调用方行为不变）。"""
         stdin, _tcg, _tcs, _raw, _read = self._linux_env([b"\x1b", b"[", b"B", b"3", b"\r"])
@@ -492,13 +500,21 @@ class TestInputChoice(unittest.TestCase):
     @unittest.skipUnless(os.name == "nt", "Windows only")
     def test_windows_esc_cancels(self) -> None:
         """Esc 键（单字符 \x1b）即时取消。"""
-        with patch("msvcrt.getwch", side_effect=["\x1b"]):
+        with (
+            patch("src.python.tui.tui_keys.sys.stdin") as mock_stdin,
+            patch("msvcrt.getwch", side_effect=["\x1b"]),
+        ):
+            mock_stdin.isatty.return_value = True
             self.assertIsNone(_input_choice_windows("  > "))
 
     @unittest.skipUnless(os.name == "nt", "Windows only")
     def test_windows_enter_submits_line(self) -> None:
         """逐字符输入 + 回车 → strip 后的行内容。"""
-        with patch("msvcrt.getwch", side_effect=["3", "\r"]):
+        with (
+            patch("src.python.tui.tui_keys.sys.stdin") as mock_stdin,
+            patch("msvcrt.getwch", side_effect=["3", "\r"]),
+        ):
+            mock_stdin.isatty.return_value = True
             self.assertEqual(_input_choice_windows("  > "), "3")
 
 

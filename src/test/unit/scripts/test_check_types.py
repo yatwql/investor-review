@@ -52,9 +52,10 @@ class TestPyrightCommand:
 
     def test_prefers_venv_binary_over_npx(self):
         """PATH 没有、但虚拟环境里装了 pyright 时用 venv 那份（钩子场景通常未激活 venv）。"""
+        p = Path("/repo/.venv/bin/pyright")
         with patch.object(check_types.shutil, "which", return_value=None):
-            with patch.object(check_types, "venv_pyright_path", return_value=Path("/repo/.venv/bin/pyright")):
-                assert check_types.pyright_command() == ["/repo/.venv/bin/pyright"]
+            with patch.object(check_types, "venv_pyright_path", return_value=p):
+                assert check_types.pyright_command() == [str(p)]
 
     def test_falls_back_to_npx(self):
         """PATH 与 venv 都没有、但 npx 可用时走 `npx --no-install pyright`（不联网安装）。"""
