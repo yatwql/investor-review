@@ -188,6 +188,9 @@ pytest 的 `-m` 标记表达式封装层，按 `--mode` 选择预定义组合。
 # 多档并行采集（可选；默认 4 核+ 为 2、弱机为 1，自适应）
 .venv/bin/python scripts/test-runner.py --mode dev-verify,regression --jobs 2
 
+# xdist 并行级别（单模式内 worker 数）：缺省 medium = 50% 核数且封顶 8；也可用环境变量固定
+TEST_RUNNER_PARALLEL=high .venv/bin/python scripts/test-runner.py --mode dev-verify
+
 # 跨机器耗时采集 + 自动更新 test-coverage.md 环境耗时对照（含机器信息采集）
 .venv/bin/python scripts/test-runner.py --mode bench --update-docs
 
@@ -201,6 +204,12 @@ pytest 的 `-m` 标记表达式封装层，按 `--mode` 选择预定义组合。
 .venv/bin/python scripts/test-runner.py --mode unit --keep-runs 5 --archive-cap-mb 1024
 ```
 
+> **并行级别怎么选**：worker 数 = 核数 × 档位系数（high 100% / medium 50% / low 25%），
+> 缺省 medium 并**封顶 8**——实测 16 核上 8 worker 最优、16 worker 反而慢约 17%（xdist 进程争抢
+> 加磁盘/杀软扫描）；显式 `--parallel high` 仍按 100% 核数。慢盘/慢 CPU 机器（典型 Windows：
+> 进程启动与 Defender 实时扫描是主开销）可先 `TEST_RUNNER_PARALLEL=high` 或 `=low` 各跑一次
+> 对比再固定，并把仓库与 `.venv` 加入杀软排除项。
+>
 > **`test-reports/archives/` 轮转**：每次运行把 `latest/` 归档为
 > `archives/<YYYYMMDD>/<HHMMSS>/`，长年累积会吃满本地磁盘与 CI runner（实测 31 份 ≈ 17G）。
 > 启动前按双闸门静默裁剪：**次数闸门**（保留最近 `--keep-runs` 次，缺省 10）+ **体积闸门**

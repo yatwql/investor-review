@@ -55,7 +55,9 @@ from _test_runner.modes import (  # noqa: F401
     resolve_jobs,
 )
 from _test_runner.pytest_env import (  # noqa: F401
+    PARALLEL_ENV,
     _PARALLEL_FACTOR,
+    resolve_parallel_level,
     _check_pytest_html,
     _check_pytest_cov,
     _check_xdist,
@@ -127,7 +129,10 @@ def parse_args() -> argparse.Namespace:
         const="medium",
         default=None,
         choices=["high", "medium", "low"],
-        help="并行级别（high=100%核数, medium=50%核数, low=25%核数，缺省 medium）",
+        help=(
+            "并行级别（high=100% 核数, medium=50% 核数且封顶 8 worker, low=25% 核数；"
+            f"缺省 medium，可用环境变量 {PARALLEL_ENV} 固定，CLI 优先）"
+        ),
     )
     parser.add_argument(
         "--timeout", type=int, default=None, metavar="SEC", help="覆盖各模式的超时设置（秒），所有模式统一使用此值"

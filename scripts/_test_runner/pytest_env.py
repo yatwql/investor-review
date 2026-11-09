@@ -82,6 +82,28 @@ _PARALLEL_FACTOR: dict[str, float] = {
 }
 
 
+#: 环境变量覆盖并行级别（与 `--parallel` 同义）：慢盘/慢 CPU 机器上可一次性固定，
+#: 不必每次命令行带参（ANSI 前缀与 `--parallel` 优先级：CLI > 本变量 > medium）
+PARALLEL_ENV = "TEST_RUNNER_PARALLEL"
+
+#: medium 档的 worker 上限：实测 16 核上 8 worker 最优、16 worker 反而慢 17%
+#: （xdist 进程争抢 + 磁盘/杀软扫描），故默认档不再随核数无上限放大；
+#: 显式 `--parallel high` 仍按 100% 核数执行（用户明确要求时尊重其选择）
+_MEDIUM_WORKER_CAP = 8
+
+
+def resolve_parallel_level(cli_level: str | None) -> str:
+    """并行级别解析：CLI > `TEST_RUNNER_PARALLEL` > 缺省 medium。
+
+    Returns:
+        ``"high"`` / ``"medium"`` / ``"low"``（非法环境变量值按 medium 处理）。
+    """
+    if cli_level:
+        return cli_level
+    raw = (os.environ.get(PARALLEL_ENV) or "").strip().lower()
+    return raw if raw in _PARALLEL_FACTOR else "medium"
+
+
 def _calc_parallel_workers(level: str | bool) -> str:
     """根据并行级别计算 worker 数。
 
@@ -98,6 +120,8 @@ def _calc_parallel_workers(level: str | bool) -> str:
     workers = max(1, int(n_cores * factor))
     if level_key == "low":
         workers = max(2, workers)
+    elif level_key == "medium":
+        workers = min(workers, _MEDIUM_WORKER_CAP)
     return str(workers)
 
 
@@ -138,10 +162,14 @@ def _build_pytest_args(
     # ── 并行执行 ──
     parallel_enabled = mode_cfg.get("parallel", False)
     if parallel_enabled and _check_xdist():
-        level = parallel_level or "medium"
+        level = resolve_parallel_level(parallel_level)
         workers = _calc_parallel_workers(level)
         args.extend(["-n", workers])
-        print(f"      [..] 并行 worker={workers}（级别: {level}）")
+        hint = ""
+        n_cores = os.cpu_count() or 0
+        if level != "high" and n_cores and int(workers) < n_cores:
+            hint = f"；如需更多并发：--parallel high 或设 {PARALLEL_ENV}=high"
+        print(f"      [..] 并行 worker={workers}（级别: {level}{hint}）")
     elif parallel_enabled:
         print("      [!] pytest-xdist 未安装，降级单线程执行")
 

@@ -18,6 +18,11 @@
 
 ### 修复
 
+- **并行档位可固定且不再无上限放大（rf-1098）** —— worker 数仍按核数×档位系数计算，但缺省档
+  `medium` 封顶 8（实测 16 核上 8 worker 最优、16 反而慢约 17%）；新增 `TEST_RUNNER_PARALLEL`
+  环境变量固定档位（优先级 `--parallel` > 环境变量 > 缺省），worker 少于核数时输出提示可提升方式；
+  `scripts-reference.md` 补「并行级别怎么选」（含 Windows 上杀软排除建议）。
+
 - **门禁链路提速三层（不降覆盖，rf-1097）** —— `check-types.py` 新增 `--changed`（钩子只查本次变更文件，
   回退规则：变更 >25 个或取不到 git 清单即跑全量；CI guards 与 P2 始终全量）；`dev-verify` 排除
   `real_repo` 标记的真实仓库守护冒烟（钩子已对同一棵树跑过，`verify`/CI 仍全跑）；按计时重新校准

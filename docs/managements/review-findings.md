@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.7-dev
-> **编号源**：`rf-next = 1098`（新增问题提出后更新为 +1；已用最大 rf-1097，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1099`（新增问题提出后更新为 +1；已用最大 rf-1098，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -75,6 +75,7 @@
 | **rf-1095** | `test-reports/archives/` 无轮转机制，实测 31 份归档 ≈ 17G（本地磁盘与 CI runner 都会被吃满） | 新增 `scripts/_test_runner/retention.py::prune_archives`（次数闸门 keep 最近 N 次 + 体积闸门 cap MiB，两侧均可关）、`test-runner.py` 启动前静默清理并新增 `--keep-runs` / `--archive-cap-mb`；删除失败只告警不计入已删、空日期层回收；补 7 例用例（次数/体积/同日排序/两闸门可关/缺目录/删除失败） |
 | **rf-1096** | **时间相关缓存用例在盘中必红**：11 个 LLM 缓存用例断言「同产出第二次命中缓存」，但未钉死行情口径桶——该桶随钟面变化（盘中档禁止复用价格相关模块），故 09:00–15:00 跑必失败、收盘后转绿；实测 09:30 跑 dev-verify 报 38 处失败，环境一变即误判为回归 | 每个缓存断言文件加 autouse fixture `_freeze_market_bucket_for_cache_asserts`（统一 `freeze_market_bucket` 钉收盘档，用例内显式冻结仍可覆盖），llm 全档 1679 通过；与 `test_module_fingerprint` 的既有做法同一口径 |
 | **rf-1097** | **门禁链路越来越慢**（实测每次提交 ≈61.5s：钩子 13.5s + `dev-verify` 45.5s），且 `--parallel high` 无增益（16 worker 仍 45.5s → 非 CPU 瓶颈）：① `check-types` 全量 pyright 13.7s/次；② `dev-verify` 内有 5 个「真实仓库守护冒烟」用例与钩子对同一棵树重复跑同一守护（≈20s）；③ 若干 report 用例套着真实重试退避等待（单文件 22s） | 三层提速且不降覆盖：① `check-types --changed` 只查变更文件（14s → 0.5~2s；变更 >25 个或取不到 git 清单时回落全量），钩子用快车道，**CI guards 与 P2 恒全量**；② 真实仓库冒烟加 `real_repo` 标记并从 `dev-verify` 排除（`verify`/CI 仍全跑）；③ 按「加离线桩前后计时」重新校准离线声明，为 4 个真受退避等待拖慢的文件恢复声明。实测 `dev-verify` 45.5s → 33.2s，钩子 13.5s → ≈5s |
+| **rf-1098** | 并行档位缺少可固定入口与上限：worker = 核数 × 系数且 medium 无上限（32 核会开到 16，实测偏慢），慢机器只能每次命令行带参数，并行度也不可解释（输出只报 worker 数） | medium 封顶 8、新增 `TEST_RUNNER_PARALLEL` 环境变量（优先级 CLI > 环境 > 缺省）、worker 少于核数时提示可提升方式；补 9 例用例（级别优先级/非法值回落/封顶/high 不封顶/low 下限）；scripts-reference 补选择建议 |
 
 ### 归档档案
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-08）
