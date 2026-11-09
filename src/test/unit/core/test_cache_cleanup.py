@@ -774,3 +774,40 @@ class TestSuspiciousKeyMisses:
         for i in range(_stats._MISS_KEY_TRACK_LIMIT + 50):
             _record_cache_miss(f"bulk_prefix_{i}")
         assert len(_stats._cache_miss_keys) == _stats._MISS_KEY_TRACK_LIMIT
+
+
+# ═══════════════════════════════════════════════════════════
+#  键名 → 文件名沙箱化（Windows 非法字符 / 目录穿越）
+# ═══════════════════════════════════════════════════════════
+
+
+class TestCacheKeySanitization:
+    """键名落盘一律是合法文件名。
+
+    回归背景：负缓存 mark 的键形如 `neg:{代码}:{日期}`，含 `:`——Windows 上文件名
+    非法，写入静默失败（缓存永不算命中，且没有任何报错）。沙箱化必须同时挡住
+    路径分隔符与 `..`，否则键名可以把文件写到缓存目录之外。
+    """
+
+    def test_colon_escaped(self):
+        from src.python.cache._paths import _cache_path
+
+        assert ":" not in os.path.basename(_cache_path("neg:600000:2026-11-09"))
+
+    def test_separators_escaped(self):
+        from src.python.cache._paths import _cache_path
+
+        name = os.path.basename(_cache_path("a/b\\c"))
+        assert "/" not in name and "\\" not in name
+
+    def test_traversal_stays_inside_cache_dir(self):
+        from src.python.cache._paths import _cache_path
+
+        assert os.path.dirname(_cache_path("../../etc/passwd")) == os.path.dirname(_cache_path("plain"))
+
+    def test_version_suffix_and_json_suffix_kept(self):
+        from src.python.cache._paths import _CACHE_KEY_VERSION, _cache_path
+
+        name = os.path.basename(_cache_path("plain"))
+        assert name.endswith(".json")
+        assert f"_{_CACHE_KEY_VERSION}" in name

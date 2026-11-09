@@ -32,6 +32,11 @@ from src.python.tui.tui_keys import (
 )
 import pytest
 
+#: 平台闸门（同一判定只写一份：重复字面量会在措辞/口径上漂移）
+_POSIX_ONLY = pytest.mark.skipif(os.name != "posix", reason="Linux only")
+_POSIX_RAW_TERMIOS = pytest.mark.skipif(os.name != "posix", reason="Linux only（raw 模式 + termios）")
+_WINDOWS_ONLY = pytest.mark.skipif(os.name != "nt", reason="Windows only")
+
 pytestmark = [pytest.mark.unit, pytest.mark.unit_ui]
 
 
@@ -91,7 +96,7 @@ class TestGetKeyDispatch(unittest.TestCase):
         mock_windows.assert_not_called()
 
 
-@unittest.skipIf(os.name != "nt", "Windows only")
+@_WINDOWS_ONLY
 class TestGetKeyWindows(unittest.TestCase):
     """Windows 分支 _get_key_windows 测试。"""
 
@@ -185,7 +190,7 @@ class TestGetKeyWindows(unittest.TestCase):
         self.assertEqual(_get_key_windows(), KEY_CTRL_C)
 
 
-@unittest.skipIf(os.name != "posix", "Linux only")
+@_POSIX_ONLY
 class TestGetKeyLinux(unittest.TestCase):
     """Linux 分支 _get_key_linux 测试。"""
 
@@ -376,7 +381,7 @@ class TestInputChoice(unittest.TestCase):
             patch("src.python.tui.tui_keys.os.read", side_effect=read_bytes),
         )
 
-    @unittest.skipIf(os.name != "posix", "Linux only（raw 模式 + termios）")
+    @_POSIX_RAW_TERMIOS
     def test_linux_esc_cancels_immediately(self) -> None:
         """孤立 Esc（超时无后继字节）→ None：误入子菜单即时返回上一步。"""
         stdin, _tcg, _tcs, _raw, _read = self._linux_env([b"\x1b"])
@@ -392,7 +397,7 @@ class TestInputChoice(unittest.TestCase):
             mock_stdin.fileno.return_value = 99
             self.assertIsNone(_input_choice_linux("  > "))
 
-    @unittest.skipIf(os.name != "posix", "Linux only（raw 模式 + termios）")
+    @_POSIX_RAW_TERMIOS
     def test_linux_residue_sequence_swallowed(self) -> None:
         """孤 Esc 后迟到的方向键序列：整段吞掉不进输入行，随后输入正常。"""
         stdin, _tcg, _tcs, _raw, _read = self._linux_env([b"\x1b"])
@@ -420,7 +425,7 @@ class TestInputChoice(unittest.TestCase):
             mock_stdin.fileno.return_value = 99
             self.assertEqual(_input_choice_linux("  > "), "3")
 
-    @unittest.skipIf(os.name != "posix", "Linux only（raw 模式 + termios）")
+    @_POSIX_RAW_TERMIOS
     def test_linux_enter_submits_line(self) -> None:
         """逐字节输入 + 回车 → strip 后的行内容。"""
         stdin, _tcg, _tcs, _raw, _read = self._linux_env([b"3", b"\r"])
@@ -429,7 +434,7 @@ class TestInputChoice(unittest.TestCase):
             mock_stdin.fileno.return_value = 99
             self.assertEqual(_input_choice_linux("  > "), "3")
 
-    @unittest.skipIf(os.name != "posix", "Linux only（raw 模式 + termios）")
+    @_POSIX_RAW_TERMIOS
     def test_linux_backspace_edits_last_char(self) -> None:
         """退格回剥最后一个字符。"""
         stdin, _tcg, _tcs, _raw, _read = self._linux_env([b"3", b"4", b"\x7f", b"\r"])
@@ -438,7 +443,7 @@ class TestInputChoice(unittest.TestCase):
             mock_stdin.fileno.return_value = 99
             self.assertEqual(_input_choice_linux("  > "), "3")
 
-    @unittest.skipIf(os.name != "posix", "Linux only（raw 模式 + termios）")
+    @_POSIX_RAW_TERMIOS
     def test_linux_ctrl_c_raises_interrupt(self) -> None:
         """raw 模式下 Ctrl+C 转发为 KeyboardInterrupt（与调用方 except 分支衔接）。"""
         stdin, _tcg, _tcs, _raw, _read = self._linux_env([b"\x03"])
@@ -448,7 +453,7 @@ class TestInputChoice(unittest.TestCase):
             with self.assertRaises(KeyboardInterrupt):
                 _input_choice_linux("  > ")
 
-    @unittest.skipIf(os.name != "posix", "Linux only（raw 模式 + termios）")
+    @_POSIX_RAW_TERMIOS
     def test_linux_arrows_return_nav_keys(self) -> None:
         """arrows=True 且行为空：↑/↓ 序列返回方向键键名（列表面板导航）。"""
         for seq, expect in (([b"\x1b", b"[", b"A"], KEY_UP), ([b"\x1b", b"[", b"B"], KEY_DOWN)):
@@ -465,7 +470,7 @@ class TestInputChoice(unittest.TestCase):
                 mock_stdin.fileno.return_value = 99
                 self.assertEqual(_input_choice_linux("  > ", arrows=True), expect)
 
-    @unittest.skipIf(os.name != "posix", "Linux only（raw 模式 + termios）")
+    @_POSIX_RAW_TERMIOS
     def test_linux_arrows_swallowed_when_line_has_content(self) -> None:
         """行内已有内容：方向键序列仍吞掉（保行编辑），Enter 提交原行。"""
         stdin, _tcg, _tcs, _raw, _read = self._linux_env([b"3", b"\x1b", b"[", b"B", b"\r"])
@@ -481,7 +486,7 @@ class TestInputChoice(unittest.TestCase):
             mock_stdin.fileno.return_value = 99
             self.assertEqual(_input_choice_linux("  > ", arrows=True), "3")
 
-    @unittest.skipIf(os.name != "posix", "Linux only（raw 模式 + termios）")
+    @_POSIX_RAW_TERMIOS
     def test_linux_arrows_disabled_swallows_sequences(self) -> None:
         """默认（arrows=False）：方向键序列整段吞掉（既有调用方行为不变）。"""
         stdin, _tcg, _tcs, _raw, _read = self._linux_env([b"\x1b", b"[", b"B", b"3", b"\r"])
@@ -518,7 +523,7 @@ class TestInputChoice(unittest.TestCase):
             self.assertEqual(_input_choice_windows("  > "), "3")
 
 
-@unittest.skipIf(os.name != "posix", "Linux only")
+@_POSIX_ONLY
 class TestGetKeyWholePacketPty(unittest.TestCase):
     """整包 ESC[B（电脑常态）必须即时解析为方向键。
 
@@ -563,6 +568,7 @@ class TestGetKeyWholePacketPty(unittest.TestCase):
         os.close(slave)
         # 子进程 READY（已 setraw）后写入 → dt 为纯解析耗时：
         # 即时解析 ~ms；缓冲谎报误判路径 = 0.5+0.3 两段超时 ≥0.8s，两头都拦得住
+        assert proc.stderr is not None  # stderr=PIPE（显式收窄 Optional，便于静态检查）
         ready = proc.stderr.readline()
         if b"READY" not in ready:
             os.close(master)

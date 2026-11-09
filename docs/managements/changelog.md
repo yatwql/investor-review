@@ -18,6 +18,12 @@
 
 ### 修复
 
+- **键名沙箱化补回归 + 平台闸门收口（rf-1104）** —— `cache/_paths.py` 的键名沙箱化（转义 `:`，
+  修「负缓存 mark 在 Windows 因非法文件名静默写不出」）此前无用例锁住，补 4 例（`:` / 分隔符 /
+  `..` 不越出缓存目录 / 版本戳与 `.json` 后缀保留）；`test_tui_keys.py`、`test_tui_menu_loop.py`
+  里逐方法复写的 11 份平台判定（`unittest.skipIf(os.name …)`，措辞已分叉）收口为模块级 mark
+  （`_POSIX_ONLY` / `_POSIX_RAW_TERMIOS` / `_WINDOWS_ONLY` / `_POSIX_TTY`），skip 语义不变；
+  `proc.stderr.readline()` 前显式收窄 Optional（pyright `reportOptionalMemberAccess`）。
 - **路径绝对化与守护域口径收口（rf-1103）** —— 三处同构副本：①「配置/环境变量给的路径按项目根
   绝对化」在 5 处各写一份（`cache/_paths`、`config/_logging`、`core/logger` 两处、
   `core/datasource_credential`），归一与否不一致（`./logs`、`data//cache` 原样落盘，空串落成
