@@ -149,6 +149,21 @@ def run_mode(
         ):
             print(f"    {stripped}")
 
+    # pytest 非测试失败的退出码：给出可执行原因，避免只看到「0 passed, 0 failed（0.0s）」
+    _PYTEST_EXIT_HINTS = {
+        2: "被中断（Ctrl+C / 会话结束）",
+        3: "内部错误（pytest 崩溃）",
+        4: "用法错误：参数不被识别——常见于缺插件（如 pytest-timeout 未装却传了 --timeout）"
+        "或环境变量残留（TEST_RUNNER_PER_TEST_TIMEOUT / TEST_RUNNER_PARALLEL）",
+        5: "未收集到用例：marker 表达式与当前测试树不匹配（或收集期被全部跳过）",
+    }
+    hint = _PYTEST_EXIT_HINTS.get(proc.returncode)
+    if hint:
+        print(f"  [ERR] {mode_key}: pytest 退出码 {proc.returncode} — {hint}")
+        tail = [ln for ln in output.splitlines() if ln.strip()][-8:]
+        for line in tail:
+            print(f"    {line.strip()}")
+
     # 结果概览
     ok = proc.returncode == 0
     tag = "OK" if ok else "ERR"

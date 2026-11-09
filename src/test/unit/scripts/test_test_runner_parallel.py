@@ -83,6 +83,32 @@ class TestPerTestTimeout:
         assert not any(a.startswith("--timeout") for a in args)
 
 
+class TestPytestExitCodeHints:
+    """pytest 非测试失败退出码的提示（避免只看到「0 passed, 0 failed（0.0s）」）。"""
+
+    @staticmethod
+    def _run(monkeypatch, capsys, returncode: int, stdout: str = "") -> str:
+        runner = load_script("_test_runner/runner.py", module_name=f"test_runner_exit_hint_{returncode}")
+        fake = type("P", (), {"returncode": returncode, "stdout": stdout, "stderr": ""})()
+        monkeypatch.setattr(runner.subprocess, "run", lambda *a, **k: fake)
+        monkeypatch.setattr(runner, "html_available", lambda: False, raising=False)
+        runner.run_mode("scenario", coverage=False)
+        return capsys.readouterr().out
+
+    def test_usage_error_explains_missing_plugin(self, monkeypatch, capsys):
+        """退出码 4（用法错误）→ 明确提示可能缺插件/环境变量残留，并回放输出尾部。"""
+        out = self._run(monkeypatch, capsys, 4, "pytest: error: unrecognized arguments: --timeout=120")
+        assert "退出码 4" in out
+        assert "pytest-timeout" in out
+        assert "unrecognized arguments" in out
+
+    def test_no_tests_collected_explains_marker(self, monkeypatch, capsys):
+        """退出码 5（未收集到用例）→ 提示 marker 与测试树不匹配。"""
+        out = self._run(monkeypatch, capsys, 5, "no tests ran in 0.01s")
+        assert "退出码 5" in out
+        assert "未收集到用例" in out
+
+
 class TestWorkerCount:
     """worker 数 = 核数 × 系数，medium 封顶 8。"""
 

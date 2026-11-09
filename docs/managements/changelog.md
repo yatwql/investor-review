@@ -18,6 +18,10 @@
 
 ### 修复
 
+- **pytest 非测试失败退出码给出可执行提示（rf-1102）** —— 退出码 2/3/4/5 原只表现为
+  「0 passed, 0 failed (0.0s)」，看不出是用法错误（缺 `pytest-timeout`、`TEST_RUNNER_*` 残留）
+  还是未收集到用例；现按退出码说明原因并回放输出末 8 行。
+
 - **Windows 收集期不再被 POSIX 专属导入打断（rf-1101）** —— `test_live_status_edge.py` 模块顶层
   `import pty`/`import termios` 在 Windows 上导致 `ERROR collecting`，整档 `unit`/`regression` 变错误；
   改用 `pytest.importorskip`（本平台缺失即整模块跳过），并新增 AST 守卫用例：`src/test` 模块级
