@@ -119,3 +119,22 @@ class TestDegradation:
         assert result["removed"] == 0
         assert len(list(archives.glob("*/*"))) == 3
         assert os.path.isdir(archives / "20260101" / "100000")
+
+    def test_volume_gate_remove_failure_still_counted_as_kept(self, tmp_path: Path, monkeypatch):
+        """体积闸门删不掉时：该份仍算保留（否则 kept/total_mb 比磁盘实际值小，统计虚报）。"""
+        archives = tmp_path / "archives"
+        mib = 1024 * 1024
+        _make_run(archives, "20260101", "100000", size_bytes=2 * mib)
+        _make_run(archives, "20260102", "100000", size_bytes=2 * mib)
+
+        def _boom(_path: str) -> None:
+            raise OSError("permission denied")
+
+        monkeypatch.setattr(retention.shutil, "rmtree", _boom)
+
+        result = retention.prune_archives(str(archives), keep=0, cap_mb=1)
+
+        assert result["removed"] == 0
+        assert result["kept"] == 2
+        assert result["total_mb"] == pytest.approx(4.0)
+        assert len(list(archives.glob("*/*"))) == 2

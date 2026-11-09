@@ -130,6 +130,7 @@ def prune_archives(
         removed += 1
 
     # 体积闸门：仍超上限就从最旧的保留项开始继续删
+    stuck: list[str] = []
     if cap_mb > 0:
         cap_bytes = cap_mb * 1024 * 1024
         sizes = {run: _dir_size_bytes(run) for run in survivors}
@@ -139,10 +140,14 @@ def prune_archives(
             size = sizes.pop(oldest, 0)
             removed_size = _remove_run(oldest)
             if removed_size is None:
-                continue  # 删不掉：留待下次
+                # 删不掉：记下来待本轮回填（若直接 continue 会让该份从统计里消失，
+                # 剩声剩余次数/体积比磁盘实际值偏小），下次调用再试
+                stuck.append(oldest)
+                continue
             freed += removed_size
             total -= size
             removed += 1
+    survivors.extend(stuck)
 
     _drop_empty_date_dirs(archives_dir)
 

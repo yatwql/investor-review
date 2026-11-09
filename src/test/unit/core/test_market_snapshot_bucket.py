@@ -13,7 +13,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 
@@ -57,6 +57,15 @@ class TestBucketResolution:
 
         assert bucket.key == expected_key
         assert bucket.intraday is intraday
+
+    def test_aware_moment_in_other_timezone_converted_to_beijing(self):
+        """带时区的入参先换北京时区再取时分（否则 UTC 时分被当成北京时间直接误分档）。"""
+        utc_0345 = datetime(*_TRADING_DAY, 3, 45, tzinfo=timezone.utc)  # = 北京 11:45（午休档）
+
+        bucket = market_hours.market_snapshot_bucket(utc_0345)
+
+        assert bucket.key == "noon:2026-11-06"
+        assert bucket.intraday is False
 
     def test_non_trading_day_uses_previous_close(self):
         """非交易日：口径是上一交易日收盘（此处周五），不能落到「盘中」。"""
