@@ -133,7 +133,8 @@ def _mem_gib_windows() -> float | None:
     try:
         stat = _MemoryStatusEx()
         stat.dwLength = ctypes.sizeof(_MemoryStatusEx)
-        if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat)):
+        windll = getattr(ctypes, "windll", None)  # 非 Windows 的解释器桩上没有 windll
+        if windll is not None and windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat)):
             return stat.ullTotalPhys / (1024**3)
     except Exception:
         return None

@@ -30,6 +30,7 @@ def check_weak_mock_assertions(cases: list[TestCase]) -> list[str]:
                 t = sub.test
                 if (
                     isinstance(t, ast.Attribute)
+                    and isinstance(t.value, ast.Name)
                     and _is_mock_name(t.value)
                     and not t.attr.startswith(("called", "call_", "assert_", "reset"))
                 ):

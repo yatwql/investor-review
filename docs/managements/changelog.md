@@ -18,6 +18,21 @@
 
 ### 修复
 
+- **时间相关缓存用例去钟面依赖（rf-1096）** —— 11 个 LLM 缓存用例断言「同产出第二次命中缓存」，
+  却未钉死行情口径桶（盘中档禁止复用价格相关模块），09:00–15:00 跑必红、收盘后转绿；统一注入
+  autouse「钉收盘档」fixture，llm 全档 1679 通过。
+
+- **`scripts/` 类型错误清零，类型守护域扩到入口脚本（rf-1093）** —— 顶层脚本 50 处 pyright error
+  逐簇清掉（`sys.stdout.reconfigure` 用 `cast` 取具体实现、`ctypes.windll`/`msvcrt` 平台桩走
+  `getattr`、动态 target 的 `build_parser` 判空、AST 节点用 `getattr(node, "lineno", 0)`、
+  `check-doc-traces` 的分支内赋值先落默认值），`[tool.pyright] include` 与 `check-types` 受检域
+  从 `src/python` 扩为 `src/python` + `scripts`。
+
+- **测试归档保留期清理（rf-1095）** —— `test-reports/archives/` 长期无轮转（实测 31 份 ≈ 17G）。
+  新增 `scripts/_test_runner/retention.py`：次数闸门（保留最近 N 次，缺省 10）+ 体积闸门
+  （总量上限，缺省 2 GiB），两侧均可用 `--keep-runs` / `--archive-cap-mb` 覆盖或关闭；清理在
+  `test-runner.py` 启动前静默执行，删除失败只告警且不计入已删，空日期层目录一并回收。
+
 - **类型谓词单源化 + 陈旧离线声明清理（rf-1094）** —— 全仓 5 份「有限真数值」谓词
   （`analysis/holding_change_events`、`analysis/trade_cost_model`、`llm/prompts_signals`、
   `report/chart_data_builder` 各一份 + `core/num_utils.is_finite_number`）收敛为

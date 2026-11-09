@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import Any, cast
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享模块（_checklib / _test_runner）
 import os
@@ -25,7 +26,8 @@ import os
 # 替换字符，直接 print 会触发 UnicodeEncodeError 使 runner 中途崩溃（丢后续阶段输出）
 if sys.stdout and hasattr(sys.stdout, "reconfigure"):
     try:
-        sys.stdout.reconfigure(errors="replace")
+        # TextIO 协议不含 reconfigure（仅 TextIOWrapper 有）：按具体实现取用
+        cast(Any, sys.stdout).reconfigure(errors="replace")
     except Exception:
         pass
 
@@ -99,6 +101,7 @@ from _test_runner.report_html import (  # noqa: F401
     _report_links_html,
     _render_index_html,
 )
+from _test_runner.retention import DEFAULT_CAP_MB, DEFAULT_KEEP_RUNS, prune_archives
 from _test_runner.runner import (  # noqa: F401
     _ensure_dirs,
     _create_latest_structure,
@@ -154,6 +157,20 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="多模式并行度（每模式独立 pytest 进程，单模式忽略；优先级 CLI > TEST_RUNNER_JOBS 环境变量 > 自适应——4 核+ 为 2、弱机/核数采集失败为 1。墙钟含轻微争抢，环境表「采集并行度」行记录本次口径，同并行度才可比）",
     )
+    parser.add_argument(
+        "--keep-runs",
+        type=int,
+        default=DEFAULT_KEEP_RUNS,
+        metavar="N",
+        help=f"归档保留最近 N 次运行（缺省 {DEFAULT_KEEP_RUNS}；<=0 不启用次数闸门）",
+    )
+    parser.add_argument(
+        "--archive-cap-mb",
+        type=int,
+        default=DEFAULT_CAP_MB,
+        metavar="MB",
+        help=f"归档总量上限（MiB，缺省 {DEFAULT_CAP_MB}；<=0 不启用体积闸门）",
+    )
     parser.add_argument("--help", action="store_true", help="显示帮助")
     args = parser.parse_args()
     if args.update_docs:
@@ -199,6 +216,17 @@ def main() -> None:
         machine_info = _collect_machine_info(args.parallel or "medium", bench_jobs=jobs)
         print(_format_machine_info(machine_info))
 
+    # 归档保留期清理（旁路：只告警不中断，防 archives/ 无限膨胀）
+    try:
+        pruned = prune_archives(_ARCHIVES_DIR, keep=args.keep_runs, cap_mb=args.archive_cap_mb)
+        if pruned["removed"]:
+            print(
+                f"  [..] 归档清理: 删除 {pruned['removed']} 次运行，释放 {pruned['freed_mb']} MiB"
+                f"（保留 {pruned['kept']} 次 / {pruned['total_mb']} MiB）"
+            )
+    except Exception:  # noqa: BLE001 — 清理属旁路，任何异常都不得阻断测试
+        print("  [!] 归档清理失败（非关键，继续执行）")
+
     # 归档现有报告
     archive_path = archive_existing()
 
@@ -236,8 +264,11 @@ def main() -> None:
     # 生成汇总页
     index_html = _render_index_html(results, args.coverage, archive_path)
     index_path = os.path.join(_LATEST_DIR, "index.html")
-    with open(index_path, "w", encoding="utf-8") as f:
-        f.write(index_html)
+    try:
+        with open(index_path, "w", encoding="utf-8") as f:
+            f.write(index_html)
+    except OSError as exc:
+        print(f"  [!] 汇总页写入失败: {exc}（测试结果本身有效，继续汇总输出）")
 
     print("\n  [OK] 汇总页已生成: test-reports/latest/index.html")
 

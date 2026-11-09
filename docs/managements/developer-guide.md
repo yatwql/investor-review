@@ -173,7 +173,7 @@ ln -sf "$PWD/.pi/models.json" ~/.pi/agent/models.json
 .venv/bin/python scripts/check-script-contract.py --ci       # scripts 顶层脚本契约（退出码声明/CLI 面/显式 encoding/测试覆盖）
 .venv/bin/python scripts/check-import-surface.py --ci         # 导入面契约（兼容注释/私有 `__all__`/跨包私有导入/动态导入字面量 + 例外表自审）
 .venv/bin/python scripts/check-file-length.py --ci         # 单文件行数红线（主程序/脚本 >1000 行 / 测试 >1200 行 + 膨胀登记表同实）
-.venv/bin/python scripts/check-types.py --ci               # pyright 类型错误（受检域 src/python；规则基线与排除项在 pyproject.toml [tool.pyright]）
+.venv/bin/python scripts/check-types.py --ci               # pyright 类型错误（受检域 src/python + scripts；规则基线与排除项在 pyproject.toml [tool.pyright]）
 ```
 
 > **`--sync` 统计快照口径（CI 分叉坑）**：`check-doc-drift --sync`（及 pre-commit 自动回写）按**工作区**实测写入 `folders.md` 行数，而 CI 的 `check-doc-drift` 按 **committed** 树实测——若受检目录存在**长期不提交的修改**（本地游离改动），本地已同步的数字会在 CI 上判「不一致」，连带 guards / test / portability 三个 job 同时红。提交前确认受检文件全部纳入本次提交；有长期游离修改时先提交它们、再 `--sync`。

@@ -21,12 +21,10 @@ def _check_pytest_html() -> bool:
 
 def _check_pytest_cov() -> bool:
     """检查 pytest-cov 是否已安装。"""
-    try:
-        import pytest_cov  # noqa: F401
+    # 可选依赖只探测是否可解析（不导入：插件导入有副作用，且 pyright 无该包的类型信息）
+    import importlib.util
 
-        return True
-    except ImportError:
-        return False
+    return importlib.util.find_spec("pytest_cov") is not None
 
 
 def _extract_count(text: str, pattern: str) -> int:
@@ -94,12 +92,11 @@ def _calc_parallel_workers(level: str | bool) -> str:
     Returns:
         "-n" 参数的字符串值，如 "8"、"4"、"2"
     """
-    if level is True:
-        level = "medium"
-    factor = _PARALLEL_FACTOR.get(level, 0.5)
+    level_key = "medium" if level is True else str(level)
+    factor = _PARALLEL_FACTOR.get(level_key, 0.5)
     n_cores = os.cpu_count() or 4
     workers = max(1, int(n_cores * factor))
-    if level == "low":
+    if level_key == "low":
         workers = max(2, workers)
     return str(workers)
 

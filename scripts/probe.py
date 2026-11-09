@@ -45,6 +45,9 @@ def main(argv: list[str] | None = None) -> int:
 
     module = get(name)
     parser = module.build_parser()
+    if parser is None:  # 契约：每个 target 必须提供 build_parser()
+        print(f"[ERR] target {name} 未实现 build_parser()")
+        return 2
     parser.prog = f"scripts/probe.py {name}"
     args = parser.parse_args(argv)
     rc = module.run(args) or 0

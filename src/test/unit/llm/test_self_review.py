@@ -297,3 +297,15 @@ def test_real_generator_reaches_provider_with_compliance_and_caches(monkeypatch)
     assert len(calls) == 1, "命中缓存后不得再次调用 provider"
     assert COMPLIANCE_CLOSING in calls[0][0], "自检模块的 system prompt 须经漏斗叠加合规声明"
     assert "宏观分析正文" in calls[0][1], "user prompt 须含上游模块产出"
+
+
+@pytest.fixture(autouse=True)
+def _freeze_market_bucket_for_cache_asserts(monkeypatch):
+    """缓存命中断言与钟面无关：统一钉在收盘档。
+
+    行情口径桶随钟面变化（盘中档禁止复用价格相关模块），不钉死时同一批断言在
+    交易时段必红、收盘后转绿——时间相关用例的典型不稳定形态。
+    """
+    from src.test._market_clock import freeze_market_bucket
+
+    freeze_market_bucket(monkeypatch)

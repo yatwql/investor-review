@@ -172,11 +172,11 @@ def _stats_actual() -> dict[str, tuple[int, int]]:
         "archive/": _count(archive),
         "plan/": _count(plan),
     }
-    src_total = tuple(
-        sum(v[i] for k, v in actual.items() if k in ("主程序代码", "HTML 报告模板", "架构图示", "辅助脚本"))
-        for i in (0, 1)
+    src_keys = ("主程序代码", "HTML 报告模板", "架构图示", "辅助脚本")
+    actual["源代码合计"] = (
+        sum(v[0] for k, v in actual.items() if k in src_keys),
+        sum(v[1] for k, v in actual.items() if k in src_keys),
     )
-    actual["源代码合计"] = src_total
     return actual
 
 

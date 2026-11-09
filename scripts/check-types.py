@@ -3,8 +3,8 @@
 
 守护域与规则基线写在 `pyproject.toml` 的 `[tool.pyright]`：
 
-  - `include`：`src/python`（产品代码；`scripts/` 入口脚本的 argparse/流替换/平台桩噪声
-    另立项清理，未入本守护域）
+  - `include`：`src/python` + `scripts`（产品代码与入口/守护脚本——两者的类型错误
+    同样是缺陷，`scripts/` 停顿的历史噪声已清零）
   - `exclude`：**刻意排除 `src/test`**——单测天然大量 mock / 行内 dict，静态噪音远多于
     缺陷收益，其正确性由 pytest 运行时守卫（怪癖口径同 `technical.md` 的类型检查决策）
   - `venvPath` / `venv`：依赖解析走项目虚拟环境（否则 pandas/akshare/flask 判缺失）
@@ -46,7 +46,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享模�
 from _shared.checklib import REPO_ROOT, add_common_args, rel, report  # noqa: E402
 
 #: 默认受检路径（与 `[tool.pyright] include` 同域；CLI 传路径即覆盖）
-DEFAULT_TARGETS: tuple[str, ...] = ("src/python",)
+DEFAULT_TARGETS: tuple[str, ...] = ("src/python", "scripts")
 
 #: 单次输出上限（CI 日志友好；超出时末尾给「其余 N 条」一行）
 MAX_REPORTED = 60

@@ -38,7 +38,7 @@ def _scan_core_layering(fpath: Path) -> list[tuple[int, str, str, str]]:
             if len(seg) >= 3 and seg[0] == "src" and seg[1] == "python" and seg[2] in _UPPER_PACKAGES:
                 hits.append(
                     (
-                        node.lineno,
+                        getattr(node, "lineno", 0),
                         "HIGH",
                         "core 反向 import 上层（分层倒置，改注册钩子/网关）",
                         cand,

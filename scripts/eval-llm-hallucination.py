@@ -74,7 +74,10 @@ def main():
     output_path = args.output
     if not output_path:
         output_path = os.path.join(_PROJECT_ROOT, "docs", "tmp", "hallucination-report.md")
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    try:
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    except OSError as exc:
+        raise SystemExit(f"[ERR] 无法创建输出目录: {exc}") from exc
 
     # ── 1. 加载数据集 ──
     logger.info("=" * 60)
@@ -85,18 +88,20 @@ def main():
     datasets = _load_datasets(dataset_filter)
     logger.info("已加载 %d 个数据集", len(datasets))
 
-    # ── Dry-Run：保存 prompt 到 tmp ──
+    # ── Dry-Run：prompt 收集与落盘路径（非 dry-run 时不写盘，变量仍先行绑定）──
+    prompt_path = os.path.join(_PROJECT_ROOT, "docs", "tmp", f"hallucination-prompts-{module_name}.md")
+    prompt_lines: list[str] = [
+        f"# LLM 幻觉率采样 — 构建的 Prompt（{module_name}）",
+        "",
+        f"生成时间: {datetime.now(timezone(timedelta(hours=8))).strftime('%Y-%m-%d %H:%M:%S')}",
+        "Dry-Run: 是",
+        "",
+    ]
     if dry_run:
-        prompt_dir = os.path.join(_PROJECT_ROOT, "docs", "tmp")
-        os.makedirs(prompt_dir, exist_ok=True)
-        prompt_path = os.path.join(prompt_dir, f"hallucination-prompts-{module_name}.md")
-        prompt_lines: list[str] = [
-            f"# LLM 幻觉率采样 — 构建的 Prompt（{module_name}）",
-            "",
-            f"生成时间: {datetime.now(timezone(timedelta(hours=8))).strftime('%Y-%m-%d %H:%M:%S')}",
-            "Dry-Run: 是",
-            "",
-        ]
+        try:
+            os.makedirs(os.path.dirname(prompt_path), exist_ok=True)
+        except OSError as exc:
+            raise SystemExit(f"[ERR] 无法创建 prompt 目录: {exc}") from exc
 
     # ── 2. 逐个数据集执行 ──
     all_results: list[dict] = []
@@ -156,12 +161,12 @@ def main():
             continue
 
         # ── 2b. 事实校验 ──
-        module_label = {
+        module_label: str = {
             "expert_review": "智囊团深度复盘",
             "global_macro": "全球政经局势",
             "health_check": "持仓体检报告",
             "penetration_deep": "穿透深度分析",
-        }.get(module_name, module_name)
+        }.get(module_name) or str(module_name)
 
         # 提取穿透代码（如适用）
         extra_codes: set[str] | None = None
@@ -197,15 +202,21 @@ def main():
 
     # ── Dry-Run 保存 Prompt ──
     if dry_run:
-        with open(prompt_path, "w", encoding="utf-8") as f:
-            f.write("\n".join(prompt_lines))
+        try:
+            with open(prompt_path, "w", encoding="utf-8") as f:
+                f.write("\n".join(prompt_lines))
+        except OSError as exc:
+            raise SystemExit(f"[ERR] 无法写入 prompt 文件 {prompt_path}: {exc}") from exc
         logger.info("Prompt 已保存到: %s", prompt_path)
 
     # ── 3. 生成报告 ──
     report = _generate_report(module_name, all_results, dry_run=dry_run)
 
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(report)
+    try:
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(report)
+    except OSError as exc:
+        raise SystemExit(f"[ERR] 无法写入报告 {output_path}: {exc}") from exc
     logger.info("报告已生成: %s", output_path)
 
     # ── 汇总输出 ──

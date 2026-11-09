@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.7-dev
-> **编号源**：`rf-next = 1096`（新增问题提出后更新为 +1；已用最大 rf-1095，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1097`（新增问题提出后更新为 +1；已用最大 rf-1096，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -22,7 +22,6 @@
 
 | # | 问题 | 修复方向 |
 | --- | --- | --- |
-| **rf-1093** | `scripts/` 顶层脚本仍有 52 处 pyright error（`reportAttributeAccessIssue` 为主：`sys.stdout.reconfigure`、替换式 socket 桩、`getattr(argparse)` 等），故未入 `check-types` 守护域 | 按簇清理：① 流对象改 `TextIO` 协议/显式 `cast`；② 桩替换改 `monkeypatch.setattr` + 显式声明；③ argparse 解析器改先赋值再断言非 None。清零后把 `scripts` 加回 `pyproject.toml` 的 `[tool.pyright] include` 与 `check-types` 默认受检路径，验收同 rf-1092 |
 
 ### P3 — 持续监控：兼容残留
 
@@ -40,7 +39,6 @@
 
 | # | 问题 | 修复方向 |
 | --- | --- | --- |
-| **rf-1095** | `test-reports/archives/` 累计 31 份归档、约 17G，`reports/` 约 207M，仓库无保留期/轮转机制（均 gitignore，不影响仓库但持续膨胀，CI runner 与本地磁盘都会被吃满） | 在 `scripts/test-runner.py` 落「保留最近 N 次 + 总量上限」的清理步（默认 N=10、上限 2G，可��� `--keep` 覆盖），镜像 `data/cache` 的 TTL 清理写法；清理为启动前静默步、失败只告警 |
 
 ### P4 — 持续监控：文件膨胀登记
 
@@ -73,6 +71,9 @@
 | **rf-1091** | 类型债清理：`api_base._attempt` 的 `result` 可能未绑定（`PacingGate.__exit__` 声明为 `bool` 即可被推断为吞异常）、`analysis/scenario.py` CI 区间值可能为 None 仍参与乘法、`analysis/rebalance.py`/`trade_discipline.py` 配置段可能为 None 却被 `dict()`/下标、`tui_keys` 的 msvcrt 平台桩与 `fd` 可空、`holding_change_review` 方向值 `get` 重载不匹配 | 逐个按「值判空 + 显式类型收窄」修：`__exit__` 改 `-> None`、`_attempt` 结果与返回下沉进 `with`、CI/配置段先 `isinstance` 收窄、msvcrt 走 `getattr` 降级、方向值 `isinstance(int)` 判定；无行为变更，均由既有用例与静态检查复核 |
 | **rf-1092** | `src/python` 余 34 处 pyright error（现场 pyright 实测 83 处，含 48 处 `reportArgumentType`），且类型检查未进门禁——只能靠偶发人工扫描发现，其中已证明混有真实缺陷 | 分簇清零到 **0 error**：① 可空值簇（`reportOptional*` / `possiblyUnbound`）逐点判空收窄；② 数值归一统一走 `core.num_utils` （`safe_num` / `finite_or`），谓词升级 `TypeGuard`（免二次判空）；③ 平台桩走 `getattr` 降级（`msvcrt`）、`PacingGate.__exit__` 改 `-> None`、`cache._store` 用 `builtin_set` 别名避开同名遮蔽；④ 新增 `scripts/check-types.py`（退出码 0/1 环境缺失/2）入 pre-commit 与 CI `guards`，规则基线落 `pyproject.toml [tool.pyright]`（受检域 `src/python`，`src/test` 刻意不入域）；⑤ 补 14 例脚本测试。验收：`check-types.py --ci` 通过（`src/python` 零 ERROR），CI `guards` 变绿 |
 | **rf-1094** | **陈旧离线声明**：66 个测试文件声明 `offline_external_sources`（撤掉声明后该文件全绿），说明用例早已不依赖任何外部数据——离线桩把「本可能漏 mock 的真实外部访问」遮住，也让这些文件对 provider 行为变化失去敏感度（48h 审计时 `test_cache_matrix` 正是同类问题导致整批红） | 逐文件试跑法（撤声明 → 单跑该文件 → 全绿即陈旧）撤掉 **66 处**（llm 12 + 全库 54），保留 61 处确有附带依赖（交易日历/行情/健康探针）的声明；撤后 dev-verify 9290 通过 0 失败 |
+| **rf-1093** | `scripts/` 顶层脚本余 50 处 pyright error（流对象 `sys.stdout.reconfigure`、`ctypes.windll`/`msvcrt` 平台桩、动态 target 的 `build_parser`、AST 节点 `lineno`、`check-doc-traces` 分支内赋值被判成可能未绑定等），故 `check-types` 守护域只覆盖 `src/python` | 逐簇清零到 **0 error**（流对象用 `cast(Any, …)` 取 `reconfigure`；平台桩 `getattr` 降级；动态模块 `build_parser` 判空；AST 用 `getattr(node, "lineno", 0)`；分支赋值先落默认值；`socket` 替换改 `setattr`、`xml` 数值属性收口到 `_num_attr` 助手），并把 `scripts` 加回 `[tool.pyright] include` 与 `check-types` 默认受检路径——守护域从此 = 产品代码 + 入口/守护脚本 |
+| **rf-1095** | `test-reports/archives/` 无轮转机制，实测 31 份归档 ≈ 17G（本地磁盘与 CI runner 都会被吃满） | 新增 `scripts/_test_runner/retention.py::prune_archives`（次数闸门 keep 最近 N 次 + 体积闸门 cap MiB，两侧均可关）、`test-runner.py` 启动前静默清理并新增 `--keep-runs` / `--archive-cap-mb`；删除失败只告警不计入已删、空日期层回收；补 7 例用例（次数/体积/同日排序/两闸门可关/缺目录/删除失败） |
+| **rf-1096** | **时间相关缓存用例在盘中必红**：11 个 LLM 缓存用例断言「同产出第二次命中缓存」，但未钉死行情口径桶——该桶随钟面变化（盘中档禁止复用价格相关模块），故 09:00–15:00 跑必失败、收盘后转绿；实测 09:30 跑 dev-verify 报 38 处失败，环境一变即误判为回归 | 每个缓存断言文件加 autouse fixture `_freeze_market_bucket_for_cache_asserts`（统一 `freeze_market_bucket` 钉收盘档，用例内显式冻结仍可覆盖），llm 全档 1679 通过；与 `test_module_fingerprint` 的既有做法同一口径 |
 
 ### 归档档案
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-08）
