@@ -178,7 +178,7 @@
 - **子标记**如 `unit_providers`、`unit_fetcher`、`unit_llm` 等支持单独运行指定模块的测试（`-m "unit_providers"`）
 - 新增单元测试文件时，必须为其测试类标注子标记和父标记，缺一不可
 
-**跨类标记**（如 `llm`、`edge`、`smoke`、`data`、`cassette`、`live`）不依附于父子层级，可跨越单元/场景分类独立筛选。其中 `cassette` 声明用例所需的已录制真实响应（离线回放），`live` 为 opt-in 真实网络套件（默认跳过、不入门禁，仅 `--run-live` 或 `-m live` 运行）。
+**跨类标记**（如 `llm`、`edge`、`smoke`、`data`、`cassette`、`live`、`real_repo`）不依附于父子层级，可跨越单元/场景分类独立筛选。其中 `cassette` 声明用例所需的已录制真实响应（离线回放），`live` 为 opt-in 真实网络套件（默认跳过、不入门禁，仅 `--run-live` 或 `-m live` 运行），`real_repo` 为真实仓库全量扫描的守护冒烟（钩子与 CI `guards` 已对同一棵树跑过同一守护，故 `dev-verify` 档显式排除；`verify`/CI 仍全跑）。
 
 各标记的定义、覆盖规模和典型耗时见 [`test-coverage.md`](./test-coverage.md) → 单元测试分组 / 跨类标记。
 

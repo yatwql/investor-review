@@ -18,6 +18,13 @@
 
 ### 修复
 
+- **Windows 上 41 个测试失败清零（跨平台可移植性）** —— 两类根因：路径分隔符与平台专属用例。
+  生产侧 `cache/_paths.py` 的缓存目录字面量改用原生分隔 + `normpath`、`_cache_path` 转义冒号
+  （Windows 文件名非法致负缓存 mark 静默失败）；`markers.py::_get_relative_dir` 改 `as_posix()`
+  与 `EXPECTED_DIR_MARKERS` 的 `/` 键一致；`demo_workspace.scrub_cli_paths` 同时抹两种分隔符并归一。
+  测试侧断言改平台中立（绝对路径 / venv 路径用 `isabs`/`startswith` 归一），POSIX 专属用例
+  （termios 按键、原地重绘、伪终端状态、`launch.sh`、`bash -n`、symlink）在 Windows 正确 skip；
+  子进程注入 `PYTHONUTF8=1` 修中文乱码断言。
 - **pytest 非测试失败退出码给出可执行提示（rf-1102）** —— 退出码 2/3/4/5 原只表现为
   「0 passed, 0 failed (0.0s)」，看不出是用法错误（缺 `pytest-timeout`、`TEST_RUNNER_*` 残留）
   还是未收集到用例；现按退出码说明原因并回放输出末 8 行。
