@@ -18,6 +18,10 @@
 
 ### 修复
 
+- **测试模式描述标出门禁归属** —— `test-runner.py --help` 与进度行里的模式描述原把 `regression`
+  写成「提交前快速验证」（实为 P2 发布门禁）、`unit`/`standard` 未说明归属，易误在提交前跑重档；
+  现按门禁标注：`dev-verify`=P0、`verify`=P1 合入、`regression`=P2 发布，`standard` 明确「无门禁位」。
+
 - **整档超时可定位到具体用例（rf-1100）** —— 新增 `TEST_RUNNER_PER_TEST_TIMEOUT=<秒>`：
   设值后为每个用例加 `pytest-timeout` 看门狗（超时即失败并打印该用例堆栈），未设值不启用
   （避免慢机器误杀）；`pytest-timeout` 入 `.[test]` 依赖，`scripts-reference.md` 补排障步骤。

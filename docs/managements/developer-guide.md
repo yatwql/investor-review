@@ -329,10 +329,10 @@ pip install pytest-cov coverage
 # 集成测试（含场景 + 模块间契约/缓存/TUI 路由）
 .venv/bin/python scripts/test-runner.py --mode integration
 
-# 全量单元测试（含 edge/data）
+# 全量单元测试（含 edge/data）——P1 合入门禁等价全集，不是提交前档
 .venv/bin/python scripts/test-runner.py --mode unit
 
-# 常规单元测试（排除 edge/data）
+# 常规单元测试（排除 edge/data）——无门禁位，仅供手工抽查
 .venv/bin/python scripts/test-runner.py --mode standard
 
 # ===== ② 专项验证（定向覆盖） =====

@@ -10,28 +10,28 @@ from collections.abc import Callable, Collection
 MODES: dict[str, dict] = {
     "unit": {
         "marker": "unit",
-        "desc": "全量单元测试（含 edge/data）",
+        "desc": "全量单元测试（含 edge/data）——P1 合入门禁的等价全集，不是提交前档",
         "timeout_sec": 720,
         "order": 1,
         "parallel": True,
     },
     "standard": {
         "marker": "unit and not (edge or data)",
-        "desc": "常规单元测试（排除 edge/data 标记）",
+        "desc": "常规单元测试（排除 edge/data）——无门禁位（≈ P1 verify 去掉 edge/data，仅供手工抽查）",
         "timeout_sec": 720,
         "order": 2,
         "parallel": True,
     },
     "scenario": {
         "marker": "scenario",
-        "desc": "业务场景集成测试（S0-S33 + T1-T21）",
+        "desc": "业务场景集成测试（S0-S33 + T1-T21）——P2 regression 与 P0 基础场景的来源",
         "timeout_sec": 600,
         "order": 3,
         "parallel": False,
     },
     "regression": {
         "marker": "scenario",
-        "desc": "回归测试（场景模式，提交前快速验证）",
+        "desc": "回归测试（场景模式）——P2 发布门禁",
         "timeout_sec": 1200,
         "order": 4,
         "parallel": False,
