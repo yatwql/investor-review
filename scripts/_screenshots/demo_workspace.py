@@ -326,7 +326,7 @@ def capture_report_text(output_root: Path | None = None) -> str:
     }
     guarded = tuple(REPO_ROOT / rel for rel in GUARDED_STATE_DIRS)
     snap = snapshot_paths(guarded)
-    master, slave = pty.openpty()
+    master, slave = pty.openpty()  # type: ignore[attr-defined]  # pty 仅 POSIX，Windows typeshed 无此属性
     try:
         proc = subprocess.Popen(
             report_command(config),
