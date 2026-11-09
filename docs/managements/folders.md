@@ -1182,7 +1182,7 @@ investor-review/
 │       │   │   ├── test_test_runner_reports.py  #   test_runner 分阶段报告路径与汇总页链接（防两阶段同名覆盖）
 │       │   │   ├── test_test_runner_modes.py  #   dev-verify preflight 去重契约（预检仅留编号快检，重量守护不入预检）
 │       │   │   ├── test_test_runner_retention.py #   归档保留期清理（次数/体积双闸门、同日按时刻排序、两侧可关、删除失败不计入）
-│       │   │   ├── test_test_runner_parallel.py #   并行级别解析与 worker 数（CLI>环境>T缺省 优先级/非法值回落/medium 封顶 8/high 不封顶/low 下限 2）
+│       │   │   ├── test_test_runner_parallel.py #   并行级别解析与 worker 数（级别优先级 CLI>环境>缺省 / 非法值回落 / medium 封顶 8 / high 不封顶 / low 下限 2）
 │       │   │   ├── test_test_runner_portability.py #   portability 探针模式测试（BOM/PEP263 判定 / 探针环境与失败回传 / 聚合口径 / 注册表接线）
 │       │   │   ├── test_extract_failures.py #   失败用例提取 data-jsonblob 解析（HTML 实体引号回归）
 │       │   │   ├── test_find_order_dependent.py # 顺序依赖二分工具：前缀二分/收集解析/分类/精简 + 端到端
