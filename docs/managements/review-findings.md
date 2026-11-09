@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.7-dev
-> **编号源**：`rf-next = 1097`（新增问题提出后更新为 +1；已用最大 rf-1096，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1098`（新增问题提出后更新为 +1；已用最大 rf-1097，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -47,7 +47,7 @@
 | 文件 | 现状与拆分方向 |
 |------|----------------|
 | `src/test/unit/scripts/test_release_tool_gate.py` 1147 行（测试登记线 900 / 红线 1200） | 按域再拆：`refresh` 编排一组、`publish` 一组独立成文件；拆分前先确认不放宽断言 |
-| `src/test/conftest.py` 1170 行（测试登记线 900） | fixture 族按域下沉（行情/LLM/网络/持久化各一模块），conftest 只留 autouse 装配与 marker 注册 |
+| `src/test/conftest.py` 1176 行（测试登记线 900） | fixture 族按域下沉（行情/LLM/网络/持久化各一模块），conftest 只留 autouse 装配与 marker 注册 |
 | `src/python/llm/generators_orchestrator.py` 843 行（主程序登记线 700） | 生成编排与共享钩子按模块族再分；预检键/指纹段可下沉 `generators_orchestrator_cache.py` |
 | `src/python/report/decision_basis.py` 962 行（主程序登记线 700，红线 1000） | 六段块装配（信号/可信度/风险预算/纪律/结算+按视界表现/约束）仍在单模块；拆分方向：结算批表与按视界表现聚合（`build_settlement_summary`＋`build_performance`＋`_mean`/`_tone_*` 色彩助手）可整体下沉 `decision_basis_settlement.py`（只读账本、无跨段依赖，预计 −180 行）；信号清单与区分度登记（`_build_signal_rows`＋`BACKTEST_CONCLUSIONS`）可再下沉一簇 |
 | `src/python/llm/skeleton.py` 847 行（主程序登记线 700） | 模板数据与渲染逻辑可下沉 `llm/skeleton_*`（骨架模板 / 占位渲染 / 缓存归因 / 回写四簇并存） |
@@ -74,6 +74,7 @@
 | **rf-1093** | `scripts/` 顶层脚本余 50 处 pyright error（流对象 `sys.stdout.reconfigure`、`ctypes.windll`/`msvcrt` 平台桩、动态 target 的 `build_parser`、AST 节点 `lineno`、`check-doc-traces` 分支内赋值被判成可能未绑定等），故 `check-types` 守护域只覆盖 `src/python` | 逐簇清零到 **0 error**（流对象用 `cast(Any, …)` 取 `reconfigure`；平台桩 `getattr` 降级；动态模块 `build_parser` 判空；AST 用 `getattr(node, "lineno", 0)`；分支赋值先落默认值；`socket` 替换改 `setattr`、`xml` 数值属性收口到 `_num_attr` 助手），并把 `scripts` 加回 `[tool.pyright] include` 与 `check-types` 默认受检路径——守护域从此 = 产品代码 + 入口/守护脚本 |
 | **rf-1095** | `test-reports/archives/` 无轮转机制，实测 31 份归档 ≈ 17G（本地磁盘与 CI runner 都会被吃满） | 新增 `scripts/_test_runner/retention.py::prune_archives`（次数闸门 keep 最近 N 次 + 体积闸门 cap MiB，两侧均可关）、`test-runner.py` 启动前静默清理并新增 `--keep-runs` / `--archive-cap-mb`；删除失败只告警不计入已删、空日期层回收；补 7 例用例（次数/体积/同日排序/两闸门可关/缺目录/删除失败） |
 | **rf-1096** | **时间相关缓存用例在盘中必红**：11 个 LLM 缓存用例断言「同产出第二次命中缓存」，但未钉死行情口径桶——该桶随钟面变化（盘中档禁止复用价格相关模块），故 09:00–15:00 跑必失败、收盘后转绿；实测 09:30 跑 dev-verify 报 38 处失败，环境一变即误判为回归 | 每个缓存断言文件加 autouse fixture `_freeze_market_bucket_for_cache_asserts`（统一 `freeze_market_bucket` 钉收盘档，用例内显式冻结仍可覆盖），llm 全档 1679 通过；与 `test_module_fingerprint` 的既有做法同一口径 |
+| **rf-1097** | **门禁链路越来越慢**（实测每次提交 ≈61.5s：钩子 13.5s + `dev-verify` 45.5s），且 `--parallel high` 无增益（16 worker 仍 45.5s → 非 CPU 瓶颈）：① `check-types` 全量 pyright 13.7s/次；② `dev-verify` 内有 5 个「真实仓库守护冒烟」用例与钩子对同一棵树重复跑同一守护（≈20s）；③ 若干 report 用例套着真实重试退避等待（单文件 22s） | 三层提速且不降覆盖：① `check-types --changed` 只查变更文件（14s → 0.5~2s；变更 >25 个或取不到 git 清单时回落全量），钩子用快车道，**CI guards 与 P2 恒全量**；② 真实仓库冒烟加 `real_repo` 标记并从 `dev-verify` 排除（`verify`/CI 仍全跑）；③ 按「加离线桩前后计时」重新校准离线声明，为 4 个真受退避等待拖慢的文件恢复声明。实测 `dev-verify` 45.5s → 33.2s，钩子 13.5s → ≈5s |
 
 ### 归档档案
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-08）

@@ -52,6 +52,7 @@ def _run_guard(name: str, cache_dir: Path) -> tuple[int, str]:
 class TestGuardConclusionReplay:
     """冷（全量）与热（回放）输出逐字一致——结论缓存不改变任何检查结论。"""
 
+    @pytest.mark.real_repo  # 会真跑守护（冷全量 + 回放），与钩子/CI 同源：不进 dev-verify
     @pytest.mark.parametrize("guard", _CACHED_GUARDS)
     def test_ci_output_identical_between_full_and_cache_hit(self, tmp_path, guard):
         """两次运行（首跑冷全量建缓存、二跑命中回放）stdout 与退出码必须完全相同。"""

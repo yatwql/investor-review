@@ -16,6 +16,7 @@ def surface():
     return load_script("check-import-surface.py", module_name="_check_import_surface_under_test")
 
 
+@pytest.mark.real_repo  # 与 pre-commit 钩子同一守护、同一棵树：不进 dev-verify
 def test_real_repo_has_no_import_surface_findings(surface):
     findings, stats = surface.collect()
     assert findings == []

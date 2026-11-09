@@ -128,14 +128,19 @@ class TestDevVerifySinglePhaseMerge:
         assert "not (edge or data)" in marker
 
     def test_marker_boolean_equivalent_to_phase_union(self):
-        """布尔等价对拍：marker ≡（任一单元域 ∧ ¬edge ∧ ¬data）∨ 基础场景——全组合枚举。"""
+        """布尔等价对拍：marker ≡ ((任一单元域 ∧ ¬edge ∧ ¬data) ∨ 基础场景) ∧ ¬real_repo——全组合枚举。
+
+        `real_repo` 是「真实仓库全量扫描的守护冒烟」：pre-commit 钩子与 CI guards 已对同一棵树
+        跑过同一守护，故 P0 显式排除（与「重量守护不入预检、避免同树重复」同一决策）。
+        """
         marker = self._phase()["marker"]
-        names = (*self._UNIT_DOMAIN, "edge", "data", "scenario_basic")
+        names = (*self._UNIT_DOMAIN, "edge", "data", "scenario_basic", "real_repo")
         for combo in itertools.product((False, True), repeat=len(names)):
             env = dict(zip(names, combo))
-            expected = (any(env[n] for n in self._UNIT_DOMAIN) and not env["edge"] and not env["data"]) or env[
-                "scenario_basic"
-            ]
+            expected = (
+                (any(env[n] for n in self._UNIT_DOMAIN) and not env["edge"] and not env["data"])
+                or env["scenario_basic"]
+            ) and not env["real_repo"]
             assert eval(marker, {"__builtins__": {}}, env) == expected  # noqa: S307 — 受控注册表表达式，仅布尔标识符
 
     def test_timeout_budget_is_sum_of_legacy_phases(self):

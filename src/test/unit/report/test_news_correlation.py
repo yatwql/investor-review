@@ -18,7 +18,9 @@ from src.python.core.models import Holding
 from src.python.report import news_correlation as nc
 import pytest
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
+# 离线桩：本文件 mock 了网络与 LLM，但生产链路仍会顺带走重试退避/节流等待；
+# 声明后这些附带等待置 0（实测 6 个用例各 ~3s → 合计 22s 降到 ~5s）
+pytestmark = [pytest.mark.unit, pytest.mark.unit_report, pytest.mark.usefixtures("offline_external_sources")]
 
 
 class TestBuildNewsData(unittest.TestCase):

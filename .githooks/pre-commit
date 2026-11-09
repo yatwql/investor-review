@@ -123,7 +123,9 @@ fi
 # 本钩子按失败处理——与 CI guards 同政策，不静默降级）
 if in_changed '^src/python/|scripts/check-types\.py|^pyproject\.toml$'; then
     echo "[..] pre-commit: 类型域（check-types，与 doc-drift 并行）"
-    run_bg check-types scripts/check-types.py --ci
+    # 快车道：只查本次变更且落在守护域内的 .py（全量约 14s，按变更约 2s）；
+    # CI guards 与发布门禁始终跑全量，本地降速不降覆盖
+    run_bg check-types scripts/check-types.py --ci --changed
 fi
 
 # 脚本域：scripts/ 顶层脚本契约（AST 只读 scripts/*.py；只随 scripts/ 变更触发）

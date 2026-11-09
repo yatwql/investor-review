@@ -50,7 +50,9 @@ MODES: dict[str, dict] = {
         # 用例集合精确一致（零重叠零遗漏）。timeout = 原两阶段 300s×2 预算总和不变。
         "phases": [
             {
-                "marker": "((unit_core or unit_providers or unit_fetcher or unit_news or unit_analysis or unit_scripts or unit_web or unit_qa or unit_report) and not (edge or data)) or scenario_basic",
+                # real_repo = 真实仓库全量扫描的守护冒烟：pre-commit 钩子与 CI guards 已对同一棵
+                # 工作树跑过同一守护，放进 P0 等于每提交重跑一遍（实测占 dev-verify 约 20s/45s）
+                "marker": "(((unit_core or unit_providers or unit_fetcher or unit_news or unit_analysis or unit_scripts or unit_web or unit_qa or unit_report) and not (edge or data)) or scenario_basic) and not real_repo",
                 "desc": "核心模块单元 + 基础业务场景（单轮；耗时参考 docs/managements/test-coverage.md 环境耗时对照）",
                 "timeout_sec": 600,
                 "parallel": True,

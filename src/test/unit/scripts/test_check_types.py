@@ -124,6 +124,60 @@ class TestRunPyright:
             assert check_types.run_pyright(["pyright"], ["src/python"]) is None
 
 
+class TestChangedMode:
+    """`--changed` 快车道：只查变更文件，护栏是「拿不到清单就回落全量」。"""
+
+    def _git_result(self, stdout: str, returncode: int = 0):
+        return type("R", (), {"stdout": stdout, "returncode": returncode})()
+
+    def test_filters_domain_and_suffix(self):
+        """只保留守护域内（src/python、scripts）的 .py，其余（文档/测试/排除域）丢弃。"""
+        fake = self._git_result("src/python/llm/pricing.py\ndocs/a.md\nsrc/test/unit/x.py\nscripts/probe.py\n")
+        with patch.object(check_types.subprocess, "run", return_value=fake):
+            assert check_types.changed_guarded_files() == ["scripts/probe.py", "src/python/llm/pricing.py"]
+
+    def test_git_failure_returns_none(self):
+        """git 命令失败（无 HEAD / 不在仓库）→ None，调用方回落全量（不漏检）。"""
+        fake = self._git_result("", returncode=128)
+        with patch.object(check_types.subprocess, "run", return_value=fake):
+            assert check_types.changed_guarded_files() is None
+
+    def test_no_change_skips_check(self, capsys):
+        """无守护域内变更 → 直接通过（不启动 pyright，省一次 ~14s 全量）。"""
+        with patch.object(check_types, "pyright_command", return_value=["pyright"]):
+            with patch.object(check_types, "changed_guarded_files", return_value=[]):
+                with patch.object(check_types, "run_pyright") as run:
+                    assert check_types.main(["--ci", "--changed"]) == 0
+        assert run.call_count == 0
+        assert "无 ERROR 级诊断" in capsys.readouterr().out
+
+    def test_many_changes_fall_back_to_full_scan(self):
+        """变更面过大（> MAX_CHANGED_FILES）→ 回落默认受检域（全量更划算）。"""
+        many = [f"src/python/m{i}.py" for i in range(check_types.MAX_CHANGED_FILES + 1)]
+        with patch.object(check_types, "pyright_command", return_value=["pyright"]):
+            with patch.object(check_types, "changed_guarded_files", return_value=many):
+                with patch.object(check_types, "run_pyright", return_value={"generalDiagnostics": []}) as run:
+                    assert check_types.main(["--ci", "--changed"]) == 0
+        assert run.call_args.args[1] == list(check_types.DEFAULT_TARGETS)
+
+    def test_small_changes_use_changed_files(self):
+        """少量变更 → 只把变更文件交给 pyright。"""
+        changed = ["src/python/llm/pricing.py", "scripts/probe.py"]
+        with patch.object(check_types, "pyright_command", return_value=["pyright"]):
+            with patch.object(check_types, "changed_guarded_files", return_value=changed):
+                with patch.object(check_types, "run_pyright", return_value={"generalDiagnostics": []}) as run:
+                    assert check_types.main(["--ci", "--changed"]) == 0
+        assert run.call_args.args[1] == changed
+
+    def test_git_unavailable_falls_back_to_full_scan(self):
+        """取不到 git 清单（None）→ 全量受检域。"""
+        with patch.object(check_types, "pyright_command", return_value=["pyright"]):
+            with patch.object(check_types, "changed_guarded_files", return_value=None):
+                with patch.object(check_types, "run_pyright", return_value={"generalDiagnostics": []}) as run:
+                    assert check_types.main(["--ci", "--changed"]) == 0
+        assert run.call_args.args[1] == list(check_types.DEFAULT_TARGETS)
+
+
 class TestMainContract:
     """退出码契约（0 通过 / 1 环境缺失 / 2 有 finding）。"""
 

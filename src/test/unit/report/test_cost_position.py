@@ -22,7 +22,7 @@ from src.python.report.cost_position import (
 from src.python.report.holdings_detail_sheet import write_holdings_detail_sheet
 from src.python.report.market_value import DetailRow
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_report, pytest.mark.usefixtures("offline_external_sources")]
 
 _CALC = "src.python.report.portfolio_history.PortfolioHistoryCalculator.calculate_for_holding"
 

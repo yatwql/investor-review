@@ -25,6 +25,11 @@
   python scripts/check-types.py src/python/llm
     显式指定受检路径（覆盖 include；排他规则仍生效），供改单模块时快反馈。
 
+  python scripts/check-types.py --changed
+    只查「相对 HEAD 变更（含未跟踪）且落在守护域内」的 .py——pre-commit 快车道：
+    全量 pyright 约 14s/次，按变更文件查约 2s；变更文件过多或拿不到 git 清单时
+    自动回落全量（宁可慢，不漏检）。**CI 与发布门禁始终跑全量**。
+
 退出码：
   0 — 无类型错误
   1 — 环境缺失（pyright 既不在 PATH，也无 npx 可用）
@@ -50,6 +55,12 @@ DEFAULT_TARGETS: tuple[str, ...] = ("src/python", "scripts")
 
 #: 单次输出上限（CI 日志友好；超出时末尾给「其余 N 条」一行）
 MAX_REPORTED = 60
+
+#: 守护域前缀（`--changed` 按此过滤变更文件；与 `[tool.pyright] include` 同域）
+GUARDED_PREFIXES: tuple[str, ...] = ("src/python/", "scripts/")
+
+#: `--changed` 的变更文件上限：超过即回落全量（pyright 起停固定开销 > 逐文件收益）
+MAX_CHANGED_FILES = 25
 
 
 def venv_pyright_path() -> Path | None:
@@ -78,6 +89,40 @@ def pyright_command() -> list[str] | None:
     if npx:
         return [npx, "--no-install", "pyright"]
     return None
+
+
+def changed_guarded_files() -> list[str] | None:
+    """取「相对 HEAD 变更（含未跟踪）且落在守护域内」的 `.py` 清单。
+
+    Returns:
+        变更文件相对路径（升序去重）；无变更返回空列表；git 不可用/命令失败
+        返回 None（调用方据此回落全量扫描，宁可慢不漏检）。
+    """
+    commands = (
+        ["git", "diff", "--name-only", "--diff-filter=ACMR", "HEAD", "--"],
+        ["git", "ls-files", "--others", "--exclude-standard"],
+    )
+    found: set[str] = set()
+    for command in commands:
+        try:
+            proc = subprocess.run(
+                command,
+                cwd=str(REPO_ROOT),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                check=False,
+                timeout=60,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return None
+        if proc.returncode != 0:
+            return None  # 无 git / 无 HEAD：不猜，回落全量
+        for line in (proc.stdout or "").splitlines():
+            path = line.strip()
+            if path.endswith(".py") and path.startswith(GUARDED_PREFIXES):
+                found.add(path)
+    return sorted(found)
 
 
 def run_pyright(cmd: list[str], targets: list[str], *, timeout: float = 900.0) -> dict[str, Any] | None:
@@ -144,6 +189,11 @@ def main(argv: list[str] | None = None) -> int:
     """
     parser = argparse.ArgumentParser(description="类型检查守护（pyright）")
     parser.add_argument("paths", nargs="*", default=[], help=f"受检路径（缺省 {', '.join(DEFAULT_TARGETS)}）")
+    parser.add_argument(
+        "--changed",
+        action="store_true",
+        help="只查相对 HEAD 变更且落在守护域内的 .py（pre-commit 快车道；过多或取不到清单时回落全量）",
+    )
     add_common_args(parser)
     args = parser.parse_args(argv)
 
@@ -156,6 +206,18 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     targets = [str(p) for p in (args.paths or DEFAULT_TARGETS)]
+    if args.changed and not args.paths:
+        changed = changed_guarded_files()
+        if changed is None:
+            targets = list(DEFAULT_TARGETS)  # git 不可用：回落全量
+        elif not changed:
+            if args.verbose:
+                print("[..] 无落在守护域内的变更文件，跳过类型检查")
+            return report([], "[OK] 类型检查通过（无 ERROR 级诊断；本次无变更文件）", ci=args.ci)
+        elif len(changed) > MAX_CHANGED_FILES:
+            targets = list(DEFAULT_TARGETS)  # 变更面过大：全量更划算
+        else:
+            targets = changed
     if args.verbose:
         print(f"[..] 解析器：{' '.join(cmd)}")
         print(f"[..] 受检目标：{', '.join(targets)}")
