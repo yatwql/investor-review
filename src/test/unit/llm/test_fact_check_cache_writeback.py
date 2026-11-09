@@ -33,6 +33,7 @@ def _freeze_market_bucket_for_cache_asserts(monkeypatch):
 
     freeze_market_bucket(monkeypatch)
 
+
 #: 数值与持仓/历史数据不一致的正文（历史最大回撤 19.0% vs 实际 -15.0%）→ 必然触发修正
 _REPLY_WITH_WRONG_NUMBERS = (
     "<p>组合累计收益率为 5.0%，历史最大回撤 19.0%，整体偏弱。</p>",

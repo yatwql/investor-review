@@ -45,6 +45,7 @@ def _freeze_market_bucket_for_cache_asserts(monkeypatch):
 
     freeze_market_bucket(monkeypatch)
 
+
 _IDX = MODULE_INDEX
 
 

@@ -51,6 +51,7 @@ def _freeze_market_bucket_for_cache_asserts(monkeypatch):
 
     freeze_market_bucket(monkeypatch)
 
+
 _SETTINGS_V2 = {
     "schema_version": 2,
     "modules": {
