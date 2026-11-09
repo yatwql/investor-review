@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.7-dev
-> **编号源**：`rf-next = 1094`（新增问题提出后更新为 +1；已用最大 rf-1093，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1096`（新增问题提出后更新为 +1；已用最大 rf-1095，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -38,6 +38,10 @@
 | # | 问题 | 修复方向 |
 | --- | --- | --- |
 
+| # | 问题 | 修复方向 |
+| --- | --- | --- |
+| **rf-1095** | `test-reports/archives/` 累计 31 份归档、约 17G，`reports/` 约 207M，仓库无保留期/轮转机制（均 gitignore，不影响仓库但持续膨胀，CI runner 与本地磁盘都会被吃满） | 在 `scripts/test-runner.py` 落「保留最近 N 次 + 总量上限」的清理步（默认 N=10、上限 2G，可��� `--keep` 覆盖），镜像 `data/cache` 的 TTL 清理写法；清理为启动前静默步、失败只告警 |
+
 ### P4 — 持续监控：文件膨胀登记
 
 行数与拆分优先级以 `scripts/check-file-length.py -v` 为准（口径见 `technical.md` C28），达警告线即登记。下表为**存量监控清单**（不占用 rf 编号，拆分后删除对应行；条数即表内行数，全在可选优化区间，无红线违规；登记行数与实测的一致性由 `check-file-length.py` 断言）：
@@ -68,6 +72,7 @@
 | **rf-1090** | `llm/strategy.py::_apply_cost_first` 读 `input_price`/`output_price`（计价表实际键为 `input`/`output`），所有模型得分恒 `inf`，`cost_first` 策略静默退化为「保持原序」；旧用例用同款假键名把错哄住了 | 改读真实键 + 模型名小写归一，缺价/子表按未知排末尾；用例改用真实键名，并新增「以真实定价表为真值」的顺序断言 |
 | **rf-1091** | 类型债清理：`api_base._attempt` 的 `result` 可能未绑定（`PacingGate.__exit__` 声明为 `bool` 即可被推断为吞异常）、`analysis/scenario.py` CI 区间值可能为 None 仍参与乘法、`analysis/rebalance.py`/`trade_discipline.py` 配置段可能为 None 却被 `dict()`/下标、`tui_keys` 的 msvcrt 平台桩与 `fd` 可空、`holding_change_review` 方向值 `get` 重载不匹配 | 逐个按「值判空 + 显式类型收窄」修：`__exit__` 改 `-> None`、`_attempt` 结果与返回下沉进 `with`、CI/配置段先 `isinstance` 收窄、msvcrt 走 `getattr` 降级、方向值 `isinstance(int)` 判定；无行为变更，均由既有用例与静态检查复核 |
 | **rf-1092** | `src/python` 余 34 处 pyright error（现场 pyright 实测 83 处，含 48 处 `reportArgumentType`），且类型检查未进门禁——只能靠偶发人工扫描发现，其中已证明混有真实缺陷 | 分簇清零到 **0 error**：① 可空值簇（`reportOptional*` / `possiblyUnbound`）逐点判空收窄；② 数值归一统一走 `core.num_utils` （`safe_num` / `finite_or`），谓词升级 `TypeGuard`（免二次判空）；③ 平台桩走 `getattr` 降级（`msvcrt`）、`PacingGate.__exit__` 改 `-> None`、`cache._store` 用 `builtin_set` 别名避开同名遮蔽；④ 新增 `scripts/check-types.py`（退出码 0/1 环境缺失/2）入 pre-commit 与 CI `guards`，规则基线落 `pyproject.toml [tool.pyright]`（受检域 `src/python`，`src/test` 刻意不入域）；⑤ 补 14 例脚本测试。验收：`check-types.py --ci` 通过（`src/python` 零 ERROR），CI `guards` 变绿 |
+| **rf-1094** | **陈旧离线声明**：66 个测试文件声明 `offline_external_sources`（撤掉声明后该文件全绿），说明用例早已不依赖任何外部数据——离线桩把「本可能漏 mock 的真实外部访问」遮住，也让这些文件对 provider 行为变化失去敏感度（48h 审计时 `test_cache_matrix` 正是同类问题导致整批红） | 逐文件试跑法（撤声明 → 单跑该文件 → 全绿即陈旧）撤掉 **66 处**（llm 12 + 全库 54），保留 61 处确有附带依赖（交易日历/行情/健康探针）的声明；撤后 dev-verify 9290 通过 0 失败 |
 
 ### 归档档案
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-08）

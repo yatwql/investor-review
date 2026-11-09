@@ -20,7 +20,7 @@ from src.python.report import holdings_detail_sheet as hds
 from src.python.report.market_value import DetailRow
 import pytest
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_report, pytest.mark.usefixtures("offline_external_sources")]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
 
 
 # ═══════════════════════════════════════════════════════════

@@ -18,6 +18,15 @@
 
 ### 修复
 
+- **类型谓词单源化 + 陈旧离线声明清理（rf-1094）** —— 全仓 5 份「有限真数值」谓词
+  （`analysis/holding_change_events`、`analysis/trade_cost_model`、`llm/prompts_signals`、
+  `report/chart_data_builder` 各一份 + `core/num_utils.is_finite_number`）收敛为
+  `core.num_utils.is_finite_number`（升级 `TypeGuard[int | float]`），各模块只引用不复制；
+  同时按「撤声明 → 单跑该文件 → 全绿即陈旧」的试跑法清掉 66 处陈旧
+  `offline_external_sources`（保留 61 处确有附带依赖者），恢复「离线桩不得遮盖真实外部访问」。
+  另修 `analysis/factor_evaluator` 的 ±inf 语义回归（改用 `value_present` 口径，inf 保留）、
+  `core/cassette` 索引的目录竞态兜底。
+
 - **类型检查落地为门禁（rf-1092）** —— `src/python` 的 pyright 错误由 83 处清零（可空值逐点收窄、
   数值归一统一走 `core.num_utils` 的 `safe_num`/`finite_or`、谓词升级 `TypeGuard`、平台桩走
   `getattr` 降级、`PacingGate.__exit__` 改 `-> None`、`cache._store` 用 `builtin_set` 避开同名遮蔽），

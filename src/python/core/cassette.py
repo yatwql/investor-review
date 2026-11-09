@@ -255,6 +255,7 @@ def save_cassette(cassette: Cassette, directory: str | None = None) -> str:
     失败时向上抛出（录制流程以显式失败终结，不再自持 mkstemp/replace 细节）。
     """
     target_dir = directory or CASSETTE_DIR
+    # 目录不可建时**故意向上抛**（见 docstring：录制流程以显式失败终结），不在此降级
     os.makedirs(target_dir, exist_ok=True)
     path = cassette_path(cassette.name, target_dir)
     payload = json.dumps(cassette.to_dict(), ensure_ascii=False, indent=2) + "\n"
@@ -276,8 +277,14 @@ def list_cassettes(directory: str | None = None) -> list[dict[str, Any]]:
     target_dir = directory or CASSETTE_DIR
     if not os.path.isdir(target_dir):
         return []
+    try:
+        # isdir 与 listdir 之间存在窗口（目录会被并发删除）：索引不阻断，按无记录处理
+        names = sorted(os.listdir(target_dir))
+    except OSError:
+        logger.warning("[cassette] 目录不可读，索引按空处理: %s", target_dir)
+        return []
     entries: list[dict[str, Any]] = []
-    for filename in sorted(os.listdir(target_dir)):
+    for filename in names:
         if not filename.endswith(".json"):
             continue
         name = filename[: -len(".json")]

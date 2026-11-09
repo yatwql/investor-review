@@ -23,7 +23,7 @@ from src.python.llm.pricing import (
     model_currency,
 )
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_llm, pytest.mark.usefixtures("offline_external_sources")]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_llm]
 
 
 class TestNativeCurrencyDisplay:

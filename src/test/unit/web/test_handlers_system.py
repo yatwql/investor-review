@@ -20,7 +20,7 @@ from src.test.unit.web.test_handlers import (
     app_client,  # noqa: F401
 )
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_web, pytest.mark.usefixtures("offline_external_sources")]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_web]
 
 
 class TestIndexConfigBackfill:

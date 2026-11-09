@@ -21,7 +21,6 @@ pytestmark = [
     pytest.mark.unit,
     pytest.mark.unit_web,
     pytest.mark.edge,
-    pytest.mark.usefixtures("offline_external_sources"),
 ]
 
 _HOLDINGS = [{"名称": "测试基金", "代码": "000001", "份额": 1000.0, "成本": 1.0}]

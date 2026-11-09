@@ -23,7 +23,6 @@ from src.python.core.constants import BEIJING_TZ
 pytestmark = [
     pytest.mark.unit,
     pytest.mark.unit_core,
-    pytest.mark.usefixtures("offline_external_sources"),
 ]
 
 #: 2026-11-06 为交易日（周五），2026-11-07 为非交易日（周六）

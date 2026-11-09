@@ -36,7 +36,7 @@ from src.python.report.event_impact_panel import (
 )
 from src.python.report.progress import ProgressReporter
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_report, pytest.mark.usefixtures("offline_external_sources")]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
 
 _TMPL_DIR = Path(PROJECT_ROOT) / "src" / "static" / "tmpl"
 

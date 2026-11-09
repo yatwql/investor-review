@@ -584,7 +584,6 @@ def test_holding_change_failure_isolated(monkeypatch):
     assert pipeline["holding_change_data"]["llm_review"] is None
 
 
-@pytest.mark.usefixtures("offline_external_sources")
 def test_cache_hit_through_dispatch(monkeypatch, llm_cache_dir):
     """T4：同一契约经分发层二次调用只产生 1 次真实调用（缓存键与指纹不受调度位置影响）。"""
     from src.python import config as cfg_mod
@@ -607,7 +606,6 @@ def test_cache_hit_through_dispatch(monkeypatch, llm_cache_dir):
     del run_holding_change_review  # 仅用于文档锚点：断言对象是分发层路径
 
 
-@pytest.mark.usefixtures("offline_external_sources")
 def test_routes_through_provider_chain(monkeypatch, llm_cache_dir):
     """T6：归因在 worker 内仍经 call_llm 进入 Provider Chain（不因透传客户端绕开链路）。"""
     from src.python import config as cfg_mod

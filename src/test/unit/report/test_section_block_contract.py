@@ -23,7 +23,7 @@ from src.python.report.section_block_extraction import (
     normalize_block_title,
 )
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_report, pytest.mark.usefixtures("offline_external_sources")]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
 
 _REPO = Path(__file__).resolve().parents[4]
 _PARTIAL_DIR = _REPO / "src" / "static" / "tmpl" / "partials"

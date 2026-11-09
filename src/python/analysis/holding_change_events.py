@@ -25,9 +25,10 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Any, TypeGuard
+from typing import Any
 
 from src.python.analysis.portfolio_evolution import _dedup_by_date
+from src.python.core.num_utils import is_finite_number
 from src.python.fetcher.history_diff import HistoryDiff
 from src.python.schemas.history import AccountSnapshot, SnapshotData, SnapshotHolding
 
@@ -307,7 +308,7 @@ def _drop_codes(sd: SnapshotData, drop: set[str]) -> SnapshotData:
 
 def _shares_valid(h: SnapshotHolding) -> bool:
     """份额字段是否可用于方向判定（存在且为有限数值）。"""
-    return _is_finite(getattr(h, "shares", None))
+    return is_finite_number(getattr(h, "shares", None))
 
 
 def _shares_of(h: SnapshotHolding | None) -> float | None:
@@ -315,7 +316,7 @@ def _shares_of(h: SnapshotHolding | None) -> float | None:
     if h is None:
         return 0.0
     value = getattr(h, "shares", None)
-    return float(value) if _is_finite(value) else None
+    return float(value) if is_finite_number(value) else None
 
 
 def _value_of(h: SnapshotHolding | None) -> float | None:
@@ -323,9 +324,4 @@ def _value_of(h: SnapshotHolding | None) -> float | None:
     if h is None:
         return 0.0
     value = getattr(h, "market_value", None)
-    return float(value) if _is_finite(value) else None
-
-
-def _is_finite(value: Any) -> TypeGuard[int | float]:
-    """有限真数值（排除 bool）：作为 TypeGuard 让下游 float() 转换可直接依赖收窄结果。"""
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+    return float(value) if is_finite_number(value) else None

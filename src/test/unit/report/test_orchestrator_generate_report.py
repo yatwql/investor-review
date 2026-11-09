@@ -17,7 +17,7 @@ from src.python.report.orchestrator import (
     generate_report,
 )
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_report, pytest.mark.usefixtures("offline_external_sources")]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
 
 
 def _real_reports_dir() -> str:

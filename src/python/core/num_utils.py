@@ -27,7 +27,7 @@ import math
 from datetime import datetime
 
 from src.python.core.constants import BEIJING_TZ
-from typing import Any
+from typing import Any, TypeGuard
 
 
 def format_size(num_bytes: float) -> str:
@@ -123,11 +123,13 @@ def finite_or(value: Any, fallback: float = 0.0) -> float:
     return float(normalized)  # type: ignore[arg-type]
 
 
-def is_finite_number(value: Any) -> bool:
+def is_finite_number(value: Any) -> TypeGuard[int | float]:
     """判定是否为有限真数值（排除 ``bool``/``None``/字符串/``NaN``/``±inf``）。
 
     等同于 ``strict_num(value) is not None``，但作为谓词在读起来更直观，
     也避免调用方误写 ``if not value``（``0`` 是合法数值却为假）。
+    作为 ``TypeGuard`` 声明：``if is_finite_number(x):`` 之后调用方可直接按数值运算，
+    无需各自再收窄——全仓只此一处实现，各模块不得再复制同名谓词。
     """
     return strict_num(value) is not None
 

@@ -183,7 +183,6 @@ def test_batch_usage_line_reports_real_tokens(caplog):
     assert "缓存命中 200" in line, f"用量行须显示真实缓存命中量: {line}"
 
 
-@pytest.mark.usefixtures("offline_external_sources")
 def test_module_cost_uses_numeric_precision():
     """逐模块费用取数值口径，不得回读 3 位小数的展示串。
 

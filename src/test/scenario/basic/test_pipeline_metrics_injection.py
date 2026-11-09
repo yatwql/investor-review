@@ -21,7 +21,6 @@ import pytest
 pytestmark = [
     pytest.mark.scenario,
     pytest.mark.scenario_basic,
-    pytest.mark.usefixtures("offline_external_sources"),
 ]
 
 # generate_all_llm 返回 4 个分析结果 + 4 个缓存标志（无辩论模式）

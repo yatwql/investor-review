@@ -21,7 +21,7 @@ from src.python.config._core import invalidate_config_cache
 from src.python.web.app import create_app
 from src.python.web.runs import RunManager, RunState
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_web, pytest.mark.usefixtures("offline_external_sources")]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_web]
 
 MAIN_JS = Path("src/static/web/main.js")
 

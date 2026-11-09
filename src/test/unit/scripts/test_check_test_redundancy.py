@@ -27,7 +27,6 @@ from src.test._script_loader import load_script
 pytestmark = [
     pytest.mark.unit,
     pytest.mark.unit_scripts,
-    pytest.mark.usefixtures("offline_external_sources"),
 ]
 
 

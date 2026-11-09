@@ -353,9 +353,7 @@ def write_whatif_backtest_sheet(ws: Worksheet, whatif_data: dict[str, Any] | Non
         delta_v = m.get("delta")
         delta_cell = ws.cell(row=row - 1, column=4)
         if not isinstance(delta_cell, MergedCell):  # 合并从属格只读
-            delta_cell.value = (
-                f"{delta_v} {m.get('arrow', '')}" if delta_v is not None else f"-- {m.get('arrow', '')}"
-            )
+            delta_cell.value = f"{delta_v} {m.get('arrow', '')}" if delta_v is not None else f"-- {m.get('arrow', '')}"
 
     # ── 归一化净值与回撤序列 ──
     row += 1

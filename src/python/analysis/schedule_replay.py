@@ -327,10 +327,7 @@ def run_schedule_replay(
             )
         turnover = turnover_rate(
             before,
-            [
-                {"code": c, "market_value": navs_d[c] * round(value * target.get(c, 0.0) / navs_d[c], 2)}
-                for c in codes
-            ],
+            [{"code": c, "market_value": navs_d[c] * round(value * target.get(c, 0.0) / navs_d[c], 2)} for c in codes],
         )
         period_cost = 0.0
         cost_known = True
@@ -402,9 +399,7 @@ def run_schedule_replay(
                         break
                     day_navs[c] = float(nav)
                 else:
-                    drift = max(
-                        abs(sim_shares[c] * day_navs[c] / value - target.get(c, 0.0)) for c in codes
-                    )
+                    drift = max(abs(sim_shares[c] * day_navs[c] / value - target.get(c, 0.0)) for c in codes)
                     if threshold is not None and drift >= threshold:
                         rebalance(idx)
         # 逐日记录当日收盘后净值（调仓已在当日 NAV 下完成，成本同日扣除）

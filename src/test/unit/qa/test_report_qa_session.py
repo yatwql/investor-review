@@ -20,7 +20,7 @@ from src.python.qa.session import (
     report_qa_session_count,
 )
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_qa, pytest.mark.usefixtures("offline_external_sources")]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_qa]
 
 _MOCK_CONFIG = {"provider": "openai", "model": "test-model"}
 
