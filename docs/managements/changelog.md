@@ -18,6 +18,10 @@
 
 ### 修复
 
+- **Windows 非交互环境按键读取不再阻塞（rf-1099）** —— `tui_keys._get_key_windows()` 缺 `isatty`
+  前置判定（Linux 分支已有），非交互 stdin 下 `msvcrt.getch()` 会一直等键，表现为 `standard`/`unit`
+  整档跑到 720s 超时；现判定提到 `import msvcrt` 之前，非 tty 直接返回 `KEY_UNKNOWN`，并补回归用例。
+
 - **并行档位可固定且不再无上限放大（rf-1098）** —— worker 数仍按核数×档位系数计算，但缺省档
   `medium` 封顶 8（实测 16 核上 8 worker 最优、16 反而慢约 17%）；新增 `TEST_RUNNER_PARALLEL`
   环境变量固定档位（优先级 `--parallel` > 环境变量 > 缺省），worker 少于核数时输出提示可提升方式；

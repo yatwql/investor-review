@@ -96,13 +96,27 @@ class TestGetKeyWindows(unittest.TestCase):
     """Windows 分支 _get_key_windows 测试。"""
 
     def setUp(self) -> None:
+        # 交互终端前提：非 tty 时该分支直接返回 KEY_UNKNOWN（不导入、不等键）
+        self._tty_patcher = patch("src.python.tui.tui_keys.sys.stdin")
+        self._tty_patcher.start().isatty.return_value = True
         # 确保 msvcrt 已在 sys.modules 中，patch 才能正确拦截
-
         self._patcher = patch("msvcrt.getch")
         self._mock_getch = self._patcher.start()
 
     def tearDown(self) -> None:
         self._patcher.stop()
+        self._tty_patcher.stop()
+
+    def test_non_tty_returns_unknown_without_blocking(self) -> None:
+        """非 tty（pytest/管道/重定向）→ 直接 KEY_UNKNOWN，绝不挂起等键。
+
+        回归：该分支原无 isatty 前置判定，在 Windows 的非交互环境下 `msvcrt.getch()`
+        会一直阻塞到有按键为止，表现为整档测试跑不完（超时）。
+        """
+        with patch("src.python.tui.tui_keys.sys.stdin") as fake_stdin:
+            fake_stdin.isatty.return_value = False
+            self.assertEqual(_get_key_windows(), KEY_UNKNOWN)
+        self._mock_getch.assert_not_called()
 
     # -- 特殊键 -------------------------------------------------------
 

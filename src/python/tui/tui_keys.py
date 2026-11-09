@@ -198,6 +198,11 @@ def get_key() -> str:
 
 
 def _get_key_windows() -> str:
+    # 非交互输入（pytest / 管道 / 重定向 stdin）不得阻塞等键：`msvcrt.getch()` 会一直
+    # 挂到有按键为止，与 Linux 分支的 isatty 前置判定同口径（此判定先于 import，
+    # 非 Windows 上也能被测试覆盖）
+    if not sys.stdin.isatty():
+        return KEY_UNKNOWN
     import msvcrt  # Windows 标准库，无需额外安装
 
     # 类型检查环境（Linux 上的 msvcrt 桞）缺 getch 声明：按可选取，缺失即降级
