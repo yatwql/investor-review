@@ -252,7 +252,8 @@ llm/generators_orchestrator.py ──→ cache/（可选）
 | **贯穿** | 日志可视化 | 结构化日志读取（parse_log/tail_log/read_log），CLI/TUI/Web 三端共享 | `core/log_reader.py` |
 | **贯穿** | 日志去重 | 同 key 时间窗内折叠重复日志（同窗口重复降 DEBUG）：报告多阶段重复装配同一批数据时只留一行，跨窗（下一次报告）照常上屏；窗口默认 60s，键不足 64 个 | `core/log_dedupe.py` |
 | **贯穿** | 系统自检 | 运行环境/配置/目录/日志与缓存/功能开关/数据源适配/数据源凭据/数据源八组一次性盘点（恒上屏，无开关），CLI/TUI/Web 三端共享；自身永不抛异常、零重依赖 | `core/doctor.py` |
-| **贯穿** | 数值归一 | 非有限值（NaN/±inf）防线收敛点：`safe_num` / `strict_num` / `finite_or` / `is_finite_number`；纯 stdlib、零项目内依赖，providers/analysis/report 任一侧可安全导入 | `core/num_utils.py` |
+| **贯穿** | 路径归一 | 配置/环境变量给出的路径统一口径：绝对原样、相对按项目根拼接并 `normpath`、空串落项目根（日志/缓存目录/数据源凭据钥匙文件共用） | `core/path_utils.py` |
+| **贯穿** | 终端着色 | 转义码字面量唯一来源 `RAW_CODES`；着色判据 `supports_color`（`NO_COLOR` / 非 TTY 降级）与按流取码 `codes_for`，三渠道共用 | `core/ansi_colors.py` |
 | **贯穿** | 文本安全边界 | 孤立代理项净化（合法代理对折叠为星平面字符、孤立项 → U+FFFD）：stdin 的 `surrogateescape` 与 JSON `\udXXX` 产物在进入 LLM 请求体 / 响应正文 / 追问输入前统一过关，避免 `UnicodeEncodeError` 被误分类为 provider 故障 | `core/text_safety.py` |
 | **贯穿** | 任务完成通知 | CLI/Web 报告收尾按 `notify` 配置分发 webhook/邮件/桌面三通道（失败必发、成功需 `on_success`；尽力而为：单通道失败隔离、永不改退出码、未配置静默跳过；降级摘要单源 `report/data_status.degradation_summary()`） | `core/completion_notify.py` |
 
@@ -371,7 +372,7 @@ section_visible = board_enabled(section.type) AND data_available(section.data_fl
 - **进度抽象**：`report/progress.py` 定义 `ProgressReporter` 基类（info/ok/warn/error/add_error/timer），三渠道各实现子类：`TuiProgressReporter`（菜单区刷新）、`CliProgressReporter`（logging + verbose stderr）、`WebProgressReporter`（事件缓冲 → 浏览器轮询）。
 - **配置快照**：生成任务执行时取一次 `get_config()` 快照，run 期间不受外部配置修改影响（Web 侧在任务**出队时**取快照，见 §1.8.5）。
 
-**渠道共性规则的单源清单**（渠道层不得各写一份）：报告输出目录 `config.resolve_output_dir`、尺寸格式化 `core.num_utils.format_size`、异常→用户提示 `core.error_hints.hint_for`、原始 `llm_settings.json` 读取 `config.read_llm_settings_file`、doctor 网络预算 `core.doctor.NETWORK_TIMEOUT_*`、产物定位/打开 `core.artifacts`、页头新鲜度 `core.data_freshness.header_freshness`、调仓输入持仓不可读提示 `report/whatif_operations.WHATIF_BASE_HOLDINGS_UNREADABLE` / `WHATIF_TARGET_HOLDINGS_UNREADABLE`、日志读取失败提示 `core/log_reader.LOG_READ_FAILED_MESSAGE`、健康历史读取失败提示 `core/perf.HEALTH_HISTORY_READ_FAILED_MESSAGE`。
+**渠道共性规则的单源清单**（渠道层不得各写一份）：报告输出目录 `config.resolve_output_dir`、尺寸格式化 `core.num_utils.format_size`、异常→用户提示 `core.error_hints.hint_for`、原始 `llm_settings.json` 读取 `config.read_llm_settings_file`、doctor 网络预算 `core.doctor.NETWORK_TIMEOUT_*`、产物定位/打开 `core.artifacts`、页头新鲜度 `core.data_freshness.header_freshness`、调仓输入持仓不可读提示 `report/whatif_operations.WHATIF_BASE_HOLDINGS_UNREADABLE` / `WHATIF_TARGET_HOLDINGS_UNREADABLE`、日志读取失败提示 `core/log_reader.LOG_READ_FAILED_MESSAGE`、健康历史读取失败提示 `core/perf.HEALTH_HISTORY_READ_FAILED_MESSAGE`、相对路径绝对化 `core.path_utils.resolve_project_path`、着色判据与按流取码 `core.ansi_colors.supports_color` / `codes_for`。
 
 #### 1.5.3 渠道差异对照
 
@@ -1696,7 +1697,7 @@ TUI 环境使用 `TuiProgressReporter`（输出到终端），CLI 环境使用 `
 | 常规（verbose=False，默认） | `logging.INFO` | `logging.WARNING` | `logging.ERROR` | logs/app.log |
 | verbose（verbose=True） | `logging.INFO` + stderr `[..]/[OK]` | `logging.WARNING` + stderr `[!]` | `logging.ERROR` + stderr `[ERR]` | app.log + stderr |
 
-verbose 模式颜色由 `stderr.isatty()` + `NO_COLOR` 环境变量控制，使用本地颜色常量（不依赖 `ansi_colors` 模块级常量，后者基于 `stdout.isatty()`）。
+verbose 模式的颜色按 **stderr 自己的流**判定：取 `core.ansi_colors.codes_for(sys.stderr)`（单源判据 `supports_color`，`NO_COLOR` 或非 TTY 即全空串）。模块级 `GREEN/RED/...` 常量按 stdout 判定一次，写 stdout 的渠道直接引用；写 stderr 的渠道必须走 `codes_for` 传入自己的流，否则 stdout 被重定向时会连带失色。
 
 #### 内部线程池（报告编排器）
 
