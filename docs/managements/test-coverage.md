@@ -14,17 +14,17 @@
 |:------------|:--------:|:--------:|
 | `unit` | **13198** | ~1min |
 | `standard` | **11937** | ~28s |
-| `scenario` | **293** | ~6s |
-| `regression` | **293** | ~12s |
+| `scenario` | **293** | ~1min |
+| `regression` | **293** | ~1min |
 | `dev-verify` | **9310** | ~1min |
 | `verify` | **13200** | ~29s |
-| `integration` | **344** | ~13s |
-| `edge` | **1193** | ~12s |
-| `data` | **70** | ~5s |
-| `all` | **13544** | ~28s |
+| `integration` | **344** | ~4min |
+| `edge` | **1190** | ~2min |
+| `data` | **70** | ~1min |
+| `all` | **13541** | ~23min |
 | `smoke` | **26** | ~4s |
 | `report` | **2859** | ~12s |
-| `all_no_unit` | **346** | ~11s |
+| `all_no_unit` | **346** | ~17min |
 | `scenario_extreme` | **9** | ~4s |
 <!-- mode-count-table:end -->
 
@@ -41,7 +41,7 @@
 #### 采集环境属性
 
 <!-- env-table:start -->
-| 环境属性 | dragonball（2026-11-08 实测） | stallman-NB1（2026-10-02 实测） |
+| 环境属性 | dragonball（2026-11-08 实测） | stallman-NB1（2026-11-09 实测） |
 |:---------|:---------------------------|:---|
 | 操作系统 | Linux | Windows |
 | 系统版本 | 6.18.58-x64v3-xanmod1 | 11 |
@@ -56,8 +56,8 @@
 | Python 版本 | 3.13.5 | 3.13.0 |
 | 并行级别 | medium | medium |
 | worker 数 | 8 | 4 |
-| 采集并行度 | 2 | 1 |
-| 采集日期 | 2026-11-08 | 2026-10-02 |
+| 采集并行度 | 2 | 2 |
+| 采集日期 | 2026-11-08 | 2026-11-09 |
 <!-- env-table:end -->
 
 #### 各模式耗时对照
@@ -65,24 +65,24 @@
 > 注：表内耗时为 bench 多模式**串行采集**墙钟（并行度 1，环境属性表「采集并行度」行记录口径）；`test-runner --jobs N` 默认自适应（4 核+ 取 2、弱机取 1），显式 N 覆盖；并行含模式间 CPU 争抢，跨并行度不与本表直接比。单模式命令不受影响。
 
 <!-- duration-table:start -->
-| `--mode` | dragonball（2026-11-08 实测） | stallman-NB1（2026-10-02 实测） |
+| `--mode` | dragonball（2026-11-08 实测） | stallman-NB1（2026-11-09 实测） |
 |:---------|:---------------------------:|:---:|
 | `unit` | ~1min | ~3min |
 | `standard` | ~28s | ~3min |
-| `scenario` | ~6s | ~51s |
+| `scenario` | ~6s | ~1min |
 | `regression` | ~12s | ~1min |
 | `verify,regression` | ~35s（verify+regression 顺序之和） | ~5min（verify+regression 顺序之和） |
 | `dev-verify` | ~1min | ~4min |
 | `verify` | ~29s | ~4min |
-| `integration` | ~13s | ~2min |
-| `edge` | ~12s | ~1min |
-| `data` | ~5s | ~31s |
-| `all` | ~28s | ~4min |
+| `integration` | ~13s | ~4min |
+| `edge` | ~12s | ~2min |
+| `data` | ~5s | ~1min |
+| `all` | ~28s | ~23min |
 | `smoke` | ~4s | ~28s |
 | `report` | ~12s | ~2min |
-| `all_no_unit` | ~11s | ~1min |
+| `all_no_unit` | ~11s | ~17min |
 | `scenario_extreme` | ~4s | ~32s |
-| 数据更新时间 | 2026-11-08 | 2026-10-02 |
+| 数据更新时间 | 2026-11-08 | 2026-11-09 |
 <!-- duration-table:end -->
 
 > **档位口径**：marker 域与 P0/P1/P2 门禁档的对应关系、以及「归域即进门禁」不变式见 `technical.md` §4.23；本表耗时与「模式对应测试量」表均按**当前口径**采集，不存在需要跨口径换算的历史列。
