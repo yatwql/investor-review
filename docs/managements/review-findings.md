@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.7-dev
-> **编号源**：`rf-next = 1106`（新增问题提出后更新为 +1；已用最大 rf-1105，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1107`（新增问题提出后更新为 +1；已用最大 rf-1106，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -51,7 +51,7 @@
 | `src/python/llm/generators_orchestrator.py` 843 行（主程序登记线 700） | 生成编排与共享钩子按模块族再分；预检键/指纹段可下沉 `generators_orchestrator_cache.py` |
 | `src/python/report/decision_basis.py` 962 行（主程序登记线 700，红线 1000） | 六段块装配（信号/可信度/风险预算/纪律/结算+按视界表现/约束）仍在单模块；拆分方向：结算批表与按视界表现聚合（`build_settlement_summary`＋`build_performance`＋`_mean`/`_tone_*` 色彩助手）可整体下沉 `decision_basis_settlement.py`（只读账本、无跨段依赖，预计 −180 行）；信号清单与区分度登记（`_build_signal_rows`＋`BACKTEST_CONCLUSIONS`）可再下沉一簇 |
 | `src/python/llm/skeleton.py` 847 行（主程序登记线 700） | 模板数据与渲染逻辑可下沉 `llm/skeleton_*`（骨架模板 / 占位渲染 / 缓存归因 / 回写四簇并存） |
-| `src/python/cli/_handlers.py` 852 行（主程序登记线 700） | 命令处理器按渠道分文件（generate/config/data 三簇），保持入口薄壳 |
+| `src/python/cli/_handlers.py` 856 行（主程序登记线 700） | 命令处理器按渠道分文件（generate/config/data 三簇），保持入口薄壳 |
 | `src/python/tui/handlers_holdings.py` 825 行（红线 1000） | 面板流程与输入采集高度耦合（共用 `_Session`），拆分收益低于回归面；再涨 ~150 行则按「面板流程 / 输入采集」两段拆，并把 `_market_data` 的会话内记忆一并做进去 |
 | `src/python/fetcher/financial_report.py` 719 行（主程序登记线 700） | 刚过线：再涨则按「索引 / 正文 / 全文定位」三阶下沉（负缓存样板统一在 `cache/_negative.py`） |
 | `src/static/tmpl/report_template.html` 277 行（样式已抽到 `partials/_report_styles.html` 750 行，各自单一关注点，均未触 1000 行） | 主模板只剩骨架 + include；再增长则按「首页/持仓/LLM/附录」四段拆 partial |
@@ -82,6 +82,7 @@
 | **rf-1102** | pytest 非测试失败（退出码 2/3/4/5）在 runner 里只显示成「0 passed, 0 failed (0.0s)」——看不出是用法错误（缺插件 / 环境变量残留）还是未收集到用例，排障只能靠手工重跑 pytest | 按退出码给出可执行提示（4=用法错误：常见缺 pytest-timeout 或 `TEST_RUNNER_*` 残留；5=未收集到用例：marker 与测试树不匹配；2=中断；3=内部错误），并回放输出末 8 行；补 2 例用例。另：`TEST_RUNNER_PER_TEST_TIMEOUT` 在**未装 `pytest-timeout`** 时改为忽略并告警（原会传 `--timeout` 使 pytest 以用法错误退出 4 秒退，表现为「0 passed, 0 failed (0.0s)」） |
 | **rf-1103** | 72h 变更复核（门禁/测试可移植性改造段）发现三处口径漂移：①「配置/环境变量给的路径按项目根绝对化」在 5 处各写一份（`cache/_paths`、`config/_logging`、`core/logger` 两处、`core/datasource_credential`），归一与否不一致（`./logs`、`data//cache` 原样落盘，空串落成 `PROJECT_ROOT/`）；② `check-types.py` 的 `GUARDED_PREFIXES` 与 `DEFAULT_TARGETS` 各写一份守护域；③ `runner.py` 退出码提示把 `TEST_RUNNER_*` 环境变量名写成字面量，且提示字典每次调用重建 | ① 新增 `core/path_utils.resolve_project_path` 单源（绝对路径原样 / 相对路径拼项目根并 `normpath` / 空串落项目根），5 处改为引用；补 6 例用例 + AST 守卫（产品代码再写 `isabs ? … : join(PROJECT_ROOT, …)` 即红）；② 前缀由 `DEFAULT_TARGETS` 派生；③ 提示字典提为模块级并引用 `pytest_env` 的 `PARALLEL_ENV`/`PER_TEST_TIMEOUT_ENV` 常量；另修 `test-coverage.md` 核心基础设施列表里已不存在的 `filesystem` 模块名 |
 | **rf-1105** | 44h 变更复核（门禁/因子/缓存改造轮）发现两处：① `_test_runner/retention.py` 体积闸门删不掉的归档被 `survivors.pop(0)` 摘掉后 `continue`，该份从此既不算保留也不进 `total_mb`——磁盘上还在，返回的「保留 N 次 / X MiB」比实际偏小（次数闸门那侧有回填、体积闸门没有，两处口径不一致）；② `core.market_hours.market_snapshot_bucket` 对**带时区**的入参不换算北京时区，直接取 `hour/minute`——传 UTC 15:00（北京 23:00）会被判成「当日收盘档」，口径标签错档 | ① 体积闸门删除失败时记入 `stuck` 并在循环后回填 `survivors`（与次数闸门口径一致），补「两闸门删不掉仍计入 kept/total_mb」回归；② 入参已带时区时改走 `astimezone(BEIJING_TZ)` 再取时分，补「UTC 03:45 = 北京 11:45 → 午休档」回归 |
+| **rf-1106** | 96h 变更复核（控制台着色单源化那轮）发现收口没做干净：① `core/ansi_colors.py` 自己就写着两份转义码字面量（模块级 `GREEN/RED/…` 一套 + `RAW_CODES` 一套），注释却声称「字面量只在一处定义」；② `cli/_handlers._use_ansi_color()` 仍自行实现 `NO_COLOR` + `isatty` 判定（单源模块引入后未回收），三渠道判定随时可能漂移；③ `supports_color` / `codes_for`（着色判据唯一入口）**无直接用例**——降级失效时会静默把转义码写进被重定向的日志；④ `DOC_DRIFT_SNAPSHOT_SHADOW`（快照影子双算诊断开关）未入脚本参考 | ① `RAW_CODES` 上移为唯一字面量来源，模块常量改由 `_stdout_code()` 派生（降级仍为空串）；② CLI 改为先问 `supports_color()`，只保留自己那条 UTF-8 编码前提；③ 新增 `test_ansi_colors.py` 9 例（NO_COLOR / 非 TTY / 按传入流判定 / `codes_for` 全空 / 常量与 `RAW_CODES` 同源 / CLI 委托与编码前提）；④ `scripts-reference.md` 补该开关 |
 | **rf-1104** | 4h 变更复核（Windows 41 例失败的修复段）发现两处：① `cache/_paths.py` 新增的键名沙箱化（转义 `:`，修「负缓存 mark 在 Windows 因非法文件名静默写不出」）**无回归用例**——换个键形就又会静默失败而无人知；② `test_tui_keys.py` / `test_tui_menu_loop.py` 把同一条平台判定（`unittest.skipIf(os.name …)`）逐方法复写 8+3 份，措辞已开始分叉（「Linux only」/「Linux only（raw 模式 + termios）」/「原地重绘需 POSIX TTY」），且 `proc.stderr.readline()` 未收窄 Optional（pyright 报 `reportOptionalMemberAccess`） | ① 补 `TestCacheKeySanitization` 4 例（`:` 转义 / 分隔符转义 / `..` 不越出缓存目录 / 版本戳与 `.json` 后缀保留）；② 两文件的平台闸门收口为模块级 mark（`_POSIX_ONLY` / `_POSIX_RAW_TERMIOS` / `_WINDOWS_ONLY` / `_POSIX_TTY`），逐方法装饰改为引用别名（标注仍是 skip，语义不变）；③ 读 `stderr` 前显式 `assert proc.stderr is not None` 收窄 |
 
 ### 归档档案

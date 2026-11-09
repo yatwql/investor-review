@@ -18,6 +18,12 @@
 
 ### 修复
 
+- **控制台着色收口补完 + 判据补用例（rf-1106）** —— `core/ansi_colors.py` 原有两份转义码字面量（模块级
+  `GREEN/RED/…` 一套 + `RAW_CODES` 一套，注释却称「只在一处定义」），现以 `RAW_CODES` 为唯一来源、模块常量
+  由 `_stdout_code()` 派生；`cli/_handlers._use_ansi_color()` 不再自写 `NO_COLOR`/`isatty`，改为委托
+  `supports_color()` 后只补自己的 UTF-8 编码前提；新增 `test/unit/core/test_ansi_colors.py` 9 例
+  （NO_COLOR / 非 TTY / 按传入流判定 / `codes_for` 降级全空 / 常量与 `RAW_CODES` 同源 / CLI 委托 + 编码前提）；
+  `scripts-reference.md` 补 `DOC_DRIFT_SNAPSHOT_SHADOW` 诊断开关。
 - **归档体积闸门统计口径 + 行情桶时区换算（rf-1105）** —— ① `_test_runner/retention.py` 体积闸门里
   删不掉的归档被摘出保留集后未回填，导致返回的「保留 N 次 / X MiB」比磁盘实际值偏小（次数闸门那侧
   有回填，两处口径不一致）→ 记入 `stuck` 并在循环后回填；② `market_hours.market_snapshot_bucket`

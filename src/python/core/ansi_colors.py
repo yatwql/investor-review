@@ -19,26 +19,8 @@ try:
 except ImportError:
     pass  # 无 colorama 时 Windows 控制台可能无法正确显示颜色，但功能不受影响
 
-# ANSI 颜色：非 TTY 或设置了 NO_COLOR 环境变量时禁用颜色输出
-if "NO_COLOR" in os.environ or not sys.stdout.isatty():
-    GREEN = RED = YELLOW = CYAN = DIM = RESET = ""
-    BLUE = BOLD = ORANGE = MAGENTA = ""
-else:
-    GREEN = "\033[92m"
-    RED = "\033[91m"
-    YELLOW = "\033[93m"
-    CYAN = "\033[96m"
-    DIM = "\033[2m"  # 次要信息降权（键名/费用/图例），让主列先被看到
-    BLUE = "\033[94m"  # 结构色：分组标题与面板横幅（不承载状态语义）
-    ORANGE = "\033[38;5;208m"  # 品牌色：应用名与版本号（256 色橙；不识别的终端落回默认色）
-    MAGENTA = "\033[95m"  # 事件色：LLM 实际调用行（报告运行时“花钱的调用发生了”的唯一视觉信号）
-    BOLD = "\033[1m"
-    RESET = "\033[0m"
-
-#: 原始转义码表（**不做 TTY 降级**）——供「按自己那条流判定着色能力」的调用方取用。
-#: 上面的 GREEN/RED/... 常量按 **stdout** 判定；写 stderr 的渠道（CLI verbose 进度、
-#: 自检报告）必须用 :func:`codes_for` 按其自身流判定，否则「stdout 被重定向」会让
-#: 本该有色的 stderr 一起失色。转义码字面量只在下面一处定义。
+#: 原始转义码表（**不做 TTY 降级**）—— 全仓转义码字面量的唯一定义处。
+#: `codes_for` 按调用方自己那条流判定；模块级 GREEN/RED/... 常量按 **stdout** 判定一次。
 RAW_CODES: dict[str, str] = {
     "GREEN": "\033[92m",
     "RED": "\033[91m",
@@ -51,6 +33,26 @@ RAW_CODES: dict[str, str] = {
     "BOLD": "\033[1m",
     "RESET": "\033[0m",
 }
+
+# ANSI 颜色：非 TTY 或设置了 NO_COLOR 环境变量时禁用颜色输出（导入时按 stdout 快照一次）
+_STDOUT_COLORED = "NO_COLOR" not in os.environ and sys.stdout.isatty()
+
+
+def _stdout_code(name: str) -> str:
+    """取原始转义码；stdout 不可着色时空串（直接拼进字符串即无副作用）。"""
+    return RAW_CODES[name] if _STDOUT_COLORED else ""
+
+
+GREEN = _stdout_code("GREEN")
+RED = _stdout_code("RED")
+YELLOW = _stdout_code("YELLOW")
+CYAN = _stdout_code("CYAN")
+DIM = _stdout_code("DIM")  # 次要信息降权（键名/费用/图例），让主列先被看到
+BLUE = _stdout_code("BLUE")  # 结构色：分组标题与面板横幅（不承载状态语义）
+ORANGE = _stdout_code("ORANGE")  # 品牌色：应用名与版本号（256 色橙；不识别的终端落回默认色）
+MAGENTA = _stdout_code("MAGENTA")  # 事件色：LLM 实际调用行（报告运行时「花钱的调用发生了」的唯一视觉信号）
+BOLD = _stdout_code("BOLD")
+RESET = _stdout_code("RESET")
 
 
 def supports_color(stream: object | None = None) -> bool:
