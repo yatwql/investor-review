@@ -26,12 +26,18 @@
 
 - **Windows 收集期不再被 POSIX 专属导入打断（rf-1101）** —— `test_live_status_edge.py` 模块顶层
   `import pty`/`import termios` 在 Windows 上导致 `ERROR collecting`，整档 `unit`/`regression` 变错误；
-  改用 `pytest.importorskip`（本平台缺失即整模块跳过），并新增 AST 守卫用例：`src/test` 模块级
-  出现 POSIX 专属导入即红（`try/except`、`importorskip`、函数体内三类写法不误报）。
+  现改为模块级跳过（`pytest.importorskip` 判定与被导入模块是否存在无关，收集期行为确定）+ conftest
+  收集门（`collect_ignore`：导入探测失败即整文件不进收集，模块级副作用不会变成 error），并新增 AST
+  守卫用例：`src/test` 模块级出现 POSIX 专属导入即红（`try/except`、`importorskip`、函数体内三类写法不误报）。
 
 - **测试模式描述标出门禁归属** —— `test-runner.py --help` 与进度行里的模式描述原把 `regression`
   写成「提交前快速验证」（实为 P2 发布门禁）、`unit`/`standard` 未说明归属，易误在提交前跑重档；
   现按门禁标注：`dev-verify`=P0、`verify`=P1 合入、`regression`=P2 发布，`standard` 明确「无门禁位」。
+
+- **CI 侧类型守护与格式基线补齐** —— `scripts/_assets/social_preview.py` 的 `cairosvg` 属可选资产
+  依赖（`.[svg]`），CI 的 test 依赖面不含它，类型守护因此在 CI 报「无法解析」；导入行改按可选依赖
+  标注（缺失仍由 `except` 分支给安装指引，本地装有该包时等价），另补 4 个 llm 测试文件的 `pytestmark`
+  折行——本地钩子的 format 探针非阻塞、CI `format` job 阻塞，此前差异会让本地绿树在 CI 变红。
 
 - **整档超时可定位到具体用例（rf-1100）** —— 新增 `TEST_RUNNER_PER_TEST_TIMEOUT=<秒>`：
   设值后为每个用例加 `pytest-timeout` 看门狗（超时即失败并打印该用例堆栈），未设值不启用
