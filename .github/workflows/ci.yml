@@ -230,10 +230,12 @@ jobs:
       # ① PEP 597 隐式编码严格档：任何未显式 encoding= 的文本 I/O 立即失败（豁免项在 pytest.ini 声明）。
       #    放在 pip 降级之前，避免「环境已被改过」影响判定；失败详情以 workflow annotation 回传
       #    （Annotations / checks API 可免授权读到具体用例名，无须日志下载权限）。
+      #    `-n auto`：同批用例、同一严格档，只换并发（串行 ≈4min 是本轮 CI 的关键路径）；
+      #    xdist 是 required_plugins，worker 数 = runner 核数。
       - name: 隐式编码严格档 — 单元套件
         run: |
           set +e
-          PYTHONWARNDEFAULTENCODING=1 python -m pytest src/test/unit -q --tb=short > /tmp/strict-encoding.log 2>&1
+          PYTHONWARNDEFAULTENCODING=1 python -m pytest src/test/unit -q --tb=short -n auto > /tmp/strict-encoding.log 2>&1
           rc=$?
           tail -40 /tmp/strict-encoding.log
           if [ "$rc" -ne 0 ]; then
