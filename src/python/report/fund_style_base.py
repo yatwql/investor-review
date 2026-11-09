@@ -12,11 +12,12 @@ from typing import Any
 from src.python.cache import get as cache_get
 from src.python.cache import set as cache_set
 from src.python.core.code_symbols import estimate_market_cap_by_prefix
+from src.python.core.constants import CACHE_NEAR_PERMANENT
 
 logger = logging.getLogger("invest")
 
 _SNAPSHOT_KEY = "fund_style_snapshot"
-_SNAPSHOT_TTL = 365 * 86400
+_SNAPSHOT_TTL = CACHE_NEAR_PERMANENT  # 跟踪基线：清理器同源取注册表的精确键 TTL
 
 # ── 六宫格风格定义 ──────────────────────────────────────────
 

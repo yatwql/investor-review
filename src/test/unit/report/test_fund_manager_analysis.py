@@ -263,3 +263,74 @@ class TestSnapshot(unittest.TestCase):
         data = {"110011": {"manager_name": "张坤", "check_date": "2026-07-04"}}
         _update_snapshot(data)
         mock_set.assert_called_once_with("fund_manager_snapshot", data)
+
+
+# ── 跨报告基线维护回归 ──────────────────────────────────────
+
+
+class TestTrackingBaselineSurvivesMaintenance:
+    """回归：跨报告对比基线不得被「生成前自动清理」当当日载荷回收。
+
+    历史缺陷：`fund_manager_snapshot` 只按上报域（`fund_manager`，24h）裁，而报告生成
+    入口每次先跑 `auto_cleanup_expired()`——两次报告相隔超过一天，基线就被删掉，
+    每份报告都退化成「首次运行，自下次报告起跟踪」。
+    """
+
+    @pytest.fixture()
+    def isolated_cache(self, tmp_path, monkeypatch):
+        from src.python.cache import _cleanup, _paths
+
+        monkeypatch.setattr(_paths, "_CACHE_DIR", str(tmp_path))
+        monkeypatch.setattr(_cleanup, "_CACHE_DIR", str(tmp_path))
+        monkeypatch.setattr(
+            "src.python.config.get_config",
+            lambda: {"market_hours": {"start": "00:00", "end": "00:00"}},  # 恒为非交易时段
+        )
+        return tmp_path
+
+    def test_two_day_old_baseline_survives_cleanup(self, isolated_cache):
+        """隔 48h 的快照不被清理器删除。"""
+        import json
+        import time
+
+        from src.python.cache._cleanup import cleanup_expired
+        from src.python.cache._paths import _CACHE_KEY_VERSION
+
+        payload = {
+            "_ts": time.time() - 48 * 3600,
+            "_data": {"110011": {"manager_name": "张坤", "check_date": "2026-06-01"}},
+        }
+        (isolated_cache / f"fund_manager_snapshot_{_CACHE_KEY_VERSION}.json").write_text(
+            json.dumps(payload), encoding="utf-8"
+        )
+
+        assert cleanup_expired(dry_run=False) == 0
+
+    @patch("src.python.report.fund_manager_analysis.fetch_fund_manager")
+    def test_second_report_after_two_days_still_tracks(self, mock_manager: MagicMock, isolated_cache):
+        """清理跑过之后，隔天出报告仍是「跟踪中」而不是「首检」。"""
+        import json
+        import time
+
+        from src.python.cache._cleanup import cleanup_expired
+        from src.python.cache._paths import _CACHE_KEY_VERSION
+
+        payload = {
+            "_ts": time.time() - 48 * 3600,
+            "_data": {"110011": {"manager_name": "张坤", "check_date": "2026-06-01"}},
+        }
+        (isolated_cache / f"fund_manager_snapshot_{_CACHE_KEY_VERSION}.json").write_text(
+            json.dumps(payload), encoding="utf-8"
+        )
+        cleanup_expired(dry_run=False)
+
+        mock_manager.return_value = {
+            "manager_name": "张坤",
+            "start_date": "2012-09-28",
+            "tenure_days": 5000,
+            "history": [],
+        }
+        results = detect_manager_changes([_make_holding("110011", "易方达中小盘混合")])
+
+        assert [r["is_first_check"] for r in results] == [False]
+        assert [r["alert_level"] for r in results] == ["正常"]

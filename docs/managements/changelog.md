@@ -8,6 +8,11 @@
 
 ## [0.17.8-dev] - 开发中（未发布）
 
+### 修复
+
+- 跨报告对比基线（`fund_manager_snapshot` / `fund_concentration_snapshot` / `fund_style_snapshot`）改为近永久 TTL（`CACHE_NEAR_PERMANENT`，1 年）并在注册表登记精确键 TTL（rf-1107）：此前落入上报域日档（`fund_manager_` → 24h），而报告生成入口每次先跑 `auto_cleanup_expired()`，两次报告相隔超过一天即把基线当过期文件删掉，报告恒定显示「此为首次运行，基金经理变更自下次报告起跟踪」
+- 「刷新基础缓存」保留跟踪基线（rf-1107）：`clear_by_group` / `clear_by_prefix` 新增 `exclude_keys`，刷新流程点名保留三个快照键——该流程只清不重建快照，清掉即让下一次报告退化成「首检」
+
 
 （本次发布内容见下方归档索引）
 

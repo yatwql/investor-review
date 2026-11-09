@@ -242,3 +242,41 @@ class TestLegacyStampExactKeyTTL:
         """超过自身 30 分钟 TTL 即删（不是被前缀 TTL 提前删，也不是永久滞留）。"""
         _write(cache_env, "sector_flow_negative_v3.json", age_seconds=31 * 60)
         assert _cleanup() == 1
+
+
+class TestTrackingSnapshotTTL:
+    """跨报告对比基线（基金经理/风格/集中度快照）按近永久窗口清理。
+
+    回归：这些键曾落进上报域的前缀 TTL（`fund_manager_` → 24h），报告生成入口每次
+    先自动清理，于是相隔一天的两次报告之间基线就被删掉——报告永远显示「首次运行」。
+    """
+
+    @pytest.mark.parametrize(
+        "filename",
+        [
+            "fund_manager_snapshot",
+            "fund_concentration_snapshot",
+            "fund_style_snapshot",
+        ],
+    )
+    def test_two_day_old_snapshot_survives(self, cache_env, filename):
+        from src.python.cache._paths import _CACHE_KEY_VERSION
+
+        _write(cache_env, f"{filename}_{_CACHE_KEY_VERSION}.json", age_seconds=48 * 3600)
+        assert _cleanup() == 0
+
+    def test_snapshot_expires_after_own_ttl(self, cache_env):
+        from src.python.cache._paths import _CACHE_KEY_VERSION
+        from src.python.core.constants import CACHE_NEAR_PERMANENT
+
+        _write(cache_env, f"fund_manager_snapshot_{_CACHE_KEY_VERSION}.json", age_seconds=CACHE_NEAR_PERMANENT + 60)
+        assert _cleanup() == 1
+
+    def test_registry_declares_snapshot_ttls(self):
+        """清理器与读侧同源：注册表必须点名这些键的独立 TTL。"""
+        from src.python.core.constants import CACHE_NEAR_PERMANENT
+        from src.python.core.registry import TRACKING_SNAPSHOT_KEYS, get_exact_ttl_map
+
+        exact = get_exact_ttl_map()
+        for key in TRACKING_SNAPSHOT_KEYS:
+            assert exact[key] == CACHE_NEAR_PERMANENT

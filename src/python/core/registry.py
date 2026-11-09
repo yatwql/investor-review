@@ -25,6 +25,7 @@ from src.python.core.computation_registry import (  # noqa: F401
 from src.python.core.data_registry import (  # noqa: F401
     DataModuleDef,
     LLM_MODULE_GATED_SECTIONS,
+    TRACKING_SNAPSHOT_KEYS,
     _CACHE_ONLY_REGISTRY,
     _MODULE_REGISTRY,
     get_cache_registry,

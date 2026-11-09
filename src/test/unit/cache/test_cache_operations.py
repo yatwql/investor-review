@@ -309,3 +309,45 @@ class TestJudgeAfterRefresh:
         assert result.market_breakdown is not None
         assert result.market_breakdown[0]["latest"] == 1
         assert not hasattr(result, "price_details")
+
+
+class TestRefreshKeepsTrackingBaseline:
+    """「刷新基础缓存」只清不重建，不得连坐作废跨报告对比基线。
+
+    回归：刷新流程把 `fund_manager_snapshot` 一并清掉（前缀命中 + 无回填路径），
+    刷完紧接着出报告即退化成「首次运行」。
+    """
+
+    def test_update_basic_cache_passes_preserve_list(self):
+        from src.python.cache.operations import update_basic_cache
+        from src.python.core.registry import TRACKING_SNAPSHOT_KEYS
+
+        with (
+            patch("src.python.cache.clear_by_group") as m_clear,
+            patch("src.python.cache.operations._refresh_common_caches", return_value=(1, 1, 1, 1)),
+            patch("src.python.cache.operations._refresh_extended_caches"),
+            patch("src.python.report.fund_performance.is_fund", return_value=False),
+        ):
+            update_basic_cache([], MagicMock())
+
+        assert set(m_clear.call_args.kwargs["exclude_keys"]) == set(TRACKING_SNAPSHOT_KEYS)
+
+    def test_snapshot_file_kept_payload_files_cleared(self, tmp_path, monkeypatch):
+        from src.python.cache import _groups, _paths
+        from src.python.cache._paths import _CACHE_KEY_VERSION
+
+        monkeypatch.setattr(_paths, "_CACHE_DIR", str(tmp_path))
+        monkeypatch.setattr(_groups, "_CACHE_DIR", str(tmp_path))
+        snapshot = tmp_path / f"fund_manager_snapshot_{_CACHE_KEY_VERSION}.json"
+        payload = tmp_path / f"fund_manager_110011_{_CACHE_KEY_VERSION}.json"
+        snapshot.write_text('{"_ts": 0, "_data": {}}', encoding="utf-8")
+        payload.write_text('{"_ts": 0, "_data": {}}', encoding="utf-8")
+
+        from src.python.cache import clear_by_group
+        from src.python.cache.operations import _BASIC_REFRESHED_CACHE_KEYS
+        from src.python.core.registry import TRACKING_SNAPSHOT_KEYS
+
+        clear_by_group("refresh", only=_BASIC_REFRESHED_CACHE_KEYS, exclude_keys=TRACKING_SNAPSHOT_KEYS)
+
+        assert snapshot.exists(), "跟踪基线被刷新流程误删 → 下次报告必「首检」"
+        assert not payload.exists(), "本流程会回填的域必须清（否则刷新无效）"

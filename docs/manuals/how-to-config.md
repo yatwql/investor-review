@@ -286,9 +286,9 @@
 
 | 键名 | 文件名模式 | 默认 TTL | 指纹来源 | 说明 |
 |------|-----------|:--------:|----------|------|
-| `fund_manager` | `fund_manager_{code}.json` + `fund_manager_snapshot.json` | 24h | — | 基金经理数据 + 快照（refresh 组） |
-| `fund_concentration` | `fund_concentration_snapshot.json` | 30 天 | — | 集中度历史快照（精确键名，无分组） |
-| `fund_style_snapshot` | `fund_style_snapshot.json` | 30 天 | — | 风格快照（精确键名，无分组） |
+| `fund_manager` | `fund_manager_{code}.json` + `fund_manager_snapshot.json` | 24h（快照 1 年） | 跟踪基线快照跨报告保留，不被清理/刷新回收 | 基金经理数据 + 快照（refresh 组） |
+| `fund_concentration` | `fund_concentration_snapshot.json` | 1 年 | — | 集中度历史快照（精确键名，无分组；跨报告基线） |
+| `fund_style_snapshot` | `fund_style_snapshot.json` | 1 年 | — | 风格快照（精确键名，无分组；跨报告基线） |
 | `extended` | `extended_{code}.json` | 24h | — | 基金风格扩展数据（市值/PE），refresh 组 |
 
 ##### 系统类
