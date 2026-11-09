@@ -18,6 +18,11 @@
 
 ### 修复
 
+- **Windows 收集期不再被 POSIX 专属导入打断（rf-1101）** —— `test_live_status_edge.py` 模块顶层
+  `import pty`/`import termios` 在 Windows 上导致 `ERROR collecting`，整档 `unit`/`regression` 变错误；
+  改用 `pytest.importorskip`（本平台缺失即整模块跳过），并新增 AST 守卫用例：`src/test` 模块级
+  出现 POSIX 专属导入即红（`try/except`、`importorskip`、函数体内三类写法不误报）。
+
 - **测试模式描述标出门禁归属** —— `test-runner.py --help` 与进度行里的模式描述原把 `regression`
   写成「提交前快速验证」（实为 P2 发布门禁）、`unit`/`standard` 未说明归属，易误在提交前跑重档；
   现按门禁标注：`dev-verify`=P0、`verify`=P1 合入、`regression`=P2 发布，`standard` 明确「无门禁位」。
