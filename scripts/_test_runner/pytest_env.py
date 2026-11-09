@@ -19,6 +19,13 @@ def _check_pytest_html() -> bool:
         return False
 
 
+def _check_pytest_timeout() -> bool:
+    """检查 pytest-timeout 是否已安装（缺它时传 `--timeout` 会让 pytest 直接用法错误退出）。"""
+    import importlib.util
+
+    return importlib.util.find_spec("pytest_timeout") is not None
+
+
 def _check_pytest_cov() -> bool:
     """检查 pytest-cov 是否已安装。"""
     # 可选依赖只探测是否可解析（不导入：插件导入有副作用，且 pyright 无该包的类型信息）
@@ -180,8 +187,16 @@ def _build_pytest_args(
 
     per_test_timeout = (os.environ.get(PER_TEST_TIMEOUT_ENV) or "").strip()
     if per_test_timeout:
-        args.extend([f"--timeout={per_test_timeout}", "--timeout-method=thread"])
-        print(f"      [..] 单用例超时看门狗: {per_test_timeout}s（{PER_TEST_TIMEOUT_ENV}）")
+        if _check_pytest_timeout():
+            args.extend([f"--timeout={per_test_timeout}", "--timeout-method=thread"])
+            print(f"      [..] 单用例超时看门狗: {per_test_timeout}s（{PER_TEST_TIMEOUT_ENV}）")
+        else:
+            # 缺插件时**不传**该参数：否则 pytest 以用法错误（退出码 4）秒退，
+            # 表现为「0 passed, 0 failed (0.0s)」，把真实测试跑丢
+            print(
+                f"      [!] 已忽略 {PER_TEST_TIMEOUT_ENV}：未安装 pytest-timeout"
+                "（安装：pip install -e \".[test]\"）"
+            )
 
     if html_available:
         args.extend(["--html", _phase_report_path(mode_key, phase_tag), "--self-contained-html"])

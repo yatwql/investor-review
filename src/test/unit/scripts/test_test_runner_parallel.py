@@ -77,6 +77,18 @@ class TestPerTestTimeout:
         assert "--timeout=120" in args
         assert "--timeout-method=thread" in args
 
+    def test_missing_plugin_is_ignored_with_warning(self, monkeypatch, capsys):
+        """装了没装插件两种情况：缺插件时不传 `--timeout`（否则 pytest 用法错误秒退 0/0），只告警。"""
+        monkeypatch.setenv(pytest_env.PER_TEST_TIMEOUT_ENV, "120")
+        # 补丁打到「实际执行 _build_pytest_args 的模块命名空间」（经脚本加载器重命名后不是同一对象）
+        monkeypatch.setitem(pytest_env._build_pytest_args.__globals__, "_check_pytest_timeout", lambda: False)
+
+        args = pytest_env._build_pytest_args(self._CFG, "unit", False, False, None)
+
+        assert not any(a.startswith("--timeout") for a in args)
+        out = capsys.readouterr().out
+        assert "已忽略" in out and "pytest-timeout" in out
+
     def test_blank_value_ignored(self, monkeypatch):
         """空白值视为未启用（不产生 `--timeout=` 空参）。"""
         args = self._args(monkeypatch, "   ")

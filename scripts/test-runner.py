@@ -61,6 +61,7 @@ from _test_runner.pytest_env import (  # noqa: F401
     resolve_parallel_level,
     _check_pytest_html,
     _check_pytest_cov,
+    _check_pytest_timeout,
     _check_xdist,
     _calc_parallel_workers,
     _extract_count,
