@@ -49,7 +49,7 @@ import logging
 import os
 from dataclasses import dataclass
 
-from src.python.core.constants import PROJECT_ROOT
+from src.python.core.path_utils import resolve_project_path
 
 logger = logging.getLogger("invest")
 
@@ -135,7 +135,7 @@ def _key_file_path(spec: CredentialSpec) -> str:
             logger.debug("[credential] 读取 %s 配置失败，回退声明路径", spec.key_file_setting)
     if not path:
         return ""
-    return path if os.path.isabs(path) else os.path.join(PROJECT_ROOT, path)
+    return resolve_project_path(path)
 
 
 def _read_key_file(path: str, field: str, section: str = "") -> str:

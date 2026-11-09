@@ -7,6 +7,7 @@ import sys
 from logging.handlers import RotatingFileHandler
 
 from src.python.core.constants import PROJECT_ROOT
+from src.python.core.path_utils import resolve_project_path
 from src.python.core.ansi_colors import MAGENTA, RED, RESET, YELLOW
 
 # 日志文件路径（始终以项目根目录为基准，不受 CWD 影响）
@@ -113,9 +114,7 @@ def _apply_logger_config(config: dict) -> None:
     """把配置写入模块级生效值（路径绝对化；测试进程固定 test.log）。"""
     global _LOG_FILE, _LOG_MAX_BYTES, _LOG_BACKUP_COUNT, _CONSOLE_COLOR
     global _CONFIG_FILE_LEVEL, _CONFIG_CONSOLE_LEVEL
-    path = config["path"]
-    if not os.path.isabs(path):
-        path = os.path.join(PROJECT_ROOT, path)
+    path = resolve_project_path(config["path"])
     _LOG_FILE = os.path.join(_LOG_BASE, "test.log") if _is_pytest else _apply_env_log_path(path)
     _LOG_MAX_BYTES = int(config["max_bytes"])
     _LOG_BACKUP_COUNT = int(config["backup_count"])
@@ -251,7 +250,7 @@ def _apply_env_log_path(path: str) -> str:
     override = os.environ.get(_LOG_PATH_ENV, "").strip()
     if not override:
         return path
-    return override if os.path.isabs(override) else os.path.join(PROJECT_ROOT, override)
+    return resolve_project_path(override)
 
 
 _apply_logger_config(_read_logger_config_file())

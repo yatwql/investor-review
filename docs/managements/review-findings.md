@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.7-dev
-> **编号源**：`rf-next = 1103`（新增问题提出后更新为 +1；已用最大 rf-1102，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1104`（新增问题提出后更新为 +1；已用最大 rf-1103，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -78,8 +78,9 @@
 | **rf-1098** | 并行档位缺少可固定入口与上限：worker = 核数 × 系数且 medium 无上限（32 核会开到 16，实测偏慢），慢机器只能每次命令行带参数，并行度也不可解释（输出只报 worker 数） | medium 封顶 8、新增 `TEST_RUNNER_PARALLEL` 环境变量（优先级 CLI > 环境 > 缺省）、worker 少于核数时提示可提升方式；补 9 例用例（级别优先级/非法值回落/封顶/high 不封顶/low 下限）；scripts-reference 补选择建议 |
 | **rf-1099** | **Windows 上 `standard`/`unit` 档 720s 超时**：`tui_keys._get_key_windows()` 无 `isatty` 前置判定（Linux 分支有），非交互 stdin（pytest/管道/重定向）下 `msvcrt.getch()` 会一直阻塞到有按键，整档测试跑不完；`dev-verify` 不含 `unit_ui` 故本地与 CI（Linux）结构性看不见 | 把 `isatty` 判定提到 `import msvcrt` 之前（与 Linux 分支同口径，非 Windows 也可被测试覆盖），非 tty 直接返回 `KEY_UNKNOWN`；Windows 分支既有用例补 tty 前提，新增「非 tty 不等键」回归 |
 | **rf-1100** | 整档超时（720s）只给出一句「测试超时」，不指明**哪个用例**卡住——排障只能靠反复二分或 `-v` 刷屏；慢机器（Windows）上「卡住」与「真慢」也无法区分 | 新增可选单用例看门狗：`TEST_RUNNER_PER_TEST_TIMEOUT=<秒>` 时给 pytest 传 `--timeout / --timeout-method=thread`（`pytest-timeout` 入 `.[test]` 可选依赖，**未设变量不启用**，避免慢机误杀），超时用例即被点名并打印堆栈；补 3 例用例（默认不启用 / 设值启用 / 空白忽略）；scripts-reference 补「整档超时怎么定位」 |
-| **rf-1101** | **Windows 上收集失败**：`test_live_status_edge.py` 在模块顶层 `import pty` / `import termios`（POSIX 专属），Windows 收集期直接报 `ERROR collecting …`，把整档 `unit`/`regression` 拖成错误——CI 与本地均 Linux，结构性看不见 | 改用模块级跳过（`pytest.importorskip` 判定与被导入模块是否存在无关，收集期行为确定）+ conftest 收集门（`collect_ignore`：ptty/termios 导入探测失败即整文件不进收集，模块级副作用不会变成 error）；新增跨平台 import 守卫用例（AST 扫 `src/test` 模块级 POSIX 专属导入，违规即红；try 包裹/importorskip/函数体内三类合法写法不误报） |
+| **rf-1101** | **Windows 上收集失败**：`test_live_status_edge.py` 在模块顶层 `import pty` / `import termios`（POSIX 专属），Windows 收集期直接报 `ERROR collecting …`，把整档 `unit`/`regression` 拖成错误——CI 与本地均 Linux，结构性看不见 | 改用模块级跳过（`pytest.importorskip` 判定与被导入模块是否存在无关，收集期行为确定）+ conftest 收集门（`collect_ignore`：pty/termios 导入探测失败即整文件不进收集，模块级副作用不会变成 error）；新增跨平台 import 守卫用例（AST 扫 `src/test` 模块级 POSIX 专属导入，违规即红；try 包裹/importorskip/函数体内三类合法写法不误报） |
 | **rf-1102** | pytest 非测试失败（退出码 2/3/4/5）在 runner 里只显示成「0 passed, 0 failed (0.0s)」——看不出是用法错误（缺插件 / 环境变量残留）还是未收集到用例，排障只能靠手工重跑 pytest | 按退出码给出可执行提示（4=用法错误：常见缺 pytest-timeout 或 `TEST_RUNNER_*` 残留；5=未收集到用例：marker 与测试树不匹配；2=中断；3=内部错误），并回放输出末 8 行；补 2 例用例。另：`TEST_RUNNER_PER_TEST_TIMEOUT` 在**未装 `pytest-timeout`** 时改为忽略并告警（原会传 `--timeout` 使 pytest 以用法错误退出 4 秒退，表现为「0 passed, 0 failed (0.0s)」） |
+| **rf-1103** | 72h 变更复核（门禁/测试可移植性改造段）发现三处口径漂移：①「配置/环境变量给的路径按项目根绝对化」在 5 处各写一份（`cache/_paths`、`config/_logging`、`core/logger` 两处、`core/datasource_credential`），归一与否不一致（`./logs`、`data//cache` 原样落盘，空串落成 `PROJECT_ROOT/`）；② `check-types.py` 的 `GUARDED_PREFIXES` 与 `DEFAULT_TARGETS` 各写一份守护域；③ `runner.py` 退出码提示把 `TEST_RUNNER_*` 环境变量名写成字面量，且提示字典每次调用重建 | ① 新增 `core/path_utils.resolve_project_path` 单源（绝对路径原样 / 相对路径拼项目根并 `normpath` / 空串落项目根），5 处改为引用；补 6 例用例 + AST 守卫（产品代码再写 `isabs ? … : join(PROJECT_ROOT, …)` 即红）；② 前缀由 `DEFAULT_TARGETS` 派生；③ 提示字典提为模块级并引用 `pytest_env` 的 `PARALLEL_ENV`/`PER_TEST_TIMEOUT_ENV` 常量；另修 `test-coverage.md` 核心基础设施列表里已不存在的 `filesystem` 模块名 |
 
 ### 归档档案
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-08）

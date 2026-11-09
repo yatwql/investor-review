@@ -18,6 +18,15 @@
 
 ### 修复
 
+- **路径绝对化与守护域口径收口（rf-1103）** —— 三处同构副本：①「配置/环境变量给的路径按项目根
+  绝对化」在 5 处各写一份（`cache/_paths`、`config/_logging`、`core/logger` 两处、
+  `core/datasource_credential`），归一与否不一致（`./logs`、`data//cache` 原样落盘，空串落成
+  `PROJECT_ROOT/`）→ 新增 `core/path_utils.resolve_project_path` 单源（绝对原样 / 相对拼项目根并
+  `normpath` / 空串落项目根），并加 AST 守卫用例：产品代码再写 `isabs ? … : join(PROJECT_ROOT, …)` 即红；
+  ② `check-types.py` 的 `GUARDED_PREFIXES` 不再另写一份，由 `DEFAULT_TARGETS` 派生；
+  ③ `runner.py` 的 pytest 退出码提示提为模块级常量，环境变量名改为引用 `pytest_env` 的
+  `PARALLEL_ENV` / `PER_TEST_TIMEOUT_ENV`（不再重写字面量）。另修 `test-coverage.md` 核心基础设施
+  列表里已不存在的 `filesystem` 模块名。
 - **Windows 上 41 个测试失败清零（跨平台可移植性）** —— 两类根因：路径分隔符与平台专属用例。
   生产侧 `cache/_paths.py` 的缓存目录字面量改用原生分隔 + `normpath`、`_cache_path` 转义冒号
   （Windows 文件名非法致负缓存 mark 静默失败）；`markers.py::_get_relative_dir` 改 `as_posix()`

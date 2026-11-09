@@ -56,8 +56,8 @@ DEFAULT_TARGETS: tuple[str, ...] = ("src/python", "scripts")
 #: 单次输出上限（CI 日志友好；超出时末尾给「其余 N 条」一行）
 MAX_REPORTED = 60
 
-#: 守护域前缀（`--changed` 按此过滤变更文件；与 `[tool.pyright] include` 同域）
-GUARDED_PREFIXES: tuple[str, ...] = ("src/python/", "scripts/")
+#: 守护域前缀（`--changed` 按此过滤变更文件；由 `DEFAULT_TARGETS` 派生，不另写一份域）
+GUARDED_PREFIXES: tuple[str, ...] = tuple(f"{target}/" for target in DEFAULT_TARGETS)
 
 #: `--changed` 的变更文件上限：超过即回落全量（pyright 起停固定开销 > 逐文件收益）
 MAX_CHANGED_FILES = 25

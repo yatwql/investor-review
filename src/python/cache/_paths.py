@@ -11,6 +11,7 @@ import re
 import stat
 
 from src.python.core.constants import PROJECT_ROOT
+from src.python.core.path_utils import resolve_project_path
 
 logger = logging.getLogger("invest")
 
@@ -28,7 +29,7 @@ def _resolve_cache_dir() -> str:
     override = os.environ.get(_CACHE_DIR_ENV, "").strip()
     if not override:
         return _ROOT_CACHE_DIR
-    return override if os.path.isabs(override) else os.path.normpath(os.path.join(PROJECT_ROOT, override))
+    return resolve_project_path(override)
 
 
 _CACHE_DIR = _resolve_cache_dir()
