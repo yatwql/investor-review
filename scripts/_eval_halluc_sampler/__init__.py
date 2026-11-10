@@ -23,6 +23,7 @@ from _eval_halluc_sampler.llm_call import (  # noqa: F401
 )
 from _eval_halluc_sampler.report import _generate_report  # noqa: F401
 from _eval_halluc_sampler.self_review import (  # noqa: F401
+    _build_self_review_dry_run_prompt,
     _generate_self_review_section,
     _run_self_review_sample,
 )

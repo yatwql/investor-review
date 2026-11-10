@@ -569,3 +569,57 @@ class TestStripLlmFooter:
 
         html = '<p style="color:#888;font-size:13px">别的样式段落</p>'
         assert strip_llm_footer(html) == html
+
+
+class TestNamePrefixAbbreviation:
+    """名称前缀缩写的主体归因（「嘉实全球产业升级」⊂「嘉实全球产业升级股票(QDII)A」）。
+
+    回归：LLM 省掉产品类型尾缀时，四分主体来源（代码/全名/简称归一/描述性尾名）都
+    解析不出来 → 数值落进「无主体」分支跳过，与真值矛盾的收益率长期留在正文里
+    （实测 017730 一处 -8.5%、两处 -5.06%）。
+    """
+
+    @pytest.fixture
+    def qdii_holdings(self) -> list[dict]:
+        return [
+            {
+                "name": "嘉实全球产业升级股票(QDII)A",
+                "code": "017730",
+                "market_value": 23941.69,
+                "cost": 25218.95,
+                "profit": -1277.26,
+                "profit_rate": -5.06,
+            },
+            {
+                "name": "华安纳斯达克100ETF联接基金A",
+                "code": "040046",
+                "market_value": 22231.0,
+                "cost": 10896.1,
+                "profit": 11334.9,
+                "profit_rate": 103.91,
+            },
+        ]
+
+    def test_prefix_abbreviation_is_corrected(self, qdii_holdings):
+        """缩写命中唯一持仓 → 按该品种真值修正，并标注「亏损」方向。"""
+        issues, _checked, _passed, corrections = check_numerical_consistency(
+            "嘉实全球产业升级（8.5%）为唯一亏损QDII", qdii_holdings
+        )
+        assert corrections == [("8.5", "-5.1", "嘉实全球产业升级（8.5%）为唯一亏损QDII", "017730实际收益率-5.1%")]
+        assert issues and "亏损" in issues[0] and "盈利" not in issues[0]
+
+    def test_ambiguous_prefix_is_not_corrected(self, qdii_holdings):
+        """同一前缀指向两只持仓（同公司不同份额）→ 归属不可知，宁漏改不误改。"""
+        ambiguous = [
+            {**qdii_holdings[0], "name": "嘉实全球产业升级股票A", "code": "017730"},
+            {**qdii_holdings[1], "name": "嘉实全球产业升级股票C", "code": "017733"},
+        ]
+        _issues, _checked, _passed, corrections = check_numerical_consistency(
+            "嘉实全球产业升级（8.5%）为唯一亏损QDII", ambiguous
+        )
+        assert corrections == []
+
+    def test_short_prefix_is_not_matched(self, qdii_holdings):
+        """2~3 字前缀（「嘉实」）与公司名/行业词无法区分 → 不作主体。"""
+        _issues, _checked, _passed, corrections = check_numerical_consistency("嘉实（8.5%）为唯一亏损QDII", qdii_holdings)
+        assert corrections == []

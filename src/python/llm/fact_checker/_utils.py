@@ -332,9 +332,60 @@ def _unresolved_attached_subject(
     token = token_match.group(0)
     # 可归因三选一：持仓名称包含该串（如「建信高端装备」⊂「建信高端装备股票A」，
     # 省略类型尾缀的完整核心名）、或常规主体匹配（代码/别名/描述尾名）能解析。
-    if any(token in name for name in (name_to_code or {})):
-        return False
+    # 「包含」这一判据要加两道闸：① 过短（<4 字，如「嘉实」）与公司名/行业词无法
+    # 区分；② 命中多只持仓（同公司不同份额）时归属不可知——两种情况下改写都可能
+    # 把对的改错，按「紧邻主体存在但解析不出」处理（宁漏改不误改）。
+    containing = [code for name, code in (name_to_code or {}).items() if token in name]
+    if containing:
+        return not (len(token) >= _MIN_NAME_PREFIX_LEN and len(set(containing)) == 1)
     return not _has_subject_candidate(token, holding_codes, name_to_code, len(token) - 1)
+
+
+#: 名称前缀缩写的最小长度：低于此长度（如「嘉实」「华夏」）与公司名/行业词无法区分
+_MIN_NAME_PREFIX_LEN = 4
+
+
+def _match_name_prefix(
+    text: str,
+    name_to_code: dict[str, str] | None,
+    anchor: int = 0,
+) -> tuple[str, int] | None:
+    """匹配持仓全名的**前缀缩写**，返回 ``(code, 边缘距离)``。
+
+    LLM 常省掉产品类型尾缀（「嘉实全球产业升级（8.5%）」指 017730「嘉实全球产业升级
+    股票(QDII)A」）。四分主体来源（代码/全名/简称归一/描述性尾名）都只看「包含关系或
+    后缀」，这类**截断在中间**的写法解析不出来，数值就落进「无主体」分支被跳过——
+    与持仓真值矛盾的数字因此长期留在正文里（实测 017730 一处 -8.5%、两处 -5.06%）。
+
+    安全边界：前缀长度 ≥ ``_MIN_NAME_PREFIX_LEN``；同一前缀指向多只持仓（同公司不同
+    份额）时归属不可知 → 返回 None（宁漏改不误改）。
+
+    Args:
+        text: 待匹配文本（通常是全句）。
+        name_to_code: 「持仓名 → 代码」映射。
+        anchor: 数值位置，用于算边缘距离。
+
+    Returns:
+        (代码, 距离) 或 None（无匹配/有歧义）。
+    """
+    matches: dict[str, list[tuple[str, int]]] = {}
+    for name, code in (name_to_code or {}).items():
+        for k in range(min(len(name) - 1, 16), _MIN_NAME_PREFIX_LEN - 1, -1):
+            prefix = name[:k]
+            idx = text.find(prefix)
+            if idx >= 0:
+                matches.setdefault(prefix, []).append((code, idx))
+                break
+    if not matches:
+        return None
+    longest = max(len(prefix) for prefix in matches)
+    candidates = [(prefix, hits) for prefix, hits in matches.items() if len(prefix) == longest]
+    codes = {code for _prefix, hits in candidates for code, _idx in hits}
+    if len(codes) > 1:
+        return None  # 同长度前缀指向不同持仓 → 歧义，放弃归因
+    prefix, hits = candidates[0]
+    code, idx = min(hits, key=lambda hit: min(abs(hit[1] - anchor), abs(hit[1] + len(prefix) - anchor)))
+    return code, min(abs(idx - anchor), abs(idx + len(prefix) - anchor))
 
 
 def _subject_spans(
@@ -399,7 +450,10 @@ def _has_subject_candidate(
     if _subject_spans(text, holding_codes, name_to_code, anchor):
         return True
     # 描述性尾名（"电池主题ETF"→561910）只有距离没有区间，单独兜底
-    return _match_descriptive_tail(text, name_to_code, anchor) is not None
+    if _match_descriptive_tail(text, name_to_code, anchor) is not None:
+        return True
+    # 前缀缩写（"嘉实全球产业升级"→017730）同理
+    return _match_name_prefix(text, name_to_code, anchor) is not None
 
 
 def _locate_subject_code(
@@ -518,6 +572,13 @@ def _locate_subject_in(
     _tail = _match_descriptive_tail(sentence, name_to_code, anchor)
     if _tail is not None:
         _code, _dist = _tail
+        _offer(_code, _dist, into_best=not has_reliable)
+
+    # 前缀缩写（"嘉实全球产业升级"→「嘉实全球产业升级股票(QDII)A」）：与尾名同口径，
+    # 句中已有代码/全名时只以「紧邻」覆盖，避免把远处缩写当主体。
+    _prefix_hit = _match_name_prefix(sentence, name_to_code, anchor)
+    if _prefix_hit is not None:
+        _code, _dist = _prefix_hit
         _offer(_code, _dist, into_best=not has_reliable)
 
     if attached is not None:

@@ -70,3 +70,15 @@ def _generate_self_review_section(samples: list[dict]) -> str:
             lines.append(f"（未产出：{sample.get('error') or '空输出'}）")
         lines.append("")
     return "\n".join(lines)
+
+
+def _build_self_review_dry_run_prompt(
+    module_outputs: dict[str, str | None],
+    holdings_details: list[dict] | None,
+    penetrated_assets: list[dict] | None,
+) -> str:
+    """dry-run 用：只构建自检提示词（不调用 LLM，零花费）。"""
+    from src.python.llm.prompts import _SYSTEM_SELF_REVIEW, _build_self_review_prompt
+
+    prompt = _build_self_review_prompt(module_outputs, holdings_details, penetrated_assets)
+    return f"### System\n\n{_SYSTEM_SELF_REVIEW}\n\n### User\n\n{prompt}"

@@ -347,8 +347,11 @@ def _evaluate_percent(ctx: PercentContext) -> tuple[str | None, tuple[str, str, 
     if best_code:
         stock_rate = (ctx.stock_rates or ctx.stock_rates_abs).get(best_code, 0)
         correct_str = f"{stock_rate:.1f}"
+        # 方向标注取**该品种**自己的盈亏，不沿用组合盈亏（否则亏损品种被标成「（盈利）」，
+        # 修正明细读起来自相矛盾）
+        _sign = "盈利" if stock_rate >= 0 else "亏损"
         _ctx = _sentence_snippet(ctx.sentence)
-        issue = f"收益相关数值 {ctx.value}% 与 {best_code} 的实际收益率 {correct_str}%（{ctx.profit_sign}）偏差超过容差（句段：{_ctx}）"
+        issue = f"收益相关数值 {ctx.value}% 与 {best_code} 的实际收益率 {correct_str}%（{_sign}）偏差超过容差（句段：{_ctx}）"
         return issue, (ctx.value_str, correct_str, ctx.sentence, f"{best_code}实际收益率{correct_str}%")
     elif closest_ref != "_portfolio":
         stock_rate = (ctx.stock_rates or ctx.stock_rates_abs).get(closest_ref, 0)

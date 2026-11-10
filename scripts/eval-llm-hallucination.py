@@ -40,6 +40,7 @@ from _eval_halluc_sampler import (  # noqa: E402
     _compute_categories,
     _compute_portfolio_values,
     _generate_report,
+    _build_self_review_dry_run_prompt,
     _generate_self_review_section,
     _load_datasets,
     _run_fact_check,
@@ -169,6 +170,28 @@ def main():
             )
             continue
 
+        # ── 2b. 事实校验（dry-run 不做：此时「LLM 输出」其实是提示词自身，
+        #        拿它当正文校验只会产出一份无意义的告警率）──
+        if dry_run:
+            all_results.append(
+                {
+                    "dataset": ds,
+                    "llm_output": llm_output,
+                    "usage": usage,
+                    "fact_check": {
+                        "issues": {"numerical": [], "symbol": [], "rank": [], "symbol_suggestion": []},
+                        "total_checks": 0,
+                        "num_checked": 0,
+                        "sym_checked": 0,
+                        "rank_checked": 0,
+                        "sym_suggestion_count": 0,
+                        "hallucination_rate": 0.0,
+                    },
+                    "elapsed": elapsed,
+                }
+            )
+            continue
+
         # ── 2b. 事实校验 ──
         module_label: str = {
             "expert_review": "智囊团深度复盘",
@@ -210,13 +233,24 @@ def main():
         )
 
         # ── 2c. 自检抽样（可选）：对本次采样到的产出跑一次模型层复核 ──
-        if args.self_review and not dry_run:
-            self_review_samples.append(
-                {
-                    "dataset": name,
-                    "content": _run_self_review_sample({module_name: llm_output}, holdings, None),
-                }
-            )
+        if args.self_review:
+            if dry_run:
+                # dry-run 只导出提示词（零花费）：验证双写模块名与摘要注入是否到位
+                prompt_lines.append("---")
+                prompt_lines.append(f"## 自检抽样 Prompt（数据集 {idx}: {name}）")
+                prompt_lines.append("")
+                prompt_lines.append("```markdown")
+                prompt_lines.append(_build_self_review_dry_run_prompt({module_name: llm_output}, holdings, None))
+                prompt_lines.append("```")
+                prompt_lines.append("")
+                self_review_samples.append({"dataset": name, "content": None, "error": "dry-run（未调用 LLM）"})
+            else:
+                self_review_samples.append(
+                    {
+                        "dataset": name,
+                        "content": _run_self_review_sample({module_name: llm_output}, holdings, None),
+                    }
+                )
 
     # ── Dry-Run 保存 Prompt ──
     if dry_run:
