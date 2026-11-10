@@ -621,5 +621,7 @@ class TestNamePrefixAbbreviation:
 
     def test_short_prefix_is_not_matched(self, qdii_holdings):
         """2~3 字前缀（「嘉实」）与公司名/行业词无法区分 → 不作主体。"""
-        _issues, _checked, _passed, corrections = check_numerical_consistency("嘉实（8.5%）为唯一亏损QDII", qdii_holdings)
+        _issues, _checked, _passed, corrections = check_numerical_consistency(
+            "嘉实（8.5%）为唯一亏损QDII", qdii_holdings
+        )
         assert corrections == []

@@ -11,6 +11,7 @@
   --dataset N[,N...]  仅测试指定数据集（序号从 1 开始，默认全部）
   --dry-run           不调用 LLM，只构建 prompt 并输出到 tmp 目录
   --self-review       额外跑一次生成后自检抽样，产物（模块名双写）追加到报告附录
+  --from-report HTML  重放一份既有报告：零 LLM 调用，输出确定性核对 + 覆盖率，不采样
   --force             跳过缓存，强制重新生成 LLM 输出
   --output FILE       报告输出路径（默认 docs/tmp/hallucination-report.md）
 
@@ -45,6 +46,7 @@ from _eval_halluc_sampler import (  # noqa: E402
     _load_datasets,
     _run_fact_check,
     _run_self_review_sample,
+    run_from_report,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
@@ -58,6 +60,12 @@ def main():
     )
     parser.add_argument("--dataset", type=str, default=None, help="仅测试指定数据集，逗号分隔（如 1,3,5）")
     parser.add_argument("--dry-run", action="store_true", help="不调用 LLM，只构建 prompt 验证结构")
+    parser.add_argument(
+        "--from-report",
+        metavar="HTML",
+        default=None,
+        help="重放一份既有报告：零 LLM 调用，输出确定性核对结果与覆盖率（不采样、不花钱）",
+    )
     parser.add_argument(
         "--self-review",
         action="store_true",
@@ -87,6 +95,10 @@ def main():
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
     except OSError as exc:
         raise SystemExit(f"[ERR] 无法创建输出目录: {exc}") from exc
+
+    # ── 0. 重放既有报告（零 LLM 调用）：确定性核对 + 覆盖率，直接返回 ──
+    if args.from_report:
+        raise SystemExit(run_from_report(args.from_report, output_path))
 
     # ── 1. 加载数据集 ──
     logger.info("=" * 60)

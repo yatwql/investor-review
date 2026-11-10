@@ -378,6 +378,7 @@ def _auto_reset_module_state():
             news_aggregator,
             tiantian_holdings,
         )
+        from src.python.llm.fact_checker import _coverage as fact_check_coverage
         from src.python.report import fund_style_base
         from src.python.tui import report_artifacts, tui_handlers, tui_keys
 
@@ -403,6 +404,7 @@ def _auto_reset_module_state():
         report_artifacts.reset_open_failure_memo()
         tui_handlers.reset_busy_state()
         tui_keys.reset_key_parser_state()
+        fact_check_coverage.reset_numerical_coverage()
 
     _reset()
     yield

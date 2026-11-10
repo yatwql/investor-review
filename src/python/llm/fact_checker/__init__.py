@@ -7,6 +7,7 @@
   - check_symbol_existence      — 品种存在性校验
   - check_ranking_correctness   — 排名正确性校验
   - check_cross_module_claims   — 跨模块收益率口径冲突（模块之间互相打架）
+  - numerical_coverage          — 覆盖率快照（多少声称被真正比对过 / 跳过原因）
   - run_fact_check              — 统一入口（全量校验 + 自动修正）
   - strip_fact_check_blocks     — 剥离校验产物段落（下游复核类消费方取纯分析正文）
 
@@ -32,6 +33,11 @@ from __future__ import annotations
 from src.python.llm.fact_checker._corrections import (  # noqa: F401
     auto_correction_counts,
     reset_auto_correction_counts,
+)
+from src.python.llm.fact_checker._coverage import (  # noqa: F401
+    note_verified,
+    numerical_coverage,
+    reset_numerical_coverage,
 )
 from src.python.llm.fact_checker._cross_module import (  # noqa: F401
     build_cross_module_block,

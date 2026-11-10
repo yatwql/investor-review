@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 import re
 
+from src.python.llm.fact_checker import _coverage
 from src.python.llm.fact_checker._constants import (
     _DEFAULT_TOLERANCE_PCT,
     _EXPOSURE_KEYWORDS,
@@ -164,7 +165,7 @@ def _is_market_scope_no_subject(
     return _subject_distance(spans, subject_code, _rel) >= _noun_dist
 
 
-def _evaluate_percent(ctx: PercentContext) -> tuple[str | None, tuple[str, str, str, str] | None]:
+def _evaluate_percent_impl(ctx: PercentContext) -> tuple[str | None, tuple[str, str, str, str] | None]:
     """评估单个百分比数值（语境判定 → 主体归因 → 是否需要修正）。
 
     语境开关的**判定顺序**（先「非收益率」早退，再回撤，最后收益语境）在本函数体内
@@ -206,6 +207,7 @@ def _evaluate_percent(ctx: PercentContext) -> tuple[str | None, tuple[str, str, 
         if change is None:
             return None, None  # 无持仓主体或无单日涨跌数据 → 无法校验，跳过
         if abs(ctx.value - abs(change)) <= ctx.tolerance_pct:
+            _coverage.note_verified()
             return None, None
         correct_str = f"{change:.1f}"
         _ctx = _sentence_snippet(ctx.sentence)
@@ -222,6 +224,7 @@ def _evaluate_percent(ctx: PercentContext) -> tuple[str | None, tuple[str, str, 
             return None, None  # 无回撤数据，无法校验，跳过
         diff = abs(ctx.value - ctx.drawdown_pct)
         if diff <= ctx.tolerance_pct:
+            _coverage.note_verified()
             return None, None
         correct_str = f"{ctx.drawdown_pct:.1f}"
         _ctx = _sentence_snippet(ctx.sentence)
@@ -242,6 +245,7 @@ def _evaluate_percent(ctx: PercentContext) -> tuple[str | None, tuple[str, str, 
     # 贵州茅台上涨15%"），组合收益数值若走个股路由会被误归到数值最近的个股。
     if _is_portfolio_level_context(ctx.sentence, ctx.anchor):
         if abs(ctx.value - ctx.profit_rate) <= ctx.tolerance_pct:
+            _coverage.note_verified()
             return None, None
         signed = ctx.profit_rate_signed if ctx.profit_rate_signed is not None else ctx.profit_rate
         correct_str = f"{signed:.1f}"
@@ -305,10 +309,13 @@ def _evaluate_percent(ctx: PercentContext) -> tuple[str | None, tuple[str, str, 
         if ref is not None and abs(ctx.value - ref) <= ctx.tolerance_pct:
             if ctx.confirmed_rates is not None:
                 ctx.confirmed_rates[best_code] = ctx.value_str
+            _coverage.note_verified()
             return None, None
         if ref is None and abs(ctx.value - ref_rates[closest_ref]) <= ctx.tolerance_pct:
+            _coverage.note_verified()
             return None, None
     elif abs(ctx.value - ref_rates[closest_ref]) <= ctx.tolerance_pct:
+        _coverage.note_verified()
         return None, None
 
     # 策略 2：句中代码全部为指数代码
@@ -365,6 +372,18 @@ def _evaluate_percent(ctx: PercentContext) -> tuple[str | None, tuple[str, str, 
         _ctx = _sentence_snippet(ctx.sentence)
         issue = f"收益相关数值 {ctx.value}% 与实际累计收益率 {correct_str}%（{ctx.profit_sign}）偏差超过容差（句段：{_ctx}）"
         return issue, (ctx.value_str, correct_str, ctx.sentence, f"组合实际收益率{correct_str}%")
+
+
+def _evaluate_percent(ctx: PercentContext) -> tuple[str | None, tuple[str, str, str, str] | None]:
+    """评估单个百分比并登记覆盖率（判定本体见 :func:`_evaluate_percent_impl`）。
+
+    覆盖率是「有多少声称被真正比对过」的唯一来源：检查器过去只报「告警/检查项」，
+    跳过的声称在统计上与「通过」无区别（实测一只基金的 8.5% 就这样消失）。
+    """
+    before = _coverage.verified_count()
+    issue, correction = _evaluate_percent_impl(ctx)
+    _coverage.note_claim(ctx, issue, before)
+    return issue, correction
 
 
 def check_numerical_consistency(

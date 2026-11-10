@@ -20,6 +20,7 @@
 - 跨报告对比基线（`fund_manager_snapshot` / `fund_concentration_snapshot` / `fund_style_snapshot`）改为近永久 TTL（`CACHE_NEAR_PERMANENT`，1 年）并在注册表登记精确键 TTL（rf-1107）：此前落入上报域日档（`fund_manager_` → 24h），而报告生成入口每次先跑 `auto_cleanup_expired()`，两次报告相隔超过一天即把基线当过期文件删掉，报告恒定显示「此为首次运行，基金经理变更自下次报告起跟踪」
 - 「刷新基础缓存」保留跟踪基线（rf-1107）：`clear_by_group` / `clear_by_prefix` 新增 `exclude_keys`，刷新流程点名保留三个快照键——该流程只清不重建快照，清掉即让下一次报告退化成「首检」
 
+- 数值校验覆盖率 + 既有报告重放（rf-1113）：检查器不再只报「告警/检查项」，另记「百分比声称里多少被真正比对、跳过的都因为什么」（`fact_checker/_coverage.py`）；`eval-llm-hallucination.py --from-report <html>` 可对一份既有报告零 LLM 重放确定性核对。实测本机最新报告：276 条声称仅 52 条（19%）被比对，11 条不符——含 `017730` 的 `8.5%`（真值 -5.1%），证明前缀缩写归因在真实报告上生效
 ### 变更
 
 - 生成后自检降级为**实验能力（出厂默认关）**（rf-1111）：它是单份报告里输入最大的一遍调用（全部模块正文），产出只是尾部清单；要衡量它是否值得开，改用离线抽样 `scripts/eval-llm-hallucination.py --self-review`，产物为「中文名（内部键）」双写的 Markdown——中文给人读、内部键给解析脚本读，人机共读

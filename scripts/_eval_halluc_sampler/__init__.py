@@ -6,11 +6,13 @@
   - fact_check.py  事实校验（独立检查器精准分类）
   - report.py      幻觉率评估报告生成
   - self_review.py 自检抽样（离线；产物双写模块名，人机共读）
+  - from_report.py 既有报告重放（`--from-report`：零 LLM 的确定性核对 + 覆盖率）
 """
 
 from __future__ import annotations
 
 from _eval_halluc_sampler.fact_check import _run_fact_check  # noqa: F401
+from _eval_halluc_sampler.from_report import run_from_report  # noqa: F401
 from _eval_halluc_sampler.holdings import (  # noqa: F401
     _compute_categories,
     _compute_portfolio_values,
