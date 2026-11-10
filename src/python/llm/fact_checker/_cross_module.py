@@ -116,9 +116,13 @@ def build_cross_module_block(issues: list[str]) -> str:
     """冲突行 → 报告用的复核区块 HTML（并入自检区块的确定性段，零 token）。"""
     if not issues:
         return ""
-    items = "".join(f"<li>{issue}</li>" for issue in issues)
+    # 用报告既有的 data-status 组件承载「状态 → 观感」（DESIGN.md：状态着色只由
+    # data-status/组件状态类承载，不自造标记或内联颜色）。
+    items = "".join(f'<div class="data-status-warn">{issue}</div>' for issue in issues)
     return (
-        "<p><strong>跨模块一致性核对（确定性，无需模型调用）</strong></p>"
-        f"<ul>{items}</ul>"
+        '<div class="data-status">'
+        '<div class="data-status-title">跨模块一致性核对（确定性，无需模型调用）</div>'
+        f"{items}"
         "<p>同一实体在不同分析模块被赋予不同收益率——请以持仓摘要为真值来源核对原文。</p>"
+        "</div>"
     )

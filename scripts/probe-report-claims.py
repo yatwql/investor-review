@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import glob
+import logging
 import os
 import sys
 from datetime import datetime, timedelta
@@ -34,6 +35,9 @@ if _PROJECT_ROOT not in sys.path:
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # _eval_halluc_sampler
 
 from _eval_halluc_sampler.from_report import audit_report as audit_one_report  # noqa: E402
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
+logger = logging.getLogger("invest")
 
 
 def _report_date(path: str) -> datetime | None:
@@ -119,7 +123,7 @@ def main(argv: list[str] | None = None) -> int:
 
     reports = select_reports(args.root, limit=max(1, args.limit), since_days=args.since)
     if not reports:
-        print(f"[ERR] {args.root} 下没有可核对的分析报告", file=sys.stderr)
+        logger.error("%s 下没有可核对的分析报告", args.root)
         return 2
 
     rows = [audit_report(path) for path in reports]
@@ -130,16 +134,21 @@ def main(argv: list[str] | None = None) -> int:
             with open(args.output, "w", encoding="utf-8") as handle:
                 handle.write(text)
         except OSError as exc:
-            print(f"[ERR] 无法写入结果文件 {args.output}: {exc}", file=sys.stderr)
+            logger.error("无法写入结果文件 %s: %s", args.output, exc)
             return 2
-        print(f"[OK] 体检结果已写入 {args.output}")
+        logger.info("体检结果已写入 %s", args.output)
     else:
         print(text, end="")
     total = {name: sum(row[name] for row in rows) for name in ("claims", "verified", "issues", "rewrites")}
     rate = total["verified"] / total["claims"] * 100 if total["claims"] else 0.0
-    print(
-        f"[OK] {len(rows)} 份报告：声称 {total['claims']}｜已比对 {total['verified']}（{rate:.0f}%）"
-        f"｜告警 {total['issues']}｜改写 {total['rewrites']}"
+    logger.info(
+        "%d 份报告：声称 %d｜已比对 %d（%.0f%%）｜告警 %d｜改写 %d",
+        len(rows),
+        total["claims"],
+        total["verified"],
+        rate,
+        total["issues"],
+        total["rewrites"],
     )
     return 0
 
