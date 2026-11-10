@@ -12,11 +12,7 @@
 from __future__ import annotations
 
 from _eval_halluc_sampler.fact_check import _run_fact_check  # noqa: F401
-from _eval_halluc_sampler.from_report import (  # noqa: F401
-    extract_holdings_details,
-    extract_sections,
-    run_from_report,
-)
+from _eval_halluc_sampler.from_report import audit_report, run_from_report  # noqa: F401
 from _eval_halluc_sampler.holdings import (  # noqa: F401
     _compute_categories,
     _compute_portfolio_values,

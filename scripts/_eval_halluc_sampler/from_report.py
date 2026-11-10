@@ -91,6 +91,121 @@ def _extract_holdings_details(sections: dict[str, str]) -> list[dict]:
     return rows
 
 
+def _audit_module(key: str, chunk: str, holdings: list[dict], dump_skipped: str | None) -> dict:
+    """单章节的数值声称核对（重置覆盖率 → 判定 → 快照）。
+
+    数值判定只走 `check_numerical_consistency` 这一条路径（覆盖率与 issues/改写都从它派生），
+    避免「覆盖率用一套、告警用另一套」的口径漂移。
+    """
+    from src.python.core.registry import get_llm_module_name
+    from src.python.llm.fact_checker import check_numerical_consistency, numerical_coverage, reset_numerical_coverage
+    from src.python.llm.fact_checker._coverage import skipped_samples
+    from src.python.llm.fact_checker._utils import _strip_html
+
+    reset_numerical_coverage()
+    issues, _checked, _passed, corrections = check_numerical_consistency(_strip_html(chunk), holdings)
+    cov = numerical_coverage()
+    label = get_llm_module_name(key)
+    dump: list[str] = []
+    if dump_skipped and dump_skipped in (key, "all"):
+        for reason, items in skipped_samples().items():
+            dump.append(f"### {label}（{key}）｜{reason}")
+            dump.append("")
+            for item in items:
+                dump.append(f"- `{item['value']}%` … {item['sentence']}")
+            dump.append("")
+    return {
+        "key": key,
+        "label": label,
+        "claims": cov["total"],
+        "verified": cov["verified"],
+        "mismatched": cov["mismatched"],
+        "skipped": cov["skipped"],
+        "skip_reasons": dict(cov["skip_reasons"]),
+        "issues": list(issues),
+        "rewrites": list(corrections),
+        "dump": dump,
+    }
+
+
+def audit_report(report_path: str, dump_skipped: str | None = None) -> dict | None:
+    """核对一份报告：章节解析 + 持仓取自报告表格 + 逐模块数值核对。
+
+    Args:
+        report_path: 报告 HTML 路径。
+        dump_skipped: 导出跳过声称抽样的模块键或 ``all``（None = 不导出）。
+
+    Returns:
+        ``{path, holdings, modules, claims, verified, mismatched, skipped, issues, rewrites,
+        issue_lines, skip_reasons, dump}``；报告不可读或无章节时返回 None。
+    """
+    from src.python.llm.fact_checker import reset_numerical_coverage
+
+    try:
+        with open(report_path, encoding="utf-8") as handle:
+            page = handle.read()
+    except OSError as exc:
+        logger.error("[ERR] 读取报告失败: %s", exc)
+        return None
+
+    sections = _extract_sections(page)
+    targets = [(key, sections.get(key, "")) for key in _MODULE_KEYS if sections.get(key)]
+    if not targets:
+        logger.error("[ERR] 报告里没有可核对的分析章节（%s）", ", ".join(_MODULE_KEYS))
+        return None
+
+    holdings = _extract_holdings_details(sections)
+    modules = [_audit_module(key, chunk, holdings, dump_skipped) for key, chunk in targets]
+    reset_numerical_coverage()
+
+    data: dict = {"path": report_path, "holdings": holdings, "modules": modules, "dump": []}
+    for name in ("claims", "verified", "mismatched", "skipped"):
+        data[name] = sum(module[name] for module in modules)
+    data["issues"] = sum(len(module["issues"]) for module in modules)
+    data["rewrites"] = sum(len(module["rewrites"]) for module in modules)
+    data["issue_lines"] = [f"[{module['label']}] {line}" for module in modules for line in module["issues"]]
+    aggregate: dict[str, int] = {}
+    for module in modules:
+        for reason, count in module["skip_reasons"].items():
+            aggregate[reason] = aggregate.get(reason, 0) + int(count)
+    data["skip_reasons"] = aggregate
+    data["dump"] = [line for module in modules for line in module["dump"]]
+    return data
+
+
+def _render(data: dict) -> str:
+    """单份报告的 Markdown 渲染。"""
+    total = data
+    rate = (total["verified"] / total["claims"] * 100) if total["claims"] else 0.0
+    lines = [
+        "# 报告确定性核对（离线，零 LLM 调用）",
+        "",
+        f"- **源报告**: `{data['path']}`",
+        f"- **持仓品种**: {len(data['holdings'])}（来自报告自身的持仓明细表）",
+        f"- **总体覆盖率**: {total['verified']}/{total['claims']}（{rate:.0f}%）｜不符 {total['mismatched']}",
+        "",
+        "| 模块 | 百分比声称 | 已比对 | 不符 | 跳过 | 跳过原因 TOP3 |",
+        "|------|-----------:|-------:|-----:|-----:|----------------|",
+    ]
+    for module in data["modules"]:
+        module_rate = (module["verified"] / module["claims"] * 100) if module["claims"] else 0.0
+        reasons = module["skip_reasons"]
+        top_reasons = "；".join(f"{reason}×{count}" for reason, count in list(reasons.items())[:3]) or "—"
+        lines.append(
+            f"| {module['label']}（{module['key']}） | {module['claims']} | {module['verified']} "
+            f"({module_rate:.0f}%) | {module['mismatched']} | {module['skipped']} | {top_reasons} |"
+        )
+    if data["skip_reasons"]:
+        lines += ["", "## 跳过原因分布（全部模块合计）", "", "| 跳过原因 | 条数 |", "|----------|-----:|"]
+        for reason, count in sorted(data["skip_reasons"].items(), key=lambda kv: -kv[1]):
+            lines.append(f"| {reason} | {count} |")
+    if data["dump"]:
+        lines += ["", "## 跳过声称抽样（人工判定：真非收益 / 漏关键词 / 漏归因）", ""] + data["dump"]
+    if data["issue_lines"]:
+        lines += ["", "## 告警明细（确定性核对）", ""] + [f"- {line}" for line in data["issue_lines"]]
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def run_from_report(
     report_path: str,
     output_path: str | None = None,
@@ -107,102 +222,25 @@ def run_from_report(
     Returns:
         0 正常（即使有告警——告警不是脚本失败）；2 报告不可读或找不到可核对章节。
     """
-    from src.python.core.registry import get_llm_module_name
-    from src.python.llm.fact_checker import numerical_coverage, reset_numerical_coverage, run_fact_check
-    from src.python.llm.fact_checker._coverage import skipped_samples
-
-    try:
-        with open(report_path, encoding="utf-8") as handle:
-            page = handle.read()
-    except OSError as exc:
-        logger.error("[ERR] 读取报告失败: %s", exc)
+    data = audit_report(report_path, dump_skipped=dump_skipped)
+    if data is None:
         return 2
 
-    sections = _extract_sections(page)
-    targets = [(key, sections.get(key, "")) for key in _MODULE_KEYS if sections.get(key)]
-    if not targets:
-        logger.error("[ERR] 报告里没有可核对的分析章节（%s）", ", ".join(_MODULE_KEYS))
-        return 2
-
-    holdings = _extract_holdings_details(sections)
     logger.info("源报告: %s", report_path)
-    logger.info("解析到持仓品种: %d｜可核对章节: %d", len(holdings), len(targets))
-
-    lines = [
-        "# 报告确定性核对（离线，零 LLM 调用）",
-        "",
-        f"- **源报告**: `{report_path}`",
-        f"- **持仓品种**: {len(holdings)}（来自报告自身的持仓明细表）",
-        "",
-        "| 模块 | 百分比声称 | 已比对 | 不符 | 跳过 | 跳过原因 TOP3 |",
-        "|------|-----------:|-------:|-----:|-----:|----------------|",
-    ]
-    detail: list[str] = []
-    total = {"total": 0, "verified": 0, "mismatched": 0, "skipped": 0}
-    aggregate: dict[str, int] = {}
-    dump: list[str] = []
-
-    for key, chunk in targets:
-        reset_numerical_coverage()
-        _checked_html, summary = run_fact_check(
-            chunk,
-            holdings,
-            module_label=get_llm_module_name(key),
-            auto_correct=False,
-            skip_ranking_check=True,
-        )
-        cov = numerical_coverage()
-        for name in total:
-            total[name] += int(cov.get(name, 0))
-        reasons = cov.get("skip_reasons") or {}
-        # TOP3 跳过原因：只报首个原因会掩盖真实分布（哪类归因缺口占大头看不出来）
-        top_reasons = "；".join(f"{reason}×{count}" for reason, count in list(reasons.items())[:3]) or "—"
-        rate = (cov["verified"] / cov["total"] * 100) if cov["total"] else 0.0
-        lines.append(
-            f"| {get_llm_module_name(key)}（{key}） | {cov['total']} | {cov['verified']} "
-            f"({rate:.0f}%) | {cov['mismatched']} | {cov['skipped']} | {top_reasons} |"
-        )
-        for reason, count in reasons.items():
-            aggregate[reason] = aggregate.get(reason, 0) + int(count)
+    logger.info("解析到持仓品种: %d｜可核对章节: %d", len(data["holdings"]), len(data["modules"]))
+    for module in data["modules"]:
+        rate = (module["verified"] / module["claims"] * 100) if module["claims"] else 0.0
         logger.info(
             "[%s] 声称 %d｜已比对 %d（%.0f%%）｜不符 %d｜跳过 %d",
-            get_llm_module_name(key),
-            cov["total"],
-            cov["verified"],
+            module["label"],
+            module["claims"],
+            module["verified"],
             rate,
-            cov["mismatched"],
-            cov["skipped"],
+            module["mismatched"],
+            module["skipped"],
         )
-        if dump_skipped and dump_skipped in (key, "all"):
-            for reason, items in skipped_samples().items():
-                dump.append(f"### {get_llm_module_name(key)}（{key}）｜{reason}")
-                dump.append("")
-                for item in items:
-                    dump.append(f"- `{item['value']}%` … {item['sentence']}")
-                dump.append("")
 
-        if summary:
-            detail.append(f"### {get_llm_module_name(key)}（{key}）")
-            detail.append("")
-            detail.append(summary.strip())
-            detail.append("")
-
-    overall = (total["verified"] / total["total"] * 100) if total["total"] else 0.0
-    lines.insert(
-        4, f"- **总体覆盖率**: {total['verified']}/{total['total']}（{overall:.0f}%）｜不符 {total['mismatched']}"
-    )
-    if aggregate:
-        lines += ["", "## 跳过原因分布（全部模块合计）", "", "| 跳过原因 | 条数 |", "|----------|-----:|"]
-        for reason, count in sorted(aggregate.items(), key=lambda kv: -kv[1]):
-            lines.append(f"| {reason} | {count} |")
-
-    if dump:
-        lines += ["", "## 跳过声称抽样（人工判定：真非收益 / 漏关键词 / 漏归因）", ""] + dump
-
-    if detail:
-        lines += ["", "## 告警明细（确定性事实校验摘要）", ""] + detail
-
-    text = "\n".join(lines).rstrip() + "\n"
+    text = _render(data)
     if output_path:
         try:
             with open(output_path, "w", encoding="utf-8") as handle:
@@ -213,26 +251,19 @@ def run_from_report(
         logger.info("核对报告已生成: %s", output_path)
     else:
         print(text)
+    rate = (data["verified"] / data["claims"] * 100) if data["claims"] else 0.0
     logger.info(
         "总体：声称 %d｜已比对 %d（%.0f%%）｜不符 %d｜跳过 %d",
-        total["total"],
-        total["verified"],
-        overall,
-        total["mismatched"],
-        total["skipped"],
+        data["claims"],
+        data["verified"],
+        rate,
+        data["mismatched"],
+        data["skipped"],
     )
-    reset_numerical_coverage()
     return 0
 
 
-# ── 对外公开的解析入口（供 `probe-report-claims.py` 复用；不再让它 import 私有名）──
-
-
-def extract_sections(page: str) -> dict[str, str]:
-    """按 `id="sec-<key>"` 切出各章节正文。"""
-    return _extract_sections(page)
-
-
-def extract_holdings_details(sections: dict[str, str]) -> list[dict]:
-    """从「持仓明细」表解析 ``{name, code, market_value, cost, profit, profit_rate}``。"""
-    return _extract_holdings_details(sections)
+__all__ = [
+    "audit_report",
+    "run_from_report",
+]

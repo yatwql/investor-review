@@ -17,7 +17,6 @@ _SCRIPTS_DIR = _REPO_ROOT / "scripts"
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
-from _eval_halluc_sampler import from_report  # noqa: E402
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_scripts]
 
@@ -44,7 +43,6 @@ def _page(module_body: str) -> str:
 
 @pytest.fixture(scope="module")
 def claims_audit():
-    from_report.extract_sections, from_report.extract_holdings_details  # noqa: B018 — 触发模块加载
     return load_script("probe-report-claims.py", module_name="probe_report_claims")
 
 

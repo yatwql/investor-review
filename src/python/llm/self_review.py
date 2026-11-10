@@ -109,11 +109,6 @@ def localize_for_display(text: str) -> str:
     return text
 
 
-def _localize_module_keys(text: str) -> str:
-    """报告上屏口径（历史名保留：调用点语义即「上屏前本地化」）。"""
-    return localize_for_display(text)
-
-
 def _review_corpus(
     module_outputs: dict[str, str | None],
     holdings_details: list[dict] | None,
@@ -218,7 +213,7 @@ def run_self_review(
         logger.warning("生成后自检未产出有效内容（不影响主内容）")
         return False
 
-    content = _localize_module_keys(content)
+    content = localize_for_display(content)
     unverified = _unverified_percentages(
         content,
         _review_corpus(

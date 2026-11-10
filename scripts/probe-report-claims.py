@@ -33,17 +33,7 @@ if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # _eval_halluc_sampler
 
-from _eval_halluc_sampler.from_report import extract_holdings_details, extract_sections  # noqa: E402
-from src.python.core.registry import get_llm_module_name  # noqa: E402
-from src.python.llm.fact_checker import (  # noqa: E402
-    check_numerical_consistency,
-    numerical_coverage,
-    reset_numerical_coverage,
-)
-from src.python.llm.fact_checker._utils import _strip_html  # noqa: E402
-
-#: 参与核对的 LLM 章节（模块键 → HTML 锚点 `id="sec-<key>"`）
-_MODULE_KEYS = ("global_macro", "expert_review", "health_check", "penetration_deep")
+from _eval_halluc_sampler.from_report import audit_report as audit_one_report  # noqa: E402
 
 
 def _report_date(path: str) -> datetime | None:
@@ -73,30 +63,22 @@ def select_reports(root: str, *, limit: int = 10, since_days: int | None = None)
 
 
 def audit_report(path: str) -> dict:
-    """核对一份报告，返回 ``{path, claims, verified, issues, rewrites, issue_lines}``。"""
-    try:
-        with open(path, encoding="utf-8") as handle:
-            page = handle.read()
-    except OSError as exc:
-        print(f"[!] 跳过不可读报告 {path}: {exc}", file=sys.stderr)
+    """核对一份报告，返回 ``{path, claims, verified, issues, rewrites, issue_lines}``。
+
+    实现委托 `_eval_halluc_sampler.from_report.audit_report`（与 `--from-report` 同一套解析与
+    判定），本脚本只做批量聚合与渲染——不另写一份循环，避免两条路径口径漂移。
+    """
+    data = audit_one_report(path)
+    if data is None:
         return {"path": path, "claims": 0, "verified": 0, "issues": 0, "rewrites": 0, "issue_lines": []}
-    sections = extract_sections(page)
-    holdings = extract_holdings_details(sections)
-    result: dict = {"path": path, "claims": 0, "verified": 0, "issues": 0, "rewrites": 0, "issue_lines": []}
-    for key in _MODULE_KEYS:
-        chunk = sections.get(key, "")
-        if not chunk:
-            continue
-        reset_numerical_coverage()
-        issues, _checked, _passed, corrections = check_numerical_consistency(_strip_html(chunk), holdings)
-        coverage = numerical_coverage()
-        result["claims"] += coverage["total"]
-        result["verified"] += coverage["verified"]
-        result["issues"] += len(issues)
-        result["rewrites"] += len(corrections)
-        result["issue_lines"].extend(f"[{get_llm_module_name(key)}] {line}" for line in issues)
-    reset_numerical_coverage()
-    return result
+    return {
+        "path": path,
+        "claims": data["claims"],
+        "verified": data["verified"],
+        "issues": data["issues"],
+        "rewrites": data["rewrites"],
+        "issue_lines": data["issue_lines"],
+    }
 
 
 def _render(rows: list[dict]) -> str:

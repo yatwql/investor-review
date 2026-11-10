@@ -35,7 +35,6 @@ from src.python.llm.fact_checker._corrections import (  # noqa: F401
     reset_auto_correction_counts,
 )
 from src.python.llm.fact_checker._coverage import (  # noqa: F401
-    note_verified,
     numerical_coverage,
     reset_numerical_coverage,
 )

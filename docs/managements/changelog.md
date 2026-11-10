@@ -35,6 +35,7 @@
 - 复核区块不再依赖 LLM 开关：确定性核对段恒在，模型层自检（若开启）跟在事实之后
 
 ### 重构
+- 数值声称重放与批量体检共用单一实现（rf-1114）：`from_report.audit_report()` 承担章节解析、持仓解析与逐模块判定，`probe-report-claims.py` 只做批量聚合与渲染；比值边界词收敛为 `_RATIO_BOUNDARY_WORDS` 单源；移除无引用导出（`note_verified`）、薄包装（`_localize_module_keys`）与两处公开转发；测试去掉空表达式 import
 
 - 本机 IP 探测归位（rf-1109）：`get_machine_ip` / `_is_loopback` 由 `core/logger.py` 迁到 `core/system_info.py`（后者本就是「机器信息 / 展示原语」的单源），顺带清掉 logger 里一段失去绑定的孤立函数文档；`web` 状态卡、TUI 状态行、页脚与启动边界日志改为同一入口
 - `scripts/_test_runner/pytest_env.py` 四处可选插件探针（html/timeout/cov/xdist）收敛为 `_has_plugin()` 单点（只查 `find_spec` 不导入，避免插件注册副作用）
