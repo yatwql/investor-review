@@ -625,3 +625,62 @@ class TestNamePrefixAbbreviation:
             "嘉实（8.5%）为唯一亏损QDII", qdii_holdings
         )
         assert corrections == []
+
+
+class TestSignedReturnAfterCode:
+    """带符号百分比紧跟持仓代码即收益率声称（句子无「收益率」字样也要校验）。
+
+    回归：`040046（+103.91%）与016055（+8.53%）` 这类括号列收益率整条被「无收益
+    关键词」早退跳过，覆盖率实测只有 19%。判据刻意收窄（必须带符号 + 紧邻持仓代码 +
+    整句无回看期词），否则集中度/敞口（无符号）与区间涨跌（看空后 N 个交易日）会被误改。
+    """
+
+    @pytest.fixture
+    def qdii_pair(self) -> list[dict]:
+        return [
+            {
+                "name": "华安纳斯达克100ETF联接基金A",
+                "code": "040046",
+                "market_value": 22231.0,
+                "cost": 10896.1,
+                "profit": 11334.9,
+                "profit_rate": 103.91,
+            },
+            {
+                "name": "博时纳斯达克100ETF联接(QDII)A",
+                "code": "016055",
+                "market_value": 10000.0,
+                "cost": 9000.0,
+                "profit": 1000.0,
+                "profit_rate": 11.11,
+            },
+        ]
+
+    def test_signed_percent_after_code_is_verified(self, qdii_pair):
+        issues, _checked, _passed, corrections = check_numerical_consistency(
+            "040046（+103.91%）与016055（+11.11%）跟踪同一指数", qdii_pair
+        )
+        assert corrections == []
+        assert issues == []
+
+    def test_wrong_signed_percent_after_code_is_corrected(self, qdii_pair):
+        _issues, _checked, _passed, corrections = check_numerical_consistency(
+            "040046（+103.91%）与016055（+8.53%）跟踪同一指数", qdii_pair
+        )
+        assert corrections == [
+            ("8.53", "11.1", "040046（+103.91%）与016055（+8.53%）跟踪同一指数", "016055实际收益率11.1%")
+        ]
+
+    def test_lookback_period_move_is_not_a_holding_return(self, qdii_pair):
+        """区间价格涨跌（看空后 N 个交易日 -19.4%）不是持仓收益率 → 一律不改写。"""
+        _issues, _checked, _passed, corrections = check_numerical_consistency(
+            "022365 看空后 9 个交易日 −19.4%，判断兑现", qdii_pair
+        )
+        assert corrections == []
+
+    def test_non_holding_code_is_ignored(self, qdii_pair):
+        """指数/大盘涨跌（道指 +2.12%）不是持仓收益率 → 不改写。"""
+        _issues, _checked, _passed, corrections = check_numerical_consistency(
+            "道指（+2.12%）、纳指（+2.69%）", qdii_pair
+        )
+        assert corrections == []

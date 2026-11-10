@@ -165,6 +165,37 @@ def _is_market_scope_no_subject(
     return _subject_distance(spans, subject_code, _rel) >= _noun_dist
 
 
+#: 回看期/区间口径词：`022365 看空后 9 个交易日 −19.4%` 是区间价格涨跌，不是持仓
+#: 收益率——带符号也绝不能拿去改写正文。
+_LOOKBACK_WORDS = (
+    "交易日",
+    "区间",
+    "以来",
+    "此后",
+    "期间",
+    "年初",
+    "本月",
+    "上一交易日",
+    "上年",
+)
+
+
+def _is_signed_return_after_code(ctx: PercentContext) -> bool:
+    """带符号百分比紧跟在持仓代码后（``040046（+103.91%）``）→ 视为持仓收益率声称。
+
+    走「无收益关键词」早退的声称里，这类是真错值的高发形态（LLM 常用括号列收益率而
+    句子不带「收益率」字样）。判据刻意收窄：**必须**带正负号且紧邻持仓代码，且整句不含
+    回看期词——集中度/敞口/风险度量都是无符号百分比，区间涨跌则可被回看期词挡下。
+    """
+    if any(word in ctx.sentence for word in _LOOKBACK_WORDS):
+        return False
+    value = ctx.value_str.strip()
+    if not value:
+        return False
+    pattern = re.compile(rf"(\d{{6}})\s*[（(]?\s*[+＋\-−]\s*{re.escape(value)}\s*%")
+    return any(match.group(1) in ctx.holding_codes for match in pattern.finditer(ctx.sentence))
+
+
 def _evaluate_percent_impl(ctx: PercentContext) -> tuple[str | None, tuple[str, str, str, str] | None]:
     """评估单个百分比数值（语境判定 → 主体归因 → 是否需要修正）。
 
@@ -232,7 +263,9 @@ def _evaluate_percent_impl(ctx: PercentContext) -> tuple[str | None, tuple[str, 
         return issue, (ctx.value_str, correct_str, ctx.sentence, f"回撤实际{correct_str}%")
 
     # 无收益关键词或收益率太小 → 无法校验
-    is_profit_context = any(kw in ctx.sentence for kw in _PROFIT_KEYWORDS)
+    # 例外：带符号百分比紧跟持仓代码（`040046（+103.91%）`）本身就是持仓收益率声称，
+    # 句子缺「收益率」字样不影响判定（见 `_is_signed_return_after_code` 的收窄护栏）。
+    is_profit_context = any(kw in ctx.sentence for kw in _PROFIT_KEYWORDS) or _is_signed_return_after_code(ctx)
     if not is_profit_context or ctx.profit_rate < 0.01:
         return None, None
 
