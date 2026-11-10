@@ -123,11 +123,12 @@ def run_from_report(report_path: str, output_path: str | None = None) -> int:
         f"- **源报告**: `{report_path}`",
         f"- **持仓品种**: {len(holdings)}（来自报告自身的持仓明细表）",
         "",
-        "| 模块 | 百分比声称 | 已比对 | 不符 | 跳过 | 主要跳过原因 |",
-        "|------|-----------:|-------:|-----:|-----:|--------------|",
+        "| 模块 | 百分比声称 | 已比对 | 不符 | 跳过 | 跳过原因 TOP3 |",
+        "|------|-----------:|-------:|-----:|-----:|----------------|",
     ]
     detail: list[str] = []
     total = {"total": 0, "verified": 0, "mismatched": 0, "skipped": 0}
+    aggregate: dict[str, int] = {}
 
     for key, chunk in targets:
         reset_numerical_coverage()
@@ -142,12 +143,15 @@ def run_from_report(report_path: str, output_path: str | None = None) -> int:
         for name in total:
             total[name] += int(cov.get(name, 0))
         reasons = cov.get("skip_reasons") or {}
-        top_reason = next(iter(reasons.items()), ("—", 0))[0] if isinstance(reasons, dict) else "—"
+        # TOP3 跳过原因：只报首个原因会掩盖真实分布（哪类归因缺口占大头看不出来）
+        top_reasons = "；".join(f"{reason}×{count}" for reason, count in list(reasons.items())[:3]) or "—"
         rate = (cov["verified"] / cov["total"] * 100) if cov["total"] else 0.0
         lines.append(
             f"| {get_llm_module_name(key)}（{key}） | {cov['total']} | {cov['verified']} "
-            f"({rate:.0f}%) | {cov['mismatched']} | {cov['skipped']} | {top_reason} |"
+            f"({rate:.0f}%) | {cov['mismatched']} | {cov['skipped']} | {top_reasons} |"
         )
+        for reason, count in reasons.items():
+            aggregate[reason] = aggregate.get(reason, 0) + int(count)
         logger.info(
             "[%s] 声称 %d｜已比对 %d（%.0f%%）｜不符 %d｜跳过 %d",
             get_llm_module_name(key),
@@ -167,6 +171,11 @@ def run_from_report(report_path: str, output_path: str | None = None) -> int:
     lines.insert(
         4, f"- **总体覆盖率**: {total['verified']}/{total['total']}（{overall:.0f}%）｜不符 {total['mismatched']}"
     )
+    if aggregate:
+        lines += ["", "## 跳过原因分布（全部模块合计）", "", "| 跳过原因 | 条数 |", "|----------|-----:|"]
+        for reason, count in sorted(aggregate.items(), key=lambda kv: -kv[1]):
+            lines.append(f"| {reason} | {count} |")
+
     if detail:
         lines += ["", "## 告警明细（确定性事实校验摘要）", ""] + detail
 

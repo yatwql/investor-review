@@ -107,4 +107,39 @@ def _classify_skip(ctx: object) -> str:
         return "比例/计数语境"
     if getattr(ctx, "is_drawdown", False):
         return "回撤语境（无回撤基准）"
-    return "无收益语境或无主体可归因"
+
+    # 下面把粗桶「无收益语境或无主体可归因」拆细：只报粗桶看不出该补归因还是该补规则
+    from ._constants import _EXPOSURE_KEYWORDS, _PROFIT_KEYWORDS, _REBALANCE_TARGET_KEYWORDS
+    from ._context import (
+        _is_contribution_sentence,
+        _is_hypothetical_context,
+        _is_position_weight_context,
+    )
+    from ._utils import _unresolved_attached_subject
+
+    if not any(kw in sentence for kw in _PROFIT_KEYWORDS):
+        return "无收益关键词（非收益语境）"
+    holding_codes = getattr(ctx, "holding_codes", set())
+    name_to_code = getattr(ctx, "name_to_code", None) or {}
+    anchor = int(getattr(ctx, "anchor", 0))
+    if _unresolved_attached_subject(sentence, anchor, holding_codes, name_to_code):
+        return "紧邻名称解析不出持仓"
+    if _is_contribution_sentence(sentence):
+        return "贡献/归因语境"
+    if any(kw in sentence for kw in ("国债", "利率", "通胀", "GDP", "CPI", "PMI")):
+        return "宏观基准语境"
+    if _is_position_weight_context(sentence):
+        return "仓位/占比语境"
+    if _is_hypothetical_context(sentence):
+        return "假设/情景语境"
+    if any(kw in sentence for kw in _REBALANCE_TARGET_KEYWORDS):
+        return "调仓目标语境"
+    if any(kw in sentence for kw in _EXPOSURE_KEYWORDS):
+        return "币种/敞口语境"
+
+    # 市场/板块口径且句中无持仓主体（延迟导入：本模块被 _numerical 导入，反之不可在模块级）
+    from ._numerical import _is_market_scope_no_subject
+
+    if _is_market_scope_no_subject(sentence, anchor, holding_codes, name_to_code):
+        return "市场/板块口径且无持仓主体"
+    return "主体可解析但无可比对参考值"

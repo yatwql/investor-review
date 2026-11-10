@@ -57,3 +57,24 @@ class TestCoverageAccounting:
         reset_numerical_coverage()
         cov = numerical_coverage()
         assert cov == {"total": 0, "verified": 0, "mismatched": 0, "skipped": 0, "skip_reasons": {}}
+
+
+class TestSkipReasonGranularity:
+    """跳过原因要能指导下一步：只给一个粗桶看不出该补归因还是该补关键词。"""
+
+    def setup_method(self):
+        reset_numerical_coverage()
+
+    def teardown_method(self):
+        reset_numerical_coverage()
+
+    def test_non_profit_sentence_has_its_own_bucket(self):
+        run_fact_check("<p>本季度行业景气度 68%</p>", _HOLDINGS, module_label="测试", auto_correct=False)
+        reasons = numerical_coverage()["skip_reasons"]
+        assert any("无收益关键词" in reason for reason in reasons), reasons
+
+    def test_unresolvable_attached_name_has_its_own_bucket(self):
+        """紧邻一个解析不出持仓的名称 → 归因缺口（该补归因，不是补关键词）。"""
+        run_fact_check("<p>某某新能源主题 收益率 45.2%</p>", _HOLDINGS, module_label="测试", auto_correct=False)
+        reasons = numerical_coverage()["skip_reasons"]
+        assert any("紧邻名称解析不出持仓" in reason for reason in reasons), reasons
