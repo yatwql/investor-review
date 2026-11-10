@@ -24,10 +24,13 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from pathlib import Path
 
 from _release._common import ReleaseError
+
+logger = logging.getLogger("invest")
 
 #: 主台账里的目标节标题：`### 开发期已修复（X.Y.Z-dev）`
 #: 节标题（`[ \t]*$` 而非 `\s*$`：避免把标题后的空行吞进匹配、占位前多出空行）
@@ -153,6 +156,13 @@ def apply_rf_archive(main_text: str, archive_text: str, version: str, date: str)
     start, end = bounds
     parts = split_section_table(main_text[start:end])
     if parts is None or not _RF_ROW_RE.search(parts[1]):
+        # 「节在、表也在，但行不是 `| **rf-N** |` 形态」以前静默返回 0，表现为
+        # 「该版本已迁档，跳过」——发布就此漏搬。这里至少留一条可诊断告警。
+        if parts is not None and any(line.strip().startswith("|") for line in parts[1].splitlines()):
+            logger.warning(
+                "review-findings「开发期已修复（%s-dev）」表内没有 `| **rf-N** |` 形态的行，归档跳过（编号需加粗）",
+                version,
+            )
         return main_text, archive_text, 0
     before, table, after = parts
     moved = sum(1 for line in table.splitlines() if _RF_ROW_RE.match(line))
