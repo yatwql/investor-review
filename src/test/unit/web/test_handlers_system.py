@@ -107,7 +107,7 @@ class TestSystemInfo:
             lambda: module_names or {},
         )
         monkeypatch.setattr("src.python.llm.circuit_breaker.get_circuit_status", lambda ep: circuit)
-        monkeypatch.setattr("src.python.core.logger.get_machine_ip", lambda: "192.168.1.100")
+        monkeypatch.setattr("src.python.core.system_info.get_machine_ip", lambda: "192.168.1.100")
         return config
 
     @staticmethod
@@ -115,7 +115,7 @@ class TestSystemInfo:
         """替换配置摘要数据源：get_config / 本地状态标志 / 机器 IP。"""
         monkeypatch.setattr("src.python.config.get_config", lambda: config or {})
         monkeypatch.setattr("src.python.config._local_state.get_flag", lambda key: privacy_shown)
-        monkeypatch.setattr("src.python.core.logger.get_machine_ip", lambda: "192.168.1.100")
+        monkeypatch.setattr("src.python.core.system_info.get_machine_ip", lambda: "192.168.1.100")
         return config
 
     def test_default_no_llm_config(self, monkeypatch):
@@ -137,7 +137,7 @@ class TestSystemInfo:
         assert info["holdings_dir"] == "未设置"
         assert info["holdings_filename"] == "未设置"
         # 输出默认 = get_default 按上屏口径呈现（真值来源 + 展示原语，均不写死字面量）
-        assert info["output_dir"] == display_path(get_default("output_dir"))
+        assert info["output_dir"] == display_path(str(get_default("output_dir")))
         assert not os.path.isabs(info["output_dir"]), "项目内路径上屏须相对化（绝对路径不可移植）"
         assert info["news_top_count"] == 300
         # 就绪判定反映 resolve_holdings_path 指向的真实文件（状态与生成链路同一路径口径）

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import os
+import socket
 
 logger = logging.getLogger("invest")
 
@@ -123,6 +124,57 @@ def resolve_provider_credentials(entry: dict, all_creds: dict) -> tuple[str, str
     return model, endpoint
 
 
+def _is_loopback(ip: str) -> bool:
+    """是否为「无信息量」地址（回环 / 未赋值）。"""
+    return not ip or ip.startswith("127.") or ip == "0.0.0.0"
+
+
+def get_machine_ip() -> str:
+    """本机对外 IP（优先默认出口网卡，回环只作兜底，失败返回 ``unknown``）。
+
+    ``gethostbyname(gethostname())`` 往往直接回环（``127.0.0.1`` 来自 /etc/hosts，
+    Debian 系更是 ``127.0.1.1``），对「在哪台机器的哪个地址上访问」没有信息量。
+    按可靠性降序取首个非回环地址：
+
+    1. UDP ``connect`` 一个公网地址（只建路由不发包，无流量）→ 默认出口网卡的本地地址；
+    2. 主机名解析出的全部地址（``gethostbyname_ex`` 的 A 记录）里挑非回环；
+    3. 以上都只有回环时返回回环（离线/单机场景它仍是正确的可访问地址）；
+    4. 全部失败返回 ``unknown``。
+
+    探测失败原因不止 ``OSError``（测试网络守卫以 ``BaseException`` 子类阻断外部建连），
+    只做展示兜底的地方不得让它冒成启动失败，故两处都按 ``BaseException`` 兜底。
+    """
+    candidates: list[str] = []
+
+    # 1) 默认出口网卡地址（UDP connect 不发包）
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            probe.connect(("8.8.8.8", 80))
+            candidates.append(probe.getsockname()[0])
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
+        pass
+
+    # 2) 主机名解析出的全部地址
+    try:
+        hostname = socket.gethostname()
+        candidates.append(socket.gethostbyname(hostname))
+        candidates.extend(socket.gethostbyname_ex(hostname)[2])
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
+        pass
+
+    for ip in candidates:
+        if not _is_loopback(ip):
+            return ip
+    for ip in candidates:
+        if ip:
+            return ip
+    return "unknown"
+
+
 def build_system_info() -> dict:
     """组装系统状态信息（版本 / IP / 持仓与输出摘要 / LLM 配置状态）。
 
@@ -137,7 +189,6 @@ def build_system_info() -> dict:
     from src.python.config import get_config, get_default, get_local_flag, resolve_holdings_path
     from src.python.config.anonymizer import get_anonymization_mode
     from src.python.core.constants import APP_VERSION
-    from src.python.core.logger import get_machine_ip
 
     info = {
         "app_version": APP_VERSION,

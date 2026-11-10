@@ -8,6 +8,11 @@
 
 ## [0.17.8-dev] - 开发中（未发布）
 
+### 重构
+
+- 本机 IP 探测归位（rf-1109）：`get_machine_ip` / `_is_loopback` 由 `core/logger.py` 迁到 `core/system_info.py`（后者本就是「机器信息 / 展示原语」的单源），顺带清掉 logger 里一段失去绑定的孤立函数文档；`web` 状态卡、TUI 状态行、页脚与启动边界日志改为同一入口
+- `scripts/_test_runner/pytest_env.py` 四处可选插件探针（html/timeout/cov/xdist）收敛为 `_has_plugin()` 单点（只查 `find_spec` 不导入，避免插件注册副作用）
+
 ### 修复
 
 - 增量历史缓存键改为注册表形状（rf-1108）：旧实现拼成 `history_history_{chain}_{code}`，既不命中 `history_stock_` / `history_index_` / `history_fund_otc_` 前缀也不命中精确键，落进 default 日档（24h）被清理——K 线文件每日全量重取，且 `_correction_streak` 计数每日重置，「连续检出→跳过全量刷新」冷却永远到不了阈值；现由唯一构造器 `chain_incremental.history_cache_key()`（`{chain_name}_{code}`）供 `index.py` / `clear_incremental_cache` 共用
