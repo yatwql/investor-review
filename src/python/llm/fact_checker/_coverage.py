@@ -20,6 +20,7 @@ from typing import TypedDict
 
 from ._constants import _PROPORTION_KEYWORDS
 
+
 class NumericalCoverage(TypedDict):
     """覆盖率快照（按百分比声称计数）。"""
 

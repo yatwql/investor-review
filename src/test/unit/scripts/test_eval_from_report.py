@@ -39,7 +39,14 @@ _HEADER = (
 
 
 def _report(module_body: str = "<p>017730 收益率 -5.06%</p>") -> str:
-    rows = _ROW_TMPL.format(name="嘉实全球产业升级股票(QDII)A", code="017730", mv="23,941.69", cost="25,218.95", profit="-1,277.26", rate="-5.06")
+    rows = _ROW_TMPL.format(
+        name="嘉实全球产业升级股票(QDII)A",
+        code="017730",
+        mv="23,941.69",
+        cost="25,218.95",
+        profit="-1,277.26",
+        rate="-5.06",
+    )
     return (
         "<html><body>"
         '<div class="section" id="sec-holdings_detail">'

@@ -13,7 +13,14 @@ from src.python.llm.fact_checker import numerical_coverage, reset_numerical_cove
 pytestmark = [pytest.mark.unit, pytest.mark.unit_llm, pytest.mark.llm]
 
 _HOLDINGS = [
-    {"name": "贵州茅台", "code": "600519", "market_value": 200000.0, "cost": 150000.0, "profit": 50000.0, "profit_rate": 33.33},
+    {
+        "name": "贵州茅台",
+        "code": "600519",
+        "market_value": 200000.0,
+        "cost": 150000.0,
+        "profit": 50000.0,
+        "profit_rate": 33.33,
+    },
 ]
 
 
