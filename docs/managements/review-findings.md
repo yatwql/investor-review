@@ -1,5 +1,5 @@
 # 投资复盘助手 - 自我审查问题记录
-> 文档版本：0.17.8-dev
+> 文档版本：0.17.8
 > **编号源**：`rf-next = 1117`（新增问题提出后更新为 +1；已用最大 rf-1116，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
@@ -63,21 +63,10 @@
 
 > 本表为本开发周期已修条目的**摘要行**（详情见 `changelog.md` 对应段）；发布时由 `release.py prepare` 的 archive 步原表搬入版本归档并在此留占位。
 
-| # | 问题 | 修复 |
-| --- | --- | --- |
-| rf-1107 | 基金经理变更监控常显「首次运行」：跟踪基线快照被按上报域 24h TTL 的清理器删除（报告生成入口每次先自动清理），且「刷新基础缓存」只清不重建该键 | 快照键登记近永久精确键 TTL（`CACHE_NEAR_PERMANENT`）+ `clear_by_group` 新增 `exclude_keys` 供刷新流程点名保留；补「隔 48h 二次报告仍非首检」等回归用例 |
-| rf-1116 | 旧缓存兼容残留：`cache_key_from_file_name()` 剥**任意** `_v{N}` 戳，为换代前的旧缓存文件保留逻辑键还原（使其仍能命中精确键 TTL）——按「不考虑旧缓存文件/旧缓存结构兼容」的口径，这属多余分支 | 改为只剥当前版本戳；旧戳文件按前缀默认 TTL 判龄清理；同步测试（旧戳不还原逻辑键、按前缀 TTL 判龄）与缓存键形态文档 |
-| rf-1115 | 契约复核发现两处偏离：跨模块核对区块自造 `<p><strong><ul>` 标记，未用报告既有 `data-status` 组件承载状态观感（DESIGN.md 要求状态着色只由组件状态类承载）；`probe-report-claims.py` 用 `print` 输出运行时诊断（日志统一约束要求 `logging`） | 区块改用 `data-status` / `data-status-title` / `data-status-warn`；脚本诊断改 `logging`（`basicConfig` + `invest` logger），Markdown 产物保持 stdout |
-| rf-1114 | 数值声称重放（`--from-report`）与批量体检（`probe-report-claims.py`）各持一份逐模块核对/聚合实现、两套校验入口（口径漂移风险）；比值边界词表重复；`note_verified` 无引用导出、`_localize_module_keys` 薄包装、两处无引用公开转发；测试内有空表达式 import | 收敛为 `from_report.audit_report()` 单一实现（批量脚本只聚合与渲染）；边界词收 `_RATIO_BOUNDARY_WORDS` 单源；删除无引用导出/薄包装/转发与空表达式；补 `__all__` |
-| rf-1113 | 事实校验只报「告警/检查项」，从不报覆盖率：与真值不符的声称一旦落进「无主体/无收益语境」就被静默跳过，统计上与「通过」无法区分（实测整份报告 276 条声称仅 52 条被比对，19%）；评测脚本也没有重放既有报告的能力，修复效果无法在固定样本上验证 | 新增覆盖率统计 `_coverage.py`（已比对/不符/跳过+原因分桶）；`--from-report <html>` 默认关的可选重放模式（零 LLM、持仓取自报告自身表格）；补覆盖率与重放解析用例 |
-| rf-1112 | 前缀缩写主体解析不出 → 与持仓真值矛盾的收益率（017730 一处 -8.5%）被当「无主体」跳过、长期留在正文；修正明细沿用组合盈亏，把亏损品种标成「盈利」；离线评测 dry-run 对提示词做事实校验，产出假幻觉率（9 项 / 22%） | 新增第五主体来源 `_match_name_prefix`（前缀 ≥4 字且唯一）+ 「名称包含」判据加严格闸；方向标注取品种自身盈亏；dry-run 跳过事实校验并在报告注明 |
-| rf-1111 | 生成后自检定位不清：作为默认开启项，它是单份报告输入最大的一遍 LLM 调用，产物只是尾部清单，且会把模块里的错值当事实转述（017730 亏损 -8.5% vs 摘要 -5.06%）；上屏仍透传内部模块键，离线也没法被程序解析 | 降级为实验能力（默认关）+ 离线抽样 `--self-review`；提示词与产物改「中文名（内部键）」双写（上屏剥离内部键、离线保留）；把可判定的跨模块收益率冲突做成确定性检查器（零 token）并置于复核区块最前 |
-| rf-1110 | 生成后自检直接透传内部模块键名（`global_macro`/`penetration_deep`），上屏不可读；自检引用模块里的错值（017730 亏 -8.5%，摘要真值 -5.06%）时无任何核对，读者会把模型复核当结论 | 提示词按中文模块名投喂 + 禁止输出内部键 + 摘要为数值真值来源；输出侧兜底替换残留键名；引用百分比做语料核对，未定位追加「无法核实」注记 |
-| rf-1109 | 近 40h 实施遗留：机器 IP 探测原语放在 `core/logger.py`（与 `core/system_info.py` 声明的「机器信息单源」相悖），且 logger 内一段函数文档失去绑定成孤立字符串；`pytest_env` 四个插件探针各写一份 | 迁到 `core/system_info.py` 并更新全部消费方/测试 patch 点；删除孤立字符串；探针收敛为 `_has_plugin()` |
-| rf-1108 | 增量历史缓存键拼成 `history_history_{chain}_{code}`，未命中任何注册表前缀 → 按 default 日档 24h 清理：K 线文件每日全量重取，`_correction_streak` 计数每日重置导致「连续检出→跳过全量刷新」冷却永不触发；`market_hours` 未登记落 default；`{cache_key}_correction_flag` 只写不读 | 新增唯一键构造器 `history_cache_key()`（`{chain_name}_{code}`）并替换 `index.py`/`clear_incremental_cache` 的手工拼接；`market_hours` 登记入 `calendar` 精确键；删除死写；新增键形状 ↔ 注册表覆盖契约测试 |
+（本版开发期已修复项已随 v0.17.8 发布迁入归档档案）
 
 ### 归档档案
-- [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-09）
+- [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-10）
 - [`archived_review-findings.0.16.x.md`](../archive/v0.16.x/archived_review-findings.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-11-03）
 - [`archived_review-findings.0.15.x.md`](../archive/v0.15.x/archived_review-findings.0.15.x.md) — v0.15.x（2026-10-24 ~ 2026-10-25）
 - [`archived_review-findings.0.14.x.md`](../archive/v0.14.x/archived_review-findings.0.14.x.md) — v0.14.x（2026-10-21 ~ 2026-10-23）

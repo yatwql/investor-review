@@ -214,7 +214,8 @@ def _rewrite_allowed(ctx: PercentContext) -> bool:
     if sign_char in ("+", "-", "＋", "−", "–"):
         return True
     nearby = ctx.sentence[max(0, ctx.anchor - 6) : ctx.anchor + 6]
-    if any(word in nearby for word in ("收益率", "收益", "浮盈", "浮亏")):
+    # 「上涨/下跌」这类涨跌动词同样是收益率声称（"招商银行上涨20.0%"）
+    if any(word in nearby for word in ("收益率", "收益", "浮盈", "浮亏", "上涨", "下跌")):
         return True
     # 就近（±12 字）出现盈亏措辞也算收益率声称（"（8.5%）为唯一亏损QDII"）
     wider = ctx.sentence[max(0, ctx.anchor - 12) : ctx.anchor + 12]
