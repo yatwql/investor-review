@@ -329,8 +329,10 @@ def _run_phased(
                 with open(debug_path, "w", encoding="utf-8") as df:
                     df.write(output)
                 print(f"      [{ph_label}] 详细日志已保存: {debug_path}")
-            except Exception:
-                pass
+            except OSError as exc:
+                # 诊断写盘失败不得遮住本轮失败本体（测试已红），但也不能静默：
+                # 否则「日志已保存」的下一步动作落空而无人知晓。
+                print(f"      [!] [{ph_label}] 详细日志写入失败: {debug_path}（{exc}）")
 
         ok = proc.returncode == 0
         tag2 = "OK" if ok else "ERR"

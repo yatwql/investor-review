@@ -27,6 +27,9 @@ from src.python.llm.self_review import (
     run_self_review,
     set_self_review_block,
 )
+from src.test.unit.llm._cache_fixtures import (  # noqa: F401 — 共享 autouse 夹具（钉住行情口径桶）
+    _freeze_market_bucket_for_cache_asserts,
+)
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_llm, pytest.mark.llm]
 
@@ -314,18 +317,6 @@ def test_real_generator_reaches_provider_with_compliance_and_caches(monkeypatch)
     assert "宏观分析正文" in calls[0][1], "user prompt 须含上游模块产出"
 
 
-@pytest.fixture(autouse=True)
-def _freeze_market_bucket_for_cache_asserts(monkeypatch):
-    """缓存命中断言与钟面无关：统一钉在收盘档。
-
-    行情口径桶随钟面变化（盘中档禁止复用价格相关模块），不钉死时同一批断言在
-    交易时段必红、收盘后转绿——时间相关用例的典型不稳定形态。
-    """
-    from src.test._market_clock import freeze_market_bucket
-
-    freeze_market_bucket(monkeypatch)
-
-
 # ── 上屏可读性：内部模块键 → 中文名 ────────────────────────────
 
 
@@ -398,6 +389,55 @@ def test_verified_percentage_is_not_flagged(monkeypatch):
 
     assert block is not None
     assert "无法核实" not in block
+
+
+def test_arithmetic_sum_of_corpus_values_is_not_flagged(monkeypatch):
+    """分项合计（18.43%+13.17%=31.60%、再加 20.45%=52.05%）是语料可推出的算术结果。
+
+    这类合计既真实又常见（自检核对模块时必然要做加减），子串匹配判不出来就会
+    把正确算术标成「无法核实」，真告警反而被噪声湮没。
+    """
+    outputs: dict[str, str | None] = {
+        "penetration_deep": "<p>穿透资产：长江电力 20.45%、建设银行 18.43%、工商银行 13.17%</p>"
+    }
+    monkeypatch.setattr(
+        "src.python.llm.generators.generate_self_review",
+        lambda *a, **k: ("<p>银行合计约 31.60%，电力+银行约 52.05%</p>", False),
+    )
+
+    run_self_review(outputs, [], [], _llm_config(True))
+    block = get_self_review_block()
+
+    assert block is not None
+    assert "无法核实" not in block
+
+
+def test_fabricated_sum_still_flagged(monkeypatch):
+    """算术核验不是放水：分项推不出的合计值仍标「无法核实」。"""
+    outputs: dict[str, str | None] = {
+        "penetration_deep": "<p>穿透资产：长江电力 20.45%、建设银行 18.43%、工商银行 13.17%</p>"
+    }
+    monkeypatch.setattr(
+        "src.python.llm.generators.generate_self_review",
+        lambda *a, **k: ("<p>银行合计约 33.90%</p>", False),
+    )
+
+    run_self_review(outputs, [], [], _llm_config(True))
+    block = get_self_review_block()
+
+    assert block is not None
+    assert "33.90%" in block and "无法核实" in block
+
+
+def test_holdings_digest_carries_profit_rate():
+    """持仓摘要须带收益率：否则自检拿不到真值口径，只能报「摘要未给无法核实」。"""
+    from src.python.llm.prompts_review import _self_review_holdings_digest
+
+    digest = _self_review_holdings_digest(
+        [{"name": "长江电力", "code": "600900", "market_value": 26703.0, "profit": 10428.3, "profit_rate": 64.08}]
+    )
+
+    assert "+64.08%" in digest
 
 
 # ── 出厂默认：实验能力默认关 ──────────────────────────────────

@@ -42,6 +42,9 @@ from src.python.llm.fact_checker._context import (
     _is_weight_context,
     _is_win_rate_context,
 )
+from src.python.llm.fact_checker._utils import (
+    _format_rate_pct,
+)
 from src.python.llm.fact_checker._patterns import _CODE_PATTERN, _PERCENT_PATTERN
 from src.python.llm.fact_checker._utils import (
     _build_stock_change_map,
@@ -296,7 +299,7 @@ def _evaluate_percent_impl(ctx: PercentContext) -> tuple[str | None, tuple[str, 
         if abs(ctx.value - abs(change)) <= ctx.tolerance_pct:
             _coverage.note_verified()
             return None, None
-        correct_str = f"{change:.1f}"
+        correct_str = _format_rate_pct(change)
         _ctx = _sentence_snippet(ctx.sentence)
         issue = f"单日涨跌数值 {ctx.value}% 与 {subject} 实际单日涨跌 {correct_str}%（句段：{_ctx}）"
         return issue, (ctx.value_str, correct_str, ctx.sentence, f"{subject}单日涨跌{correct_str}%")
@@ -313,7 +316,7 @@ def _evaluate_percent_impl(ctx: PercentContext) -> tuple[str | None, tuple[str, 
         if diff <= ctx.tolerance_pct:
             _coverage.note_verified()
             return None, None
-        correct_str = f"{ctx.drawdown_pct:.1f}"
+        correct_str = _format_rate_pct(ctx.drawdown_pct)
         _ctx = _sentence_snippet(ctx.sentence)
         issue = f"回撤相关数值 {ctx.value}% 与实际最大回撤 {correct_str}% 偏差超过容差（句段：{_ctx}）"
         return issue, (ctx.value_str, correct_str, ctx.sentence, f"回撤实际{correct_str}%")
@@ -346,7 +349,7 @@ def _evaluate_percent_impl(ctx: PercentContext) -> tuple[str | None, tuple[str, 
             _coverage.note_verified()
             return None, None
         signed = ctx.profit_rate_signed if ctx.profit_rate_signed is not None else ctx.profit_rate
-        correct_str = f"{signed:.1f}"
+        correct_str = _format_rate_pct(signed)
         _ctx = _sentence_snippet(ctx.sentence)
         issue = f"收益相关数值 {ctx.value}% 与实际累计收益率 {correct_str}%（{ctx.profit_sign}）偏差超过容差（句段：{_ctx}）"
         _corr = (ctx.value_str, correct_str, ctx.sentence, f"组合实际收益率{correct_str}%") if _allow_rewrite else None
@@ -468,7 +471,7 @@ def _evaluate_percent_impl(ctx: PercentContext) -> tuple[str | None, tuple[str, 
     # 最近邻比较仍用绝对值（_PERCENT_PATTERN 不捕获负号，ctx.value 恒为正，幅度匹配）。
     if best_code:
         stock_rate = (ctx.stock_rates or ctx.stock_rates_abs).get(best_code, 0)
-        correct_str = f"{stock_rate:.1f}"
+        correct_str = _format_rate_pct(stock_rate)
         # 方向标注取**该品种**自己的盈亏，不沿用组合盈亏（否则亏损品种被标成「（盈利）」，
         # 修正明细读起来自相矛盾）
         _sign = "盈利" if stock_rate >= 0 else "亏损"
@@ -482,7 +485,7 @@ def _evaluate_percent_impl(ctx: PercentContext) -> tuple[str | None, tuple[str, 
         return issue, _corr
     elif closest_ref != "_portfolio":
         stock_rate = (ctx.stock_rates or ctx.stock_rates_abs).get(closest_ref, 0)
-        correct_str = f"{stock_rate:.1f}"
+        correct_str = _format_rate_pct(stock_rate)
         _ctx = _sentence_snippet(ctx.sentence)
         issue = f"收益相关数值 {ctx.value}% 与 {closest_ref} 的实际收益率 {correct_str}%（{ctx.profit_sign}）偏差超过容差（句段：{_ctx}）"
         _corr = (
@@ -493,7 +496,7 @@ def _evaluate_percent_impl(ctx: PercentContext) -> tuple[str | None, tuple[str, 
         return issue, _corr
     else:
         signed = ctx.profit_rate_signed if ctx.profit_rate_signed is not None else ctx.profit_rate
-        correct_str = f"{signed:.1f}"
+        correct_str = _format_rate_pct(signed)
         _ctx = _sentence_snippet(ctx.sentence)
         issue = f"收益相关数值 {ctx.value}% 与实际累计收益率 {correct_str}%（{ctx.profit_sign}）偏差超过容差（句段：{_ctx}）"
         _corr = (ctx.value_str, correct_str, ctx.sentence, f"组合实际收益率{correct_str}%") if _allow_rewrite else None

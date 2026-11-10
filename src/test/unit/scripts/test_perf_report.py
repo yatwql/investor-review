@@ -222,24 +222,65 @@ class TestOfflineStubs:
         assert quote["name"] == "贵州茅台"
 
     def test_state_isolation_redirects_perf_paths(self, perf_test_report):
-        """基准不得写真实 perf 历史/健康快照/熔断状态（防污染统计与真实运行）。"""
+        """基准不得写真实 perf 历史/健康快照/熔断状态/持仓快照（防污染统计与真实运行）。"""
         from src.python.core import perf as perf_mod
         from src.python.core import provider_registry as registry_mod
+        from src.python.report import history_snapshot as snapshot_mod
 
-        orig = (perf_mod._PERF_HISTORY_FILE, perf_mod._HEALTH_CHECK_FILE, registry_mod._CIRCUIT_BREAKER_STATE_FILE)
+        orig = (
+            perf_mod._PERF_HISTORY_FILE,
+            perf_mod._HEALTH_CHECK_FILE,
+            registry_mod._CIRCUIT_BREAKER_STATE_FILE,
+            snapshot_mod.HISTORY_SNAPSHOT_DIR,
+        )
         try:
             iso_dir = perf_test_report._isolate_state_writes()
             assert perf_mod._PERF_HISTORY_FILE.startswith(iso_dir)
             assert perf_mod._HEALTH_CHECK_FILE.startswith(iso_dir)
             # 熔断文件名以绝对路径传入，os.path.join 丢弃前面的目录段 → 落在隔离目录
             assert registry_mod._CIRCUIT_BREAKER_STATE_FILE.startswith(iso_dir)
+            # 持仓快照目录：合成持仓落进共享主目录会当权当天最后一个快照，
+            # 使 holding_change_events 把真实序列判成「基线切换」（重合度 0.09）
+            assert snapshot_mod.HISTORY_SNAPSHOT_DIR.startswith(iso_dir)
+            assert snapshot_mod.HISTORY_SNAPSHOT_DIR != orig[3]
             assert perf_mod._PERF_HISTORY_FILE != orig[0]
         finally:
             (
                 perf_mod._PERF_HISTORY_FILE,
                 perf_mod._HEALTH_CHECK_FILE,
                 registry_mod._CIRCUIT_BREAKER_STATE_FILE,
+                snapshot_mod.HISTORY_SNAPSHOT_DIR,
             ) = orig
+
+    def test_bench_snapshot_lands_in_isolated_dir_not_shared_history(self, perf_test_report, tmp_path):
+        """回归：基准跑完不向真实快照目录新增文件（隔离失效即在写入时暴露）。"""
+        from src.python.report import history_snapshot as snapshot_mod
+
+        real_dir = tmp_path / "real_history"
+        real_dir.mkdir()
+        orig_dir = snapshot_mod.HISTORY_SNAPSHOT_DIR
+        try:
+            snapshot_mod.HISTORY_SNAPSHOT_DIR = str(real_dir)
+            iso_dir = perf_test_report._isolate_state_writes()
+            snapshot_mod.save(_bench_snapshot())
+            assert list(real_dir.iterdir()) == [], "基准快照不得写进共享主目录"
+            iso_files = list((Path(iso_dir) / "history" / "snapshots").glob("snapshot_*.json"))
+            assert len(iso_files) == 1, "基准快照应落在隔离目录"
+        finally:
+            snapshot_mod.HISTORY_SNAPSHOT_DIR = orig_dir
+
+    def test_bench_namespace_is_invisible_to_shared_series(self, perf_test_report, tmp_path):
+        """双保险：即便目录隔离失效，命名空间域内的快照也不进共享序列（`_dedup_by_date` 不吃）。"""
+        from src.python.report import history_snapshot as snapshot_mod
+
+        orig_dir = snapshot_mod.HISTORY_SNAPSHOT_DIR
+        try:
+            snapshot_mod.HISTORY_SNAPSHOT_DIR = str(tmp_path / "snaps")
+            snapshot_mod.save(_bench_snapshot(), perf_test_report._SNAPSHOT_NAMESPACE)
+            assert snapshot_mod.load_all() == [], "共享主目录不得读到基准域快照"
+            assert len(snapshot_mod.load_all(perf_test_report._SNAPSHOT_NAMESPACE)) == 1
+        finally:
+            snapshot_mod.HISTORY_SNAPSHOT_DIR = orig_dir
 
     def test_offline_network_blocks_connect_and_neutralizes_sleep(self, perf_test_report, monkeypatch):
         """传输层离线：建连瞬时 OSError（既有 except 接住走降级）+ 退避不真等。"""
@@ -412,6 +453,23 @@ class TestLlmMock:
         assert all(isinstance(c, str) and c for c in llm_content)
         assert debate_info is None
         reporter.add_error.assert_not_called()
+
+
+def _bench_snapshot():
+    """构造一份最小快照（基准跑合成持仓的等效形态：多个代码、单账户）。"""
+    from src.python.schemas.history import AccountSnapshot, SnapshotData, SnapshotHolding
+
+    holdings = tuple(
+        SnapshotHolding(code=code, name=f"基准{code}", shares=100.0, cost_price=10.0, market_value=1000.0)
+        for code in ("600519", "601398", "000001")
+    )
+    return SnapshotData(
+        accounts=(AccountSnapshot(account_name="基准", holdings=holdings),),
+        total_value=3000.0,
+        total_cost=3000.0,
+        total_pnl=0.0,
+        timestamp="20260101T000000",
+    )
 
 
 def _sample(module, stocks: int, funds: int):

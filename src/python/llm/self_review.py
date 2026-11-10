@@ -26,6 +26,7 @@
 
 from __future__ import annotations
 
+import bisect
 import logging
 import re
 import threading
@@ -78,6 +79,14 @@ _UNVERIFIED_PCT_NOTE = (
     "应按「无法核实」处理，不得作为判断依据：{items}。"
 )
 
+#: 合计/差值换算的允许偏差（百分点）——分项各自四舍五入到两位小数后，
+#: 其和/差与声明值的偏差不超过两个分项的舍入误差之和。
+_DERIVED_PCT_TOLERANCE = 0.02
+
+#: 参与换算的分项数上限（1~3 项）——模型即兴换算最高发的是「两个分项相加」
+#: 与「三项合计」，再长的组合既罕见又会让搜索退化为 O(n³)。
+_DERIVED_PCT_MAX_TERMS = 3
+
 
 def module_dual_form(text: str) -> str:
     """把裸模块键补成「中文名（内部键）」双写（**离线产物**用：人读中文、程序读键）。"""
@@ -125,13 +134,73 @@ def _review_corpus(
     return "\n".join(parts)
 
 
+def _corpus_pct_values(corpus: str) -> list[float]:
+    """语料中出现的百分比数值（去重后升序），供算术核验搜索用。"""
+    values: set[float] = set()
+    for match in _PCT_RE.finditer(corpus):
+        try:
+            values.add(round(float(match.group(0).rstrip("%")), 2))
+        except ValueError:  # 正则已限定数字形态，取不到只可能是异常输入
+            continue
+    return sorted(values)
+
+
+def _nearest_hit(pool: list[float], target: float) -> bool:
+    """有序池中是否存在与 target 相差不超过容差的取值（二分定位后看两侧）。"""
+    idx = bisect.bisect_left(pool, target)
+    for probe in (idx - 1, idx):
+        if 0 <= probe < len(pool) and abs(pool[probe] - target) <= _DERIVED_PCT_TOLERANCE:
+            return True
+    return False
+
+
+def _is_derived_percentage(value: float, pool: list[float]) -> bool:
+    """该百分比是否为语料取值的加减组合（模型「合计/差值」换算的合法结果）。
+
+    逐个验算会退化成排列组合，故用**残差搜索**实现：把声明的值减去已选分项，
+    再看残差是否直接落在语料取值里（1~3 项、含减法）。分项数超过
+    ``_DERIVED_PCT_MAX_TERMS`` 或语料为空时停止（宁漏判不漏放：漏判只是多
+    一条「无法核实」注记，误放会让真幻觉溜过去）。
+    """
+    if not pool:
+        return False
+    if _nearest_hit(pool, value):
+        return True
+    for first in pool:
+        rest = value - first
+        if _nearest_hit(pool, rest):
+            return True
+        if _DERIVED_PCT_MAX_TERMS < 3:
+            continue
+        for second in pool:
+            # ±second 两种符号各试一次：合计（+）与差值（-）都是模型常用口径
+            if _nearest_hit(pool, rest - second) or _nearest_hit(pool, rest + second):
+                return True
+    return False
+
+
 def _unverified_percentages(text: str, corpus: str) -> list[str]:
-    """自检引用了但语料里找不到原值的百分比（模型即兴换算/编造的高发点）。"""
+    """自检引用了但语料里找不到原值的百分比（模型即兴换算/编造的高发点）。
+
+    两层判据：先要求数值**逐字**出现在语料里（`digits in corpus`，容忍 ".5" 是
+    "5.50" 的子串）；再退一步允许它是语料取值的**加减组合**——「银行合计约
+    ".18.43% + 13.17%" 这类合计/差值是语料可推出的合法结果，不能当幻觉，
+    否则会把正确的算术汇总标成「无法核实」，把真告警淹掉。
+    """
     found: list[str] = []
+    pool: list[float] | None = None
     for match in _PCT_RE.finditer(text):
         raw = match.group(0)
-        digits = raw.rstrip("%").lstrip("+-")
+        digits = raw.rstrip("%").lstrip("+")
         if digits in corpus:
+            continue
+        if pool is None:
+            pool = _corpus_pct_values(corpus)
+        try:
+            value = float(digits)
+        except ValueError:  # 正则已限定数字形态，取不到只可能是异常输入
+            continue
+        if _is_derived_percentage(value, pool):
             continue
         if raw not in found:
             found.append(raw)

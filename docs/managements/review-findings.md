@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.9-dev
-> **编号源**：`rf-next = 1118`（新增问题提出后更新为 +1；已用最大 rf-1117，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1120`（新增问题提出后更新为 +1；已用最大 rf-1119，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -67,6 +67,8 @@
 
 > 本表为本开发周期已修条目的**摘要行**（详情见 `changelog.md` 对应段）；发布时由 `release.py prepare` 的 archive 步原表搬入版本归档并在此留占位。
 | **rf-1117** | 发布台账归档在「行首编号未加粗」时静默返回 0（表现为「该版本已迁档，跳过」），v0.17.8 发布因此漏搬 10 条自审条目至归档，gate 前置断言才发现 | `apply_rf_archive()` 增加 `logging` 告警（点名编号需加粗），补 `caplog` 用例；v0.17.8 归档条目已按原表搬运补齐 |
+| **rf-1118** | 报告运行日志排查出的四类缺陷：①`test-perf-report.py` 状态隔离漏 `HISTORY_SNAPSHOT_DIR`，合成持仓快照污染真实历史（按日去重当权 2026-11-06 最后一个快照 → 代码重合度 0.09，两段区间交易事件永久跳过，180 天不自愈）；②`_unverified_percentages` 纯子串匹配，把合法的分项合计（18.43+13.17=31.60）判成幻觉并上屏「无法核实」；③事实校验修正值按一位小数上屏，与摘要两位小数口径互斥（20.66 → 20.7），矛盾由修正本身制造；④自检持仓摘要不含收益率，核不了收益率声称 | ①补快照目录隔离 + `snapshot_namespace="bench"` 双保险，删污染快照，补 3 条回归（含命名空间不可见性）；②百分比核对允诈 1~3 项加减组合（容差 0.02pp，残差搜索），分项推不出的仍标出；③`_format_rate_pct` 统一两位小数并剥精度零（`FACT_CHECK_RULES_VERSION` → `fact-rules-7`，同步 4 个测试文件的期望值）；④摘要行补 `收益率 {rate:+.2f}%` |
+| **rf-1119** | 近 50 小时变更审计的测试基建技术债：①`_freeze_market_bucket_for_cache_asserts`（autouse 夹具）在 11 个缓存相关测试文件各复制一份同名同体，口径调整要改十一遍；②`test_perf_history*.py` 两个分片各复制一份 `fixture_mod` + `_records`（记录形状改一处要改两遍）；③`scripts/_test_runner/runner.py` 失败详情落盘失败时 `except Exception: pass`，诊断链在该步静默断掉 | ①夹具收口到既有 `src/test/unit/llm/_cache_fixtures.py`，11 文件改为顶部导入即生效；②新增 `src/test/unit/scripts/_perf_history_fixtures.py` 承载共享成员；③改 `except OSError` + 上报「详细日志写入失败（原因）」，补回归（落盘失败留痕且不改判定） |
 
 ### 归档档案
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-10）

@@ -20,6 +20,9 @@ import pytest
 
 from src.python.llm import generate_all_llm
 from src.test.helpers import SynchronousExecutor
+from src.test.unit.llm._cache_fixtures import (  # noqa: F401 — 共享 autouse 夹具（钉住行情口径桶）
+    _freeze_market_bucket_for_cache_asserts,
+)
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_llm, pytest.mark.llm]
 
@@ -692,15 +695,3 @@ class TestCompetitiveContextRenderedOnce(unittest.TestCase):
             )
 
         self.assertIs(mock_expert.call_args.kwargs["metrics"], metrics)
-
-
-@pytest.fixture(autouse=True)
-def _freeze_market_bucket_for_cache_asserts(monkeypatch):
-    """缓存命中断言与钟面无关：统一钉在收盘档。
-
-    行情口径桶随钟面变化（盘中档禁止复用价格相关模块），不钉死时同一批断言在
-    交易时段必红、收盘后转绿——时间相关用例的典型不稳定形态。
-    """
-    from src.test._market_clock import freeze_market_bucket
-
-    freeze_market_bucket(monkeypatch)

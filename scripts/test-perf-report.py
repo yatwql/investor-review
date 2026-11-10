@@ -317,8 +317,13 @@ def _generate_details(holdings: list[Any]) -> list[Any]:
 # ── 性能基准主要流程 ─────────────────────────────
 
 
+#: 基准运行使用的快照命名空间域——合成持仓的快照与共享主目录（真实用户历史）
+#: 天然隔离，`load_all(None)` / `_dedup_by_date` 不会读到它。
+_SNAPSHOT_NAMESPACE = "bench"
+
+
 def _isolate_state_writes() -> str:
-    """状态隔离：把 perf 历史/数据源健康快照/熔断状态重定向到临时目录。
+    """状态隔离：把 perf 历史/数据源健康快照/熔断状态/持仓快照重定向到临时目录。
 
     基准运行不得写进真实 `perf_history.jsonl` / `datasource_health.jsonl`（污染
     运行历史视图的统计样本，perf-history 的分位/离群分析直接受此影响）与
@@ -327,16 +332,25 @@ def _isolate_state_writes() -> str:
     重定向」；熔断文件名传绝对路径时 ``os.path.join`` 会丢弃前面的目录段），
     直接改写；一次性 CLI 无需还原。
 
+    **持仓快照目录必须一并隔离**：基准跑的是合成持仓（23 只股票/2 账户），落进
+    共享主目录后按日去重会当权当天最后一个快照，`holding_change_events` /
+    `portfolio_evolution` / `trade_cost_model` 三个消费者把真实序列判成「基线切换」
+    （代码重合度 0.09 < 0.5 → 该区间交易事件被永久跳过），且快照保留 180 天不会
+    自愈。`history_snapshot` 在导入时按值绑定 `HISTORY_SNAPSHOT_DIR`，故必须改写
+    **该模块**的属性而非 `core.constants` 同名常量。
+
     Returns:
         隔离目录路径
     """
     from src.python.core import perf as _perf_state
     from src.python.core import provider_registry as _registry
+    from src.python.report import history_snapshot as _snapshot_store
 
     iso_dir = tempfile.mkdtemp(prefix="perf_bench_state_")
     _perf_state._PERF_HISTORY_FILE = os.path.join(iso_dir, "perf_history.jsonl")
     _perf_state._HEALTH_CHECK_FILE = os.path.join(iso_dir, "datasource_health.jsonl")
     _registry._CIRCUIT_BREAKER_STATE_FILE = os.path.join(iso_dir, "circuit_breaker.json")
+    _snapshot_store.HISTORY_SNAPSHOT_DIR = os.path.join(iso_dir, "history", "snapshots")
     return iso_dir
 
 
@@ -454,6 +468,8 @@ def run_perf_test() -> tuple[dict[str, float], PerfSample, PerfSample]:
             report_type="both",
             fetch_history=False,
             output_dir=tmp_dir.name,
+            # 双保险：合成持仓即便目录隔离失效也落进独立命名空间域，不进共享主目录
+            snapshot_namespace=_SNAPSHOT_NAMESPACE,
         )
         t_elapsed = time.perf_counter() - t_start
 
