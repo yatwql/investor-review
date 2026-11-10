@@ -72,7 +72,7 @@ class TestGenerateAllLlm(unittest.TestCase):
         mock_health.return_value = ("<p>体检</p>", False)
         mock_penetration.return_value = ("<p>穿透</p>", False)
 
-        macro, expert, health, penetration, mc, ec, hc, pc, *_ = generate_all_llm([], [], 0, 0, 0, 0, 0, {}, force=True)
+        macro, expert, health, penetration, mc, ec, hc, pc, *_ = generate_all_llm({}, {}, 0, 0, 0, 0, 0, {}, force=True)
 
         self.assertEqual(macro, "<p>宏</p>")
         self.assertEqual(expert, "<p>策略</p>")
@@ -96,7 +96,7 @@ class TestGenerateAllLlm(unittest.TestCase):
         mock_health.return_value = ("<p>h</p>", False)
         mock_penetration.return_value = ("<p>p</p>", False)
 
-        macro, expert, health, penetration, mc, ec, hc, pc, *_ = generate_all_llm([], [], 0, 0, 0, 0, 0, {})
+        macro, expert, health, penetration, mc, ec, hc, pc, *_ = generate_all_llm({}, {}, 0, 0, 0, 0, 0, {})
 
         self.assertIsNotNone(macro)
         self.assertIsNotNone(expert)
@@ -589,8 +589,8 @@ class TestDataQualityBlockRenderedOnce(unittest.TestCase):
             patch.object(disp, "make_http_client", return_value=MagicMock()),
         ):
             generate_all_llm(
-                [],
-                [],
+                {},
+                {},
                 100000.0,
                 90000.0,
                 10000.0,
@@ -657,7 +657,7 @@ class TestCompetitiveContextRenderedOnce(unittest.TestCase):
             patch.object(disp, "ThreadPoolExecutor", new=SynchronousExecutor),
             patch.object(disp, "make_http_client", return_value=MagicMock()),
         ):
-            generate_all_llm([], [], 100000.0, 90000.0, 10000.0, 500.0, 1, {"股票": 100000.0}, force=True)
+            generate_all_llm({}, {}, 100000.0, 90000.0, 10000.0, 500.0, 1, {"股票": 100000.0}, force=True)
 
         self.assertEqual(len(rendered), 1, "竞争语境块被渲染了多次 → 两侧可能各渲染一份")
 
@@ -691,7 +691,7 @@ class TestCompetitiveContextRenderedOnce(unittest.TestCase):
             patch.object(disp, "make_http_client", return_value=MagicMock()),
         ):
             generate_all_llm(
-                [], [], 100000.0, 90000.0, 10000.0, 500.0, 1, {"股票": 100000.0}, force=True, metrics=metrics
+                {}, {}, 100000.0, 90000.0, 10000.0, 500.0, 1, {"股票": 100000.0}, force=True, metrics=metrics
             )
 
         self.assertIs(mock_expert.call_args.kwargs["metrics"], metrics)

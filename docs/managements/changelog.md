@@ -17,6 +17,7 @@
 - 自检持仓摘要补 `收益率` 维度（rf-1118）：摘要只给市值/盈亏/占比时，自检无法核验收益率声称，只能写「摘要未给无法核实」，事实校验改出的错值也就无从对账
 
 - 测试基建去重与诊断留痕（rf-1119）：`_freeze_market_bucket_for_cache_asserts` 原在 11 个缓存测试文件各一份，收口到 `_cache_fixtures.py`（导入即生效）；`test_perf_history*.py` 分片的 `fixture_mod`/`_records` 收口到新增 `_perf_history_fixtures.py`；`scripts/_test_runner/runner.py` 失败详情落盘失败不再 `except Exception: pass`，改为上报路径与原因（补回归：留痕且不改判定）
+- 文档复核回写（rf-1118/rf-1119）：llm-technical §12.4 补「引用数值核对（逐字 + 1~3 项加减组合）」与摘要收益率维度；requirements R-LLM-12 同步该口径；developer-guide 增「持久化路径必须成套隔离（非 pytest 一次性 CLI + 按值绑定路径改模块属性 + 命名空间双保险）」；scripts-reference 补 `test-perf-report.py` 的状态隔离范围；reports-instruction 的修正明细格式改为语义说明 + 两位小数口径；另清 `test_generate_all_llm.py` 5 处以 `[]` 充 `dict` 形参的类型噪声
 
 （本次发布内容见下方归档索引）
 
