@@ -747,3 +747,54 @@ class TestAttributionRefinements:
             "华宝增强收益债券A作为债券型持仓出现-10.24%，与超短债反差明显", portfolio_holdings
         )
         assert corrections == []
+
+
+class TestPrecisionGuards:
+    """自动改写的精度护栏：宁可只报告，也不能把仓位/财务指标改写成收益率。
+
+    批量重放 10 份报告的依据：26 条「不符」里 20 条是归因错位（权重/净利同比/风险
+    指标被当成持仓收益率），若据此改写会把对的数字改错。
+    """
+
+    @pytest.fixture
+    def guard_holdings(self) -> list[dict]:
+        return [
+            {
+                "name": "兴全恒慧30天持有超短债C",
+                "code": "012325",
+                "market_value": 20000.0,
+                "cost": 19138.0,
+                "profit": 862.0,
+                "profit_rate": 4.5,
+            },
+            {
+                "name": "长江电力",
+                "code": "600900",
+                "market_value": 62700.0,
+                "cost": 38000.0,
+                "profit": 24700.0,
+                "profit_rate": 65.0,
+            },
+        ]
+
+    def test_financial_metric_is_not_attributed_as_return(self, guard_holdings):
+        """「看看 600900 的 −6.6%」是净利同比，不是持仓收益率 → 不告警、不改写。"""
+        issues, _checked, _passed, corrections = check_numerical_consistency(
+            "却对 600900 的净利同比 -6.6% 视而不见", guard_holdings
+        )
+        assert issues == [] and corrections == []
+
+    def test_weight_target_phrasing_is_not_a_return(self, guard_holdings):
+        """「把长江电力从 19.4% 减到 15% 以内」是仓位目标 → 不改写。"""
+        _issues, _checked, _passed, corrections = check_numerical_consistency(
+            "把长江电力从 19.4% 减到 15% 以内，理由是浮盈厚", guard_holdings
+        )
+        assert corrections == []
+
+    def test_unsigned_weight_is_reported_but_not_rewritten(self, guard_holdings):
+        """无符号且无紧邻收益词的数值：可以报告，但绝不自动改写（可能是权重）。"""
+        issues, _checked, _passed, corrections = check_numerical_consistency(
+            "012325（13.4%，持仓收益率+4.5%）", guard_holdings
+        )
+        assert corrections == [], "无符号权重不得被改写"
+        assert any("13.4" in issue for issue in issues), "但仍应作为可疑数值上报"

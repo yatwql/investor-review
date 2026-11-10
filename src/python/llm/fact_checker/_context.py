@@ -353,3 +353,54 @@ def _is_threshold_context(sentence: str, match_start: int, window: int = 12) -> 
     """数值是否处于「占比 vs 阈值」语境（无符号百分比时用于跳过收益率改写）。"""
     nearby = sentence[max(0, match_start - window) : match_start + window]
     return any(word in nearby for word in _THRESHOLD_WORDS)
+
+
+#: 风险/财务类指标词：数值紧邻它们时不是「持仓收益率」（夏普/卡玛/VaR/波动率/分位/
+#: 净利同比…）。批量重放实测这类词把 -6.6%（净利同比）判成 600900 的 61% 收益率。
+_RISK_METRIC_WORDS: tuple[str, ...] = (
+    "夏普",
+    "卡玛",
+    "VaR",
+    "波动率",
+    "分位",
+    "净利",
+    "同比",
+    "环比",
+    "增速",
+    "回撤",
+    "久期",
+    "利差",
+    "溢价",
+    "折价",
+    "换手",
+)
+
+#: 仓位目标/调整措辞：「把长江电力从 19.4% 减到 15% 以内」里的 19.4% 是仓位，
+#: 不是收益率——紧邻窗口出现这类措辞时一律不改写。
+_WEIGHT_TARGET_PHRASES: tuple[str, ...] = (
+    "减到",
+    "降到",
+    "减至",
+    "降至",
+    "换到",
+    "提到",
+    "压到",
+    "控制在",
+    "不超过",
+    "以内",
+    "以上",
+    "以下",
+    "线",
+)
+
+
+def _is_metric_word_context(sentence: str, match_start: int, window: int = 14) -> bool:
+    """数值是否紧邻风险/财务类指标词（此时不是持仓收益率）。"""
+    nearby = sentence[max(0, match_start - window) : match_start + window]
+    return any(word in nearby for word in _RISK_METRIC_WORDS)
+
+
+def _is_weight_target_context(sentence: str, match_start: int, window: int = 10) -> bool:
+    """数值是否处于仓位/目标比例措辞中（此时是仓位，不是收益率）。"""
+    nearby = sentence[max(0, match_start - window) : match_start + window]
+    return any(phrase in nearby for phrase in _WEIGHT_TARGET_PHRASES)

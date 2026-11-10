@@ -128,14 +128,16 @@ def _classify_skip(ctx: object) -> str:
         return "回撤语境（无回撤基准）"
 
     # 下面把粗桶「无收益语境或无主体可归因」拆细：只报粗桶看不出该补归因还是该补规则
-    from ._constants import _EXPOSURE_KEYWORDS, _PROFIT_KEYWORDS, _REBALANCE_TARGET_KEYWORDS
+    from ._constants import _ATTACHED_SUBJECT_MAX_DIST, _EXPOSURE_KEYWORDS, _PROFIT_KEYWORDS, _REBALANCE_TARGET_KEYWORDS
     from ._context import (
         _is_contribution_sentence,
         _is_hypothetical_context,
+        _is_metric_word_context,
         _is_position_weight_context,
+        _is_weight_target_context,
         _is_threshold_context,
     )
-    from ._utils import _unresolved_attached_subject
+    from ._utils import _subject_spans, _unresolved_attached_subject
 
     if not any(kw in sentence for kw in _PROFIT_KEYWORDS):
         return "无收益关键词（非收益语境）"
@@ -148,6 +150,18 @@ def _classify_skip(ctx: object) -> str:
         return "贡献/归因语境"
     if any(kw in sentence for kw in ("国债", "利率", "通胀", "GDP", "CPI", "PMI")):
         return "宏观基准语境"
+    nearest: dict[str, int] = {}
+    for start, end, code in _subject_spans(sentence, holding_codes, name_to_code):
+        dist = min(abs(start - anchor), abs(end - anchor))
+        nearest[code] = min(nearest.get(code, dist), dist)
+    if len(nearest) >= 2:
+        ordered = sorted(nearest.values())
+        if ordered[0] > _ATTACHED_SUBJECT_MAX_DIST or ordered[1] <= _ATTACHED_SUBJECT_MAX_DIST:
+            return "多主体句（归因歧义）"
+    if _is_metric_word_context(sentence, anchor):
+        return "风险/财务指标语境"
+    if _is_weight_target_context(sentence, anchor):
+        return "仓位/目标比例语境"
     if _is_threshold_context(sentence, anchor):
         return "阈值/比较语境"
     if _is_position_weight_context(sentence):
