@@ -1494,7 +1494,18 @@ CLI 模式的便捷入口，跳过 TUI 界面，直接以命令行模式运行�
 
 # 跳过缓存强制重新生成
 .venv/bin/python scripts/eval-llm-hallucination.py --force
+
+# 额外跑一次生成后自检抽样（产物模块名双写，人机共读；配 --dry-run 时只导出提示词）
+.venv/bin/python scripts/eval-llm-hallucination.py --self-review
+
+# 重放一份既有报告：零 LLM 调用，输出确定性核对 + 覆盖率（不采样、不花钱）
+.venv/bin/python scripts/eval-llm-hallucination.py --from-report reports/20261110/xxx.html --output docs/tmp/det-check.md
+
+# 重放时导出「被跳过的百分比声称」抽样，用于判定跳过是否合理
+.venv/bin/python scripts/eval-llm-hallucination.py --from-report reports/20261110/xxx.html --dump-skipped all
 ```
+
+**覆盖率口径（重放模式的核心输出）**：按**百分比声称**计数，`已比对`＝与某条参考值真正比过（通过/不符都算），`跳过`按九类原因分桶（无收益关键词 / 紧邻名称解析不出持仓 / 度量非收益率 / 变化率权重胜率 / 仓位占比 / 比例计数 / 贡献归因 / 假设情景 / 市场口径无主体）。只报「告警/检查项」会把「没查」和「查过没问题」混为一谈——实测一份真实报告 276 条声称仅 52 条（19%）被比对。
 
 **输出**：
 - 报告文件：`docs/tmp/hallucination-report.md`

@@ -12,6 +12,7 @@
   --dry-run           不调用 LLM，只构建 prompt 并输出到 tmp 目录
   --self-review       额外跑一次生成后自检抽样，产物（模块名双写）追加到报告附录
   --from-report HTML  重放一份既有报告：零 LLM 调用，输出确定性核对 + 覆盖率，不采样
+  --dump-skipped MOD  与 --from-report 同用：导出被跳过的声称抽样（模块键或 all）
   --force             跳过缓存，强制重新生成 LLM 输出
   --output FILE       报告输出路径（默认 docs/tmp/hallucination-report.md）
 
@@ -67,6 +68,12 @@ def main():
         help="重放一份既有报告：零 LLM 调用，输出确定性核对结果与覆盖率（不采样、不花钱）",
     )
     parser.add_argument(
+        "--dump-skipped",
+        metavar="MODULE",
+        default=None,
+        help="与 --from-report 同用：导出被跳过的百分比声称抽样（模块键或 all），供人工判定跳过是否合理",
+    )
+    parser.add_argument(
         "--self-review",
         action="store_true",
         help="额外跑一次生成后自检抽样（模型层复核），产物追加到报告附录（模块名双写）",
@@ -98,7 +105,7 @@ def main():
 
     # ── 0. 重放既有报告（零 LLM 调用）：确定性核对 + 覆盖率，直接返回 ──
     if args.from_report:
-        raise SystemExit(run_from_report(args.from_report, output_path))
+        raise SystemExit(run_from_report(args.from_report, output_path, dump_skipped=args.dump_skipped))
 
     # ── 1. 加载数据集 ──
     logger.info("=" * 60)

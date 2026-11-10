@@ -100,3 +100,25 @@ class TestRunFromReport:
         assert "总体覆盖率" in text
         assert "| 模块 | 百分比声称 |" in text
         assert "017730" in text, "与持仓真值不符的声称必须出现在告警明细里"
+
+
+class TestDumpSkipped:
+    """跳过声称抽样导出：改规则前先用它看证据（真非收益 / 漏关键词 / 漏归因）。"""
+
+    def test_dump_lists_skipped_claims_with_context(self, tmp_path):
+        src = tmp_path / "report.html"
+        src.write_text(_report("<p>建设银行 18.7% 超线，行业集中度偏高</p>"), encoding="utf-8")
+        out = tmp_path / "det-check.md"
+
+        assert run_from_report(str(src), str(out), dump_skipped="all") == 0
+        text = out.read_text(encoding="utf-8")
+        assert "## 跳过声称抽样" in text
+        assert "18.7%" in text, "被跳过的声称必须连同前文一起导出，否则无法人工判定"
+
+    def test_without_flag_no_dump_section(self, tmp_path):
+        src = tmp_path / "report.html"
+        src.write_text(_report(), encoding="utf-8")
+        out = tmp_path / "det-check.md"
+
+        assert run_from_report(str(src), str(out)) == 0
+        assert "跳过声称抽样" not in out.read_text(encoding="utf-8")

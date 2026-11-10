@@ -36,6 +36,9 @@ _total = 0
 _verified = 0
 _mismatched = 0
 _skipped: dict[str, int] = {}
+#: 跳过声称的抽样（按原因各留前 N 条，供 `--dump-skipped` 人工判定是「真非收益」还是「漏了关键词」）
+_SAMPLE_LIMIT_PER_REASON = 20
+_skipped_samples: dict[str, list[dict[str, str]]] = {}
 
 
 def reset_numerical_coverage() -> None:
@@ -44,6 +47,7 @@ def reset_numerical_coverage() -> None:
     with _lock:
         _total = _verified = _mismatched = 0
         _skipped.clear()
+        _skipped_samples.clear()
 
 
 def note_verified() -> None:
@@ -64,13 +68,28 @@ def note_claim(ctx: object, verdict_issue: str | None, verified_before: int) -> 
             return
         if _verified > verified_before:
             return
-        _skipped[_classify_skip(ctx)] = _skipped.get(_classify_skip(ctx), 0) + 1
+        reason = _classify_skip(ctx)
+        _skipped[reason] = _skipped.get(reason, 0) + 1
+        bucket = _skipped_samples.setdefault(reason, [])
+        if len(bucket) < _SAMPLE_LIMIT_PER_REASON:
+            bucket.append(
+                {
+                    "value": str(getattr(ctx, "value_str", "")) or str(getattr(ctx, "value", "")),
+                    "sentence": str(getattr(ctx, "sentence", ""))[:120],
+                }
+            )
 
 
 def verified_count() -> int:
     """当前已比对条数（包装器用来判断本条是否发生过比对）。"""
     with _lock:
         return _verified
+
+
+def skipped_samples() -> dict[str, list[dict[str, str]]]:
+    """跳过声称的抽样（每原因最多 ``_SAMPLE_LIMIT_PER_REASON`` 条）。"""
+    with _lock:
+        return {reason: list(items) for reason, items in _skipped_samples.items()}
 
 
 def numerical_coverage() -> NumericalCoverage:

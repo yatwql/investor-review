@@ -91,14 +91,25 @@ def _extract_holdings_details(sections: dict[str, str]) -> list[dict]:
     return rows
 
 
-def run_from_report(report_path: str, output_path: str | None = None) -> int:
+def run_from_report(
+    report_path: str,
+    output_path: str | None = None,
+    dump_skipped: str | None = None,
+) -> int:
     """对既有报告跑确定性核对，写 Markdown 报告并打印汇总。
+
+    Args:
+        report_path: 报告 HTML 路径。
+        output_path: 核对结果 Markdown 落点（None 时打印到 stdout）。
+        dump_skipped: 导出「被跳过的声称」抽样（模块键或 ``all``），供人工判定
+            是「真非收益」还是「漏了关键词/归因」——改规则前先用它看证据。
 
     Returns:
         0 正常（即使有告警——告警不是脚本失败）；2 报告不可读或找不到可核对章节。
     """
     from src.python.core.registry import get_llm_module_name
     from src.python.llm.fact_checker import numerical_coverage, reset_numerical_coverage, run_fact_check
+    from src.python.llm.fact_checker._coverage import skipped_samples
 
     try:
         with open(report_path, encoding="utf-8") as handle:
@@ -129,6 +140,7 @@ def run_from_report(report_path: str, output_path: str | None = None) -> int:
     detail: list[str] = []
     total = {"total": 0, "verified": 0, "mismatched": 0, "skipped": 0}
     aggregate: dict[str, int] = {}
+    dump: list[str] = []
 
     for key, chunk in targets:
         reset_numerical_coverage()
@@ -161,6 +173,14 @@ def run_from_report(report_path: str, output_path: str | None = None) -> int:
             cov["mismatched"],
             cov["skipped"],
         )
+        if dump_skipped and dump_skipped in (key, "all"):
+            for reason, items in skipped_samples().items():
+                dump.append(f"### {get_llm_module_name(key)}（{key}）｜{reason}")
+                dump.append("")
+                for item in items:
+                    dump.append(f"- `{item['value']}%` … {item['sentence']}")
+                dump.append("")
+
         if summary:
             detail.append(f"### {get_llm_module_name(key)}（{key}）")
             detail.append("")
@@ -175,6 +195,9 @@ def run_from_report(report_path: str, output_path: str | None = None) -> int:
         lines += ["", "## 跳过原因分布（全部模块合计）", "", "| 跳过原因 | 条数 |", "|----------|-----:|"]
         for reason, count in sorted(aggregate.items(), key=lambda kv: -kv[1]):
             lines.append(f"| {reason} | {count} |")
+
+    if dump:
+        lines += ["", "## 跳过声称抽样（人工判定：真非收益 / 漏关键词 / 漏归因）", ""] + dump
 
     if detail:
         lines += ["", "## 告警明细（确定性事实校验摘要）", ""] + detail
