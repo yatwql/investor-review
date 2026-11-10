@@ -684,3 +684,66 @@ class TestSignedReturnAfterCode:
             "道指（+2.12%）、纳指（+2.69%）", qdii_pair
         )
         assert corrections == []
+
+
+class TestAttributionRefinements:
+    """归因守卫的两处收窄：组合级措辞与副词插入语不该让真收益率声称白白跳过。
+
+    回归依据（真实报告重放）：`组合持仓收益率+19.14%` 因「组合持仓」不在组合级关键词表
+    而被判「主体不可解析」跳过；`持仓收益率已 +64.96%`、`出现-11.01%` 因副词残留成
+    「收益率已」同判跳过。三者都是可校验的真收益率。
+    """
+
+    @pytest.fixture
+    def portfolio_holdings(self) -> list[dict]:
+        return [
+            {
+                "name": "长江电力",
+                "code": "600900",
+                "market_value": 62700.0,
+                "cost": 38000.0,
+                "profit": 24700.0,
+                "profit_rate": 65.0,
+            },
+            {
+                "name": "华宝增强收益债券A",
+                "code": "240012",
+                "market_value": 37700.0,
+                "cost": 42000.0,
+                "profit": -4300.0,
+                "profit_rate": -10.24,
+            },
+            {
+                "name": "兴全恒慧30天持有超短债C",
+                "code": "012325",
+                "market_value": 20000.0,
+                "cost": 20000.0,
+                "profit": 0.0,
+                "profit_rate": 0.0,
+            },
+        ]
+
+    def test_portfolio_holding_return_is_verified(self, portfolio_holdings):
+        """组合级措辞（组合持仓收益率）→ 按组合总收益率校验，不再当「主体不可解析」。"""
+        total_cost = sum(h["cost"] for h in portfolio_holdings)
+        total_profit = sum(h["profit"] for h in portfolio_holdings)
+        expected = round(total_profit / total_cost * 100, 2)
+        issues, _checked, _passed, corrections = check_numerical_consistency(
+            f"组合持仓收益率+{expected}%，最大持仓兴全恒慧", portfolio_holdings
+        )
+        assert corrections == []
+        assert issues == []
+
+    def test_adverb_between_name_and_rate_is_transparent(self, portfolio_holdings):
+        """「长江电力…持仓收益率已 +65.0%」：副词不该让主体不可解析。"""
+        _issues, _checked, _passed, corrections = check_numerical_consistency(
+            "长江电力 20.7% 超过 15% 线，且持仓收益率已 +65.0%", portfolio_holdings
+        )
+        assert corrections == []
+
+    def test_verb_before_rate_keeps_subject(self, portfolio_holdings):
+        """「华宝增强收益债券A…出现-10.24%」：动词不该切断主体归因。"""
+        _issues, _checked, _passed, corrections = check_numerical_consistency(
+            "华宝增强收益债券A作为债券型持仓出现-10.24%，与超短债反差明显", portfolio_holdings
+        )
+        assert corrections == []

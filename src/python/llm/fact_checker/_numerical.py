@@ -20,6 +20,7 @@ from src.python.llm.fact_checker._constants import (
     _REBALANCE_TARGET_KEYWORDS,
 )
 from src.python.llm.fact_checker._context import (
+    _is_threshold_context,
     _is_benchmark_relative_context,
     _is_breakdown_sum_context,
     _is_contribution_sentence,
@@ -273,6 +274,13 @@ def _evaluate_percent_impl(ctx: PercentContext) -> tuple[str | None, tuple[str, 
     ref_rates: dict[str, float] = dict(ctx.stock_rates_abs)
     ref_rates["_portfolio"] = ctx.profit_rate
 
+
+    # 组合单日/当日表现语境（"今日组合 +0.21%"）→ 数值为组合当日收益，非个股收益率，
+    # 且无组合当日收益基准数据可校验 → 跳过。必须在此判定：否则回退全局最近邻会将
+    # 当日收益（如 0.21%）误修正为数值最接近的品种收益率（如 561910 的 -2.3%）。
+    if _is_portfolio_daily_change_context(ctx.sentence, ctx.anchor):
+        return None, None
+
     # 组合级收益语境（"组合累计收益约10.0%"）→ 数值归到组合总收益率而非某个个股。
     # 必须在主体定位前判定：同句含多个持仓代码时（如"组合累计收益10%，招商银行上涨8%，
     # 贵州茅台上涨15%"），组合收益数值若走个股路由会被误归到数值最近的个股。
@@ -286,10 +294,12 @@ def _evaluate_percent_impl(ctx: PercentContext) -> tuple[str | None, tuple[str, 
         issue = f"收益相关数值 {ctx.value}% 与实际累计收益率 {correct_str}%（{ctx.profit_sign}）偏差超过容差（句段：{_ctx}）"
         return issue, (ctx.value_str, correct_str, ctx.sentence, f"组合实际收益率{correct_str}%")
 
-    # 组合单日/当日表现语境（"今日组合 +0.21%"）→ 数值为组合当日收益，非个股收益率，
-    # 且无组合当日收益基准数据可校验 → 跳过。必须在此判定：否则回退全局最近邻会将
-    # 当日收益（如 0.21%）误修正为数值最接近的品种收益率（如 561910 的 -2.3%）。
-    if _is_portfolio_daily_change_context(ctx.sentence, ctx.anchor):
+    # 阈值/比较语境的**无符号**百分比（"长江电力 20.7% 超过 15% 线"）是占比与阈值，
+    # 不是收益率：同句别处出现「收益率」字样时会漏过整句级收益语境判定，若按邻近主体
+    # 归因就会拿占比去比对品种收益率（实测「长江电力 20.7% 超过 15% 线」被当作 600900
+    # 的收益率，与真值 65.0% 判为不符）。
+    _sign_char = ctx.sentence[max(0, ctx.anchor - 1) : ctx.anchor]
+    if _sign_char not in ("+", "-", "＋", "−", "–") and _is_threshold_context(ctx.sentence, ctx.anchor):
         return None, None
 
     # 数值紧贴一个解析不出持仓的名称（如简称「建信装备」）→ 主体归属不可知，

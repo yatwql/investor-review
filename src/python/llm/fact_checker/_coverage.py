@@ -133,6 +133,7 @@ def _classify_skip(ctx: object) -> str:
         _is_contribution_sentence,
         _is_hypothetical_context,
         _is_position_weight_context,
+        _is_threshold_context,
     )
     from ._utils import _unresolved_attached_subject
 
@@ -147,6 +148,8 @@ def _classify_skip(ctx: object) -> str:
         return "贡献/归因语境"
     if any(kw in sentence for kw in ("国债", "利率", "通胀", "GDP", "CPI", "PMI")):
         return "宏观基准语境"
+    if _is_threshold_context(sentence, anchor):
+        return "阈值/比较语境"
     if _is_position_weight_context(sentence):
         return "仓位/占比语境"
     if _is_hypothetical_context(sentence):

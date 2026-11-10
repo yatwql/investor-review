@@ -330,3 +330,26 @@ def _is_suggestion_context(code: str, full_text: str) -> bool:
     end = min(len(full_text), idx + 60)
     context = full_text[start:end]
     return any(kw in context for kw in _SUGGESTION_KEYWORDS)
+
+
+#: 阈值/比较语境词：`长江电力 20.7% 超过 15% 线` 里的数字是占比与阈值比较，不是收益率。
+#: 只在**无符号**百分比上启用（`+65.0%` 的符号已表明是收益率），避免把正常收益率声称跳过。
+_THRESHOLD_WORDS: tuple[str, ...] = (
+    "超过",
+    "跌破",
+    "高于",
+    "低于",
+    "以内",
+    "以上",
+    "以下",
+    "阈值",
+    "上限",
+    "下限",
+    "线",
+)
+
+
+def _is_threshold_context(sentence: str, match_start: int, window: int = 12) -> bool:
+    """数值是否处于「占比 vs 阈值」语境（无符号百分比时用于跳过收益率改写）。"""
+    nearby = sentence[max(0, match_start - window) : match_start + window]
+    return any(word in nearby for word in _THRESHOLD_WORDS)
