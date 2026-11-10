@@ -174,7 +174,7 @@ skeleton.py:generate_llm_content()
 | `api.py` | API 层 | Provider 路由、Multi-Provider Chain 链式遍历、Extended Thinking 注入（无 provider 链即显式失败，不做单 Provider 直连）；`http_client` 缺省时自建一次性兜底客户端（串行后置模块链路，见 §4.2） | `call_llm()` / `call_single_provider()` |
 | `api_base.py` | 基础设施 | HTTP 调用、重试骨架、截断检测、Token 日志、失败追踪 | `call_llm_with_retry()` |
 | `strategy.py` | 基础设施 | 多 Provider 切换策略引擎（priority/weighted/cost_first/fallback_only），模块偏好注入，代理偏好后置处理 | `resolve_provider_chain()` |
-| `fact_checker/`（子包 9 模块，`__init__.py` 重导出 4 公开函数） | 基础设施 | LLM 输出事实锚定校验（数值一致性/品种存在性/排名正确性/跨模块收益率口径冲突）+ 自动修正（**改写门槛高于告警**：仅带符号或就近有盈亏措辞才改写）+ 覆盖率统计（已比对/跳过+原因） | `run_fact_check()` |
+| `fact_checker/`（子包 11 模块，`__init__.py` 重导出 11 个公开函数） | 基础设施 | LLM 输出事实锚定校验（数值一致性/品种存在性/排名正确性/跨模块收益率口径冲突）+ 自动修正（**改写门槛高于告警**：仅带符号或就近有盈亏措辞才改写）+ 覆盖率统计（已比对/跳过+原因） | `run_fact_check()` |
 | `fallback.py` | 基础设施 | 全模块失败时的降级占位模板；占位识别（`is_placeholder_content()` 按模板共有的稳定签名 `⚠️ 当前无法` 判定，供 `report/llm_quality.py` 等内容侧消费——签名常量与模板同文件，改模板即改签名） | `get_fallback_content()` / `get_placeholder_text()` / `is_placeholder_content()` |
 | `prompts_core.py` | 工具 | 提示词门面：System Prompt 常量 + 辩论 synthesis 构建 + **三域子模块门面再导出**（失败原因/数据块/复盘自审，旧导入面不变） | `_SYSTEM_*` 常量 + `_build_system_debate_synthesis()` |
 | `failure_reasons.py` | 工具 | LLM 模块失败原因常量（`FAIL_REASON_*` + `LLM_MODULE_FAILURE`，自 prompts_core 按职责下沉） | `LLM_MODULE_FAILURE` |

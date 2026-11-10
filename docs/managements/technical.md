@@ -3111,7 +3111,7 @@ API 层         api.py        Provider 路由 + Multi-Provider Chain 遍历
                failure_reasons.py   模块失败原因常量（LLM_MODULE_FAILURE）
                markdown.py          Markdown→HTML 转换
                circuit_breaker.py   LLM API 熔断器
-               fact_checker/        LLM 输出伪代码/幻觉过滤（子包 9 模块，__init__ 重导出 4 公开函数）
+               fact_checker/        LLM 输出伪代码/幻觉过滤（子包 11 模块，__init__ 重导出 11 个公开函数）
                _hallucination_filter.py  虚构品种代码过滤（行内句段粒度删除）
                fallback.py          全失败降级占位模板
 ```
@@ -3314,7 +3314,7 @@ class ComputModuleDef:
 | `analytics_metrics` | 量化指标计算 | ✅ | 夏普比率、卡玛比率、HHI 集中度、组合 Beta、持仓胜率、换手率、波动率、最大回撤 |
 | `analytics_liquidity` | 流动性分析 | ✅ | 场内/场外比例、停牌风险、基金封闭期分析 |
 | `analytics_fx_exposure` | 外汇敞口分析 | ✅ | A股/港股/美股 国别分布与外汇风险敞口判断 |
-| `analytics_fact_checker` | 事实锚定校验器 | ✅ | LLM 输出的事实校验：数值一致性、品种存在性、排名正确性（纯算法层） |；跨模块收益率口径冲突（同一实体在不同模块被赋予不同收益率，确定性判定） |
+| `analytics_fact_checker` | 事实锚定校验器 | ✅ | LLM 输出的事实校验：数值一致性、品种存在性、排名正确性、跨模块收益率口径冲突（同一实体在不同模块被赋予不同收益率）；纯算法层、零 LLM 调用 |
 | `analytics_scenario` | 情景分析 | ✅ | 市场涨跌情景模拟、3 情景表、置信区间传播 |
 | `analytics_alignment` | 组合校准分析 | ✅ | 费率估算/现金剥离/TWR 计算 |
 | `analytics_inferrer` | 用户画像推断 | ⏳ | 持仓结构→风险偏好推断 |
