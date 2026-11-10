@@ -216,7 +216,8 @@ def test_prompt_builder_includes_module_texts_and_digests():
         per_module_limit=10,
     )
 
-    assert "global_macro" in prompt
+    assert "全球政经局势" in prompt, "提示词按中文模块名投喂（不暴露内部键）"
+    assert "global_macro" not in prompt
     assert "智囊团正文" in prompt
     assert "已截断" in prompt, "超过 per_module_limit 的模块正文必须标注截断"
     assert "测试基金" in prompt and "000001" in prompt
@@ -244,13 +245,27 @@ def test_fingerprint_includes_prompt_schema_version(monkeypatch):
     assert after != before, "提示词版本盐变化必须换键（否则旧自检结论按旧清单复用）"
 
 
+def test_fingerprint_carries_module_scoped_prompt_salt(monkeypatch):
+    """自检文案改动只走模块级盐：换它必换键，且不连坐全局提示词盐。"""
+    import src.python.llm.module_fingerprint as mf
+    from src.python.llm.prompts_review import SELF_REVIEW_PROMPT_VERSION
+
+    outputs: dict[str, str | None] = {"global_macro": "<p>x</p>"}
+    parts = mf.self_review_fingerprint_parts(outputs)
+    assert parts["self_review_prompt_version"] == SELF_REVIEW_PROMPT_VERSION
+
+    before = self_review_fingerprint(outputs)
+    monkeypatch.setattr(mf, "SELF_REVIEW_PROMPT_VERSION", "self-review-selftest")
+    assert self_review_fingerprint(outputs) != before
+
+
 def test_prompt_builder_skips_empty_outputs():
     """空/None 产出不进入提示词（不给模型无意义空段）。"""
     from src.python.llm.prompts import _build_self_review_prompt
 
     prompt = _build_self_review_prompt({"global_macro": None, "expert_review": "   "}, None, None)
-    assert "### 模块：global_macro" not in prompt
-    assert "### 模块：expert_review" not in prompt
+    assert "### 模块：" not in prompt, "空产出不得进入提示词的模块段"
+    assert "全球政经局势" not in prompt
     assert "（无持仓明细）" in prompt
     assert "（无穿透数据）" in prompt
 
@@ -309,3 +324,64 @@ def _freeze_market_bucket_for_cache_asserts(monkeypatch):
     from src.test._market_clock import freeze_market_bucket
 
     freeze_market_bucket(monkeypatch)
+
+
+# ── 上屏可读性：内部模块键 → 中文名 ────────────────────────────
+
+
+def test_prompt_uses_display_names_and_forbids_internal_keys():
+    """提示词按中文模块名投喂，并明确禁止输出内部键名（报告读者不是开发者）。"""
+    from src.python.llm.prompts_review import _SYSTEM_SELF_REVIEW, _build_self_review_prompt
+
+    prompt = _build_self_review_prompt({"global_macro": "<p>海外市场走弱</p>", "penetration_deep": "<p>穿透正文</p>"})
+    assert "### 模块：全球政经局势" in prompt
+    assert "### 模块：穿透深度分析" in prompt
+    assert "global_macro" not in prompt
+    assert "不得输出内部键名" in _SYSTEM_SELF_REVIEW
+
+
+def test_residual_module_keys_are_localized(monkeypatch):
+    """模型仍照抄键名时由代码兜底换成中文名（`模块 global_macro` / 反引号形态都要换）。"""
+    monkeypatch.setattr(
+        "src.python.llm.generators.generate_self_review",
+        lambda *a, **k: ("<p>模块 global_macro 与 `penetration_deep` 结论互斥</p>", False),
+    )
+
+    run_self_review(_OUTPUTS, [], [], _llm_config(True))
+    block = get_self_review_block()
+
+    assert block is not None
+    assert "全球政经局势" in block and "穿透深度分析" in block
+    assert "global_macro" not in block and "penetration_deep" not in block
+
+
+# ── 引用数值核对：语料里查不到的百分比不得当结论 ────────────────
+
+
+def test_unverified_percentage_is_flagged(monkeypatch):
+    """引用语料中不存在的百分比（如自造的 -8.5%）→ 追加「无法核实」注记。"""
+    monkeypatch.setattr(
+        "src.python.llm.generators.generate_self_review",
+        lambda *a, **k: ("<p>嘉实全球产业升级亏损 8.5%</p>", False),
+    )
+
+    run_self_review({"global_macro": "<p>嘉实全球产业升级亏损 5.06%</p>"}, [], [], _llm_config(True))
+    block = get_self_review_block()
+
+    assert block is not None
+    assert "8.5%" in block and "无法核实" in block
+
+
+def test_verified_percentage_is_not_flagged(monkeypatch):
+    """语料中存在的百分比原样引用 → 不加注记。"""
+    outputs: dict[str, str | None] = {"global_macro": "<p>组合持仓收益率 +19.14%</p>"}
+    monkeypatch.setattr(
+        "src.python.llm.generators.generate_self_review",
+        lambda *a, **k: ("<p>组合持仓收益率 +19.14%</p>", False),
+    )
+
+    run_self_review(outputs, [], [], _llm_config(True))
+    block = get_self_review_block()
+
+    assert block is not None
+    assert "无法核实" not in block

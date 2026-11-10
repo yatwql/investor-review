@@ -8,6 +8,15 @@ from __future__ import annotations
 from src.python.config.anonymizer import mask_holding_code
 
 
+SELF_REVIEW_PROMPT_VERSION = "self-review-2"
+"""自检提示词**模块级**版本盐（进自检指纹）。
+
+自检的静态文案（清单条目/禁止项/上屏口径）改动必须换键，否则旧结论按旧清单复用；
+该盐刻意与全局 ``PROMPT_SCHEMA_VERSION`` 分开——后者一动会连带作废其余全部 LLM 缓存
+（一次全量重算的成本），而自检文案改动只该影响自检自身。
+"""
+
+
 _SYSTEM_SELF_REVIEW = """你是严格的投资复盘内容复核员。你会收到同一次报告中若干个分析模块的产出文本，
 以及持仓/穿透数据摘要。你的唯一任务是**复核这些产出与数据是否自洽**，而不是重新做一遍分析。
 
@@ -25,6 +34,12 @@ _SYSTEM_SELF_REVIEW = """你是严格的投资复盘内容复核员。你会收�
 - **禁止新增数据、数值或排名**：只能引用你收到的文本与摘要中的既有信息；不确定就写「无法核实」。
 - **禁止声称已"校验无误"或给出质量评分**：你只报告发现，不下结论性背书。
 - 不得复述原文全文，只引用必要片段（每条不超过 40 字）。
+- **引用模块时用你收到的中文模块名**（如「全球政经局势」「持仓穿透深度分析」），
+  不得输出内部键名（`global_macro` / `penetration_deep` 之类），报告正文的读者不是开发者。
+- **百分比与数值只能原样引用**：自检给出的每个数字都必须能在下方文本或摘要里逐字找到；
+  无法定位就写「无法核实」，不得自行换算或四舍五入。
+- **持仓/穿透摘要是数值真值来源**：模块产出里的收益率/占比与摘要不一致时，按矛盾列出
+  （同时引用两处原值，并指出哪个与摘要不符），不要把模块的写法当既定事实转述。
 
 输出为 Markdown，只输出上述清单，不要寒暄、不要总结段落。"""
 
@@ -46,6 +61,9 @@ def _build_self_review_prompt(
     Returns:
         自检 user prompt。
     """
+    from src.python.core.registry import get_llm_module_names
+
+    module_names = get_llm_module_names()
     lines: list[str] = ["以下是本次报告的各模块分析产出（已截断），请按系统提示要求复核。", ""]
     for key, text in (module_outputs or {}).items():
         if not isinstance(text, str) or not text.strip():
@@ -53,7 +71,7 @@ def _build_self_review_prompt(
         plain = _strip_html_for_review(text)
         if len(plain) > per_module_limit:
             plain = plain[:per_module_limit] + "…（已截断）"
-        lines.append(f"### 模块：{key}")
+        lines.append(f"### 模块：{module_names.get(key, key)}")
         lines.append(plain)
         lines.append("")
 

@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.8-dev
-> **编号源**：`rf-next = 1110`（新增问题提出后更新为 +1；已用最大 rf-1109，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1111`（新增问题提出后更新为 +1；已用最大 rf-1110，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -66,6 +66,7 @@
 | # | 问题 | 修复 |
 | --- | --- | --- |
 | rf-1107 | 基金经理变更监控常显「首次运行」：跟踪基线快照被按上报域 24h TTL 的清理器删除（报告生成入口每次先自动清理），且「刷新基础缓存」只清不重建该键 | 快照键登记近永久精确键 TTL（`CACHE_NEAR_PERMANENT`）+ `clear_by_group` 新增 `exclude_keys` 供刷新流程点名保留；补「隔 48h 二次报告仍非首检」等回归用例 |
+| rf-1110 | 生成后自检直接透传内部模块键名（`global_macro`/`penetration_deep`），上屏不可读；自检引用模块里的错值（017730 亏 -8.5%，摘要真值 -5.06%）时无任何核对，读者会把模型复核当结论 | 提示词按中文模块名投喂 + 禁止输出内部键 + 摘要为数值真值来源；输出侧兜底替换残留键名；引用百分比做语料核对，未定位追加「无法核实」注记 |
 | rf-1109 | 近 40h 实施遗留：机器 IP 探测原语放在 `core/logger.py`（与 `core/system_info.py` 声明的「机器信息单源」相悖），且 logger 内一段函数文档失去绑定成孤立字符串；`pytest_env` 四个插件探针各写一份 | 迁到 `core/system_info.py` 并更新全部消费方/测试 patch 点；删除孤立字符串；探针收敛为 `_has_plugin()` |
 | rf-1108 | 增量历史缓存键拼成 `history_history_{chain}_{code}`，未命中任何注册表前缀 → 按 default 日档 24h 清理：K 线文件每日全量重取，`_correction_streak` 计数每日重置导致「连续检出→跳过全量刷新」冷却永不触发；`market_hours` 未登记落 default；`{cache_key}_correction_flag` 只写不读 | 新增唯一键构造器 `history_cache_key()`（`{chain_name}_{code}`）并替换 `index.py`/`clear_incremental_cache` 的手工拼接；`market_hours` 登记入 `calendar` 精确键；删除死写；新增键形状 ↔ 注册表覆盖契约测试 |
 

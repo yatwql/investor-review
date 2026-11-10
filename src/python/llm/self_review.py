@@ -25,6 +25,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import threading
 
 logger = logging.getLogger("invest")
@@ -66,6 +67,58 @@ def ensure_non_guarantee_note(html: str) -> str:
     if NON_GUARANTEE_NOTE in html:
         return html
     return f"{html.rstrip()}\n<p>{NON_GUARANTEE_NOTE}</p>"
+
+
+_PCT_RE = re.compile(r"[-+]?\d+(?:\.\d+)?%")
+
+_UNVERIFIED_PCT_NOTE = (
+    "注：下列百分比未能在本次数据（模块产出与持仓/穿透摘要）中逐字定位，"
+    "应按「无法核实」处理，不得作为判断依据：{items}。"
+)
+
+
+def _localize_module_keys(text: str) -> str:
+    """把模型输出里残留的内部模块键名换成用户可见的中文名。
+
+    提示词已按中文模块名投喂，但模型仍可能照抄缓存里的旧产出或自行使用键名——
+    报告读者不是开发者，内部键（`global_macro` / `penetration_deep`）上屏即噪声。
+    """
+    from src.python.core.registry import get_llm_module_names
+
+    names = get_llm_module_names()
+    for key in sorted(names, key=len, reverse=True):
+        text = text.replace(f"`{key}`", names[key])
+        text = re.sub(rf"(?<![\w-]){re.escape(key)}(?![\w-])", names[key], text)
+    return text
+
+
+def _review_corpus(
+    module_outputs: dict[str, str | None],
+    holdings_details: list[dict] | None,
+    penetrated_assets: list[dict] | None,
+    extra_blocks: tuple[str, ...],
+) -> str:
+    """自检可引用的原文语料（模块全文 + 摘要 + 附加事实块），用于核对引用的百分比。"""
+    from src.python.llm.prompts_review import _self_review_holdings_digest, _self_review_penetration_digest
+
+    parts = [text for text in (module_outputs or {}).values() if isinstance(text, str)]
+    parts.extend(block for block in extra_blocks if block)
+    parts.append(_self_review_holdings_digest(holdings_details))
+    parts.append(_self_review_penetration_digest(penetrated_assets))
+    return "\n".join(parts)
+
+
+def _unverified_percentages(text: str, corpus: str) -> list[str]:
+    """自检引用了但语料里找不到原值的百分比（模型即兴换算/编造的高发点）。"""
+    found: list[str] = []
+    for match in _PCT_RE.finditer(text):
+        raw = match.group(0)
+        digits = raw.rstrip("%").lstrip("+-")
+        if digits in corpus:
+            continue
+        if raw not in found:
+            found.append(raw)
+    return found
 
 
 def _has_any_output(module_outputs: dict[str, str | None]) -> bool:
@@ -132,6 +185,24 @@ def run_self_review(
         logger.warning("生成后自检未产出有效内容（不影响主内容）")
         return False
 
+    content = _localize_module_keys(content)
+    unverified = _unverified_percentages(
+        content,
+        _review_corpus(
+            module_outputs,
+            holdings_details,
+            penetrated_assets,
+            (
+                purchase_constraint_block,
+                holding_change_block,
+                event_impact_block,
+                schedule_replay_block,
+            ),
+        ),
+    )
+    if unverified:
+        logger.warning("[self_review] 自检引用了语料中查不到的百分比：%s", ", ".join(unverified))
+        content = f"{content}\n<p>{_UNVERIFIED_PCT_NOTE.format(items='、'.join(unverified[:5]))}</p>"
     set_self_review_block(ensure_non_guarantee_note(content))
     return True
 
