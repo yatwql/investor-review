@@ -760,7 +760,7 @@ class TestSuspiciousKeyMisses:
 
         for i in range(5):
             _record_cache_miss(f"report_symbol_miss_{i:06d}.SZ")
-            _record_cache_miss(f"history_history_stock_60090{i}_correction_streak")
+            _record_cache_miss(f"history_stock_60090{i}_correction_streak")
         with caplog.at_level(logging.INFO, logger="invest"):
             log_cache_summary()
         assert not [r for r in caplog.records if r.levelno == logging.WARNING]

@@ -296,7 +296,7 @@
 | 键名 | 文件名模式 | 默认 TTL | 指纹来源 | 说明 |
 |------|-----------|:--------:|----------|------|
 | `tracking` | `holdings_tracking.json` | 30 天 | — | 持仓跟踪数据（精确键名，无指纹） |
-| `calendar` | `trading_calendar.json` | 14 天 | — | A 股交易日历（精确键名，无指纹） |
+| `calendar` | `trading_calendar.json` / `market_hours.json` | 14 天 | — | A 股交易日历 + 官方开闭市探测（精确键名，无指纹） |
 | `bond_yield` | `bond_yield_rf` | 24h | — | 无风险利率（国债收益率；精确键名，无指纹） |
 | `datasink_probe_miss` | `datasink_probe_miss_{hash}.json` | 12h | — | 财报章节 404 探测负缓存（只记**确定性**缺失；调大=省请求但恢复更慢） |
 | `report_symbol_miss` | `report_symbol_miss_{symbol}.json` | 6h | — | 标的正文缺失负缓存（章节阶 + 备源均无正文） |

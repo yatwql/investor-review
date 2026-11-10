@@ -372,10 +372,15 @@ _MODULE_REGISTRY: tuple[DataModuleDef, ...] = (
     DataModuleDef("历史股票日线", "history_stock", cache_prefixes=("history_stock_",), cache_ttl=CACHE_WEEKLY),
     DataModuleDef("历史基金净值", "history_fund_otc", cache_prefixes=("history_fund_otc_",), cache_ttl=CACHE_MONTHLY),
     DataModuleDef("指数历史日线", "history_index", cache_prefixes=("history_index_",), cache_ttl=CACHE_MONTHLY),
-    # ── 交易日历（akshare 全年数据，极少变动，无 cache_group 避免误删）──
+    # ── 交易日历与交易时段（极少变动；无 cache_group 避免误删）──
+    # `market_hours` 是官方开闭市探测结果（读侧 60s 盘中 / 7d 盘后）：不登记则落
+    # default 日档，与读侧 7d 盘后口径不一致（多点一次回源）。
     DataModuleDef(
-        "交易日历", "calendar", exact_cache_keys=("trading_calendar",), cache_ttl=CACHE_WEEKLY * 2
-    ),  # 两周（cleanup 周期 + 读缓存均从此取值）
+        "交易日历",
+        "calendar",
+        exact_cache_keys=("trading_calendar", "market_hours"),
+        cache_ttl=CACHE_WEEKLY * 2,
+    ),  # 两周（cleanup 周期 + 读缓存均从此取值）,
     # ── 无风险利率（bond_zh_us_rate + 手动兜底）──
     DataModuleDef(
         "无风险利率",

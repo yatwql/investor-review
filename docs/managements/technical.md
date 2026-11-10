@@ -2000,6 +2000,8 @@ annualized_vol = std(daily_returns, ddof=1) × √252
 | 过期缓存降级 | 全链路失败时降级 7 天内过期缓存 | 全链路失败时返回空列表 `[]`（显示占位文本） |
 | 数据修正感知 | 无感知 | 重叠检测→自动全量刷新（应对除权除息） |
 
+缓存键由 `chain_incremental.history_cache_key()` **唯一构造**（`{chain_name}_{code}`，如 `history_stock_600519`；`index.py` 的窗口缩水自愈与 `clear_incremental_cache` 均走同一构造器）。键名必须落在注册表 `history_stock_` / `history_index_` / `history_fund_otc_` 前缀内——前缀是清理器判定 TTL 的唯一依据，键名多拼一层（如 `history_history_*`）就会落进 default 日档被每天删掉，K 线文件与 `_correction_streak` 计数随之失效（后者的「连续检出→跳过全量刷新」冷却再也累计不到阈值）。该契约由 `src/test/unit/cache/test_cache_key_registry_contract.py` 守卫。
+
 #### 基准指数对比
 
 基准指数历史走势的并行获取与归一化对齐，在 5 步算法链基础上叠加显示。

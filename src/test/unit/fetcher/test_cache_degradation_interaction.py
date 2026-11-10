@@ -196,7 +196,7 @@ class TestHistoryDoesNotDegrade:
         from src.python.cache import set as cache_set
         from src.python.fetcher import chain_incremental as inc
 
-        cache_set("history_history_stock_600519", [{"date": "2026-10-01", "close": 1600.0}])
+        cache_set("history_stock_600519", [{"date": "2026-10-01", "close": 1600.0}])
         monkeypatch.setattr(inc, "_get_chain", lambda chain_name: ["p1"])
         monkeypatch.setattr(inc, "get_registry", lambda: _Registry())
         monkeypatch.setattr(inc, "_try_providers", lambda *a, **k: [])
@@ -213,7 +213,7 @@ class TestHistoryDoesNotDegrade:
         from src.python.fetcher import chain_incremental as inc
 
         payload = {"_ts": time.time() - (CACHE_WEEKLY + 3600), "_data": [{"date": "2026-01-01", "close": 1500.0}]}
-        (cache_env / f"history_history_stock_600519_{_CACHE_KEY_VERSION}.json").write_text(
+        (cache_env / f"history_stock_600519_{_CACHE_KEY_VERSION}.json").write_text(
             json.dumps(payload), encoding="utf-8"
         )
         monkeypatch.setattr(inc, "_get_chain", lambda chain_name: ["p1"])

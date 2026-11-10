@@ -53,6 +53,26 @@ def reset_run_history_state() -> None:
     _EMPTY_SKIP_LOGGED.clear()
 
 
+def history_cache_key(chain_name: str, code: str) -> str:
+    """增量历史文件缓存的逻辑键（唯一键构造器）。
+
+    键名**必须**落在注册表声明的 `history_stock_` / `history_index_` /
+    `history_fund_otc_` 前缀内：前缀是清理器判定 TTL 的唯一依据，形状多拼一层
+    （如 `history_history_stock_*`）就会落进既不命中前缀、也不命中
+    精确键的 default 日档，K 线文件与 `_correction_streak` 计数每天被删——
+    后者被删后「连续检出→跳过全量刷新」的冷却永远累计不到阈值。
+
+    Args:
+        chain_name: chain 名称（`history_stock` / `history_index` /
+            `history_index_us` / `history_fund_otc`）
+        code: 证券代码
+
+    Returns:
+        缓存键（如 `history_stock_600519`）
+    """
+    return f"{chain_name}_{code}"
+
+
 def _correction_streak_key(cache_key: str) -> str:
     """连续检出历史重叠的计数键（缓存键派生，随缓存键一同清理）。"""
     return f"{cache_key}_correction_streak"
@@ -170,7 +190,7 @@ def fetch_with_incremental_fallback(
         list[dict]: 按日期升序排列的数据列表，至少返回 days 条。
         全链路失败时返回空列表（不使用过期缓存——走势数据降级后显示占位文本）。
     """
-    cache_key = f"history_{chain_name}_{code}"
+    cache_key = history_cache_key(chain_name, code)
     # 单轮窗口复用：同一（chain, code）已被更大窗口取过时直接截尾，不再走
     # 缓存合并与 provider 链路（同一份报告内多个消费方各拉一道的根源）。
     _memo_key = (chain_name, code)
@@ -359,7 +379,7 @@ def clear_incremental_cache(chain_name: str, code: str) -> None:
     缓存键格式与 :func:`fetch_with_incremental_fallback` 保持一致，
     避免调用方重复拼接键名。
     """
-    cache_clear(f"history_{chain_name}_{code}")
+    cache_clear(history_cache_key(chain_name, code))
 
 
 def _merge_by_date(cached: list[dict], new_data: list[dict]) -> list[dict]:
@@ -465,7 +485,6 @@ def _validate_continuity(cached: list[dict], new_data: list[dict], cache_key: st
     if isinstance(_first_date, str) and isinstance(_last_date, str) and _first_date < _last_date:
         if _overlap_values_changed(cached, new_data):
             logger.warning("[%s] 新旧数据重叠且重叠段数值变化——判定为历史修正，自动全量刷新", cache_key)
-            cache_set(f"{cache_key}_correction_flag", True)
             return True
         logger.debug(
             "[%s] 新旧数据重叠但重叠段数值一致（源按条数返回整窗）——按日合并，不做全量刷新",

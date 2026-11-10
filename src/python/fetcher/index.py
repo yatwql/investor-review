@@ -317,6 +317,7 @@ def fetch_index_history(code: str, days: int = 365) -> list[dict] | None:
         clear_incremental_cache,
         fetch_with_incremental_fallback,
     )
+    from src.python.fetcher.chain_incremental import history_cache_key
 
     # 先查会话缓存（会话级复用）：缓存条目记为 ``(days, bars)``，**仅在缓存窗口不小于
     # 本次需求时复用**——否则「某调用者先用短窗口取过 → 后续要长窗口的调用者拿到更短
@@ -366,7 +367,7 @@ def fetch_index_history(code: str, days: int = 365) -> list[dict] | None:
         # 一次；无文件缓存时短结果即源上限，不重试。
         # 源单次上限（约 2000 根）也要排除：结果已达上限即短于请求属源限制，
         # 清缓存重取只会得到同样的长度，白白多打一次大请求并让缓存反复失效。
-        file_cached = cache_get(f"history_{chain_name}_{code}", CACHE_WEEKLY) or []
+        file_cached = cache_get(history_cache_key(chain_name, code), CACHE_WEEKLY) or []
         if result and len(result) < days and len(result) < _SOURCE_HISTORY_CAP and file_cached:
             logger.info(
                 "[index] %s 返回 %d 根 < 请求 %d 天，清链路缓存全量重取",
