@@ -274,7 +274,7 @@
 | 8 | 财经热点关联分析 | `news_correlation` |
 | 9 | 持仓体检报告 | `health_check` |
 | 10 | 穿透深度分析 | `penetration_deep` |
-| 11 | 生成后自检 | `self_review` |
+| 11 | 生成后自检（实验能力，默认关） | `self_review` |
 | 12 | 持仓变动复盘归因 | `holding_change` |
 
 **默认关闭的整章（13-15，写 `features.json`；编号随注册表）**：

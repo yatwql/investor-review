@@ -174,7 +174,7 @@ skeleton.py:generate_llm_content()
 | `api.py` | API 层 | Provider 路由、Multi-Provider Chain 链式遍历、Extended Thinking 注入（无 provider 链即显式失败，不做单 Provider 直连）；`http_client` 缺省时自建一次性兜底客户端（串行后置模块链路，见 §4.2） | `call_llm()` / `call_single_provider()` |
 | `api_base.py` | 基础设施 | HTTP 调用、重试骨架、截断检测、Token 日志、失败追踪 | `call_llm_with_retry()` |
 | `strategy.py` | 基础设施 | 多 Provider 切换策略引擎（priority/weighted/cost_first/fallback_only），模块偏好注入，代理偏好后置处理 | `resolve_provider_chain()` |
-| `fact_checker/`（子包 9 模块，`__init__.py` 重导出 4 公开函数） | 基础设施 | LLM 输出事实锚定校验（数值一致性/品种存在性/排名正确性）+ 自动修正 | `run_fact_check()` |
+| `fact_checker/`（子包 9 模块，`__init__.py` 重导出 4 公开函数） | 基础设施 | LLM 输出事实锚定校验（数值一致性/品种存在性/排名正确性/跨模块收益率口径冲突）+ 自动修正（**改写门槛高于告警**：仅带符号或就近有盈亏措辞才改写）+ 覆盖率统计（已比对/跳过+原因） | `run_fact_check()` |
 | `fallback.py` | 基础设施 | 全模块失败时的降级占位模板；占位识别（`is_placeholder_content()` 按模板共有的稳定签名 `⚠️ 当前无法` 判定，供 `report/llm_quality.py` 等内容侧消费——签名常量与模板同文件，改模板即改签名） | `get_fallback_content()` / `get_placeholder_text()` / `is_placeholder_content()` |
 | `prompts_core.py` | 工具 | 提示词门面：System Prompt 常量 + 辩论 synthesis 构建 + **三域子模块门面再导出**（失败原因/数据块/复盘自审，旧导入面不变） | `_SYSTEM_*` 常量 + `_build_system_debate_synthesis()` |
 | `failure_reasons.py` | 工具 | LLM 模块失败原因常量（`FAIL_REASON_*` + `LLM_MODULE_FAILURE`，自 prompts_core 按职责下沉） | `LLM_MODULE_FAILURE` |
@@ -1373,7 +1373,7 @@ reload_pricing() → 读 llm_pricing_ref.json
 
 ### 12.2 注册表键名派生
 
-在 `core/registry.py` 中，每个 LLM 模块通过 `settings_suffix` 注册（`global_macro`、`expert_review`、`health_check`、`penetration_deep`、`news_correlation`、`self_review`（生成后自检，出厂默认开；生成后一遍执行、不经并行调度）、`holding_change`（持仓变动复盘归因，`enabled_llm` 默认开；章本体由 feature `holding_change_review` 控制，并入并行批调度），外加 3 个辩论模块 `debate_pro`/`debate_con`/`debate_synthesis`），自动派生 `llm_settings.json` 的所有合法键名：
+在 `core/registry.py` 中，每个 LLM 模块通过 `settings_suffix` 注册（`global_macro`、`expert_review`、`health_check`、`penetration_deep`、`news_correlation`、`self_review`（生成后自检，出厂默认关；生成后一遍执行、不经并行调度）、`holding_change`（持仓变动复盘归因，`enabled_llm` 默认开；章本体由 feature `holding_change_review` 控制，并入并行批调度），外加 3 个辩论模块 `debate_pro`/`debate_con`/`debate_synthesis`），自动派生 `llm_settings.json` 的所有合法键名：
 
 ```
 已知 LLM Settings 键名（每个模块 9 个）：
@@ -1422,15 +1422,21 @@ reload_pricing() → 读 llm_pricing_ref.json
 
 消费点仅两处：编排层 `needs` 计算（模块集合）与报告层 `news_top_count` 解析（采集规模）。非默认档位在 LLM 用量页签写入一行自述（`standard` 不写，保持零噪声）。
 
-### 12.4 生成后自检（`self_review`，出厂默认开）
+### 12.4 生成后自检（`self_review`，出厂默认关）
 
 **分层定位（与确定性校验不重叠）**：① `llm/fact_checker` 确定性校验（数值/代码/排名有据性 + 自动修正，**始终生效**）；② `llm/self_review.py` 模型层复核（结论与数据是否矛盾 / 是否有未标注的推测性表述 / 模块间结论是否互斥），经 `enabled_llm.self_review` 开启。
+
+**上屏与人机共读口径**：提示词按「中文名（内部键）」**双写**投喂（`### 模块：全球政经局势（global_macro）`），产物到达报告层前由 `localize_for_display()` 剥掉内部键只留中文名；离线抽样（`scripts/eval-llm-hallucination.py --self-review`）**保留双写**——中文给人读、内部键给解析脚本读，两条口径各取所需。
+
+**确定性跨模块核对（恒开，零 token）**：`fact_checker/_cross_module.py` 对同一品种在不同模块的收益率口径做冲突检查（如一处 `8.5%`、两处 `-5.06%`），检出结果置于复核区块**最前**（事实先于观点）；模型层自检（若开启）跟在其后。因此关闭 `self_review` 只是省掉模型复核，报告仍保留确定性核对段。
+
+**覆盖率与批量体检**：`_coverage.py` 统计每次校验的「已比对 / 不符 / 跳过 + 原因分桶」；`scripts/eval-llm-hallucination.py --from-report <html>` 单份重放、`scripts/probe-report-claims.py` 批量重放（零 LLM 调用、只读），用于回答「漏检在哪里」而不是只看告警数。
 
 **注册形态**：在 `core/registry.py` 登记（显示名/缓存前缀/TTL/用量统计/失败原因载体自动获得），但**刻意不进 `generators_orchestrator._MODULE_FNS`**——其输入是其余模块的产出，必须串行在它们之后，属**生成后一遍**而非线程池并行调度模块（模块注册纪律明文允许该形态；`test_self_review.py` 有「不在并行表」的防注册漂移用例）。
 
 **产物交付**：不扩宽 4 元组 `llm_content` 契约（报告层多处按位置解包），改用**运行作用域载体 + 报告层零参 pull**（与 `report/experimental_notice` 同源模式）：`set_self_review_block()` 写入本轮区块，Excel 用量页签与 HTML「生成后自检（附录）」区块以零参函数取用。HTML 落点为附录区块（不占章节号、不参与目录导航）。
 
-**默认参数**：`max_tokens_self_review=8192` / `timeout_self_review=90` / `temperature_self_review=0.1` / `reasoning_effort_self_review=low`（出厂默认开；未产出时仍计入失败原因载体）。
+**默认参数**：`max_tokens_self_review=8192` / `timeout_self_review=90` / `temperature_self_review=0.1` / `reasoning_effort_self_review=low`（出厂默认关；未产出时仍计入失败原因载体）。
 
 **指纹**：`module_fingerprint.self_review_fingerprint()` 为**内容寻址**（各模块产出正文 + 持仓/穿透摘要），仅写侧使用、不进 `MODULE_FINGERPRINT_BUILDERS`（该表供预检/写两侧共享同一 `ModuleFingerprintInputs` 形状）——产出未变（含全部缓存命中）时键不变，自检同样命中缓存。
 
