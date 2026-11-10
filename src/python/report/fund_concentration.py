@@ -21,12 +21,13 @@ from typing import Any
 
 from src.python.cache import get as cache_get
 from src.python.cache import set as cache_set
+from src.python.core.constants import CACHE_NEAR_PERMANENT
 from src.python.report.holdings_freshness import evaluate_report_period
 
 logger = logging.getLogger("invest")
 
 _SNAPSHOT_KEY = "fund_concentration_snapshot"
-_SNAPSHOT_TTL = 365 * 86400  # 接近永久
+_SNAPSHOT_TTL = CACHE_NEAR_PERMANENT  # 跟踪基线：清理器同源取注册表的精确键 TTL
 
 _UNKNOWN_PERIOD = "未知"
 """报告期无法解析时 `holdings_freshness` 给出的展示文本（不参与推进判定）。"""

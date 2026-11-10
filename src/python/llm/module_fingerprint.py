@@ -55,6 +55,7 @@ from src.python.llm.fingerprint import (
 )
 from src.python.llm.prompts_action import scenario_mandate_cache_suffix
 from src.python.llm.prompts_signals import _signal_digest_cache_suffix
+from src.python.llm.prompts_review import SELF_REVIEW_PROMPT_VERSION
 from src.python.llm.rate_caliber import PROMPT_SCHEMA_VERSION
 
 __all__ = [
@@ -560,6 +561,8 @@ def self_review_fingerprint_parts(
     parts: dict[str, object] = {
         # 提示词文本版本盐：自检清单等静态文案改动也须换键（与四主模块同口径）
         "prompt_version": PROMPT_SCHEMA_VERSION,
+        # 模块级盐：自检文案改动只作废自检自身结论，不连坐其余模块的缓存
+        "self_review_prompt_version": SELF_REVIEW_PROMPT_VERSION,
         "outputs": normalized,
         "holdings": extract_stable_holdings(holdings_details),
         "penetration": extract_stable_penetration(penetrated_assets),

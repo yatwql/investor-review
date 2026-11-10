@@ -116,6 +116,7 @@ Compress-Archive -Path data\holdings,data\config,data\history -DestinationPath "
 |---|---|---|
 | 只清缓存（数据可能陈旧时） | 删 `data/cache/`，或 TUI `[3]` / Web「运行状态 → 缓存管理」清理过期项 | 下次运行重新拉取，仅慢一次 |
 | 让报告从「没有上期」重新开始 | 删 `data/history/snapshots/` | 环比、组合演进、快照对比重新积累 |
+| 让基金经理变更/风格漂移/集中度历史回到「首次运行」 | 删 `data/cache/fund_manager_snapshot_v*.json` / `fund_concentration_snapshot_v*.json` / `fund_style_snapshot_v*.json` | 这三个基线快照按近永久（1 年）窗口保留，「刷新基础缓存」与过期清理都不会动它们——要重置必须手动删文件 |
 | 恢复出厂配置（保留持仓） | 删 `data/config/` 后重启 | 密钥、路径、开关全部要重新填 |
 | 彻底重来 | 删 `data/`、`reports/`、`logs/`（保留 `data/holdings/` 里的持仓 Excel） | 缓存、历史、状态全清 |
 

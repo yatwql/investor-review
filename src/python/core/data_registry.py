@@ -19,7 +19,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from src.python.core.constants import CACHE_DAILY, CACHE_MONTHLY, CACHE_TWO_WEEKS, CACHE_WEEKLY
+from src.python.core.constants import (
+    CACHE_DAILY,
+    CACHE_MONTHLY,
+    CACHE_NEAR_PERMANENT,
+    CACHE_TWO_WEEKS,
+    CACHE_WEEKLY,
+)
 
 __all__ = [
     "DataModuleDef",
@@ -38,6 +44,7 @@ __all__ = [
     "get_prefix_type_map",
     "get_registered_data_types",
     "get_registry",
+    "TRACKING_SNAPSHOT_KEYS",
 ]
 
 # ── 行业资金流向：同前缀异构 TTL 键（单源声明）─────────
@@ -48,6 +55,20 @@ SECTOR_FLOW_STALE_KEY = "sector_flow_last_good"
 SECTOR_FLOW_STALE_TTL = 259200  # 3 天：陈旧回退基准（再旧对当下判断无意义）
 SECTOR_FLOW_NEG_KEY = "sector_flow_negative"
 SECTOR_FLOW_NEG_TTL = 1800  # 30 分钟：跨进程失败负缓存
+
+# ── 跨报告对比基线快照（单源声明）─────────────────────
+# 基金经理变更、风格漂移、集中度历史都靠「上次报告的快照」判定变化。它们是
+# **跟踪基线**，不是当日行情/列表载荷：按上报域的日档 TTL 裁掉就等于每次隔天
+# 出报告都是首检（历史缺陷：清理器按 fund_manager 域 24h 裁，报告生成入口又
+# 每次先跑自动清理），故在此声明独立近永久 TTL，并作为「刷新只清不重建」
+# 流程的保留清单下发给 cache 层。
+TRACKING_SNAPSHOT_KEYS: frozenset[str] = frozenset(
+    {
+        "fund_manager_snapshot",
+        "fund_concentration_snapshot",
+        "fund_style_snapshot",
+    }
+)
 
 # ── 模块定义 ────────────────────────────────────────────────
 
@@ -298,6 +319,7 @@ _MODULE_REGISTRY: tuple[DataModuleDef, ...] = (
         "fund_manager",
         cache_prefixes=("fund_manager_",),
         exact_cache_keys=("fund_manager_snapshot",),
+        exact_key_ttls=(("fund_manager_snapshot", CACHE_NEAR_PERMANENT),),
         cache_ttl=CACHE_DAILY,
         cache_groups=("refresh",),
     ),
@@ -305,10 +327,15 @@ _MODULE_REGISTRY: tuple[DataModuleDef, ...] = (
         "基金集中度历史",
         "fund_concentration",
         exact_cache_keys=("fund_concentration_snapshot",),
+        exact_key_ttls=(("fund_concentration_snapshot", CACHE_NEAR_PERMANENT),),
         cache_ttl=CACHE_MONTHLY,
     ),
     DataModuleDef(
-        "基金风格快照", "fund_style_snapshot", exact_cache_keys=("fund_style_snapshot",), cache_ttl=CACHE_MONTHLY
+        "基金风格快照",
+        "fund_style_snapshot",
+        exact_cache_keys=("fund_style_snapshot",),
+        exact_key_ttls=(("fund_style_snapshot", CACHE_NEAR_PERMANENT),),
+        cache_ttl=CACHE_MONTHLY,
     ),
     DataModuleDef(
         "基金风格扩展数据（市值/PE）",
@@ -345,10 +372,15 @@ _MODULE_REGISTRY: tuple[DataModuleDef, ...] = (
     DataModuleDef("历史股票日线", "history_stock", cache_prefixes=("history_stock_",), cache_ttl=CACHE_WEEKLY),
     DataModuleDef("历史基金净值", "history_fund_otc", cache_prefixes=("history_fund_otc_",), cache_ttl=CACHE_MONTHLY),
     DataModuleDef("指数历史日线", "history_index", cache_prefixes=("history_index_",), cache_ttl=CACHE_MONTHLY),
-    # ── 交易日历（akshare 全年数据，极少变动，无 cache_group 避免误删）──
+    # ── 交易日历与交易时段（极少变动；无 cache_group 避免误删）──
+    # `market_hours` 是官方开闭市探测结果（读侧 60s 盘中 / 7d 盘后）：不登记则落
+    # default 日档，与读侧 7d 盘后口径不一致（多点一次回源）。
     DataModuleDef(
-        "交易日历", "calendar", exact_cache_keys=("trading_calendar",), cache_ttl=CACHE_WEEKLY * 2
-    ),  # 两周（cleanup 周期 + 读缓存均从此取值）
+        "交易日历",
+        "calendar",
+        exact_cache_keys=("trading_calendar", "market_hours"),
+        cache_ttl=CACHE_WEEKLY * 2,
+    ),  # 两周（cleanup 周期 + 读缓存均从此取值）,
     # ── 无风险利率（bond_zh_us_rate + 手动兜底）──
     DataModuleDef(
         "无风险利率",

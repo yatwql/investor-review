@@ -569,3 +569,232 @@ class TestStripLlmFooter:
 
         html = '<p style="color:#888;font-size:13px">别的样式段落</p>'
         assert strip_llm_footer(html) == html
+
+
+class TestNamePrefixAbbreviation:
+    """名称前缀缩写的主体归因（「嘉实全球产业升级」⊂「嘉实全球产业升级股票(QDII)A」）。
+
+    回归：LLM 省掉产品类型尾缀时，四分主体来源（代码/全名/简称归一/描述性尾名）都
+    解析不出来 → 数值落进「无主体」分支跳过，与真值矛盾的收益率长期留在正文里
+    （实测 017730 一处 -8.5%、两处 -5.06%）。
+    """
+
+    @pytest.fixture
+    def qdii_holdings(self) -> list[dict]:
+        return [
+            {
+                "name": "嘉实全球产业升级股票(QDII)A",
+                "code": "017730",
+                "market_value": 23941.69,
+                "cost": 25218.95,
+                "profit": -1277.26,
+                "profit_rate": -5.06,
+            },
+            {
+                "name": "华安纳斯达克100ETF联接基金A",
+                "code": "040046",
+                "market_value": 22231.0,
+                "cost": 10896.1,
+                "profit": 11334.9,
+                "profit_rate": 103.91,
+            },
+        ]
+
+    def test_prefix_abbreviation_is_corrected(self, qdii_holdings):
+        """缩写命中唯一持仓 → 按该品种真值修正，并标注「亏损」方向。"""
+        issues, _checked, _passed, corrections = check_numerical_consistency(
+            "嘉实全球产业升级（8.5%）为唯一亏损QDII", qdii_holdings
+        )
+        assert corrections == [("8.5", "-5.1", "嘉实全球产业升级（8.5%）为唯一亏损QDII", "017730实际收益率-5.1%")]
+        assert issues and "亏损" in issues[0] and "盈利" not in issues[0]
+
+    def test_ambiguous_prefix_is_not_corrected(self, qdii_holdings):
+        """同一前缀指向两只持仓（同公司不同份额）→ 归属不可知，宁漏改不误改。"""
+        ambiguous = [
+            {**qdii_holdings[0], "name": "嘉实全球产业升级股票A", "code": "017730"},
+            {**qdii_holdings[1], "name": "嘉实全球产业升级股票C", "code": "017733"},
+        ]
+        _issues, _checked, _passed, corrections = check_numerical_consistency(
+            "嘉实全球产业升级（8.5%）为唯一亏损QDII", ambiguous
+        )
+        assert corrections == []
+
+    def test_short_prefix_is_not_matched(self, qdii_holdings):
+        """2~3 字前缀（「嘉实」）与公司名/行业词无法区分 → 不作主体。"""
+        _issues, _checked, _passed, corrections = check_numerical_consistency(
+            "嘉实（8.5%）为唯一亏损QDII", qdii_holdings
+        )
+        assert corrections == []
+
+
+class TestSignedReturnAfterCode:
+    """带符号百分比紧跟持仓代码即收益率声称（句子无「收益率」字样也要校验）。
+
+    回归：`040046（+103.91%）与016055（+8.53%）` 这类括号列收益率整条被「无收益
+    关键词」早退跳过，覆盖率实测只有 19%。判据刻意收窄（必须带符号 + 紧邻持仓代码 +
+    整句无回看期词），否则集中度/敞口（无符号）与区间涨跌（看空后 N 个交易日）会被误改。
+    """
+
+    @pytest.fixture
+    def qdii_pair(self) -> list[dict]:
+        return [
+            {
+                "name": "华安纳斯达克100ETF联接基金A",
+                "code": "040046",
+                "market_value": 22231.0,
+                "cost": 10896.1,
+                "profit": 11334.9,
+                "profit_rate": 103.91,
+            },
+            {
+                "name": "博时纳斯达克100ETF联接(QDII)A",
+                "code": "016055",
+                "market_value": 10000.0,
+                "cost": 9000.0,
+                "profit": 1000.0,
+                "profit_rate": 11.11,
+            },
+        ]
+
+    def test_signed_percent_after_code_is_verified(self, qdii_pair):
+        issues, _checked, _passed, corrections = check_numerical_consistency(
+            "040046（+103.91%）与016055（+11.11%）跟踪同一指数", qdii_pair
+        )
+        assert corrections == []
+        assert issues == []
+
+    def test_wrong_signed_percent_after_code_is_corrected(self, qdii_pair):
+        _issues, _checked, _passed, corrections = check_numerical_consistency(
+            "040046（+103.91%）与016055（+8.53%）跟踪同一指数", qdii_pair
+        )
+        assert corrections == [
+            ("8.53", "11.1", "040046（+103.91%）与016055（+8.53%）跟踪同一指数", "016055实际收益率11.1%")
+        ]
+
+    def test_lookback_period_move_is_not_a_holding_return(self, qdii_pair):
+        """区间价格涨跌（看空后 N 个交易日 -19.4%）不是持仓收益率 → 一律不改写。"""
+        _issues, _checked, _passed, corrections = check_numerical_consistency(
+            "022365 看空后 9 个交易日 −19.4%，判断兑现", qdii_pair
+        )
+        assert corrections == []
+
+    def test_non_holding_code_is_ignored(self, qdii_pair):
+        """指数/大盘涨跌（道指 +2.12%）不是持仓收益率 → 不改写。"""
+        _issues, _checked, _passed, corrections = check_numerical_consistency(
+            "道指（+2.12%）、纳指（+2.69%）", qdii_pair
+        )
+        assert corrections == []
+
+
+class TestAttributionRefinements:
+    """归因守卫的两处收窄：组合级措辞与副词插入语不该让真收益率声称白白跳过。
+
+    回归依据（真实报告重放）：`组合持仓收益率+19.14%` 因「组合持仓」不在组合级关键词表
+    而被判「主体不可解析」跳过；`持仓收益率已 +64.96%`、`出现-11.01%` 因副词残留成
+    「收益率已」同判跳过。三者都是可校验的真收益率。
+    """
+
+    @pytest.fixture
+    def portfolio_holdings(self) -> list[dict]:
+        return [
+            {
+                "name": "长江电力",
+                "code": "600900",
+                "market_value": 62700.0,
+                "cost": 38000.0,
+                "profit": 24700.0,
+                "profit_rate": 65.0,
+            },
+            {
+                "name": "华宝增强收益债券A",
+                "code": "240012",
+                "market_value": 37700.0,
+                "cost": 42000.0,
+                "profit": -4300.0,
+                "profit_rate": -10.24,
+            },
+            {
+                "name": "兴全恒慧30天持有超短债C",
+                "code": "012325",
+                "market_value": 20000.0,
+                "cost": 20000.0,
+                "profit": 0.0,
+                "profit_rate": 0.0,
+            },
+        ]
+
+    def test_portfolio_holding_return_is_verified(self, portfolio_holdings):
+        """组合级措辞（组合持仓收益率）→ 按组合总收益率校验，不再当「主体不可解析」。"""
+        total_cost = sum(h["cost"] for h in portfolio_holdings)
+        total_profit = sum(h["profit"] for h in portfolio_holdings)
+        expected = round(total_profit / total_cost * 100, 2)
+        issues, _checked, _passed, corrections = check_numerical_consistency(
+            f"组合持仓收益率+{expected}%，最大持仓兴全恒慧", portfolio_holdings
+        )
+        assert corrections == []
+        assert issues == []
+
+    def test_adverb_between_name_and_rate_is_transparent(self, portfolio_holdings):
+        """「长江电力…持仓收益率已 +65.0%」：副词不该让主体不可解析。"""
+        _issues, _checked, _passed, corrections = check_numerical_consistency(
+            "长江电力 20.7% 超过 15% 线，且持仓收益率已 +65.0%", portfolio_holdings
+        )
+        assert corrections == []
+
+    def test_verb_before_rate_keeps_subject(self, portfolio_holdings):
+        """「华宝增强收益债券A…出现-10.24%」：动词不该切断主体归因。"""
+        _issues, _checked, _passed, corrections = check_numerical_consistency(
+            "华宝增强收益债券A作为债券型持仓出现-10.24%，与超短债反差明显", portfolio_holdings
+        )
+        assert corrections == []
+
+
+class TestPrecisionGuards:
+    """自动改写的精度护栏：宁可只报告，也不能把仓位/财务指标改写成收益率。
+
+    批量重放 10 份报告的依据：26 条「不符」里 20 条是归因错位（权重/净利同比/风险
+    指标被当成持仓收益率），若据此改写会把对的数字改错。
+    """
+
+    @pytest.fixture
+    def guard_holdings(self) -> list[dict]:
+        return [
+            {
+                "name": "兴全恒慧30天持有超短债C",
+                "code": "012325",
+                "market_value": 20000.0,
+                "cost": 19138.0,
+                "profit": 862.0,
+                "profit_rate": 4.5,
+            },
+            {
+                "name": "长江电力",
+                "code": "600900",
+                "market_value": 62700.0,
+                "cost": 38000.0,
+                "profit": 24700.0,
+                "profit_rate": 65.0,
+            },
+        ]
+
+    def test_financial_metric_is_not_attributed_as_return(self, guard_holdings):
+        """「看看 600900 的 −6.6%」是净利同比，不是持仓收益率 → 不告警、不改写。"""
+        issues, _checked, _passed, corrections = check_numerical_consistency(
+            "却对 600900 的净利同比 -6.6% 视而不见", guard_holdings
+        )
+        assert issues == [] and corrections == []
+
+    def test_weight_target_phrasing_is_not_a_return(self, guard_holdings):
+        """「把长江电力从 19.4% 减到 15% 以内」是仓位目标 → 不改写。"""
+        _issues, _checked, _passed, corrections = check_numerical_consistency(
+            "把长江电力从 19.4% 减到 15% 以内，理由是浮盈厚", guard_holdings
+        )
+        assert corrections == []
+
+    def test_unsigned_weight_is_reported_but_not_rewritten(self, guard_holdings):
+        """无符号且无紧邻收益词的数值：可以报告，但绝不自动改写（可能是权重）。"""
+        issues, _checked, _passed, corrections = check_numerical_consistency(
+            "012325（13.4%，持仓收益率+4.5%）", guard_holdings
+        )
+        assert corrections == [], "无符号权重不得被改写"
+        assert any("13.4" in issue for issue in issues), "但仍应作为可疑数值上报"

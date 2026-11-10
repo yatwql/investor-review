@@ -36,17 +36,17 @@ class TestOverlapValueAwareJudgement:
         cached = _bars(_CACHED_DATES)
         new = _bars(["2026-01-07", "2026-01-08", "2026-01-09"])  # 整窗后移，重叠两天
         with patch("src.python.fetcher.chain_incremental.cache_set") as mock_set:
-            assert _validate_continuity(cached, new, "history_history_stock_600000") is False
+            assert _validate_continuity(cached, new, "history_stock_600000") is False
         mock_set.assert_not_called()
 
     def test_changed_values_are_a_revision(self):
-        """重叠日期价格变化 1% → 判定历史修正，置修正标记。"""
+        """重叠日期价格变化 1% → 判定历史修正（判据纯检测，不写标记）。"""
         cached = _bars(_CACHED_DATES)
         new = _bars(["2026-01-07", "2026-01-08", "2026-01-09"])
         new[0]["close"] = cached[2]["close"] * 1.01  # 重叠首日价格变了
         with patch("src.python.fetcher.chain_incremental.cache_set") as mock_set:
-            assert _validate_continuity(cached, new, "history_history_stock_600001") is True
-        mock_set.assert_any_call("history_history_stock_600001_correction_flag", True)
+            assert _validate_continuity(cached, new, "history_stock_600001") is True
+        mock_set.assert_not_called()  # 判据纯检测：标记写入已随死写移除
 
     def test_rounding_noise_within_tolerance_is_benign(self):
         """末位舍入差（相对 1e-6）不构成修正——复权价两次请求可差末位。"""
@@ -54,14 +54,14 @@ class TestOverlapValueAwareJudgement:
         new = _bars(["2026-01-07", "2026-01-08", "2026-01-09"], close=10.0)
         new[0]["close"] = 10.00001
         with patch("src.python.fetcher.chain_incremental.cache_set"):
-            assert _validate_continuity(cached, new, "history_history_stock_600002") is False
+            assert _validate_continuity(cached, new, "history_stock_600002") is False
 
     def test_no_overlap_returns_false(self):
         """无日期重叠（新数据全在缓存末日之后）→ 不是修正。"""
         cached = _bars(_CACHED_DATES)
         new = _bars(["2026-01-09", "2026-01-12"])
         with patch("src.python.fetcher.chain_incremental.cache_set") as mock_set:
-            assert _validate_continuity(cached, new, "history_history_stock_600003") is False
+            assert _validate_continuity(cached, new, "history_stock_600003") is False
         mock_set.assert_not_called()
 
 

@@ -53,6 +53,13 @@ def _generate_report(
     lines.append(f"| **达标** | **{'✅ 是' if target_met else '❌ 否'}** |")
     lines.append("")
 
+    if dry_run:
+        lines.append(
+            "> **Dry-Run 说明**：本次未调用 LLM、也未做事实校验——检查项与幻觉率按 0 展示，"
+            "该模式只用于验证提示词结构（模块双写名、摘要注入、截断标记）。"
+        )
+        lines.append("")
+
     lines.append("> **说明**：")
     lines.append('> - 品种存在性告警分为"声称持有"（幻觉）和"建议提及"（非幻觉），')
     lines.append(">   建议提及不计入幻觉率（如 LLM 推荐买入的品种不在持仓中）。")

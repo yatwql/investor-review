@@ -39,7 +39,7 @@ PROJECT_ROOT = os.environ.get("INVEST_PROJECT_ROOT") or _find_project_root()
 # 应用名称（单一来源，TUI 首页 / 启动日志 / Web 首页 / HTML 报告首页 / Excel 首页统一引用）
 APP_NAME = "投资复盘助手"
 
-APP_VERSION = "0.17.7"
+APP_VERSION = "0.17.8"
 
 # ── 报告产物文件名（单一来源：Excel/HTML 写入器与 Web 预览下载统一引用） ──
 # 报告产物文件基名（归档名 = 基名 + 时间戳后缀）
@@ -57,6 +57,10 @@ CACHE_DAILY = 86400  # 每日（24h）
 CACHE_WEEKLY = 604800  # 每周（7d）
 CACHE_TWO_WEEKS = 1209600  # 两周（14d）
 CACHE_MONTHLY = 2592000  # 每月（30d）
+# 近永久（1 年）：跨报告对比基线快照（基金经理/风格/集中度）的寿命。这类快照是
+# **手动管理**的跟踪基线而非当日载荷——按上报域的日档裁会让「隔天再出报告」永远
+# 退化成首次运行，故读侧与清理侧共用一个不受上报域 TTL 影响的窗口。
+CACHE_NEAR_PERMANENT = 365 * 86400
 
 # ── 跨模块共享的分析口径与枚举（单一来源：各模块 import，不得就地重定义） ──
 # 回看窗口（交易日 ≈ 3 个月）默认值：行业 Beta、风格因子回归、相关性分析同口径，

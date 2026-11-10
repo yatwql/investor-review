@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import os
-import socket
 import sys
 from logging.handlers import RotatingFileHandler
 
@@ -318,58 +317,6 @@ def setup_logger(name: str = "invest") -> logging.Logger:
     return logger
 
 
-"""Get the local host address, falling back to 'unknown'.
-
-`gethostbyname(gethostname())` alone usually answers loopback (`127.0.0.1`
-直接来自 /etc/hosts，Debian 系更是 `127.0.1.1`），对「在哪台机器的哪个地址上
-访问」没有信息量。按可靠性降序取首个非回环地址：
-
-1. UDP `connect` 一个公网地址（只建路由不发包，无流量）→ 默认出口网卡的本地地址；
-2. 主机名解析出的全部 IPv4（`gethostbyname_ex`）里挑非回环；
-3. 以上都只有回环时返回回环（离线/单机场景它仍是正确的可访问地址）；
-4. 全部失败返回 'unknown'。
-"""
-
-
-def _is_loopback(ip: str) -> bool:
-    return not ip or ip.startswith("127.") or ip == "0.0.0.0"
-
-
-def get_machine_ip() -> str:
-    """获取本机 IP 地址（优先非回环），失败时返回 'unknown'。"""
-    candidates: list[str] = []
-
-    # 1) 默认出口网卡地址（UDP connect 不发包）
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
-            probe.connect(("8.8.8.8", 80))
-            candidates.append(probe.getsockname()[0])
-    except (KeyboardInterrupt, SystemExit):
-        raise
-    except BaseException:
-        # 探测失败原因不止 OSError：测试网络守卫以 BaseException 子类阻断外部建连，
-        # 只做展示兜底的地方不得让它冒成启动失败。
-        pass
-
-    # 2) 主机名解析出的全部地址
-    try:
-        hostname = socket.gethostname()
-        candidates.append(socket.gethostbyname(hostname))
-        candidates.extend(socket.gethostbyname_ex(hostname)[2])
-    except (KeyboardInterrupt, SystemExit):
-        raise
-    except BaseException:
-        pass
-
-    for ip in candidates:
-        if not _is_loopback(ip):
-            return ip
-    for ip in candidates:
-        if ip:
-            return ip
-    return "unknown"
-
-
 def log_app_boundary(event: str, mode: str) -> None:
     """记录应用启动/关闭事件到日志。
 
@@ -378,6 +325,7 @@ def log_app_boundary(event: str, mode: str) -> None:
         mode: "CLI模式" 或 "TUI模式"
     """
     from src.python.core.constants import APP_NAME, APP_VERSION
+    from src.python.core.system_info import get_machine_ip
 
     ip = get_machine_ip()
     logging.getLogger("invest").info(

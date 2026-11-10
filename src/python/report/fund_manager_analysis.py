@@ -21,6 +21,7 @@ from typing import Any
 from src.python.core.trading_calendar import elapsed_trading_days_with_natural_fallback
 from src.python.cache import get as cache_get
 from src.python.cache import set as cache_set
+from src.python.core.constants import CACHE_NEAR_PERMANENT
 from src.python.fetcher.fund_manager import fetch_fund_manager
 from src.python.core.models import Holding
 from src.python.report.fund_performance import is_fund
@@ -28,7 +29,7 @@ from src.python.report.fund_performance import is_fund
 logger = logging.getLogger("invest")
 
 _SNAPSHOT_KEY = "fund_manager_snapshot"
-_SNAPSHOT_TTL = 365 * 86400  # 接近永久（快照手动管理，不由 TTL 驱动）
+_SNAPSHOT_TTL = CACHE_NEAR_PERMANENT  # 跟踪基线：清理器同源取注册表的精确键 TTL
 
 # ── 快照读写 ────────────────────────────────────────────────────
 

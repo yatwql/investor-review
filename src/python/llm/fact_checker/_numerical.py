@@ -9,7 +9,9 @@ from dataclasses import dataclass
 
 import re
 
+from src.python.llm.fact_checker import _coverage
 from src.python.llm.fact_checker._constants import (
+    _ATTACHED_SUBJECT_MAX_DIST,
     _DEFAULT_TOLERANCE_PCT,
     _EXPOSURE_KEYWORDS,
     _INDEX_CODES,
@@ -19,6 +21,9 @@ from src.python.llm.fact_checker._constants import (
     _REBALANCE_TARGET_KEYWORDS,
 )
 from src.python.llm.fact_checker._context import (
+    _is_metric_word_context,
+    _is_threshold_context,
+    _is_weight_target_context,
     _is_benchmark_relative_context,
     _is_breakdown_sum_context,
     _is_contribution_sentence,
@@ -43,6 +48,7 @@ from src.python.llm.fact_checker._utils import (
     _build_stock_rate_map,
     _calc_portfolio_values,
     _clause_span,
+    _enclosing_bracket_span,
     _extract_holding_map,
     _locate_subject_code,
     _locate_subject_in,
@@ -164,7 +170,89 @@ def _is_market_scope_no_subject(
     return _subject_distance(spans, subject_code, _rel) >= _noun_dist
 
 
-def _evaluate_percent(ctx: PercentContext) -> tuple[str | None, tuple[str, str, str, str] | None]:
+#: 回看期/区间口径词：`022365 看空后 9 个交易日 −19.4%` 是区间价格涨跌，不是持仓
+#: 收益率——带符号也绝不能拿去改写正文。
+_LOOKBACK_WORDS = (
+    "交易日",
+    "区间",
+    "以来",
+    "此后",
+    "期间",
+    "年初",
+    "本月",
+    "上一交易日",
+    "上年",
+)
+
+
+def _is_signed_return_after_code(ctx: PercentContext) -> bool:
+    """带符号百分比紧跟在持仓代码后（``040046（+103.91%）``）→ 视为持仓收益率声称。
+
+    走「无收益关键词」早退的声称里，这类是真错值的高发形态（LLM 常用括号列收益率而
+    句子不带「收益率」字样）。判据刻意收窄：**必须**带正负号且紧邻持仓代码，且整句不含
+    回看期词——集中度/敞口/风险度量都是无符号百分比，区间涨跌则可被回看期词挡下。
+    """
+    if any(word in ctx.sentence for word in _LOOKBACK_WORDS):
+        return False
+    value = ctx.value_str.strip()
+    if not value:
+        return False
+    pattern = re.compile(rf"(\d{{6}})\s*[（(]?\s*[+＋\-−]\s*{re.escape(value)}\s*%")
+    return any(match.group(1) in ctx.holding_codes for match in pattern.finditer(ctx.sentence))
+
+
+def _rewrite_allowed(ctx: PercentContext) -> bool:
+    """是否允许**自动改写**该数值（不满足则只报告、不改写）。
+
+    改写直接进用户可见正文，门槛必须高于「报告一条提示」：
+      - 带正负号（`+103.91%` / `−5.06%`）→ 明确是收益率；
+      - 或数值紧邻「收益率/收益/浮盈/浮亏」字样（±6 字）→ 明确是收益率。
+    无符号且无紧邻收益词的数值绝大多数是仓位/占比/同比等（批量重放实测：剩余的
+    不符全部落在这类——13.4%/29.4%/6.6%），把权重改写成收益率是硬伤。
+    """
+    sign_char = ctx.sentence[max(0, ctx.anchor - 1) : ctx.anchor]
+    if sign_char in ("+", "-", "＋", "−", "–"):
+        return True
+    nearby = ctx.sentence[max(0, ctx.anchor - 6) : ctx.anchor + 6]
+    # 「上涨/下跌」这类涨跌动词同样是收益率声称（"招商银行上涨20.0%"）
+    if any(word in nearby for word in ("收益率", "收益", "浮盈", "浮亏", "上涨", "下跌")):
+        return True
+    # 就近（±12 字）出现盈亏措辞也算收益率声称（"（8.5%）为唯一亏损QDII"）
+    wider = ctx.sentence[max(0, ctx.anchor - 12) : ctx.anchor + 12]
+    return any(word in wider for word in ("亏损", "浮亏", "浮盈", "盈利"))
+
+
+def _ambiguous_multi_subject(ctx: PercentContext) -> bool:
+    """多主体句中该数值的主体归因是否分不清（分不清 → 不改写也不告警）。
+
+    判据：句中出现 ≥2 个不同持仓主体，且（最近主体边缘距离 > 贴身阈值，或两个不同
+    主体的最近距离都 ≤ 贴身阈值）；同一主体的多处出现只取最近一次。
+    """
+    spans = _subject_spans(ctx.sentence, ctx.holding_codes, ctx.name_to_code)
+    if not spans:
+        return False
+    nearest: dict[str, int] = {}
+    for start, end, code in spans:
+        dist = min(abs(start - ctx.anchor), abs(end - ctx.anchor))
+        nearest[code] = min(nearest.get(code, dist), dist)
+    if len(nearest) < 2:
+        return False
+    # 括号作用域优先：数值落在只含一个持仓代码的括号内时，归属由括号决定（与
+    # `_locate_subject_code` 同口径），不因括号外更近的另一个主体而判歧义。
+    bracket = _enclosing_bracket_span(ctx.sentence, ctx.anchor)
+    if bracket is not None:
+        codes = {
+            match.group(0)
+            for match in _CODE_PATTERN.finditer(ctx.sentence, bracket[0], bracket[1])
+            if match.group(0) in ctx.holding_codes
+        }
+        if len(codes) == 1:
+            return False
+    ordered = sorted(nearest.values())
+    return ordered[0] > _ATTACHED_SUBJECT_MAX_DIST or ordered[1] <= _ATTACHED_SUBJECT_MAX_DIST
+
+
+def _evaluate_percent_impl(ctx: PercentContext) -> tuple[str | None, tuple[str, str, str, str] | None]:
     """评估单个百分比数值（语境判定 → 主体归因 → 是否需要修正）。
 
     语境开关的**判定顺序**（先「非收益率」早退，再回撤，最后收益语境）在本函数体内
@@ -206,6 +294,7 @@ def _evaluate_percent(ctx: PercentContext) -> tuple[str | None, tuple[str, str, 
         if change is None:
             return None, None  # 无持仓主体或无单日涨跌数据 → 无法校验，跳过
         if abs(ctx.value - abs(change)) <= ctx.tolerance_pct:
+            _coverage.note_verified()
             return None, None
         correct_str = f"{change:.1f}"
         _ctx = _sentence_snippet(ctx.sentence)
@@ -222,6 +311,7 @@ def _evaluate_percent(ctx: PercentContext) -> tuple[str | None, tuple[str, str, 
             return None, None  # 无回撤数据，无法校验，跳过
         diff = abs(ctx.value - ctx.drawdown_pct)
         if diff <= ctx.tolerance_pct:
+            _coverage.note_verified()
             return None, None
         correct_str = f"{ctx.drawdown_pct:.1f}"
         _ctx = _sentence_snippet(ctx.sentence)
@@ -229,7 +319,9 @@ def _evaluate_percent(ctx: PercentContext) -> tuple[str | None, tuple[str, str, 
         return issue, (ctx.value_str, correct_str, ctx.sentence, f"回撤实际{correct_str}%")
 
     # 无收益关键词或收益率太小 → 无法校验
-    is_profit_context = any(kw in ctx.sentence for kw in _PROFIT_KEYWORDS)
+    # 例外：带符号百分比紧跟持仓代码（`040046（+103.91%）`）本身就是持仓收益率声称，
+    # 句子缺「收益率」字样不影响判定（见 `_is_signed_return_after_code` 的收窄护栏）。
+    is_profit_context = any(kw in ctx.sentence for kw in _PROFIT_KEYWORDS) or _is_signed_return_after_code(ctx)
     if not is_profit_context or ctx.profit_rate < 0.01:
         return None, None
 
@@ -237,22 +329,49 @@ def _evaluate_percent(ctx: PercentContext) -> tuple[str | None, tuple[str, str, 
     ref_rates: dict[str, float] = dict(ctx.stock_rates_abs)
     ref_rates["_portfolio"] = ctx.profit_rate
 
+    # 组合单日/当日表现语境（"今日组合 +0.21%"）→ 数值为组合当日收益，非个股收益率，
+    # 且无组合当日收益基准数据可校验 → 跳过。必须在此判定：否则回退全局最近邻会将
+    # 当日收益（如 0.21%）误修正为数值最接近的品种收益率（如 561910 的 -2.3%）。
+    if _is_portfolio_daily_change_context(ctx.sentence, ctx.anchor):
+        return None, None
+
+    # 是否允许自动改写（只报告不改写的情形见 `_rewrite_allowed`）
+    _allow_rewrite = _rewrite_allowed(ctx)
+
     # 组合级收益语境（"组合累计收益约10.0%"）→ 数值归到组合总收益率而非某个个股。
     # 必须在主体定位前判定：同句含多个持仓代码时（如"组合累计收益10%，招商银行上涨8%，
     # 贵州茅台上涨15%"），组合收益数值若走个股路由会被误归到数值最近的个股。
     if _is_portfolio_level_context(ctx.sentence, ctx.anchor):
         if abs(ctx.value - ctx.profit_rate) <= ctx.tolerance_pct:
+            _coverage.note_verified()
             return None, None
         signed = ctx.profit_rate_signed if ctx.profit_rate_signed is not None else ctx.profit_rate
         correct_str = f"{signed:.1f}"
         _ctx = _sentence_snippet(ctx.sentence)
         issue = f"收益相关数值 {ctx.value}% 与实际累计收益率 {correct_str}%（{ctx.profit_sign}）偏差超过容差（句段：{_ctx}）"
-        return issue, (ctx.value_str, correct_str, ctx.sentence, f"组合实际收益率{correct_str}%")
+        _corr = (ctx.value_str, correct_str, ctx.sentence, f"组合实际收益率{correct_str}%") if _allow_rewrite else None
+        return issue, _corr
 
-    # 组合单日/当日表现语境（"今日组合 +0.21%"）→ 数值为组合当日收益，非个股收益率，
-    # 且无组合当日收益基准数据可校验 → 跳过。必须在此判定：否则回退全局最近邻会将
-    # 当日收益（如 0.21%）误修正为数值最接近的品种收益率（如 561910 的 -2.3%）。
-    if _is_portfolio_daily_change_context(ctx.sentence, ctx.anchor):
+    # 风险/财务类指标词（夏普/卡玛/VaR/波动率/分位/净利同比）与仓位目标措辞
+    # （"从 19.4% 减到 15% 以内"）紧邻的数值都不是持仓收益率：前者是别的度量，
+    # 后者是仓位。批量重放实测这两类贡献了不符的大头（净利 -6.6% 被判成 600900
+    # 的 61% 收益率、仓位 19.4% 被判成 64.1%）。
+    if _is_metric_word_context(ctx.sentence, ctx.anchor) or _is_weight_target_context(ctx.sentence, ctx.anchor):
+        return None, None
+
+    # 多主体句的**归因歧义**：同一句出现 ≥2 个持仓主体且最近主体不贴身（或两个主体都
+    # 贴身）时，括号/顿号枚举会让最近邻归因不可靠——实测把建设银行 +252.19% 归到工商
+    # 银行、把仓位 13.5% 归成持仓收益率。批量重放 10 份报告：不符 26 条里 20 条属此形态。
+    # 只挡「分不清」的，不挡「紧贴唯一主体」的（否则整份报告的覆盖率会被压到 8%）。
+    if _ambiguous_multi_subject(ctx):
+        return None, None
+
+    # 阈值/比较语境的**无符号**百分比（"长江电力 20.7% 超过 15% 线"）是占比与阈值，
+    # 不是收益率：同句别处出现「收益率」字样时会漏过整句级收益语境判定，若按邻近主体
+    # 归因就会拿占比去比对品种收益率（实测「长江电力 20.7% 超过 15% 线」被当作 600900
+    # 的收益率，与真值 65.0% 判为不符）。
+    _sign_char = ctx.sentence[max(0, ctx.anchor - 1) : ctx.anchor]
+    if _sign_char not in ("+", "-", "＋", "−", "–") and _is_threshold_context(ctx.sentence, ctx.anchor):
         return None, None
 
     # 数值紧贴一个解析不出持仓的名称（如简称「建信装备」）→ 主体归属不可知，
@@ -305,10 +424,13 @@ def _evaluate_percent(ctx: PercentContext) -> tuple[str | None, tuple[str, str, 
         if ref is not None and abs(ctx.value - ref) <= ctx.tolerance_pct:
             if ctx.confirmed_rates is not None:
                 ctx.confirmed_rates[best_code] = ctx.value_str
+            _coverage.note_verified()
             return None, None
         if ref is None and abs(ctx.value - ref_rates[closest_ref]) <= ctx.tolerance_pct:
+            _coverage.note_verified()
             return None, None
     elif abs(ctx.value - ref_rates[closest_ref]) <= ctx.tolerance_pct:
+        _coverage.note_verified()
         return None, None
 
     # 策略 2：句中代码全部为指数代码
@@ -347,21 +469,47 @@ def _evaluate_percent(ctx: PercentContext) -> tuple[str | None, tuple[str, str, 
     if best_code:
         stock_rate = (ctx.stock_rates or ctx.stock_rates_abs).get(best_code, 0)
         correct_str = f"{stock_rate:.1f}"
+        # 方向标注取**该品种**自己的盈亏，不沿用组合盈亏（否则亏损品种被标成「（盈利）」，
+        # 修正明细读起来自相矛盾）
+        _sign = "盈利" if stock_rate >= 0 else "亏损"
         _ctx = _sentence_snippet(ctx.sentence)
-        issue = f"收益相关数值 {ctx.value}% 与 {best_code} 的实际收益率 {correct_str}%（{ctx.profit_sign}）偏差超过容差（句段：{_ctx}）"
-        return issue, (ctx.value_str, correct_str, ctx.sentence, f"{best_code}实际收益率{correct_str}%")
+        issue = f"收益相关数值 {ctx.value}% 与 {best_code} 的实际收益率 {correct_str}%（{_sign}）偏差超过容差（句段：{_ctx}）"
+        _corr = (
+            (ctx.value_str, correct_str, ctx.sentence, f"{best_code}实际收益率{correct_str}%")
+            if _allow_rewrite
+            else None
+        )
+        return issue, _corr
     elif closest_ref != "_portfolio":
         stock_rate = (ctx.stock_rates or ctx.stock_rates_abs).get(closest_ref, 0)
         correct_str = f"{stock_rate:.1f}"
         _ctx = _sentence_snippet(ctx.sentence)
         issue = f"收益相关数值 {ctx.value}% 与 {closest_ref} 的实际收益率 {correct_str}%（{ctx.profit_sign}）偏差超过容差（句段：{_ctx}）"
-        return issue, (ctx.value_str, correct_str, ctx.sentence, f"{closest_ref}实际收益率{correct_str}%")
+        _corr = (
+            (ctx.value_str, correct_str, ctx.sentence, f"{closest_ref}实际收益率{correct_str}%")
+            if _allow_rewrite
+            else None
+        )
+        return issue, _corr
     else:
         signed = ctx.profit_rate_signed if ctx.profit_rate_signed is not None else ctx.profit_rate
         correct_str = f"{signed:.1f}"
         _ctx = _sentence_snippet(ctx.sentence)
         issue = f"收益相关数值 {ctx.value}% 与实际累计收益率 {correct_str}%（{ctx.profit_sign}）偏差超过容差（句段：{_ctx}）"
-        return issue, (ctx.value_str, correct_str, ctx.sentence, f"组合实际收益率{correct_str}%")
+        _corr = (ctx.value_str, correct_str, ctx.sentence, f"组合实际收益率{correct_str}%") if _allow_rewrite else None
+        return issue, _corr
+
+
+def _evaluate_percent(ctx: PercentContext) -> tuple[str | None, tuple[str, str, str, str] | None]:
+    """评估单个百分比并登记覆盖率（判定本体见 :func:`_evaluate_percent_impl`）。
+
+    覆盖率是「有多少声称被真正比对过」的唯一来源：检查器过去只报「告警/检查项」，
+    跳过的声称在统计上与「通过」无区别（实测一只基金的 8.5% 就这样消失）。
+    """
+    before = _coverage.verified_count()
+    issue, correction = _evaluate_percent_impl(ctx)
+    _coverage.note_claim(ctx, issue, before)
+    return issue, correction
 
 
 def check_numerical_consistency(

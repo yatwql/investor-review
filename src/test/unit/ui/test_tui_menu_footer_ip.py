@@ -31,33 +31,33 @@ class TestMachineIpLine:
     """``machine_ip_line`` 取数与降级。"""
 
     def test_returns_ip_from_single_source(self):
-        """IP 取自 ``core.logger.get_machine_ip``（不另写探测逻辑）。"""
-        with patch("src.python.core.logger.get_machine_ip", return_value="192.168.1.5"):
+        """IP 取自 ``core.system_info.get_machine_ip``（不另写探测逻辑）。"""
+        with patch("src.python.core.system_info.get_machine_ip", return_value="192.168.1.5"):
             assert machine_ip_line() == "本机 IP 192.168.1.5"
 
     def test_unknown_sentinel_degrades_to_dash(self):
         """取数原语失败时的哨兵值 ``unknown`` 不上屏，按 ``—`` 展示。"""
-        with patch("src.python.core.logger.get_machine_ip", return_value="unknown"):
+        with patch("src.python.core.system_info.get_machine_ip", return_value="unknown"):
             assert machine_ip_line() == "本机 IP —"
 
     def test_probe_exception_degrades_to_dash(self):
         """探测抛错不冒成首页渲染失败（页脚整行降级）。"""
-        with patch("src.python.core.logger.get_machine_ip", side_effect=OSError("no route")):
+        with patch("src.python.core.system_info.get_machine_ip", side_effect=OSError("no route")):
             assert machine_ip_line() == "本机 IP —"
 
     def test_memoized_within_ttl(self):
         """TTL 内复用记忆：首页逐帧重绘不得每帧重跑一次探测。"""
-        with patch("src.python.core.logger.get_machine_ip", return_value="10.0.0.7") as probe:
+        with patch("src.python.core.system_info.get_machine_ip", return_value="10.0.0.7") as probe:
             machine_ip_line(now=1000.0)
             machine_ip_line(now=1000.5)
         assert probe.call_count == 1
 
     def test_retakes_after_memo_reset(self):
         """``reset_status_memo``（[R] 刷新 / 配置变更）后重新取数，新地址即刻上屏。"""
-        with patch("src.python.core.logger.get_machine_ip", return_value="10.0.0.7"):
+        with patch("src.python.core.system_info.get_machine_ip", return_value="10.0.0.7"):
             machine_ip_line(now=2000.0)
         reset_status_memo()
-        with patch("src.python.core.logger.get_machine_ip", return_value="10.0.0.9"):
+        with patch("src.python.core.system_info.get_machine_ip", return_value="10.0.0.9"):
             assert machine_ip_line(now=2000.1) == "本机 IP 10.0.0.9"
 
 
@@ -70,7 +70,7 @@ class TestHomeFrameFooter:
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             with patch.object(text_layout, "terminal_columns", return_value=columns):
-                with patch("src.python.core.logger.get_machine_ip", return_value="192.168.1.5"):
+                with patch("src.python.core.system_info.get_machine_ip", return_value="192.168.1.5"):
                     with patch("src.python.tui.tui.print_header", lambda: None):
                         with patch("src.python.tui.tui.show_config", lambda: None):
                             with patch("src.python.tui.tui.render_menu", lambda *_a, **_k: None):

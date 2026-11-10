@@ -1,5 +1,5 @@
 # 投资复盘助手 — 质量控制与测试标准
-> 文档版本：0.17.7
+> 文档版本：0.17.8
 
 ---
 
@@ -560,7 +560,7 @@
 | R-LLM-07 | `src/test/unit/config/test_llm_settings.py` + `src/test/unit/config/test_config_llm_multi.py` | 批 5 |
 | R-LLM-09 | `src/test/unit/llm/test_prompts_signals.py` | 批 5 |
 | R-LLM-11 | `src/test/unit/llm/test_depth_profile.py` + `src/test/unit/report/test_summary.py` + `src/test/unit/report/test_summary_module_rows.py` | 批 5 |
-| R-LLM-12 | `src/test/unit/llm/test_self_review.py` + `src/test/unit/report/test_llm_module_info.py` | 批 5 |
+| R-LLM-12 | `src/test/unit/llm/test_self_review.py` + `src/test/unit/report/test_llm_module_info.py` + `src/test/unit/llm/test_cross_module_claims.py` + `src/test/unit/llm/test_fact_checker_coverage.py` | 批 5 |
 | R-LLM-13 | `src/test/unit/llm/test_cost_forecast.py` + `src/test/unit/cli/test_cli_cost_forecast.py` + `src/test/unit/web/test_cost_forecast_flow.py` + `src/test/unit/handlers/test_handlers_report.py` | 批 5 |
 | R-LLM-14 | `src/test/unit/config/test_config_llm_providers_priority.py`（CLI/面板/Web 同源用例：`test_cli_llm_provider_order.py` / `test_handlers_llm_providers.py` / `test_config_edit.py::TestLlmProvidersBlock`） | 批 5；桶策略：`src/test/unit/core/test_market_snapshot_bucket.py`（五时点分档/每份报告判定一次/提示词口径/进键）+ `src/test/unit/llm/test_cache_matrix.py::TestMarketSnapshotBucketPolicy`（盘中不复用 / 收盘档复用 / 口径行） |
 | R-LLM-15 | `src/test/unit/llm/test_llm_budget.py` | 批 6 |

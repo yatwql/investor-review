@@ -254,7 +254,7 @@ def build_status_line(*, now: float | None = None) -> str:
 def machine_ip_line(*, now: float | None = None) -> str:
     """首页页脚的本机 IP 行（``本机 IP 192.168.1.5``，取不到给 ``—``）。
 
-    首页每帧重绘，而 ``get_machine_ip`` 会做一次 UDP 路由探测 + 主机名解析，
+    首页每帧重绘，而 ``system_info.get_machine_ip`` 会做一次 UDP 路由探测 + 主机名解析，
     故与状态行共用 TTL 记忆化（``reset_status_memo`` 一并清）。
 
     Args:
@@ -268,7 +268,7 @@ def machine_ip_line(*, now: float | None = None) -> str:
     if cached is not None and ts - float(_memo.get("machine_ip_ts", 0.0)) < _STATUS_TTL:
         return str(cached)
     try:
-        from src.python.core.logger import get_machine_ip
+        from src.python.core.system_info import get_machine_ip
 
         ip = str(get_machine_ip() or "")
         # unknown 是取数原语的失败哨兵值，上屏按「—」降级（不向用户暴露内部哨兵）

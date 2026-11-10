@@ -9,29 +9,30 @@ import sys
 from _test_runner.paths import _LATEST_DIR, _PROJECT_ROOT, _SRC_DIR
 
 
+def _has_plugin(module_name: str) -> bool:
+    """可选 pytest 插件是否可解析。
+
+    只探测 `find_spec` 而不导入：插件导入有副作用（注册命令行参数、改写收集行为），
+    且这些可选依赖没有类型信息，导入会给类型检查添噪声。
+    """
+    import importlib.util
+
+    return importlib.util.find_spec(module_name) is not None
+
+
 def _check_pytest_html() -> bool:
     """检查 pytest-html 是否已安装。"""
-    try:
-        import pytest_html  # noqa: F401
-
-        return True
-    except ImportError:
-        return False
+    return _has_plugin("pytest_html")
 
 
 def _check_pytest_timeout() -> bool:
     """检查 pytest-timeout 是否已安装（缺它时传 `--timeout` 会让 pytest 直接用法错误退出）。"""
-    import importlib.util
-
-    return importlib.util.find_spec("pytest_timeout") is not None
+    return _has_plugin("pytest_timeout")
 
 
 def _check_pytest_cov() -> bool:
     """检查 pytest-cov 是否已安装。"""
-    # 可选依赖只探测是否可解析（不导入：插件导入有副作用，且 pyright 无该包的类型信息）
-    import importlib.util
-
-    return importlib.util.find_spec("pytest_cov") is not None
+    return _has_plugin("pytest_cov")
 
 
 def _extract_count(text: str, pattern: str) -> int:
@@ -74,12 +75,7 @@ def _parse_pytest_output(output: str) -> dict:
 
 def _check_xdist() -> bool:
     """检查 pytest-xdist 是否已安装。"""
-    try:
-        import xdist  # noqa: F401
-
-        return True
-    except ImportError:
-        return False
+    return _has_plugin("xdist")
 
 
 _PARALLEL_FACTOR: dict[str, float] = {

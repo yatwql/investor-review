@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import logging
 import os
-import re
 import stat
 
 from src.python.core.constants import PROJECT_ROOT
@@ -43,8 +42,8 @@ _GZIP_SUFFIX = ".gz"
 # 不受影响，无需额外剥离逻辑。
 _CACHE_KEY_VERSION = "v4"
 
-#: 键版本戳后缀（`_v4` / `_v12` …）：剥戳后得到逻辑键
-_VERSION_STAMP_RE = re.compile(r"_v\d+$")
+#: 当前键版本戳后缀（`_v4`）：只剥当前戳（非当前戳文件按前缀 TTL 判龄清理）
+_VERSION_STAMP_SUFFIX = f"_{_CACHE_KEY_VERSION}"
 
 
 def _cache_path(key: str) -> str:
@@ -60,14 +59,13 @@ def get_cache_dir() -> str:
 
 
 def cache_key_from_file_name(file_name: str) -> str | None:
-    """缓存文件名 → 逻辑缓存键（剥 `.json` / `.json.gz` 与 `_{版本}` 戳）。
+    """缓存文件名 → 逻辑缓存键（剥 `.json` / `.json.gz` 与**当前**版本戳）。
 
-    磁盘上的缓存键带版本戳（`{key}_v{N}.json`），而读侧 `get()` 用的是逻辑键；
+    磁盘上的缓存键带版本戳（`{key}_v4.json`），而读侧 `get()` 用的是逻辑键；
     任何从目录列举反推缓存键的地方（过期清理、页头新鲜度）都必须走本函数，
     否则会拼出 `{key}_v4_v4.json` 这类不存在的路径而静默降级。
 
-    剥的是**任意** `_v{N}` 戳而非仅当前戳：换代后残留的旧戳文件同样要还原成
-    逻辑键，才能命中精确键映射表（拿自身 TTL 而非前缀默认值）。
+    只剥当前戳：非当前戳的缓存文件按前缀默认 TTL 判龄后清掉（读侧本就读不到）。
 
     Args:
         file_name: 目录中的完整文件名（带扩展名）。
@@ -81,7 +79,9 @@ def cache_key_from_file_name(file_name: str) -> str | None:
             break
     else:
         return None
-    return _VERSION_STAMP_RE.sub("", stem)
+    if stem.endswith(_VERSION_STAMP_SUFFIX):
+        return stem[: -len(_VERSION_STAMP_SUFFIX)]
+    return stem
 
 
 def check_cache_dir_permissions() -> None:

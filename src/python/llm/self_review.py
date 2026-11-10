@@ -5,7 +5,9 @@
   ① ``llm/fact_checker``：确定性校验（数值/代码/排名是否有据，可自动修正、追加摘要），
      **始终生效**，不依赖本模块；
   ② 本模块：模型层自检（结论与数据是否矛盾、是否存在未标注的推测性表述、模块间结论
-     是否互斥）——由 ``llm_settings.json → enabled_llm.self_review`` 控制，出厂默认开。
+     是否互斥）——由 ``llm_settings.json → enabled_llm.self_review`` 控制，**出厂默认关**（实验能力）：
+     它是单份报告里输入最大的一遍（全部模块正文），产物只是尾部的复核清单；要衡量
+     它是否值得开，用离线抽样 ``scripts/eval-llm-hallucination.py --self-review``。
 
 **产物交付方式**：自检产出的「自检清单」区块由本模块的**运行作用域载体**承载，报告层
 （Excel 用量页签 / HTML 自检区块）以**零参 pull** 方式取用——与
@@ -25,6 +27,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import threading
 
 logger = logging.getLogger("invest")
@@ -66,6 +69,84 @@ def ensure_non_guarantee_note(html: str) -> str:
     if NON_GUARANTEE_NOTE in html:
         return html
     return f"{html.rstrip()}\n<p>{NON_GUARANTEE_NOTE}</p>"
+
+
+_PCT_RE = re.compile(r"[-+]?\d+(?:\.\d+)?%")
+
+_UNVERIFIED_PCT_NOTE = (
+    "注：下列百分比未能在本次数据（模块产出与持仓/穿透摘要）中逐字定位，"
+    "应按「无法核实」处理，不得作为判断依据：{items}。"
+)
+
+
+def module_dual_form(text: str) -> str:
+    """把裸模块键补成「中文名（内部键）」双写（**离线产物**用：人读中文、程序读键）。"""
+    from src.python.core.registry import get_llm_module_names
+
+    names = get_llm_module_names()
+    for key in sorted(names, key=len, reverse=True):
+        dual = f"{names[key]}（{key}）"
+        text = text.replace(f"`{key}`", dual)
+        # 已在双写括号内的键不再二次套娃（`(?<![（\w-])`）
+        text = re.sub(rf"(?<![（\w-]){re.escape(key)}(?![）\w-])", dual, text)
+    return text
+
+
+def localize_for_display(text: str) -> str:
+    """把双写形态与裸键统一成**只留中文名**（报告上屏用：读者不是开发者）。
+
+    双写里的「（内部键）」在屏幕上只是噪声——离线评测（``scripts/eval-llm-hallucination.py``
+    的自检抽样）保留双写供程序解析，两条展示口径各取所需。
+    """
+    from src.python.core.registry import get_llm_module_names
+
+    names = get_llm_module_names()
+    for key in sorted(names, key=len, reverse=True):
+        name = names[key]
+        text = text.replace(f"{name}（{key}）", name).replace(f"{name}({key})", name)
+        text = text.replace(f"`{key}`", name)
+        text = re.sub(rf"(?<![\w-]){re.escape(key)}(?![\w-])", name, text)
+    return text
+
+
+def _review_corpus(
+    module_outputs: dict[str, str | None],
+    holdings_details: list[dict] | None,
+    penetrated_assets: list[dict] | None,
+    extra_blocks: tuple[str, ...],
+) -> str:
+    """自检可引用的原文语料（模块全文 + 摘要 + 附加事实块），用于核对引用的百分比。"""
+    from src.python.llm.prompts_review import _self_review_holdings_digest, _self_review_penetration_digest
+
+    parts = [text for text in (module_outputs or {}).values() if isinstance(text, str)]
+    parts.extend(block for block in extra_blocks if block)
+    parts.append(_self_review_holdings_digest(holdings_details))
+    parts.append(_self_review_penetration_digest(penetrated_assets))
+    return "\n".join(parts)
+
+
+def _unverified_percentages(text: str, corpus: str) -> list[str]:
+    """自检引用了但语料里找不到原值的百分比（模型即兴换算/编造的高发点）。"""
+    found: list[str] = []
+    for match in _PCT_RE.finditer(text):
+        raw = match.group(0)
+        digits = raw.rstrip("%").lstrip("+-")
+        if digits in corpus:
+            continue
+        if raw not in found:
+            found.append(raw)
+    return found
+
+
+def prepend_review_block(html: str) -> None:
+    """把**确定性**核对段插到复核区块最前（事实在观点之前）。
+
+    模型层自检默认关，区块仍要有内容——确定性的跨模块核对零 token、可门禁，
+    属「先摆事实」；模型层复核（若开启）跟在后面作辅助意见。
+    """
+    if not html:
+        return
+    set_self_review_block(html + (get_self_review_block() or ""))
 
 
 def _has_any_output(module_outputs: dict[str, str | None]) -> bool:
@@ -132,6 +213,24 @@ def run_self_review(
         logger.warning("生成后自检未产出有效内容（不影响主内容）")
         return False
 
+    content = localize_for_display(content)
+    unverified = _unverified_percentages(
+        content,
+        _review_corpus(
+            module_outputs,
+            holdings_details,
+            penetrated_assets,
+            (
+                purchase_constraint_block,
+                holding_change_block,
+                event_impact_block,
+                schedule_replay_block,
+            ),
+        ),
+    )
+    if unverified:
+        logger.warning("[self_review] 自检引用了语料中查不到的百分比：%s", ", ".join(unverified))
+        content = f"{content}\n<p>{_UNVERIFIED_PCT_NOTE.format(items='、'.join(unverified[:5]))}</p>"
     set_self_review_block(ensure_non_guarantee_note(content))
     return True
 
@@ -151,6 +250,9 @@ __all__ = [
     "SELF_REVIEW_MODULE_KEY",
     "ensure_non_guarantee_note",
     "get_self_review_block",
+    "localize_for_display",
+    "module_dual_form",
+    "prepend_review_block",
     "reset_self_review",
     "run_self_review",
     "set_self_review_block",

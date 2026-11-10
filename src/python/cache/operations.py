@@ -46,7 +46,6 @@ _BASIC_REFRESHED_CACHE_KEYS: frozenset[str] = frozenset(
         "dividend_",
         "news_",
         "fund_manager_",
-        "fund_manager_snapshot",
         "extended_",
     }
 )
@@ -172,13 +171,16 @@ def update_basic_cache(holdings: list, reporter) -> CacheUpdateResult:
         CacheUpdateResult — TUI 外壳可据此输出格式化结果
     """
     from src.python.cache import clear_by_group
+    from src.python.core.registry import TRACKING_SNAPSHOT_KEYS
 
     result = CacheUpdateResult()
     result.holdings_count = len(holdings)
 
     # 先清旧缓存（匹配 TUI 语义）——只清本流程会回填的域，避免连坐作废
     # 财报/财务指标等要等到出报告才重取的域（见 _BASIC_REFRESHED_CACHE_KEYS）。
-    clear_by_group("refresh", only=_BASIC_REFRESHED_CACHE_KEYS)
+    # 跟踪基线快照（基金经理/风格/集中度）本流程**只清不重建**，清掉就会让下一次
+    # 报告退化成「首检」，故点名保留。
+    clear_by_group("refresh", only=_BASIC_REFRESHED_CACHE_KEYS, exclude_keys=TRACKING_SNAPSHOT_KEYS)
 
     from src.python.report.fund_performance import is_fund
 

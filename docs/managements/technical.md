@@ -1,5 +1,5 @@
 # 投资复盘助手 — 技术设计
-> 文档版本：0.17.7
+> 文档版本：0.17.8
 
 ## 目录
 
@@ -1313,7 +1313,7 @@ cache/
 | `clear(key)` | `(str) → None` | 同时删除 `.json` 和 `.json.gz` |
 | `get_ttl(data_type)` | `(str) → float` | TTL 分辨率（见下方流程图）；只由数据类型决定（无按 key 抖动、无兼容参数）——**读侧用**，含盘中覆盖 |
 | `get_cleanup_ttl(data_type, written_at=None)` | `(str, float\|None) → float` | 清理侧 TTL：盘中一律按静态 TTL（不拿 30s 读侧口径删文件）；**盘后**对盘中敏感类型额外回收**盘中写入**的快照（看写入时刻是否在交易时段，返回 0），收盘后写入的当日收盘值保留 |
-| `clear_by_group(group, only=None)` | `(str, Iterable[str]\|None) → dict[str, int]` | 按 preload/refresh 分组清除；`only` 传缓存键前缀/精确键名集合时**只清这些域所属的模块**（用于「刷新基础缓存」这类只回填部分域的流程，避免连坐作废财报/财务指标等下次出报告才重取的域） |
+| `clear_by_group(group, only=None, exclude_keys=())` | `(str, Iterable[str]\|None, Iterable[str]) → dict[str, int]` | 按 preload/refresh 分组清除；`only` 传缓存键前缀/精确键名集合时**只清这些域所属的模块**（用于「刷新基础缓存」这类只回填部分域的流程，避免连坐作废财报/财务指标等下次出报告才重取的域）；`exclude_keys` 点名保留的逻辑键（前缀是粗粒度选择器，同前缀下夹带**不属于本域语义**的键——如落在 `fund_manager_` 前缀里的跟踪基线 `fund_manager_snapshot`，清掉会让下一次报告退化成「首检」） |
 | `cleanup_expired()` | `() → int` | 扫描全量缓存，删除超龄项（逐文件明细只进 DEBUG，INFO 留汇总行 + 释放字节；age/TTL 按量级自适应单位——盘中 30s 的 price TTL 不再印成 `ttl=0.0h`；**无 `_ts` 包封的文件跳过 TTL 判定**，见下） |
 
 #### TTL 分辨率流程
@@ -2000,6 +2000,8 @@ annualized_vol = std(daily_returns, ddof=1) × √252
 | 过期缓存降级 | 全链路失败时降级 7 天内过期缓存 | 全链路失败时返回空列表 `[]`（显示占位文本） |
 | 数据修正感知 | 无感知 | 重叠检测→自动全量刷新（应对除权除息） |
 
+缓存键由 `chain_incremental.history_cache_key()` **唯一构造**（`{chain_name}_{code}`，如 `history_stock_600519`；`index.py` 的窗口缩水自愈与 `clear_incremental_cache` 均走同一构造器）。键名必须落在注册表 `history_stock_` / `history_index_` / `history_fund_otc_` 前缀内——前缀是清理器判定 TTL 的唯一依据，键名多拼一层（如 `history_history_*`）就会落进 default 日档被每天删掉，K 线文件与 `_correction_streak` 计数随之失效（后者的「连续检出→跳过全量刷新」冷却再也累计不到阈值）。该契约由 `src/test/unit/cache/test_cache_key_registry_contract.py` 守卫。
+
 #### 基准指数对比
 
 基准指数历史走势的并行获取与归一化对齐，在 5 步算法链基础上叠加显示。
@@ -2100,7 +2102,7 @@ prune()：两阶段自动清理
 天天基金 fundf10 基金经理列表 HTML 解析
     │ 获取当前经理姓名 + 任职起始日
     ▼
-fund_manager_snapshot 快照（精确键名，每日更新）
+fund_manager_snapshot 快照（精确键名，跨报告基线，近永久保留）
     │ 与历史快照比对
     ▼
 窗口期计算（任职起始日距今天数）：
@@ -2112,7 +2114,7 @@ fund_manager_snapshot 快照（精确键名，每日更新）
 ```
 
 - 每个基金独立判断，互不干扰
-- 快照使用精确键名（`fund_manager_snapshot`），无指纹后缀，每日 TTL 过期自动刷新
+- 快照使用精确键名（`fund_manager_snapshot`），无指纹后缀；作为**跨报告对比基线**按近永久窗口（`CACHE_NEAR_PERMANENT`，1 年）保留——不随上报域的 24h 档被清理器回收（报告生成入口每次先跑自动清理，按日档裁会让相隔一天的两次报告之间基线消失、报告永远显示「首次运行」），也不被「刷新基础缓存」清除（该流程只清不重建快照）
 
 #### 持仓结构与集中度
 
@@ -2157,7 +2159,7 @@ Excel 热力图着色：
 
 - 环比变化箭头：↑/↓ 标识方向
 - **环比以报告期推进为前提**：快照增记 `period`（基金持仓报告期）。本次报告期与上期相同时，两次读的是同一份报告，环比恒为 0——报 0 会被读成「持仓结构没变化」，实为「没有新数据可比」，故改标「无对比意义」并注明原因，快照条目**原样沿用**（含 `check_date`），不刷新成一次新观察；报告期推进时照常对比。旧快照无 `period` 字段时维持原对比行为。页签含「报告期」列，陈旧者带「（陈旧）」后缀（保留数据 + 标注，区别于重合度矩阵的剔除口径）。
-- 快照使用精确键名（`fund_concentration_snapshot`），月级 TTL
+- 快照使用精确键名（`fund_concentration_snapshot`），近永久 TTL（`CACHE_NEAR_PERMANENT`，跨报告基线，不随 `fund_concentration` 域 TTL 清理）
 
 #### 风格与因子分析（一章四区块：风格表 + 因子回归 + 行业 Beta + 因子目录）
 
@@ -2186,7 +2188,7 @@ Excel 热力图着色：
 **性能优化**：
 - 会话级缓存委托 DataSourceRegistry session_cache（domain="extended"），同一股票仅首次 HTTP
 - Tencent 二级降级基于 registry 熔断器（provider="tencent_style"），避免网络不可达时逐只等待超时
-- 独立快照 `fund_style_snapshot` 精确键名，月级 TTL，不受菜单缓存命令影响
+- 独立快照 `fund_style_snapshot` 精确键名，近永久 TTL（`CACHE_NEAR_PERMANENT`，跨报告基线），不受菜单缓存命令与自动清理影响
 
 ##### 区块二：风格因子回归
 
@@ -3109,7 +3111,7 @@ API 层         api.py        Provider 路由 + Multi-Provider Chain 遍历
                failure_reasons.py   模块失败原因常量（LLM_MODULE_FAILURE）
                markdown.py          Markdown→HTML 转换
                circuit_breaker.py   LLM API 熔断器
-               fact_checker/        LLM 输出伪代码/幻觉过滤（子包 9 模块，__init__ 重导出 4 公开函数）
+               fact_checker/        LLM 输出伪代码/幻觉过滤（子包 11 模块，__init__ 重导出 11 个公开函数）
                _hallucination_filter.py  虚构品种代码过滤（行内句段粒度删除）
                fallback.py          全失败降级占位模板
 ```
@@ -3312,7 +3314,7 @@ class ComputModuleDef:
 | `analytics_metrics` | 量化指标计算 | ✅ | 夏普比率、卡玛比率、HHI 集中度、组合 Beta、持仓胜率、换手率、波动率、最大回撤 |
 | `analytics_liquidity` | 流动性分析 | ✅ | 场内/场外比例、停牌风险、基金封闭期分析 |
 | `analytics_fx_exposure` | 外汇敞口分析 | ✅ | A股/港股/美股 国别分布与外汇风险敞口判断 |
-| `analytics_fact_checker` | 事实锚定校验器 | ✅ | LLM 输出的事实校验：数值一致性、品种存在性、排名正确性（纯算法层） |
+| `analytics_fact_checker` | 事实锚定校验器 | ✅ | LLM 输出的事实校验：数值一致性、品种存在性、排名正确性、跨模块收益率口径冲突（同一实体在不同模块被赋予不同收益率）；纯算法层、零 LLM 调用 |
 | `analytics_scenario` | 情景分析 | ✅ | 市场涨跌情景模拟、3 情景表、置信区间传播 |
 | `analytics_alignment` | 组合校准分析 | ✅ | 费率估算/现金剥离/TWR 计算 |
 | `analytics_inferrer` | 用户画像推断 | ⏳ | 持仓结构→风险偏好推断 |
@@ -3470,7 +3472,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `depth_profile` | 报告深度档位表与解析（brief/standard/deep：只收窄模块集合与新闻采集规模，缺省档与既有行为逐字节一致） | LLM 智能分析 | 内容生成 | `config.json → llm_report_depth` |
 | `force_scope` | 模块级强刷范围（可强刷键清单 FORCEABLE_LLM_MODULES / resolve_force_scope 粒度优先归一与未知键校验 / is_module_forced；全局 force 与模块子集合并为模块键集合，强刷不改缓存键构造） | LLM 智能分析 | 内容生成 | 无（CLI `--llm-module` / TUI 多选 / Web 勾选，命令行一次性参数） |
 | `llm_providers.priority` | LLM 多链线路优先级（降级顺序三渠道调序：共享编辑层 reorder 动作归一化写盘，CLI `--llm-provider-order` / TUI [M] 面板 / Web 配置面 ▲▼） | LLM 智能分析 | 内容生成 | `llm_providers.json → providers[].priority` |
-| `self_review` | 生成后自检（模型层复核各模块产出与数据是否自洽；分层于确定性事实校验之上，出厂默认开） | LLM 智能分析 | 内容生成 | `llm_settings.json → enabled_llm.self_review` |
+| `self_review` | 生成后自检（模型层复核各模块产出与数据是否自洽；分层于确定性事实校验之上，出厂默认关——单份报告输入最大的一遍，批量评估走离线抽样。上屏两条硬保证：模块一律以中文显示名出现（残留内部键由代码兜底替换）、自检引用的百分比须在本次语料中逐字可定位，否则追加上「无法核实」注记） | LLM 智能分析 | 内容生成 | `llm_settings.json → enabled_llm.self_review` |
 | `quarter_walk_anchor` | 季报回溯窗口的时间锚点上下文（记录-回放时固定为 cassette 录制时点，去时间依赖而保留请求形状漂移信号） | 数据源 | 数据获取 | 无 |
 | `apply_compliance_guardrails` | 合规声明集中注入（在 system prompt 尾部幂等叠加「仅供复盘参考、不构成投资建议」，窄判定角色可追加专属约束） | LLM 智能分析 | 内容生成 | 无 |
 | `cost_forecast` | 事前费用预估与日预算（计划参与模块×模型单价区间预估：历史实际费用优先、静态包络兜底、无法定价降级不阻塞；重新生成范围感知——`force_llm`/`force_modules` 与创建运行同源 `resolve_force_scope` 归一，范围内模块按静态单价口径、范围外维持历史口径，摘要行拆分显示；日预算超限交互询问降级/中止、非交互硬闸——TUI/CLI/Web 三渠道同源数据面） | LLM 智能分析 | 内容生成 | `llm_settings.json → daily_cost_limit` |
@@ -4000,7 +4002,7 @@ web/ (Web 服务层，薄入口)
 
 **两层模型**：① 默认值唯一来源是 `core/data_registry.py` 的模块声明（`DataModuleDef.cache_ttl`）；② `core/registry.py` 的精确键表用于**同前缀异构寿命键**（陈旧回退基准、负缓存、探测退避），精确键优先于前缀默认值。新增缓存键必须先在注册表声明 TTL，禁止在调用点写裸秒数。
 
-**键形态**：`{逻辑键}_{键版本}.json`（超阈值自动 gzip）。键版本号变更即整体作废旧缓存；清理按逻辑键（剥任意 `_v{N}` 戳）查 TTL，故旧戳文件也按自身 TTL 判龄。
+**键形态**：`{逻辑键}_{键版本}.json`（超阈值自动 gzip）。键版本号变更即整体作废旧缓存；清理按逻辑键（只剥**当前**版本戳）查 TTL，旧戳文件按前缀默认 TTL 判龄后被清理（不为其保留还原分支）。
 
 **盘中特殊**：交易时段内价格/指数类走短 TTL，收盘后回落日级 TTL；收市后只读缓存（CACHE_ONLY）避免取到收盘价当实时价。
 

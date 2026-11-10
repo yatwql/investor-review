@@ -10,6 +10,9 @@
   --module MODULE     LLM 模块名: expert_review（默认）, global_macro, health_check, penetration_deep
   --dataset N[,N...]  仅测试指定数据集（序号从 1 开始，默认全部）
   --dry-run           不调用 LLM，只构建 prompt 并输出到 tmp 目录
+  --self-review       额外跑一次生成后自检抽样，产物（模块名双写）追加到报告附录
+  --from-report HTML  重放一份既有报告：零 LLM 调用，输出确定性核对 + 覆盖率，不采样
+  --dump-skipped MOD  与 --from-report 同用：导出被跳过的声称抽样（模块键或 all）
   --force             跳过缓存，强制重新生成 LLM 输出
   --output FILE       报告输出路径（默认 docs/tmp/hallucination-report.md）
 
@@ -39,8 +42,12 @@ from _eval_halluc_sampler import (  # noqa: E402
     _compute_categories,
     _compute_portfolio_values,
     _generate_report,
+    _build_self_review_dry_run_prompt,
+    _generate_self_review_section,
     _load_datasets,
     _run_fact_check,
+    _run_self_review_sample,
+    run_from_report,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
@@ -54,6 +61,23 @@ def main():
     )
     parser.add_argument("--dataset", type=str, default=None, help="仅测试指定数据集，逗号分隔（如 1,3,5）")
     parser.add_argument("--dry-run", action="store_true", help="不调用 LLM，只构建 prompt 验证结构")
+    parser.add_argument(
+        "--from-report",
+        metavar="HTML",
+        default=None,
+        help="重放一份既有报告：零 LLM 调用，输出确定性核对结果与覆盖率（不采样、不花钱）",
+    )
+    parser.add_argument(
+        "--dump-skipped",
+        metavar="MODULE",
+        default=None,
+        help="与 --from-report 同用：导出被跳过的百分比声称抽样（模块键或 all），供人工判定跳过是否合理",
+    )
+    parser.add_argument(
+        "--self-review",
+        action="store_true",
+        help="额外跑一次生成后自检抽样（模型层复核），产物追加到报告附录（模块名双写）",
+    )
     parser.add_argument("--force", action="store_true", help="跳过缓存强制重新生成")
     parser.add_argument(
         "--output", type=str, default=None, help="报告输出路径（默认 docs/tmp/hallucination-report.md）"
@@ -78,6 +102,10 @@ def main():
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
     except OSError as exc:
         raise SystemExit(f"[ERR] 无法创建输出目录: {exc}") from exc
+
+    # ── 0. 重放既有报告（零 LLM 调用）：确定性核对 + 覆盖率，直接返回 ──
+    if args.from_report:
+        raise SystemExit(run_from_report(args.from_report, output_path, dump_skipped=args.dump_skipped))
 
     # ── 1. 加载数据集 ──
     logger.info("=" * 60)
@@ -105,6 +133,7 @@ def main():
 
     # ── 2. 逐个数据集执行 ──
     all_results: list[dict] = []
+    self_review_samples: list[dict] = []
 
     for idx, ds in enumerate(datasets, 1):
         name = ds["name"]
@@ -160,6 +189,28 @@ def main():
             )
             continue
 
+        # ── 2b. 事实校验（dry-run 不做：此时「LLM 输出」其实是提示词自身，
+        #        拿它当正文校验只会产出一份无意义的告警率）──
+        if dry_run:
+            all_results.append(
+                {
+                    "dataset": ds,
+                    "llm_output": llm_output,
+                    "usage": usage,
+                    "fact_check": {
+                        "issues": {"numerical": [], "symbol": [], "rank": [], "symbol_suggestion": []},
+                        "total_checks": 0,
+                        "num_checked": 0,
+                        "sym_checked": 0,
+                        "rank_checked": 0,
+                        "sym_suggestion_count": 0,
+                        "hallucination_rate": 0.0,
+                    },
+                    "elapsed": elapsed,
+                }
+            )
+            continue
+
         # ── 2b. 事实校验 ──
         module_label: str = {
             "expert_review": "智囊团深度复盘",
@@ -200,6 +251,26 @@ def main():
             }
         )
 
+        # ── 2c. 自检抽样（可选）：对本次采样到的产出跑一次模型层复核 ──
+        if args.self_review:
+            if dry_run:
+                # dry-run 只导出提示词（零花费）：验证双写模块名与摘要注入是否到位
+                prompt_lines.append("---")
+                prompt_lines.append(f"## 自检抽样 Prompt（数据集 {idx}: {name}）")
+                prompt_lines.append("")
+                prompt_lines.append("```markdown")
+                prompt_lines.append(_build_self_review_dry_run_prompt({module_name: llm_output}, holdings, None))
+                prompt_lines.append("```")
+                prompt_lines.append("")
+                self_review_samples.append({"dataset": name, "content": None, "error": "dry-run（未调用 LLM）"})
+            else:
+                self_review_samples.append(
+                    {
+                        "dataset": name,
+                        "content": _run_self_review_sample({module_name: llm_output}, holdings, None),
+                    }
+                )
+
     # ── Dry-Run 保存 Prompt ──
     if dry_run:
         try:
@@ -211,6 +282,8 @@ def main():
 
     # ── 3. 生成报告 ──
     report = _generate_report(module_name, all_results, dry_run=dry_run)
+    if self_review_samples:
+        report += _generate_self_review_section(self_review_samples)
 
     try:
         with open(output_path, "w", encoding="utf-8") as f:

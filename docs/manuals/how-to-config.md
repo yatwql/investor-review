@@ -276,7 +276,7 @@
 | `llm_global_macro` | `llm_global_macro_{fingerprint}.json` | 24h | A股/美股指数 + 持仓汇总 | 全球政经局势 |
 | `llm_health_check` | `llm_health_check_{fingerprint}.json` | 4h | 持仓明细（排除行情波动） | 持仓体检报告 |
 | `llm_penetration_deep` | `llm_penetration_deep_{fingerprint}.json` | 4h | 持仓明细（排除行情波动） | 穿透深度分析 |
-| `llm_self_review` | `llm_self_review_{fingerprint}.json` | 24h | 四个分析模块的产出文本摘要 + 持仓/穿透摘要（**内容寻址**：产出不变即命中） | 生成后自检（⚗ 默认开） |
+| `llm_self_review` | `llm_self_review_{fingerprint}.json` | 24h | 四个分析模块的产出文本摘要 + 持仓/穿透摘要（**内容寻址**：产出不变即命中） | 生成后自检（⚗ 实验能力，默认关） |
 | `llm_holding_change` | `llm_holding_change_{fingerprint}.json` | 24h | 变动事实块 + 信号对账块 + 持仓摘要 + 申购限购约束块（**内容寻址**：进提示词必进指纹） | 持仓变动复盘归因（章本体 `holding_change_review` 默认关，开启后归因默认开） |
 | `llm_debate_pro` | `llm_debate_pro_{fingerprint}.json` | 24h | 复用 expert_review 持仓指纹（排除行情波动） | 辩论白脸（实验功能） |
 | `llm_debate_con` | `llm_debate_con_{fingerprint}.json` | 24h | 复用 expert_review 持仓指纹（排除行情波动） | 辩论黑脸（实验功能） |
@@ -286,9 +286,9 @@
 
 | 键名 | 文件名模式 | 默认 TTL | 指纹来源 | 说明 |
 |------|-----------|:--------:|----------|------|
-| `fund_manager` | `fund_manager_{code}.json` + `fund_manager_snapshot.json` | 24h | — | 基金经理数据 + 快照（refresh 组） |
-| `fund_concentration` | `fund_concentration_snapshot.json` | 30 天 | — | 集中度历史快照（精确键名，无分组） |
-| `fund_style_snapshot` | `fund_style_snapshot.json` | 30 天 | — | 风格快照（精确键名，无分组） |
+| `fund_manager` | `fund_manager_{code}.json` + `fund_manager_snapshot.json` | 24h（快照 1 年） | 跟踪基线快照跨报告保留，不被清理/刷新回收 | 基金经理数据 + 快照（refresh 组） |
+| `fund_concentration` | `fund_concentration_snapshot.json` | 1 年 | — | 集中度历史快照（精确键名，无分组；跨报告基线） |
+| `fund_style_snapshot` | `fund_style_snapshot.json` | 1 年 | — | 风格快照（精确键名，无分组；跨报告基线） |
 | `extended` | `extended_{code}.json` | 24h | — | 基金风格扩展数据（市值/PE），refresh 组 |
 
 ##### 系统类
@@ -296,7 +296,7 @@
 | 键名 | 文件名模式 | 默认 TTL | 指纹来源 | 说明 |
 |------|-----------|:--------:|----------|------|
 | `tracking` | `holdings_tracking.json` | 30 天 | — | 持仓跟踪数据（精确键名，无指纹） |
-| `calendar` | `trading_calendar.json` | 14 天 | — | A 股交易日历（精确键名，无指纹） |
+| `calendar` | `trading_calendar.json` / `market_hours.json` | 14 天 | — | A 股交易日历 + 官方开闭市探测（精确键名，无指纹） |
 | `bond_yield` | `bond_yield_rf` | 24h | — | 无风险利率（国债收益率；精确键名，无指纹） |
 | `datasink_probe_miss` | `datasink_probe_miss_{hash}.json` | 12h | — | 财报章节 404 探测负缓存（只记**确定性**缺失；调大=省请求但恢复更慢） |
 | `report_symbol_miss` | `report_symbol_miss_{symbol}.json` | 6h | — | 标的正文缺失负缓存（章节阶 + 备源均无正文） |
