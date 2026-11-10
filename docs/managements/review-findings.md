@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.8-dev
-> **编号源**：`rf-next = 1111`（新增问题提出后更新为 +1；已用最大 rf-1110，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1112`（新增问题提出后更新为 +1；已用最大 rf-1111，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -48,7 +48,7 @@
 |------|----------------|
 | `src/test/unit/scripts/test_release_tool_gate.py` 1147 行（测试登记线 900 / 红线 1200） | 按域再拆：`refresh` 编排一组、`publish` 一组独立成文件；拆分前先确认不放宽断言 |
 | `src/test/conftest.py` 1185 行（测试登记线 900） | fixture 族按域下沉（行情/LLM/网络/持久化各一模块），conftest 只留 autouse 装配与 marker 注册 |
-| `src/python/llm/generators_orchestrator.py` 843 行（主程序登记线 700） | 生成编排与共享钩子按模块族再分；预检键/指纹段可下沉 `generators_orchestrator_cache.py` |
+| `src/python/llm/generators_orchestrator.py` 863 行（主程序登记线 700） | 生成编排与共享钩子按模块族再分；预检键/指纹段可下沉 `generators_orchestrator_cache.py` |
 | `src/python/report/decision_basis.py` 962 行（主程序登记线 700，红线 1000） | 六段块装配（信号/可信度/风险预算/纪律/结算+按视界表现/约束）仍在单模块；拆分方向：结算批表与按视界表现聚合（`build_settlement_summary`＋`build_performance`＋`_mean`/`_tone_*` 色彩助手）可整体下沉 `decision_basis_settlement.py`（只读账本、无跨段依赖，预计 −180 行）；信号清单与区分度登记（`_build_signal_rows`＋`BACKTEST_CONCLUSIONS`）可再下沉一簇 |
 | `src/python/llm/skeleton.py` 847 行（主程序登记线 700） | 模板数据与渲染逻辑可下沉 `llm/skeleton_*`（骨架模板 / 占位渲染 / 缓存归因 / 回写四簇并存） |
 | `src/python/cli/_handlers.py` 856 行（主程序登记线 700） | 命令处理器按渠道分文件（generate/config/data 三簇），保持入口薄壳 |
@@ -66,6 +66,7 @@
 | # | 问题 | 修复 |
 | --- | --- | --- |
 | rf-1107 | 基金经理变更监控常显「首次运行」：跟踪基线快照被按上报域 24h TTL 的清理器删除（报告生成入口每次先自动清理），且「刷新基础缓存」只清不重建该键 | 快照键登记近永久精确键 TTL（`CACHE_NEAR_PERMANENT`）+ `clear_by_group` 新增 `exclude_keys` 供刷新流程点名保留；补「隔 48h 二次报告仍非首检」等回归用例 |
+| rf-1111 | 生成后自检定位不清：作为默认开启项，它是单份报告输入最大的一遍 LLM 调用，产物只是尾部清单，且会把模块里的错值当事实转述（017730 亏损 -8.5% vs 摘要 -5.06%）；上屏仍透传内部模块键，离线也没法被程序解析 | 降级为实验能力（默认关）+ 离线抽样 `--self-review`；提示词与产物改「中文名（内部键）」双写（上屏剥离内部键、离线保留）；把可判定的跨模块收益率冲突做成确定性检查器（零 token）并置于复核区块最前 |
 | rf-1110 | 生成后自检直接透传内部模块键名（`global_macro`/`penetration_deep`），上屏不可读；自检引用模块里的错值（017730 亏 -8.5%，摘要真值 -5.06%）时无任何核对，读者会把模型复核当结论 | 提示词按中文模块名投喂 + 禁止输出内部键 + 摘要为数值真值来源；输出侧兜底替换残留键名；引用百分比做语料核对，未定位追加「无法核实」注记 |
 | rf-1109 | 近 40h 实施遗留：机器 IP 探测原语放在 `core/logger.py`（与 `core/system_info.py` 声明的「机器信息单源」相悖），且 logger 内一段函数文档失去绑定成孤立字符串；`pytest_env` 四个插件探针各写一份 | 迁到 `core/system_info.py` 并更新全部消费方/测试 patch 点；删除孤立字符串；探针收敛为 `_has_plugin()` |
 | rf-1108 | 增量历史缓存键拼成 `history_history_{chain}_{code}`，未命中任何注册表前缀 → 按 default 日档 24h 清理：K 线文件每日全量重取，`_correction_streak` 计数每日重置导致「连续检出→跳过全量刷新」冷却永不触发；`market_hours` 未登记落 default；`{cache_key}_correction_flag` 只写不读 | 新增唯一键构造器 `history_cache_key()`（`{chain_name}_{code}`）并替换 `index.py`/`clear_incremental_cache` 的手工拼接；`market_hours` 登记入 `calendar` 精确键；删除死写；新增键形状 ↔ 注册表覆盖契约测试 |

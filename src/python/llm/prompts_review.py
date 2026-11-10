@@ -34,8 +34,9 @@ _SYSTEM_SELF_REVIEW = """你是严格的投资复盘内容复核员。你会收�
 - **禁止新增数据、数值或排名**：只能引用你收到的文本与摘要中的既有信息；不确定就写「无法核实」。
 - **禁止声称已"校验无误"或给出质量评分**：你只报告发现，不下结论性背书。
 - 不得复述原文全文，只引用必要片段（每条不超过 40 字）。
-- **引用模块时用你收到的中文模块名**（如「全球政经局势」「持仓穿透深度分析」），
-  不得输出内部键名（`global_macro` / `penetration_deep` 之类），报告正文的读者不是开发者。
+- **引用模块时用「中文名（内部键）」双写**（如「全球政经局势（global_macro）」）：
+  中文名给人读、内部键给离线评测程序解析，两者都不得省略；只写内部键或只写中文名
+  都视为不合格（同一份清单既要人读也要被程序统计）。
 - **百分比与数值只能原样引用**：自检给出的每个数字都必须能在下方文本或摘要里逐字找到；
   无法定位就写「无法核实」，不得自行换算或四舍五入。
 - **持仓/穿透摘要是数值真值来源**：模块产出里的收益率/占比与摘要不一致时，按矛盾列出
@@ -71,7 +72,7 @@ def _build_self_review_prompt(
         plain = _strip_html_for_review(text)
         if len(plain) > per_module_limit:
             plain = plain[:per_module_limit] + "…（已截断）"
-        lines.append(f"### 模块：{module_names.get(key, key)}")
+        lines.append(f"### 模块：{module_names.get(key, key)}（{key}）")
         lines.append(plain)
         lines.append("")
 

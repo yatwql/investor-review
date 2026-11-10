@@ -10,6 +10,7 @@
   --module MODULE     LLM 模块名: expert_review（默认）, global_macro, health_check, penetration_deep
   --dataset N[,N...]  仅测试指定数据集（序号从 1 开始，默认全部）
   --dry-run           不调用 LLM，只构建 prompt 并输出到 tmp 目录
+  --self-review       额外跑一次生成后自检抽样，产物（模块名双写）追加到报告附录
   --force             跳过缓存，强制重新生成 LLM 输出
   --output FILE       报告输出路径（默认 docs/tmp/hallucination-report.md）
 
@@ -39,8 +40,10 @@ from _eval_halluc_sampler import (  # noqa: E402
     _compute_categories,
     _compute_portfolio_values,
     _generate_report,
+    _generate_self_review_section,
     _load_datasets,
     _run_fact_check,
+    _run_self_review_sample,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
@@ -54,6 +57,11 @@ def main():
     )
     parser.add_argument("--dataset", type=str, default=None, help="仅测试指定数据集，逗号分隔（如 1,3,5）")
     parser.add_argument("--dry-run", action="store_true", help="不调用 LLM，只构建 prompt 验证结构")
+    parser.add_argument(
+        "--self-review",
+        action="store_true",
+        help="额外跑一次生成后自检抽样（模型层复核），产物追加到报告附录（模块名双写）",
+    )
     parser.add_argument("--force", action="store_true", help="跳过缓存强制重新生成")
     parser.add_argument(
         "--output", type=str, default=None, help="报告输出路径（默认 docs/tmp/hallucination-report.md）"
@@ -105,6 +113,7 @@ def main():
 
     # ── 2. 逐个数据集执行 ──
     all_results: list[dict] = []
+    self_review_samples: list[dict] = []
 
     for idx, ds in enumerate(datasets, 1):
         name = ds["name"]
@@ -200,6 +209,15 @@ def main():
             }
         )
 
+        # ── 2c. 自检抽样（可选）：对本次采样到的产出跑一次模型层复核 ──
+        if args.self_review and not dry_run:
+            self_review_samples.append(
+                {
+                    "dataset": name,
+                    "content": _run_self_review_sample({module_name: llm_output}, holdings, None),
+                }
+            )
+
     # ── Dry-Run 保存 Prompt ──
     if dry_run:
         try:
@@ -211,6 +229,8 @@ def main():
 
     # ── 3. 生成报告 ──
     report = _generate_report(module_name, all_results, dry_run=dry_run)
+    if self_review_samples:
+        report += _generate_self_review_section(self_review_samples)
 
     try:
         with open(output_path, "w", encoding="utf-8") as f:

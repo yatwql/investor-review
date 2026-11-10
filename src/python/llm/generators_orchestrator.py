@@ -814,6 +814,26 @@ def generate_all_llm(
         schedule_replay_block=schedule_replay_block,
     )
 
+    # ── 跨模块一致性核对（确定性，零 token）──────────────────────────────
+    # 单模块事实校验只回答「这段文字与本模块数据是否相符」，看不出模块之间互相打架
+    # （实测同一只基金一处 -8.5%、两处 -5.06%）。这类冲突是纯算术可判定的，放在
+    # 模型层自检之外做；检出时并入复核区块的**最前**（事实先于观点）。
+    from src.python.llm.fact_checker import build_cross_module_block, check_cross_module_claims
+    from src.python.llm.self_review import prepend_review_block
+
+    _cross_issues = check_cross_module_claims(
+        {
+            _module_labels.get("global_macro", "全球政经局势"): _review_text(gm_r) or "",
+            _module_labels.get("expert_review", "智囊团深度复盘"): _review_text(er_r) or "",
+            _module_labels.get("health_check", "持仓体检报告"): _review_text(hc_r) or "",
+            _module_labels.get("penetration_deep", "穿透深度分析"): _review_text(pd_r) or "",
+        },
+        holdings_details,
+    )
+    if _cross_issues:
+        prepend_review_block(build_cross_module_block(_cross_issues))
+        logger.info("[cross_module] 检出 %d 处跨模块收益率口径冲突", len(_cross_issues))
+
     # ── 持仓变动复盘归因：已在上面并入并行批（`_MODULE_FNS["holding_change"]`）──
     # 早先串行后置是因为它与自检同属「章内块」，但它只吃持仓变动契约、不依赖四模块
     # 产出，串行只是把 4~25s 白加到关键路径上。契约缺席（开关关闭/准入未过）时内部

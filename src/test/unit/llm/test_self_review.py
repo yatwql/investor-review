@@ -216,8 +216,8 @@ def test_prompt_builder_includes_module_texts_and_digests():
         per_module_limit=10,
     )
 
-    assert "全球政经局势" in prompt, "提示词按中文模块名投喂（不暴露内部键）"
-    assert "global_macro" not in prompt
+    assert "全球政经局势" in prompt, "提示词按中文模块名投喂"
+    assert "（global_macro）" in prompt, "同时保留内部键供离线评测解析"
     assert "智囊团正文" in prompt
     assert "已截断" in prompt, "超过 per_module_limit 的模块正文必须标注截断"
     assert "测试基金" in prompt and "000001" in prompt
@@ -334,10 +334,9 @@ def test_prompt_uses_display_names_and_forbids_internal_keys():
     from src.python.llm.prompts_review import _SYSTEM_SELF_REVIEW, _build_self_review_prompt
 
     prompt = _build_self_review_prompt({"global_macro": "<p>海外市场走弱</p>", "penetration_deep": "<p>穿透正文</p>"})
-    assert "### 模块：全球政经局势" in prompt
-    assert "### 模块：穿透深度分析" in prompt
-    assert "global_macro" not in prompt
-    assert "不得输出内部键名" in _SYSTEM_SELF_REVIEW
+    assert "### 模块：全球政经局势（global_macro）" in prompt, "双写：中文名给人读、键给程序解析"
+    assert "### 模块：穿透深度分析（penetration_deep）" in prompt
+    assert "双写" in _SYSTEM_SELF_REVIEW
 
 
 def test_residual_module_keys_are_localized(monkeypatch):
@@ -353,6 +352,20 @@ def test_residual_module_keys_are_localized(monkeypatch):
     assert block is not None
     assert "全球政经局势" in block and "穿透深度分析" in block
     assert "global_macro" not in block and "penetration_deep" not in block
+
+
+def test_dual_form_is_kept_for_offline_and_stripped_for_display():
+    """两条展示口径各取所需：离线产物保留双写（程序可解析），报告上屏只留中文名。"""
+    from src.python.llm.self_review import localize_for_display, module_dual_form
+
+    raw = "模块 global_macro 与 `penetration_deep` 结论互斥"
+    dual = module_dual_form(raw)
+    assert "全球政经局势（global_macro）" in dual
+    assert "穿透深度分析（penetration_deep）" in dual
+
+    display = localize_for_display(dual)
+    assert "全球政经局势" in display and "穿透深度分析" in display
+    assert "global_macro" not in display and "penetration_deep" not in display
 
 
 # ── 引用数值核对：语料里查不到的百分比不得当结论 ────────────────
@@ -385,3 +398,15 @@ def test_verified_percentage_is_not_flagged(monkeypatch):
 
     assert block is not None
     assert "无法核实" not in block
+
+
+# ── 出厂默认：实验能力默认关 ──────────────────────────────────
+
+
+def test_shipped_default_is_disabled():
+    """出厂默认关：单份报告里输入最大的一遍调用不该默认烧（确定性核对恒开兜底）。"""
+    from src.python.config._llm_settings_defaults import get_llm_setting_default
+
+    enabled = get_llm_setting_default("enabled_llm")
+    assert isinstance(enabled, dict)
+    assert enabled[SELF_REVIEW_MODULE_KEY] is False

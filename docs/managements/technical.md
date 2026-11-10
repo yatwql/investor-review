@@ -3314,7 +3314,7 @@ class ComputModuleDef:
 | `analytics_metrics` | 量化指标计算 | ✅ | 夏普比率、卡玛比率、HHI 集中度、组合 Beta、持仓胜率、换手率、波动率、最大回撤 |
 | `analytics_liquidity` | 流动性分析 | ✅ | 场内/场外比例、停牌风险、基金封闭期分析 |
 | `analytics_fx_exposure` | 外汇敞口分析 | ✅ | A股/港股/美股 国别分布与外汇风险敞口判断 |
-| `analytics_fact_checker` | 事实锚定校验器 | ✅ | LLM 输出的事实校验：数值一致性、品种存在性、排名正确性（纯算法层） |
+| `analytics_fact_checker` | 事实锚定校验器 | ✅ | LLM 输出的事实校验：数值一致性、品种存在性、排名正确性（纯算法层） |；跨模块收益率口径冲突（同一实体在不同模块被赋予不同收益率，确定性判定） |
 | `analytics_scenario` | 情景分析 | ✅ | 市场涨跌情景模拟、3 情景表、置信区间传播 |
 | `analytics_alignment` | 组合校准分析 | ✅ | 费率估算/现金剥离/TWR 计算 |
 | `analytics_inferrer` | 用户画像推断 | ⏳ | 持仓结构→风险偏好推断 |
@@ -3472,7 +3472,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `depth_profile` | 报告深度档位表与解析（brief/standard/deep：只收窄模块集合与新闻采集规模，缺省档与既有行为逐字节一致） | LLM 智能分析 | 内容生成 | `config.json → llm_report_depth` |
 | `force_scope` | 模块级强刷范围（可强刷键清单 FORCEABLE_LLM_MODULES / resolve_force_scope 粒度优先归一与未知键校验 / is_module_forced；全局 force 与模块子集合并为模块键集合，强刷不改缓存键构造） | LLM 智能分析 | 内容生成 | 无（CLI `--llm-module` / TUI 多选 / Web 勾选，命令行一次性参数） |
 | `llm_providers.priority` | LLM 多链线路优先级（降级顺序三渠道调序：共享编辑层 reorder 动作归一化写盘，CLI `--llm-provider-order` / TUI [M] 面板 / Web 配置面 ▲▼） | LLM 智能分析 | 内容生成 | `llm_providers.json → providers[].priority` |
-| `self_review` | 生成后自检（模型层复核各模块产出与数据是否自洽；分层于确定性事实校验之上，出厂默认开。上屏两条硬保证：模块一律以中文显示名出现（残留内部键由代码兜底替换）、自检引用的百分比须在本次语料中逐字可定位，否则追加上「无法核实」注记） | LLM 智能分析 | 内容生成 | `llm_settings.json → enabled_llm.self_review` |
+| `self_review` | 生成后自检（模型层复核各模块产出与数据是否自洽；分层于确定性事实校验之上，出厂默认关——单份报告输入最大的一遍，批量评估走离线抽样。上屏两条硬保证：模块一律以中文显示名出现（残留内部键由代码兜底替换）、自检引用的百分比须在本次语料中逐字可定位，否则追加上「无法核实」注记） | LLM 智能分析 | 内容生成 | `llm_settings.json → enabled_llm.self_review` |
 | `quarter_walk_anchor` | 季报回溯窗口的时间锚点上下文（记录-回放时固定为 cassette 录制时点，去时间依赖而保留请求形状漂移信号） | 数据源 | 数据获取 | 无 |
 | `apply_compliance_guardrails` | 合规声明集中注入（在 system prompt 尾部幂等叠加「仅供复盘参考、不构成投资建议」，窄判定角色可追加专属约束） | LLM 智能分析 | 内容生成 | 无 |
 | `cost_forecast` | 事前费用预估与日预算（计划参与模块×模型单价区间预估：历史实际费用优先、静态包络兜底、无法定价降级不阻塞；重新生成范围感知——`force_llm`/`force_modules` 与创建运行同源 `resolve_force_scope` 归一，范围内模块按静态单价口径、范围外维持历史口径，摘要行拆分显示；日预算超限交互询问降级/中止、非交互硬闸——TUI/CLI/Web 三渠道同源数据面） | LLM 智能分析 | 内容生成 | `llm_settings.json → daily_cost_limit` |

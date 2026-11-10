@@ -36,7 +36,9 @@ _FLAT_DEFAULTS: dict[str, Any] = {
         "health_check": True,
         "penetration_deep": True,
         "news_correlation": False,
-        "self_review": True,
+        # 生成后自检：模型层复核属实验能力，出厂默认关（每次报告额外一次大输入调用，
+        # 且与确定性事实校验分层——后者恒开、零 token、可门禁）
+        "self_review": False,
         # 持仓变动复盘归因：章本体由 feature holding_change_review 控制（默认关），
         # 此开关仅在章本体开启后决定是否额外调用一次 LLM 做归因（默认开）
         "holding_change": True,
