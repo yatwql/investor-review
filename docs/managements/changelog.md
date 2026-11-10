@@ -35,6 +35,7 @@
 - 复核区块不再依赖 LLM 开关：确定性核对段恒在，模型层自检（若开启）跟在事实之后
 
 ### 重构
+- 旧缓存兼容分支移除（rf-1116）：`cache_key_from_file_name()` 只剥**当前**键版本戳，旧戳文件不再还原逻辑键（按前缀默认 TTL 判龄后清理）；换代残留本是一次性废弃物，读侧也读不到，不为它保留还原分支
 - 架构/设计契约复核（rf-1115）：跨模块核对区块改用报告既有 `data-status` / `data-status-warn` 组件承载状态观感（此前是自造的 `<p><strong><ul>` 标记，绕过 DESIGN.md「状态着色只由组件状态类承载」）；`probe-report-claims.py` 的运行时诊断由 `print` 改为 `logging`（日志统一约束），Markdown 产物仍走 stdout
 - 数值声称重放与批量体检共用单一实现（rf-1114）：`from_report.audit_report()` 承担章节解析、持仓解析与逐模块判定，`probe-report-claims.py` 只做批量聚合与渲染；比值边界词收敛为 `_RATIO_BOUNDARY_WORDS` 单源；移除无引用导出（`note_verified`）、薄包装（`_localize_module_keys`）与两处公开转发；测试去掉空表达式 import
 

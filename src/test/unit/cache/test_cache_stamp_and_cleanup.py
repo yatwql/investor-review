@@ -201,16 +201,12 @@ class TestCacheKeyFromFileName:
 
         assert cache_key_from_file_name(f"report_x_{_CACHE_KEY_VERSION}.json.gz") == "report_x"
 
-    def test_legacy_stamp_also_stripped(self):
-        """任意 `_v{N}` 戳都剥掉：旧戳文件虽读不到，但清理要还原出逻辑键。
-
-        只剥当前戳时，旧戳文件反推出的键带 `_v3` → 精确键 TTL 表命不中 → 退成
-        前缀默认 TTL，有效期内的负缓存/回退基准被提前删掉。
-        """
+    def test_legacy_stamp_not_stripped(self):
+        """只剥当前戳：非当前戳文件按前缀默认 TTL 判龄后清掉（读侧本就读不到）。"""
         from src.python.cache import cache_key_from_file_name
 
-        assert cache_key_from_file_name("price_600519_v3.json") == "price_600519"
-        assert cache_key_from_file_name("price_600519_v12.json.gz") == "price_600519"
+        assert cache_key_from_file_name("price_600519_v3.json") == "price_600519_v3"
+        assert cache_key_from_file_name("price_600519_v12.json.gz") == "price_600519_v12"
 
     def test_logical_key_without_stamp_unchanged(self):
         """无戳文件名原样返回（不误剥键名内部的 `_v` 片段）。"""
@@ -224,23 +220,16 @@ class TestCacheKeyFromFileName:
         assert cache_key_from_file_name("notes.txt") is None
 
 
-class TestLegacyStampExactKeyTTL:
-    """换代后残留的旧键版本戳文件同样按精确键 TTL 判定，不被前缀默认值误删。
+class TestNonCurrentStampFallsToPrefixTTL:
+    """非当前键版本戳文件按前缀默认 TTL 判龄清理（读侧本就读不到）。
 
-    回归背景：`cache_key_from_file_name` 原先只剥**当前**版本戳，旧戳文件反推出的
-    逻辑键仍带 `_v3` 后缀 → 精确键 TTL 表（负缓存 30min / 回退基准 3 天）命不中 →
-    退化成前缀默认 TTL（`sector_flow_` 900s），有效期内数据被提前清掉。
+    当前戳能剥掉并命中精确键 TTL（见 `TestPerTypeCleanupTTL` 里用 `_CACHE_KEY_VERSION`
+    构造的用例）；非当前戳文件读侧读不到，清理时按前缀默认 TTL 判龄即可。
     """
 
-    def test_legacy_stamp_negative_cache_survives_prefix_ttl(self, cache_env):
-        """20 分钟龄的旧戳负缓存（前缀 TTL 仅 15 分钟、自身 30 分钟）必须留下。"""
+    def test_non_current_stamp_uses_prefix_ttl(self, cache_env):
+        """非当前戳负缓存（前缀 TTL 15 分钟）20 分钟龄 → 按前缀判龄即删。"""
         _write(cache_env, "sector_flow_negative_v3.json", age_seconds=20 * 60)
-        assert _cleanup() == 0
-        assert (cache_env / "sector_flow_negative_v3.json").exists()
-
-    def test_legacy_stamp_negative_cache_expires_after_own_ttl(self, cache_env):
-        """超过自身 30 分钟 TTL 即删（不是被前缀 TTL 提前删，也不是永久滞留）。"""
-        _write(cache_env, "sector_flow_negative_v3.json", age_seconds=31 * 60)
         assert _cleanup() == 1
 
 
