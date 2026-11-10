@@ -54,6 +54,7 @@
 | `test-perf-report.py` | 评测 | 端到端报告生成管线性能基准（独立脚本，mock 外部数据源） |
 | `perf-history.py` | 运维 | 性能历史趋势查看（读取 perf_history.jsonl → 版本演进总表 + P95/P99 分位概览 + 离群/尾部归因 + 异常运行/同版本漂移 + 秒每品种归一化 + 并发预算段（档位/预算/峰值/缩容合计，标注跨档位不可直接比耗时）+ 时段聚合（耗时与费用合计/环比/缩容列）/机读输出（llm_cost、by_period 费用字段、CSV 增 budget/peak/clamps 三列）；实现拆在 `_perf_history/`——`stats.py` 统计原语 / `data.py` 派生 / `report.py` 渲染 / `cli.py` 入口，主入口只留 docstring 与 re-export） |
 | `probe.py` | 运维 | 探测统一入口（按 target 分发到 `_probes/` 子模块；新探针实现契约面登记即用） |
+| `probe-report-claims.py` | 运维观测 | 批量重放历史报告做确定性数值核对（覆盖率/告警/自动改写，零 LLM 调用、只读；不入门禁） |
 | `eval-factor-zoo.py` | 评测 | 因子动物园目录评测（非生产代码；五个来源族各抽 5 个因子，评测 A 字段可得率 / B 与既有信号族增量 / C 全量计算耗时占比三项指标，A/B/C 全过才转正立项；子命令 catalog / fields / signals / timing / verdict / all，产物只落 `docs/tmp/factor-zoo/`；实现拆在 `_eval_factor_zoo/`） |
 | `eval-decision-quality.py` | 评测 | 投资决策质量待验证项回测（决策视界命中率 / 因子单因子 IC / 估值两口径区分度；判据预注册于脚本常量，样本门槛 100、IC 绝对值拒绝线 0.05；子命令 horizon / factor-ic / valuation / all，产物落 `docs/tmp/decision-quality/`） |
 | `_assets/` | 内部 | 视觉资产实现包（`social_preview.py` 预览图绘制与栅格化 / `svg_check.py` 架构图渲染体检） |
@@ -1132,6 +1133,12 @@ sh .githooks/install-hooks.sh --off   # 停用
 `counters` 的 `warnings`/`errors` 由 `PerfCollector` 在首个阶段计时时挂上的只计数日志 handler 自动采集（`invest` logger 的 WARNING/ERROR），`save()` 时摘除——告警来源分散在 `reporter.add_error` 与各模块 `logger.warning`，集中采集避免逐点改造与新增链路漏登记。
 
 `llm` 上下文由 `llm/observation.py` 的运行观测汇聚器（`bind_llm_observation` / `current_llm_observation`）在调用链上归集：重试退避（`core/retry.py` 的 `on_retry` 回调）、端点节流等待（`llm/pacing.py` 的 `PacingGate`）、provider 命中与降级（`llm/api.py` 的 provider 链）、模块级缓存命中（`generators_orchestrator` 预检）、逐模块 model/tokens/费用（`llm/session.py` 单源）。未绑定汇聚器时（如单测直调 LLM 层）所有记录调用为空操作，行为零变化。
+
+**`probe-report-claims.py` — 报告数值声称体检（批量重放）**
+
+**设计逻辑**：生产报告里的收益率声称是否与持仓真值相符，单份看不出规律——本脚本扫 `reports/` 下最近 N 份报告，复用 `--from-report` 的解析与确定性校验（章节按 `id="sec-<key>"` 切分、持仓取自报告自身的明细表），逐份输出「百分比声称 / 已比对 / 告警 / 自动改写」并附告警明细。它的用途是**发现系统性偏差**：实测 10 份重放出 26 条告警里 20 条是检查器归因错位（仓位/净利同比/风险指标被当成持仓收益率），据此才补出精度护栏；只有 1 条是 LLM 真写错。只读、零 LLM 调用、不写业务状态。
+
+**使用逻辑**：`python scripts/probe-report-claims.py [--limit N] [--since DAYS] [--output FILE]`。退出码 0 正常（有告警也是 0——告警是内容线索不是脚本失败）、2 找不到可核对报告。已比对率低说明「多数声称被跳过」，样本里以权重/敞口/风险度为主属正常；要逐条判定跳过是否合理，用 `eval-llm-hallucination.py --from-report <html> --dump-skipped <模块|all>`。
 
 **`probe.py` — 探测统一入口（target 分发 registry）**
 

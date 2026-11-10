@@ -223,3 +223,16 @@ def run_from_report(
     )
     reset_numerical_coverage()
     return 0
+
+
+# ── 对外公开的解析入口（供 `probe-report-claims.py` 复用；不再让它 import 私有名）──
+
+
+def extract_sections(page: str) -> dict[str, str]:
+    """按 `id="sec-<key>"` 切出各章节正文。"""
+    return _extract_sections(page)
+
+
+def extract_holdings_details(sections: dict[str, str]) -> list[dict]:
+    """从「持仓明细」表解析 ``{name, code, market_value, cost, profit, profit_rate}``。"""
+    return _extract_holdings_details(sections)
