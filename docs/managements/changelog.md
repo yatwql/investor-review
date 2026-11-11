@@ -30,6 +30,7 @@
 - HTML 装配拆分第一批（rf-1128）：先补 6 条结构契约用例（装配顺序 / 哨兵归属（每个 `_render_*` 的产物只能落到自己的模板变量，封住元组解包串位）/ 后处理阶段名 / 匿名化时序 / 原子落盘 / 单区块异常），再把「资产内嵌 → 匿名化 → 落盘」收敛成 `HTML_POST_STAGES` 有序表（阶段名成为 perf 细分口径的单一来源），`_mask_report_text` / `_run_post_stages` 独立成函数；`write_html_report` 编排体 388 → 289 行。第二批（19 处区块装配外移 + 模板变量显式映射）待做
 - HTML 区块装配外移（rf-1128）：新增 `report/html_sections.py`——按**连续区段**分组的 `SECTION_BUILDERS` 表 + `HtmlAssembly` 上下文 + `SectionBindings`（NamedTuple，逐字段类型）+ `assemble_sections`；19 处 `_render_*` 调用与 Chart.js 数据集补齐一并迁入，`write_html_report` 编排体 289 → 265 行。行为零变化：6 条结构契约用例（含哨兵归属）与安全场景（匿名化产物无真名/真码）全过；顺带修正一处口径陷阱：装配上下文对 `details`/指数/新闻**保持 None 透传**（转 `[]`/`{}` 会让渲染器跳过物化）
 - HTML 装配拆分收口（rf-1128）：契约六条全部落地（顺序成表 / 产物具名 / 后处理阶段表 / 匿名化时序 / 原子落盘 / 单区块异常隔离），编排壳 388 → 265 行；形态目标按实测调整为「装配与后处理各自成表」——剩余约 110 行是模板参数的显式绑定，是「产物→模板变量」契约的可见面，压成 dict 只会多一层间接（偏离理由与遗留风险归属记入契约文档）
+- 清理一条死 patch（rf-1129）：`test_excel_generator.py` 仍 patch `excel_news_warning.get_report_sheet_name`（`create=True`），该模块从不使用此名——patch 一直是静默 no-op，删除；同轮 56h 审计无其他债（无跨文件同体函数 / 无死私有函数 / 无新增 TODO）
 
 （本次发布内容见下方归档索引）
 
