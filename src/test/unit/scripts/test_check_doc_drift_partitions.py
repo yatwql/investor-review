@@ -252,6 +252,22 @@ class TestManagementPartitions:
         findings = drift.audit_management_partitions(review_findings="", plan=plan, changelog=self._CHANGELOG_OK)
         assert any("plan-9" in f and "已完成项须移入归档" in f for f in findings)
 
+    def test_bold_form_completed_plan_in_todo(self, drift):
+        """粗体形态的已完成项滞留在未完成区 → 报 finding。
+
+        回归：四个已完成项（大型函数拆分四连项）以 `**plan-N …**：已完成` 粗体形式留在
+        「### 已完成（待发布归档）」里，标题正则全扫不到，跨一次发布未被搬入归档。
+        """
+        plan = "## 当前迭代待办\n\n### 已完成（待发布归档）\n\n**plan-9 某拆分**：已完成（函数体 300 → 80 行）\n\n## 归档\n"
+        findings = drift.audit_management_partitions(review_findings="", plan=plan, changelog=self._CHANGELOG_OK)
+        assert any("plan-9" in f and "粗体形态" in f for f in findings)
+
+    def test_bold_form_pending_note_is_not_completed(self, drift):
+        """粗体在办说明（不带「已完成」）不误报——防把进度句读成完成项。"""
+        plan = "## 当前迭代待办\n\n**plan-9 某拆分**：进行中（已拆出两个模块）\n\n## 归档\n"
+        findings = drift.audit_management_partitions(review_findings="", plan=plan, changelog=self._CHANGELOG_OK)
+        assert [f for f in findings if "粗体形态" in f] == []
+
     def test_archived_plan_still_in_todo(self, drift):
         """已归档项仍在未完成区 → 报 finding（分区互斥）。"""
         plan = "## 当前迭代待办\n\n#### 🔲 `plan-9` 待做\n\n## 归档\n"

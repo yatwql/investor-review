@@ -55,6 +55,11 @@ _PLAN_DONE_HEADING_ID = re.compile(r"^\s*#{2,4}\s*✅\s*`?(plan-\d+)", re.M)
 #: 在办小节通常不带 ✅/🔲 标记，只认带标记的集合会把在办项全判成孤儿。
 _PLAN_ANY_HEADING_ID = re.compile(r"^\s*#{2,4}\s*(?:🔲|✅)?\s*`?(plan-\d+)", re.M)
 
+#: 粗体形态的已完成条目（`**plan-N 标题**：已完成…`）——不是小节标题，标题正则扫不到：
+#: 实测四个已完成项（大型函数拆分四连项）以粗体形式溜进「### 已完成（待发布归档）」
+#: 并跨过一次发布未被搬入归档，而上述三条扫标题的规则全部静默通过（已完成项滞留）。
+_PLAN_BOLD_DONE_ID = re.compile(r"^\s*\*\*(plan-\d+)[^\n]*\*\*[：:]\s*已完成", re.M)
+
 
 _ARCHIVE_INDEX_PAIRS: tuple[tuple[Path, str], ...] = (
     (_MANAGEMENTS / "changelog.md", "archived_changelog."),
@@ -156,6 +161,13 @@ def audit_management_partitions(
     todo = _doc_section(plan, "## 当前迭代待办", "## 归档")
     for pid in _PLAN_DONE_HEADING_ID.findall(todo):
         findings.append(f"{rel(_PLAN_MD)}: 未完成区出现已完成项 `{pid}`（已完成项须移入归档）")
+    # 粗体形态：「### 已完成（待发布归档）」里的 `**plan-N …**：已完成` 不是标题，
+    # 只查标题会让这类条目长期滞留（宣称「待发布归档」却跨版本不发）。
+    for pid in _PLAN_BOLD_DONE_ID.findall(todo):
+        findings.append(
+            f"{rel(_PLAN_MD)}: 待办区出现粗体形态已完成项 `{pid}`"
+            "（`**plan-N …**：已完成` 须连同小节移入计划归档，不得以「待发布归档」滞留）"
+        )
     todo_ids = set(_PLAN_HEADING_ID.findall(todo))
     archived_plan_ids: set[str] = set()
     for text in archived_plans or []:
