@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 
+from src.python.llm.fact_checker._patterns import _PERCENT_PATTERN
 from src.python.llm.fact_checker._constants import (
     _BENCHMARK_RELATIVE_KEYWORDS,
     _CHANGE_RATE_KEYWORDS,
@@ -33,7 +34,8 @@ from src.python.llm.fact_checker._constants import (
 
 #: 「合计 = 分项之和」判定：括号内分项只取带百分号的数值（持仓代码等裸数字不参与），
 #: 容差 0.2 覆盖四舍五入（分项各留 1 位小数时合计误差 ≤0.1）。
-_BREAKDOWN_PART_PATTERN = re.compile(r"(\d+(?:\.\d+)?)\s*%")
+# 分项数值与百分比单源同名（`_PERCENT_PATTERN`，同样只需幅度）
+_BREAKDOWN_PART_PATTERN = _PERCENT_PATTERN
 _BREAKDOWN_SUM_TOLERANCE = 0.2
 
 

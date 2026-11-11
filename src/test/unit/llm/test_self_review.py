@@ -429,6 +429,21 @@ def test_fabricated_sum_still_flagged(monkeypatch):
     assert "33.90%" in block and "无法核实" in block
 
 
+def test_percentage_token_pattern_is_single_source():
+    """百分比 token 单源：自检引用核对、跨模块冲突判定共用 `_patterns` 的那一个模式。
+
+    各写一份时符号与空白容错容易出现不一致：跨模块判定把
+    `-5.06%` 认成冲突而自检核验认不出来（或反之），两个检查互相打脸。
+    """
+    from src.python.llm.fact_checker import _context, _cross_module, _patterns
+    from src.python.llm import self_review
+
+    assert self_review._PCT_RE is _patterns._SIGNED_PERCENT_PATTERN
+    assert _cross_module._PCT_RE is _patterns._SIGNED_PERCENT_PATTERN
+    # 分项「合计 = 各项之和」只需幅度，用无符号模式（语义不同，不是写法不同）
+    assert _context._BREAKDOWN_PART_PATTERN is _patterns._PERCENT_PATTERN
+
+
 def test_holdings_digest_carries_profit_rate():
     """持仓摘要须带收益率：否则自检拿不到真值口径，只能报「摘要未给无法核实」。"""
     from src.python.llm.prompts_review import _self_review_holdings_digest

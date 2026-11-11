@@ -20,6 +20,7 @@
 - 文档复核回写（rf-1118/rf-1119）：llm-technical §12.4 补「引用数值核对（逐字 + 1~3 项加减组合）」与摘要收益率维度；requirements R-LLM-12 同步该口径；developer-guide 增「持久化路径必须成套隔离（非 pytest 一次性 CLI + 按值绑定路径改模块属性 + 命名空间双保险）」；scripts-reference 补 `test-perf-report.py` 的状态隔离范围；reports-instruction 的修正明细格式改为语义说明 + 两位小数口径；另清 `test_generate_all_llm.py` 5 处以 `[]` 充 `dict` 形参的类型噪声
 - 基准跑日志隔离 + 巨潮探针区分负缓存（rf-1120）：`test-perf-report.py` 新增 `_isolate_log_writes()`（`INVEST_LOG_PATH` 落临时目录 + `INVEST_RUN_CONTEXT=perf`，导入任何 `src` 模块前生效），止住禁网跑把 1347 行告警写进真实 `logs/app.log`；`cninfo` 导出 `ORGID_MISS_CACHE_REASON_PREFIX`，健康探针把「负缓存命中」与「本轮真失败」分开报，不再让失败率虚高误导排查
 - 行业资金流向补健康探针（rf-1121）：此前 12 个探针不覆盖这个数据面（走 akshare 双通道 + 负缓存 + 陈旧回退，不进 Provider Chain），退化只能翻日志发现。新增 `probe_sector_flow_channels()` 逐通道直连（不读不写缓存、不返回陈旧回退），探针按全通/部分/全挂三态上报；探针总数 12 → 13
+- 百分比 token 单源 + 覆盖率复位口径纠偏（rf-1122）：`llm/` 下原有一份模式四处写法，跨模块冲突判定与自检引用核对各带一份，符号/空白容错改一处漏一处就互相打脸——现统一到 `_patterns._SIGNED_PERCENT_PATTERN`（命名组 sign/num）；`_coverage` 的复位 docstring 按实际（离线重放逐报告复位）改正，补一条单源结构断言
 
 （本次发布内容见下方归档索引）
 

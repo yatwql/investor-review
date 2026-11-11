@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import re
 
+from ._patterns import _SIGNED_PERCENT_PATTERN
 from ._utils import _strip_html
 
 #: 指标族关键词：只有这些语境下的百分比才算「同一口径」，避免拿收益率比仓位或涨跌幅
@@ -28,12 +29,13 @@ _WINDOW = 48
 #: 判定为冲突的最小差值（百分点）：小于它可能是不同取整精度，不算矛盾
 _TOLERANCE_PP = 0.5
 
-_PCT_RE = re.compile(r"([-+]?)\s*(\d+(?:\.\d+)?)\s*%")
+# 带符号百分比与自检引用核对共用同一模式（单源：`_patterns._SIGNED_PERCENT_PATTERN`）
+_PCT_RE = _SIGNED_PERCENT_PATTERN
 
 
 def _signed_pct(match: re.Match[str]) -> float:
-    value = float(match.group(2))
-    return -value if match.group(1) == "-" else value
+    value = float(match.group("num"))
+    return -value if match.group("sign") == "-" else value
 
 
 def _entity_mentions(text: str, holdings_details: list | None) -> list[tuple[str, str, int]]:

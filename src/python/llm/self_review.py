@@ -31,6 +31,8 @@ import logging
 import re
 import threading
 
+from src.python.llm.fact_checker._patterns import _SIGNED_PERCENT_PATTERN
+
 logger = logging.getLogger("invest")
 
 SELF_REVIEW_MODULE_KEY = "self_review"
@@ -72,7 +74,8 @@ def ensure_non_guarantee_note(html: str) -> str:
     return f"{html.rstrip()}\n<p>{NON_GUARANTEE_NOTE}</p>"
 
 
-_PCT_RE = re.compile(r"[-+]?\d+(?:\.\d+)?%")
+# 百分比 token 与跨模块核对共用同一模式（单源：`fact_checker._patterns`）
+_PCT_RE = _SIGNED_PERCENT_PATTERN
 
 _UNVERIFIED_PCT_NOTE = (
     "注：下列百分比未能在本次数据（模块产出与持仓/穿透摘要）中逐字定位，"
@@ -134,12 +137,18 @@ def _review_corpus(
     return "\n".join(parts)
 
 
+def _signed_value(match: re.Match[str]) -> float:
+    """百分比匹配 → 带符号数值（``-5.06%`` → ``-5.06``）。"""
+    value = float(match.group("num"))
+    return -value if match.group("sign") == "-" else value
+
+
 def _corpus_pct_values(corpus: str) -> list[float]:
     """语料中出现的百分比数值（去重后升序），供算术核验搜索用。"""
     values: set[float] = set()
     for match in _PCT_RE.finditer(corpus):
         try:
-            values.add(round(float(match.group(0).rstrip("%")), 2))
+            values.add(round(_signed_value(match), 2))
         except ValueError:  # 正则已限定数字形态，取不到只可能是异常输入
             continue
     return sorted(values)
@@ -190,8 +199,8 @@ def _unverified_percentages(text: str, corpus: str) -> list[str]:
     found: list[str] = []
     pool: list[float] | None = None
     for match in _PCT_RE.finditer(text):
-        raw = match.group(0)
-        digits = raw.rstrip("%").lstrip("+")
+        raw = match.group(0).replace(" ", "")
+        digits = f"{match.group('sign') or ''}{match.group('num')}"
         if digits in corpus:
             continue
         if pool is None:
