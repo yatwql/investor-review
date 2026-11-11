@@ -8,8 +8,9 @@
 
 ## [0.17.10-dev] - 开发中（未发布）
 
+### 修复
 
-（本次发布内容见下方归档索引）
+- **智囊团超时与实测生成时长对齐（rf-1130）**：`timeout_expert_review` 原为 120s，而实测生成时长 116 / 119 / 201s（`perf_history` 的 `llm.modules.expert_review.duration_seconds`）——`core.http_client` 的端到端墙钟到点即放弃请求，调用方随即原样重发，同一份内容付两次费并多等一整轮（实测一次 201.4s 中有 120s 是被丢弃那次的服务端生成）。现按 `max_tokens` 36000 / 实测速率 ≈168 tok/s（用满需 ≈215s）留余量，默认值改 240s：`config/_llm_settings_defaults.py`（事实位）、`llm/generators_singletons.py`（缺键兜底同值，不再回落旧值）、`data/config/llm_settings.json` 与实际生效值三处同步；`llm-technical.md` / `how-to-config-llm.md` 的模块参数表与取值范围同步，新增 `TestTimeoutCoversFullGeneration` 回归用例（断言满额输出所需时长落在 timeout 之内）。
 
 ## 归档
 

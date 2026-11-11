@@ -57,7 +57,11 @@ _FLAT_DEFAULTS: dict[str, Any] = {
     "model_expert_review": None,
     "temperature_expert_review": 0.3,
     "max_tokens_expert_review": 36000,
-    "timeout_expert_review": 120,
+    # 240s：max_tokens 36000 在实测生成速率（≈168 tok/s，见 perf_history 的
+    # expert_review 输入/输出与 duration）下用满需 ≈215s。原值 120 与实测生成
+    # 时长（116~201s）几乎相等，会周期性撞 core.http_client 的端到端墙钟硬截止：
+    # 请求被放弃、整条生成原样重发，等于同一份内容付两次费并多等一整轮。
+    "timeout_expert_review": 240,
     "cache_enabled_expert_review": True,
     "output_brief_expert_review": False,
     "thinking_enabled_expert_review": True,

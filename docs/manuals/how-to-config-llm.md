@@ -430,7 +430,7 @@ LLM 分析结果默认缓存，避免重复调用 API 浪费费用：
 | `model_{module}` | string / null | `null` | 独立指定本模块使用的模型，`null`=沿用线路默认。**线路条目或凭据块中的 `model` 优先**（模块级值只在两者都缺省时生效） |
 | `temperature_{module}` | float | 0.1~0.8（模块差异） | 采样温度，0=确定性最高，1=最大多样性 |
 | `max_tokens_{module}` | int | 3072~36000（模块差异） | 输出最大 token 数，超过时内容被截断（触发自动重试）。**DeepSeek 为 thinking + 正文共享预算**（详见下方 DeepSeek V4 说明） |
-| `timeout_{module}` | int | 60~120（模块差异） | API 超时秒数 |
+| `timeout_{module}` | int | 60~240（模块差异） | API 超时秒数（端到端墙钟：到点即放弃请求并重发，故须覆盖满额生成时长，见下方参数表） |
 | `cache_enabled_{module}` | bool | `true` | 是否启用缓存。关闭后每次生成都重新调用 API |
 | `output_brief_{module}` | bool | `false` | 精简模式：`true` 时输出 ≤200 字（global_macro）或 ≤300 字（其余模块）。**批量模式（news_correlation）不支持** |
 | `thinking_enabled_{module}` | bool | 模块差异 | 是否开启 Extended Thinking（Claude / DeepSeek / Gemini 2.5） |
@@ -561,7 +561,7 @@ LLM 分析结果默认缓存，避免重复调用 API 浪费费用：
 | 模块 | model | temperature | max_tokens | timeout | thinking_enabled | thinking_budget | reasoning_effort | output_brief_limit |
 |------|:-----:|:-----------:|:----------:|:-------:|:----------------:|:---------------:|:----------------:|:------------------:|
 | **全球政经局势** | null（使用默认） | **0.3**（低温保事实） | **3072** | **60s** | false | 6000 | low | **200 字** |
-| **智囊团深度复盘** | null | **0.3**（低温保事实） | **36000** | **120s** | **true** ⭐ | 24000 | **medium** | 300 字 |
+| **智囊团深度复盘** | null | **0.3**（低温保事实） | **36000** | **240s** | **true** ⭐ | 24000 | **medium** | 300 字 |
 | **持仓体检报告** | null | **0.1**（极低温保数值精确） | **24000** | **120s** | **true** | 18000 | **low** | 300 字 |
 | **穿透深度分析** | null | **0.1**（极低温保数值精确） | **12288** | **90s** | false | 12000 | low | 300 字 |
 | **财经新闻关联分析** | null（可换轻量模型降成本） | **0.1**（极低温保 JSON） | **3000** | **60s** | false | 6000 | low | 不适用 |

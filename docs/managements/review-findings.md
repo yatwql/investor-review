@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.10-dev
-> **编号源**：`rf-next = 1130`（新增问题提出后更新为 +1；已用最大 rf-1129，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1131`（新增问题提出后更新为 +1；已用最大 rf-1130，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -62,6 +62,7 @@
 
 | # | 问题 | 修复 |
 | --- | --- | --- |
+| rf-1130 | 智囊团深度复盘 `timeout` 与实测生成时长几乎相等（116 / 119 / 201s vs 120s），周期性撞 `core.http_client` 端到端墙钟硬截止：请求被放弃后整条原样重发，同一份内容付费两次并多等一整轮 | `timeout_expert_review` 120 → 240（按 `max_tokens`/实测速率 ≈215s 留余量），默认值表/代码兜底/用户配置/文档同步；新增 `TestTimeoutCoversFullGeneration` 回归用例 |
 
 
 > 本表为本开发周期已修条目的**摘要行**（详情见 `changelog.md` 对应段）；发布时由 `release.py prepare` 的 archive 步原表搬入版本归档并在此留占位。

@@ -153,6 +153,30 @@ class TestTokenCapHeadroom:
         assert 3 * debate["procon"]["per_call_max_tokens"] < debate["max_total_tokens_per_report"]
 
 
+class TestTimeoutCoversFullGeneration:
+    """模块 timeout 须覆盖「max_tokens 用满」的生成时长（防墙钟截止后整条重发）。
+
+    回归：`expert_review` 原 timeout=120s 与实测生成时长（116 / 119 / 201s，见
+    `data/state/perf_history.jsonl` 的 `llm.modules.expert_review.duration_seconds`）
+    几乎相等。`core.http_client` 的端到端墙钟到点即放弃请求，调用方随即原样重发
+    ——同一份内容付两次费并多等一整轮（实测一次 201.4s，其中 120s 是被丢弃那次的服务端生成）。
+    """
+
+    #: 保守吞吐下限（tok/s）：实测中位数 ≈168 tok/s，取 160 留抖动余量
+    THROUGHPUT_FLOOR = 160.0
+
+    def test_expert_review_timeout_covers_max_tokens_generation(self):
+        """智囊团满额输出所需时长须落在其 timeout 之内。"""
+        from src.python.config._llm_settings_defaults import _DEFAULT_LLM_SETTINGS
+
+        d = _DEFAULT_LLM_SETTINGS
+        needed = d["max_tokens_expert_review"] / self.THROUGHPUT_FLOOR
+        assert d["timeout_expert_review"] >= needed, (
+            f"timeout_expert_review={d['timeout_expert_review']}s 低于满额生成所需 {needed:.0f}s"
+            f"（max_tokens_expert_review {d['max_tokens_expert_review']} / {self.THROUGHPUT_FLOOR:.0f} tok/s）"
+        )
+
+
 class TestFullFailRetryDelayDeclared:
     """全链延迟重试等待键须为已登记 llm_settings 键。
 
