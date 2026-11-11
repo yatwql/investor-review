@@ -55,6 +55,9 @@ _TIMEOUT = 20.0
 _ORGID_TIMEOUT = 8.0
 #: orgId 失败结果的负缓存 TTL（秒）：失败不入缓存时，每次重跑都要重付一遍墙钟预算
 _ORGID_MISS_TTL = 3600.0
+#: 负缓存命中时的失败原因前缀（对外可见：健康探针据此区分「本轮未重试」与
+#: 「本轮真的请求并失败」——两种降级态的处置不同，混报会高估源的不稳定度）。
+ORGID_MISS_CACHE_REASON_PREFIX = "orgId 近期解析失败"
 #: 公告 PDF 下载的超时预算。年报原文动辄几十 MB，与元数据接口共用 20s 必然在
 #: 慢链路下触发「挂起 → 不重试 → 失败」，且**从未成功过**（白等 N × 超时）。
 #: 单独放宽到 60s，配合下方「本会话主机不可达短路」避免反复白等。
@@ -353,7 +356,7 @@ def resolve_org_id(code: str) -> str | None:
     miss_reason = cache_get(miss_key, _ORGID_MISS_TTL)
     if isinstance(miss_reason, str) and miss_reason:
         logger.debug("[cninfo] 代码 %s 近 %.0f 分钟内解析失败（%s），本轮跳过", code, _ORGID_MISS_TTL / 60, miss_reason)
-        set_last_reason(f"orgId 近期解析失败（{miss_reason}）")
+        set_last_reason(f"{ORGID_MISS_CACHE_REASON_PREFIX}（{miss_reason}）")
         return None
     payload = _post_json(
         "/new/information/topSearch/query",

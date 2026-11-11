@@ -17,7 +17,10 @@ from __future__ import annotations
 import ast
 import importlib
 import inspect
+import os
 import re
+import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -475,3 +478,59 @@ def _bench_snapshot():
 def _sample(module, stocks: int, funds: int):
     """构造样本规模（总品种数由分量派生，不写死）。"""
     return module.PerfSample(holdings=stocks + funds, stocks=stocks, funds=funds)
+
+
+class TestLogIsolation:
+    """基准跑不得写真实 logs/app.log（禁网告警会冲淡真实告警密度）。"""
+
+    def test_log_isolation_redirects_env(self, perf_test_report, monkeypatch):
+        """隔离后日志路径落在临时目录，并带运行上下文标记。"""
+        monkeypatch.delenv("INVEST_LOG_PATH", raising=False)
+        monkeypatch.delenv("INVEST_RUN_CONTEXT", raising=False)
+
+        iso_dir = perf_test_report._isolate_log_writes()
+
+        assert os.environ["INVEST_LOG_PATH"].startswith(iso_dir)
+        assert os.environ["INVEST_RUN_CONTEXT"] == "perf"
+
+    def test_log_isolation_respects_outer_override(self, perf_test_report, monkeypatch, tmp_path):
+        """外层已指定日志路径时不覆盖（发布基准单独采集时尊重外层口径）。"""
+        outer = tmp_path / "outer.log"
+        monkeypatch.setenv("INVEST_LOG_PATH", str(outer))
+
+        perf_test_report._isolate_log_writes()
+
+        assert os.environ["INVEST_LOG_PATH"] == str(outer)
+
+    def test_log_isolation_binds_before_src_import(self, tmp_path):
+        """端到端：先隔离再导入 logger，落盘路径必须在隔离目录内。"""
+        repo_root = Path(__file__).resolve().parents[4]
+        code = (
+            "import sys\n"
+            f"sys.path.insert(0, {str(repo_root)!r})\n"
+            "from src.test._script_loader import load_script\n"
+            "mod = load_script('test-perf-report.py')\n"
+            "iso = mod._isolate_log_writes()\n"
+            "from src.python.core import logger as log_mod\n"
+            "print(iso)\nprint(log_mod._LOG_FILE)\n"
+        )
+        # 子进程环境必须干净：① 三个「测试进程」信号（PYTEST_CURRENT_TEST /
+        # INVEST_RUNNING_TESTS / pytest in argv）任一残留，logger 都会改落 test.log；
+        # ② 同批用例可能已写入 INVEST_LOG_PATH（`setdefault` 语义下会覆盖隔离结果）
+        _stripped = {"PYTEST_CURRENT_TEST", "INVEST_RUNNING_TESTS", "INVEST_LOG_PATH", "INVEST_RUN_CONTEXT"}
+        env = {k: v for k, v in os.environ.items() if k not in _stripped}
+        proc = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            cwd=str(repo_root),
+            env=env,
+            timeout=120,
+        )
+
+        lines = proc.stdout.strip().splitlines()
+        assert len(lines) == 2, f"子进程输出异常: {proc.stdout[-300:]} {proc.stderr[-500:]}"
+        iso_dir, log_file = lines
+        assert log_file.startswith(iso_dir), f"日志未隔离：{log_file} 不在 {iso_dir} 下"

@@ -381,8 +381,30 @@ def _install_offline_network() -> None:
     setattr(_time, "sleep", lambda _seconds: None)  # 基准运行不真睡
 
 
+def _isolate_log_writes() -> str:
+    """日志落盘隔离：基准跑不得写真实 `logs/app.log`（并打运行上下文标记）。
+
+    基准按设计禁网，一轮会产出上千条「连接失败」告警（实测 1347 行）。它们既不是
+    真实故障，又会把真实告警密度冲淡到看不出来（事后分析只能逐行筛「基准运行按设计
+    禁网」才能还原）。日志路径在**模块导入期**由 `core.logger._apply_env_log_path`
+    绑定，因此本函数必须在导入任何 `src.python` 模块之前调用（`run_perf_test` 首行）。
+
+    用 `setdefault` 而不硬覆盖：外层已指定日志路径时（如发布基准单独采集）尊重外层。
+
+    Returns:
+        隔离目录路径
+    """
+    iso_dir = tempfile.mkdtemp(prefix="perf_bench_logs_")
+    os.environ.setdefault("INVEST_LOG_PATH", os.path.join(iso_dir, "app.log"))
+    os.environ.setdefault("INVEST_RUN_CONTEXT", "perf")
+    return iso_dir
+
+
 def run_perf_test() -> tuple[dict[str, float], PerfSample, PerfSample]:
     """执行性能基准测试，返回（各阶段耗时, Phase1/2 样本规模, Phase3 样本规模）。"""
+    # 日志隔离必须在任何 src 导入之前（logger 在导入期绑定落盘路径）
+    _isolate_log_writes()
+
     from unittest.mock import patch
 
     from src.python.report.excel_generator import generate_excel_report

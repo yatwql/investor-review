@@ -120,6 +120,11 @@ def _check_cninfo() -> tuple[str, float, str]:
     """巨潮资讯探针：解析 orgId（公告列表查询的必需参数；结果按月缓存）。
 
     选 orgId 而非下载 PDF：它是备源链路的入口，且成本最低（一次搜索请求，月级缓存）。
+
+    三态不可混报：① 解析成功→ OK；② **负缓存命中**（近一小时内已失败）→ WARN 且点名
+    「本轮按负缓存跳过」；③ 本轮真的请求并失败 → WARN + 原因。②与③的处置完全不同
+    （等窗口过期 vs 排查源侧），混作一谈会把失败率算虚（实测 23.7% 的「未解析」里多数
+    是同代码的负缓存窗口，读起来像源在持续抖动）。
     """
     start = time.perf_counter()
     try:
@@ -131,6 +136,12 @@ def _check_cninfo() -> tuple[str, float, str]:
     elapsed = (time.perf_counter() - start) * 1000
     if org_id:
         return _OK, elapsed, f"{elapsed:.0f}ms 正常（orgId 已解析）"
+    from src.python.providers.cninfo import ORGID_MISS_CACHE_REASON_PREFIX
+    from src.python.providers.utils import take_last_reason
+
+    reason = take_last_reason()
+    if reason.startswith(ORGID_MISS_CACHE_REASON_PREFIX):
+        return _WARN, elapsed, f"{elapsed:.0f}ms 近期已失败，本轮按负缓存跳过（{reason}）"
     return _WARN, elapsed, "未解析到 orgId（搜索接口变动 / 网络异常，详见 logs/app.log）"
 
 

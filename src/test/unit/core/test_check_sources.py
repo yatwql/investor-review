@@ -293,6 +293,42 @@ class TestFinancialReportProbes:
         assert symbol == cs._OK
         assert "orgId" in message
 
+    def test_cninfo_probe_distinguishes_negative_cache(self, monkeypatch):
+        """负缓存命中 ≠ 本轮新失败：文案必须点名「按负缓存跳过」。
+
+        两者处置不同（等窗口过期 vs 排查源侧），混报会让健康记录里的失败率虚高
+        ——实测 23.7% 的「未解析到 orgId」里多数是同一代码的负缓存窗口。
+        """
+        from src.python.providers import cninfo
+        from src.python.providers.cninfo import ORGID_MISS_CACHE_REASON_PREFIX
+        from src.python.providers.utils import set_last_reason
+
+        def _miss(_code):
+            set_last_reason(f"{ORGID_MISS_CACHE_REASON_PREFIX}（连接失败）")
+            return None
+
+        monkeypatch.setattr(cninfo, "resolve_org_id", _miss)
+        symbol, _latency, message = cs._check_cninfo()
+
+        assert symbol == cs._WARN
+        assert "负缓存" in message, message
+        assert ORGID_MISS_CACHE_REASON_PREFIX in message
+
+    def test_cninfo_probe_fresh_failure_keeps_generic_wording(self, monkeypatch):
+        """本轮真的请求并失败 → 保持通用文案，不冒充负缓存。"""
+        from src.python.providers import cninfo
+        from src.python.providers.utils import set_last_reason
+
+        def _miss(_code):
+            set_last_reason("未解析到 orgId（源侧无该代码档案）")
+            return None
+
+        monkeypatch.setattr(cninfo, "resolve_org_id", _miss)
+        symbol, _latency, message = cs._check_cninfo()
+
+        assert symbol == cs._WARN
+        assert "负缓存" not in message, message
+
     def test_cninfo_probe_warns_when_orgid_missing(self, monkeypatch):
         from src.python.providers import cninfo
 
