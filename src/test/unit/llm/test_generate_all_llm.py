@@ -21,6 +21,7 @@ import pytest
 from src.python.llm import generate_all_llm
 from src.test.helpers import SynchronousExecutor
 from src.python.llm import _llm_context_blocks as _llm_context_blocks_mod
+from src.python.llm import _worker_runner as _disp_mod
 from src.test.unit.llm._cache_fixtures import (  # noqa: F401 — 共享 autouse 夹具（钉住行情口径桶）
     _freeze_market_bucket_for_cache_asserts,
 )
@@ -56,12 +57,9 @@ class TestGenerateAllLlm(unittest.TestCase):
         cls._cfg_patcher.start()
         cls._exec_patcher = patch("src.python.llm._llm_dispatch.ThreadPoolExecutor", new=SynchronousExecutor)
         cls._exec_patcher.start()
-        cls._httpx_patcher = patch("src.python.llm._llm_dispatch.httpx.Client", new=MagicMock())
-        cls._httpx_patcher.start()
 
     @classmethod
     def tearDownClass(cls) -> None:
-        cls._httpx_patcher.stop()
         cls._exec_patcher.stop()
         cls._cfg_patcher.stop()
 
@@ -179,12 +177,9 @@ class TestGenerateFunctionsAcceptLlmConfig(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls._exec_patcher = patch("src.python.llm._llm_dispatch.ThreadPoolExecutor", new=SynchronousExecutor)
         cls._exec_patcher.start()
-        cls._httpx_patcher = patch("src.python.llm._llm_dispatch.httpx.Client", new=MagicMock())
-        cls._httpx_patcher.start()
 
     @classmethod
     def tearDownClass(cls) -> None:
-        cls._httpx_patcher.stop()
         cls._exec_patcher.stop()
 
     """测试 generate_* 函数接受外部 llm_config 参数。"""
@@ -307,12 +302,9 @@ class TestGenerateAllLlmCachePrecheck(unittest.TestCase):
         cls._cfg_patcher.start()
         cls._exec_patcher = patch("src.python.llm._llm_dispatch.ThreadPoolExecutor", new=SynchronousExecutor)
         cls._exec_patcher.start()
-        cls._httpx_patcher = patch("src.python.llm._llm_dispatch.httpx.Client", new=MagicMock())
-        cls._httpx_patcher.start()
 
     @classmethod
     def tearDownClass(cls) -> None:
-        cls._httpx_patcher.stop()
         cls._exec_patcher.stop()
         cls._cfg_patcher.stop()
 
@@ -587,7 +579,7 @@ class TestDataQualityBlockRenderedOnce(unittest.TestCase):
             patch.object(orch, "_compute_module_cache_info", wraps=orch._compute_module_cache_info) as mock_info,
             patch.object(disp, "generate_health_check", return_value=("<p>体检</p>", False)) as mock_health,
             patch.object(disp, "ThreadPoolExecutor", new=SynchronousExecutor),
-            patch.object(disp, "make_http_client", return_value=MagicMock()),
+            patch.object(_disp_mod, "make_http_client", return_value=MagicMock()),
         ):
             generate_all_llm(
                 {},
@@ -656,7 +648,7 @@ class TestCompetitiveContextRenderedOnce(unittest.TestCase):
             patch.object(disp, "generate_health_check", return_value=("<p>体检</p>", False)),
             patch.object(disp, "generate_penetration_deep_analysis", return_value=("<p>穿透</p>", False)),
             patch.object(disp, "ThreadPoolExecutor", new=SynchronousExecutor),
-            patch.object(disp, "make_http_client", return_value=MagicMock()),
+            patch.object(_disp_mod, "make_http_client", return_value=MagicMock()),
         ):
             generate_all_llm({}, {}, 100000.0, 90000.0, 10000.0, 500.0, 1, {"股票": 100000.0}, force=True)
 
@@ -689,7 +681,7 @@ class TestCompetitiveContextRenderedOnce(unittest.TestCase):
             patch.object(_llm_context_blocks_mod, "_build_competitive_context_block", return_value=""),
             patch.object(disp, "generate_expert_review", return_value=("<p>复盘</p>", False)) as mock_expert,
             patch.object(disp, "ThreadPoolExecutor", new=SynchronousExecutor),
-            patch.object(disp, "make_http_client", return_value=MagicMock()),
+            patch.object(_disp_mod, "make_http_client", return_value=MagicMock()),
         ):
             generate_all_llm(
                 {}, {}, 100000.0, 90000.0, 10000.0, 500.0, 1, {"股票": 100000.0}, force=True, metrics=metrics

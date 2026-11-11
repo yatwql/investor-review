@@ -162,7 +162,9 @@ skeleton.py:generate_llm_content()
 | 模块 | 分类 | 职责 | 入口函数 |
 |:-----|:-----|:------|:---------|
 | `generators_orchestrator.py` | 编排门面 | 编排壳：配置与强刷范围归一、缓存预检查（`_compute_module_cache_info` / `_precheck_*`）、并行批调用与结果装配、收尾落盘；上下文块装配下沉 `_llm_context_blocks.py`、**生成后一遍**（事实锚定 + 可选自检 + 跨模块核对）下沉 `_llm_post_pass.py`、worker 装配与线程池分发下沉 `_llm_dispatch.py`，三者均经本门面 re-export（`_dispatch_llm_workers` 等，patch 点不变） | `generate_all_llm()` |
-| `_llm_dispatch.py` | 编排层 | 4+1 模块并行调度：`_build_module_fns` 模块→生成函数映射（`_MODULE_FNS`）、`ThreadPoolExecutor` 分发与进度回调、thinking 串行上限与辩论模式 `_debate_wrapper` 路由、`_LLM_CLIENT_SETTINGS` HTTP 客户端设置 | `_dispatch_llm_workers()` |
+| `_llm_dispatch.py` | 编排层 | 4+1 模块并行调度壳：`_build_module_fns` 模块→生成函数映射（`_MODULE_FNS`）、`ThreadPoolExecutor` 提交与归集（预算闸/异常不外抛/结果键集合=提交集合）、收尾汇总；worker 装配下沉 `_worker_runner.py`、辩论槽位路由下沉 `_debate_router.py`，`_LLM_CLIENT_SETTINGS` 仍在此定义 | `_dispatch_llm_workers()` |
+| `_worker_runner.py` | 编排层 | 单模块 worker 装配：thinking 闸门（`thinking_enabled_{label}` + 并发上限，非法值回落 1）→ client 装配（缺 h2 时去 `http2` 降级重试一次）→ 调用生成函数 → span 记录；等待时长经回调记入总账 | `make_module_runner()` / `thinking_concurrency_limit()` |
+| `_debate_router.py` | 编排层 | 辩论模式**槽位替换**：把 `expert_review` 换成 pro→con→synthesis 串行组合（键名不变），两级回退（synthesis 失败 → pro+con 拼接；pro/con 失败或异常 → 回退普通生成并清空辩论信息） | `install_debate_route()` |
 | `_llm_context_blocks.py` | 编排层 | 六类上下文块的**单次渲染/提取**落点（竞争语境块、数据质量详细状态块渲染一次；申购限购 / 持仓变动复盘 / 事件窗分歧例 / 调仓纪律回放引用四块从契约提取同一实例），收成不可变快照 `LlmContextBlocks`，由调用方把**同一实例**分别交指纹与提示词（`is` 身份断言守护） | `build_context_blocks()` / `extract_*_block()` |
 | `_llm_post_pass.py` | 运行作用域 | 生成后一遍的顺序落点：逐模块事实锚定（含缓存回写与摘要拼接，缓存命中跳过排名校验）→ 生成后自检 → 跨模块收益率核对（副产物落运行作用域载体）；自检输入经 `review_text()` 剥掉用量页脚与校验产物段 | `anchor_fact_checks()` / `apply_generation_post_pass()` |
 | `generators.py` | 生成层 | 生成门面（按生成器域拆分）：辩论模式 pro/con/synthesis 生成 + `generate_self_review()`（生成后自检）+ `generate_holding_change_review()` 门面（实现于 `holding_change_review.py`）+ 单例四函数门面再导出 | 各 `generate_*()` |
@@ -454,9 +456,9 @@ _LLM_CLIENT_SETTINGS = {
 }
 ```
 
-每个工作线程创建**独立**的 `httpx.Client` 实例（`_make_runner` 闭包），避免全局共享连接池的线程安全问题。`h2` 包不可用时自动降级到 HTTP/1.1。
+每个工作线程创建**独立**的 client 实例（`_worker_runner.make_module_runner` 闭包），避免全局共享连接池的线程安全问题。`h2` 包不可用时自动降级到 HTTP/1.1。
 
-**缺省兜底（未注入客户端的调用）**：客户端装配只发生在分发层（`_llm_dispatch._execute` 为并行 worker 装配）；**编排层串行后置调用**（现只剩 `run_self_review`，`run_holding_change_review` 已并入并行批并复用 worker 客户端）不注入 `http_client`，None 会直达 provider 层 `assert client is not None` 秒败，且 AssertionError 被 `call_llm` 的 per-provider `except Exception` 吞成「provider 异常，切换下一 provider」整链连环失败（归因整章静默丢失）。因此兜底收口在多链与 legacy 两路的**唯一汇聚点** `api.call_single_provider`：`http_client is None` 且 provider 受支持（claude/openai/gemini）时经 `core.http_client.make_http_client`（HTTP 客户端统一工厂约束）自建一次性客户端，`with` 块内完成调用后关闭；不支持的 provider 不建（避免浪费连接），调用方自备客户端则原样透传、漏斗不代为关闭。
+**缺省兜底（未注入客户端的调用）**：客户端装配只发生在分发层（`_worker_runner._build_client` 为并行 worker 装配，含缺 h2 降级）；**编排层串行后置调用**（现只剩 `run_self_review`，`run_holding_change_review` 已并入并行批并复用 worker 客户端）不注入 `http_client`，None 会直达 provider 层 `assert client is not None` 秒败，且 AssertionError 被 `call_llm` 的 per-provider `except Exception` 吞成「provider 异常，切换下一 provider」整链连环失败（归因整章静默丢失）。因此兜底收口在多链与 legacy 两路的**唯一汇聚点** `api.call_single_provider`：`http_client is None` 且 provider 受支持（claude/openai/gemini）时经 `core.http_client.make_http_client`（HTTP 客户端统一工厂约束）自建一次性客户端，`with` 块内完成调用后关闭；不支持的 provider 不建（避免浪费连接），调用方自备客户端则原样透传、漏斗不代为关闭。
 
 `max_workers=llm_config.llm_max_concurrency`（config 默认 3）控制并行调用数。开启 Extended Thinking 的模块（`thinking_enabled_{suffix}=true`）受独立信号量 `llm_max_thinking_concurrency`（默认 2）约束——多 thinking 模块并发涌向 DeepSeek 等强制推理端点时偶发返回空 content（HTTP 200 空响应），该信号量从源头降低并发（thinking 请求同时最多 N 个），非 thinking 模块不受此限。
 

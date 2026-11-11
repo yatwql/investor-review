@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -58,12 +58,9 @@ class TestExtractFromPipelineData(unittest.TestCase):
         cls._cfg_patcher.start()
         cls._exec_patcher = patch("src.python.llm._llm_dispatch.ThreadPoolExecutor", new=SynchronousExecutor)
         cls._exec_patcher.start()
-        cls._httpx_patcher = patch("src.python.llm._llm_dispatch.httpx.Client", new=MagicMock())
-        cls._httpx_patcher.start()
 
     @classmethod
     def tearDownClass(cls) -> None:
-        cls._httpx_patcher.stop()
         cls._exec_patcher.stop()
         cls._cfg_patcher.stop()
 
@@ -79,7 +76,7 @@ class TestExtractFromPipelineData(unittest.TestCase):
         self._stubs(mock_expert, mock_macro, mock_health, mock_penetration)
         pipeline_data = {"event_impact_data": dict(_CONTRACT)}
 
-        generate_all_llm([], [], 0, 0, 0, 0, 0, {}, pipeline_data=pipeline_data)
+        generate_all_llm({}, {}, 0, 0, 0, 0, 0, {}, pipeline_data=pipeline_data)
 
         for name, mock_fn in [
             ("global_macro", mock_macro),
@@ -94,7 +91,7 @@ class TestExtractFromPipelineData(unittest.TestCase):
         """契约缺席（feature 关闭/无分歧例）→ ""（提示词与缓存键双不变）。"""
         self._stubs(mock_expert, mock_macro, mock_health, mock_penetration)
 
-        generate_all_llm([], [], 0, 0, 0, 0, 0, {}, pipeline_data={})
+        generate_all_llm({}, {}, 0, 0, 0, 0, 0, {}, pipeline_data={})
 
         for name, mock_fn in [
             ("global_macro", mock_macro),

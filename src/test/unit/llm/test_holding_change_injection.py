@@ -59,12 +59,9 @@ class TestExtractFromPipelineData(unittest.TestCase):
         cls._cfg_patcher.start()
         cls._exec_patcher = patch("src.python.llm._llm_dispatch.ThreadPoolExecutor", new=SynchronousExecutor)
         cls._exec_patcher.start()
-        cls._httpx_patcher = patch("src.python.llm._llm_dispatch.httpx.Client", new=MagicMock())
-        cls._httpx_patcher.start()
 
     @classmethod
     def tearDownClass(cls) -> None:
-        cls._httpx_patcher.stop()
         cls._exec_patcher.stop()
         cls._cfg_patcher.stop()
 
@@ -643,7 +640,6 @@ def test_registry_notes_match_parallel_dispatch():
 
 def test_self_review_receives_text_without_fact_check_blocks():
     """编排层喂给自检的正文剔除校验产物段落（报告渲染仍用含校验段落的完整正文）。"""
-    from unittest.mock import MagicMock
 
     from src.test.helpers import SynchronousExecutor
 

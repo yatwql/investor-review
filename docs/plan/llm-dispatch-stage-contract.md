@@ -1,6 +1,6 @@
 # LLM worker 派发拆分 —— 结构契约（plan-251）
 
-> 状态：立项（未开工）
+> 状态：**已完成**（实施结果见文末 §8）
 > 对象：`src/python/llm/_llm_dispatch.py::_dispatch_llm_workers`（256 行）
 > 关联：`plan.md` → `plan-251`
 
@@ -64,3 +64,15 @@
 - 不改各生成函数（`generate_global_macro` 等）的实现与提示词；
 - 不改 `run_fact_check` / 自检链路（属 `plan-250` 的生成后一遍）；
 - 不改限速器与 provider 选择策略。
+
+## 8. 实施结果
+
+| 项 | 结果 |
+|---|---|
+| 派发壳 | `_dispatch_llm_workers` 函数体 256 → 75 行：只留早退、thinking 闸门与等待记账接线、`_build_module_fns` 装配、辩论路由安装、`_run_workers` 调用 |
+| worker 装配外移 | 新模块 `llm/_worker_runner.py`：`thinking_concurrency_limit`（非法值回落 1）/ `is_thinking_module` / `make_module_runner`（thinking 闸门 → client 装配与缺 h2 降级 → 调用生成函数 → span 记录）。`make_http_client` 的消费点随之迁移 |
+| 辩论路由外移 | 新模块 `llm/_debate_router.py`：`install_debate_route` 槽位替换 + 两级回退（synthesis 失败 → pro+con 拼接；pro/con 失败或异常 → 回退普通生成并清空辩论信息容器）、`debate_mode_combination` |
+| 提交与归集 | `_run_workers`（28 行）：自建预算闸 → 只提交 `needs=True` → 异常不外抛且留 WARNING → 结果键集合与提交集合相等；`_log_dispatch_tail` 记预算跳过清单与 thinking 串行等待量化 |
+| 契约守护 | `test_llm_dispatch_contract.py` 11 条结构用例在拆分前后均绿（结果键集合 / 返回形状 / 线程异常隔离 / 并发上限回落 / 预算闸 / 辩论槽位 / client 降级） |
+| patch 点迁移 | `make_http_client` 6 处迁到 `_worker_runner`；辩论生成函数按「延迟导入 → patch 源模块」指向 `llm.generators`；另清掉 9 处从未生效的 `_llm_dispatch.httpx.Client` patch（client 一律经 `make_http_client` 构造） |
+| 门禁 | `src/test/unit/llm` + `integration` 1791 项、`dev-verify` 全绿；ruff / 类型 / 文档守护全过 |

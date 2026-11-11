@@ -23,6 +23,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.python.llm import _llm_dispatch as dispatch
+from src.python.llm import _worker_runner as _worker_runner_mod
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_llm, pytest.mark.llm]
 
@@ -52,7 +53,7 @@ def _call(needs: dict[str, bool], *, llm_config: dict | None = None, client=None
     }
     params.update(kwargs)
     factory = client if client is not None else (lambda **_kwargs: MagicMock())
-    with patch.object(dispatch, "make_http_client", side_effect=factory):
+    with patch.object(_worker_runner_mod, "make_http_client", side_effect=factory):
         return dispatch._dispatch_llm_workers(**params)
 
 
@@ -154,7 +155,9 @@ def test_debate_route_keeps_expert_review_key_and_falls_back():
 
     with (
         patch.object(dispatch, "_build_module_fns", return_value=dict(fns)),
-        patch.object(dispatch, "generate_debate_procon", return_value=("", "", "")),
+        # 辩论生成函数在路由模块内**延迟导入**（避免与 generators 的导入环）→
+        # 按「patch 源模块」纪律指向定义处
+        patch("src.python.llm.generators.generate_debate_procon", return_value=("", "", "")),
         patch("src.python.config.features.is_feature_enabled", side_effect=lambda name: name == "llm_debate_procon"),
     ):
         result = _call({"expert_review": True}, _debate_info_container=container)

@@ -262,12 +262,9 @@ class TestEnhanceNewsCorrelationUsesLlmConfig(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls._exec_patcher = patch("src.python.llm._llm_dispatch.ThreadPoolExecutor", new=SynchronousExecutor)
         cls._exec_patcher.start()
-        cls._httpx_patcher = patch("src.python.llm._llm_dispatch.httpx.Client", new=MagicMock())
-        cls._httpx_patcher.start()
 
     @classmethod
     def tearDownClass(cls) -> None:
-        cls._httpx_patcher.stop()
         cls._exec_patcher.stop()
 
     @patch("src.python.llm._batch_mode.cache_get", return_value=None)
