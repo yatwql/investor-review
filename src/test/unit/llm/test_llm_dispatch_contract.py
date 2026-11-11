@@ -129,17 +129,33 @@ def test_thinking_concurrency_limit_falls_back_to_one(configured, expected):
 
 
 def test_budget_guard_skips_overrun_modules_without_killing_running_ones():
-    """预算闸：超预算模块返回 (None, False) 并计入跳过汇总（不打断已提交的模块）。"""
-    fns = {"global_macro": lambda _c, _lc: ("<p>宏</p>", False)}
+    """预算闸：超预算的模块返回 (None, False) 并计入跳过清单（不打断已提交的模块）。
 
-    with (
-        patch.object(dispatch, "_build_module_fns", return_value=dict(fns)),
-        # 起点拨到很久以前 → 首次检查即超预算
-        patch.object(dispatch.time, "monotonic", return_value=10_000.0),
-    ):
-        result = _call({"global_macro": True}, llm_config={**_CFG, "llm_total_time_budget_sec": 1})
+    直接构造闸门并注入 clock——不对模块级 `time.monotonic` 打全局补丁：那是进程级
+    共享对象，并行跑（CI `-n auto`）时会跨用例互相影响，表现为「本机绿、CI 红」。
+    """
+    skipped: list[str] = []
+    guard = dispatch.make_budget_guard(
+        1.0,
+        0.0,
+        skipped,
+        {"global_macro": "全球政经局势"},
+        clock=lambda: 5.0,  # 已用 5s > 预算 1s
+    )
 
-    assert result["global_macro"] == {"result": None, "cached": False}, "预算跳过必须给出 (None, False)"
+    wrapped = guard("global_macro", lambda: ("<p>内容</p>", False))
+
+    assert wrapped() == (None, False), "超预算必须给出 (None, False)"
+    assert skipped == ["global_macro"], "超预算模块必须计入跳过清单"
+
+
+def test_budget_guard_passes_through_within_budget():
+    """预算内：闸门不改变结果（只做前置检查，不包装结果形状）。"""
+    skipped: list[str] = []
+    guard = dispatch.make_budget_guard(10.0, 0.0, skipped, {}, clock=lambda: 1.0)
+
+    assert guard("global_macro", lambda: ("<p>内容</p>", True))() == ("<p>内容</p>", True)
+    assert skipped == []
 
 
 def test_debate_route_keeps_expert_review_key_and_falls_back():
