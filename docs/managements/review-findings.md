@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.9-dev
-> **编号源**：`rf-next = 1128`（新增问题提出后更新为 +1；已用最大 rf-1127，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1129`（新增问题提出后更新为 +1；已用最大 rf-1128，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -77,6 +77,7 @@
 | **rf-1125** | 拆分前必须先立的契约面缺失：`generate_all_llm` 392 行内混着「块装配 / 缓存预检 / 并行派发 / 事实锚定 / 自检 / 跨模块核对」，其中三条不变式（返回元组位序、块实例只渲染一次且同进指纹与提示词、门面 patch 点）没有任何断言，拆分时极易静默漂移（缓存键与请求体脱钩、patch 变 no-op） | 先补 7 条结构契约用例（拆分前后均绿）再动代码；块装配整组下沉 `llm/_llm_context_blocks.py`（六块 → `LlmContextBlocks` 快照，`fingerprint_kwargs()`/`prompt_kwargs()` 同源），生成后一遍下沉 `llm/_llm_post_pass.py`（锚定 → 自检 → 跨模块核对 + `review_text` 剥离），门面缩为编排壳（函数体 392 → 101 行）；块渲染器与 `run_fact_check` 的 7 处 patch 目标随消费方迁移（漏迁即 AttributeError） |
 | **rf-1126** | `_dispatch_llm_workers` 256 行、6 个嵌套闭包把三条运行契约埋在闭包里：client 装配与缺 h2 降级、thinking 并发闸门与等待记账、辩论槽位替换与回退——「提交哪些模块 / 返回什么形状 / 失败如何沉淀」只能靠读闭包；另有 9 处 `_llm_dispatch.httpx.Client` patch 从未生效（client 一律经 `make_http_client` 构造，patch 是残留） | 先补 11 条结构契约用例（拆分前后均绿）再动代码；worker 装配下沉 `llm/_worker_runner.py`（`make_module_runner` / `thinking_concurrency_limit` / `is_thinking_module`），辩论路由下沉 `llm/_debate_router.py`（`install_debate_route` 槽位替换 + 两级回退）；派发壳 256 → 75 行，提交归集与收尾汇总收进 `_run_workers` / `_log_dispatch_tail`；`make_http_client` 的 6 处 patch 随消费方迁移、9 处残留 patch 删除 |
 | **rf-1127** | `_generate_report_both` 388 行把五个 perf 阶段、运行边界、后台健康检查与双产物成败混在一处：阶段名与顺序是 `perf_history` 跨版本可比性的口径，却只以 `perf.start("…")` 字面量存在；start/stop 是否成对、历史关闭时哪些装配仍须执行，都只能逐行读 | 先补 8 条结构契约用例（拆分前后均绿）再动代码；五阶段与阶段表收进 `report/_both_stages.py`（`BOTH_STAGES` 五元组：名字/实现/是否执行/跳过提示/是否计时，`stage_runner` 用 try/finally 配对），编排壳 388 → 43 行；历史取数按旧口径只在开关开启时计时、装配段不计时（perf 读数与拆分前一致）；既有源扫描用例目标同步到新模块 |
+| **rf-1128** | `write_html_report` 397 行把 19 处区块装配、模板参数与后处理三段混在一处：装配顺序（= 章序）与「哪个装配产物进哪个模板变量」只能靠读行；后处理阶段名散在三处 `_mark` 字面量；匿名化时序无结构保证 | 先立 6 条结构契约用例（装配顺序 / **哨兵归属** / 后处理阶段名 / 匿名化时序 / 原子落盘 / 单区块异常）；分批实施：①后处理三段成 `HTML_POST_STAGES` 表；②19 处装配迁入 `report/html_sections.py`（`SECTION_BUILDERS` 连续区段表 + `HtmlAssembly` 上下文 + `SectionBindings` NamedTuple）；编排壳 397 → 265 行。形态目标按实测调整为「装配与后处理各自成表」（剩余约 110 行为模板参数显式绑定，偏离理由记入契约文档）；过程中修正一处口径陷阱：装配上下文对 details/指数/新闻保持 None 透传（转 []/{} 会让渲染器跳过物化 → 匿名化失效） |
 
 ### 归档档案
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-10）

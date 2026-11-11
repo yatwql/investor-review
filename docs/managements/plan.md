@@ -7,7 +7,7 @@
 
 ## 概述
 
-在办 8 项：P1 2 项（**plan-238**、**plan-239**）、P2 1 项（**plan-92**）、P3 4 项（**plan-70**、**plan-233**、**plan-243**、**plan-248**）、P4 1 项（**plan-55**）。命名与实现纪律见 `CLAUDE.md`（单一事实位，本表不重复）。
+在办 7 项：P1 2 项（**plan-238**、**plan-239**）、P2 1 项（**plan-92**）、P3 3 项（**plan-70**、**plan-233**、**plan-243**）、P4 1 项（**plan-55**）。命名与实现纪律见 `CLAUDE.md`（单一事实位，本表不重复）。
 
 ---
 
@@ -82,13 +82,6 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 **长期观察（不排期，触发条件满足时再评估）**：① R8 纪律规则重构——前置 V5 成熟样本 ≥100（现 2 条）；② V7 相关性约束启用——前置样本期 ≥250 交易日（现 146）；③ 讨论稿优先级 6 与 V4/V6/V7 模型 A/B（人工采样，不入自动化）。以上任一前置达成前，资源投向其他任务。
 **事实位**：轮次明细、验收记录与回测读数见设计稿 [`investment-decision-basis-design.md`](../plan/investment-decision-basis-design.md) §4/§5 及[归档讨论稿](../archive/v0.16.x/investment-decision-quality/investment-decision-quality.md) §8.1；本表不复述。
 
-#### `plan-248` HTML 报告装配拆分（先定结构契约）
-
-**现状**：`report/html_writer.py::write_html_report` 397 行——19 个章节区块装配 + 模板绑定 + 渲染后三步后处理（资产内嵌/匿名化/落盘）+ 4 处阶段计时混在一处。**契约缺口**：区块装配顺序 = 报告目录顺序，但这条对应关系只存在于函数体的调用顺序里，改顺序无任何结构信号、也无断言能发现改坏。
-**结构契约**（6 条，含守护方式）：[`html-writer-stage-contract.md`](../plan/html-writer-stage-contract.md) —— 顺序以显式有序表表达、区块返回元组形状不变、阶段名集合固定（perf 口径）、匿名化在渲染后落盘前、原子落盘、渲染期单区块异常隔离。
-**目标形态**：编排壳 ≤ 90 行，区块按主题拆到 `html_sections_*.py`，顺序表与模板变量映射成为单一事实位。
-**验收**：结构用例（顺序表↔实调顺序 / 阶段名集合）+ 生成一份真实报告逐章 diff 为空。
-
 ### P4 — 实验候选（先决门槛未过，暂缓）
 入选标准：接入前有硬性先决门槛，门槛未过不排期。
 
@@ -107,6 +100,7 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 
 **plan-249 both 报告路径拆分**：已完成（编排壳函数体 388 → 43 行；五阶段与阶段表收进 `_both_stages.py`，8 条结构契约用例在拆分前后均绿），契约与实施结果见 [`report-both-stage-contract.md`](../plan/report-both-stage-contract.md) §8。## 归档
 
+**plan-248 HTML 报告装配拆分**：已完成（契约 6 条全部落地；编排壳 388 → 265 行，形态目标按实测调整为「装配与后处理各自成表」，偏离理由见契约文档 §8 末节），契约与结果见 [`html-writer-stage-contract.md`](../plan/html-writer-stage-contract.md)。
 - [`archived_plan.0.17.x.md`](../archive/v0.17.x/archived_plan.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-08）
 - [`archived_plan.0.16.x.md`](../archive/v0.16.x/archived_plan.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-11-03）
 - [`archived_plan.0.15.x.md`](../archive/v0.15.x/archived_plan.0.15.x.md) — v0.15.x（2026-10-24 ~ 2026-10-25）
