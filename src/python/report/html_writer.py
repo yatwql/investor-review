@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 import logging
@@ -317,6 +318,51 @@ def _inject_section_order_css(html: str, section_numbers: dict) -> str:
 
 
 # ── 核心生成函数 ────────────────────────────────────────────
+
+
+#: HTML 后处理阶段表：**名字即 perf 细分口径**（`stage_recorder` 的 record 名），
+#: 顺序即执行顺序。匿名化必须排在落盘之前——否则脱敏泄漏进产物文件。
+HTML_POST_STAGES: tuple[tuple[str, Callable[[dict], None]], ...] = (
+    ("资产内嵌", lambda state: state.update(html=_inline_js_assets(state["html"]))),
+    ("匿名化", lambda state: state.update(html=_mask_report_text(state))),
+    ("落盘", lambda state: state.update(path=_save_html_report(state["html"] or "", *state["save_args"]))),
+)
+
+#: 匿名化清扫所需的当轮上下文（holdings 与代码显示映射）；由 write_html_report 每轮写入。
+_MASK_CTX: dict[str, Any] = {}
+
+
+def _mask_report_text(state: dict) -> str:
+    """产物文本清扫（匿名化）：字段层未覆盖的派生面在最终 HTML 文本统一真名→代号。
+
+    明细区块已在字段层替换，重复命中无副作用。仅名称（中文串）全局安全，自由文本
+    清扫因此**不含代码**——代码是纯数字串，全文子串替换会误伤金额与 JSON 数值；
+    代码面由渲染点结构化掩码（模板 ``| anon_code``）与 ``mask_code_text`` 边界安全
+    替换兜底。off → 恒等零开销。
+    """
+    from src.python.config.anonymizer import (
+        build_report_alias_map,
+        get_anonymization_mode,
+        mask_code_text,
+        mask_display_text,
+    )
+
+    html = state["html"]
+    mode = get_anonymization_mode()
+    if mode == "off":
+        return html
+    holdings = _MASK_CTX.get("holdings") or []
+    code_map = _MASK_CTX.get("code_map") or {}
+    html = mask_display_text(html, build_report_alias_map(holdings, mode, include_codes=False))
+    # mask_code_text 的返回类型是 str | None（无替换时不保证原样）；落盘前统一收窄
+    return mask_code_text(html, code_map) or ""
+
+
+def _run_post_stages(state: dict, mark: Callable[[str], None]) -> None:
+    """按 :data:`HTML_POST_STAGES` 顺序执行后处理，每步后记一次细分耗时。"""
+    for name, step in HTML_POST_STAGES:
+        step(state)
+        mark(name)
 
 
 def write_html_report(
@@ -688,34 +734,13 @@ def write_html_report(
     )
     _mark("模板渲染")
 
-    # 内嵌 Chart.js 资产 → HTML 单文件自包含（下载/移动/单发移动端浏览
-    # 不再依赖同目录松散 JS；不产出松散副本）
-    html = _inline_js_assets(html)
-    _mark("资产内嵌")
-
-    # 产物文本清扫（匿名化）：字段层未覆盖的派生面（分类/业绩/管理人等从
-    # holdings 直取名称的区块）在最终 HTML 文本统一真名→代号；明细区块已
-    # 在字段层替换，重复命中无副作用。仅名称（中文串）全局安全，自由文本
-    # 清扫因此**不含代码**——代码是纯数字串，全文子串替换会误伤金额与
-    # JSON 数值；代码面由渲染点结构化掩码（模板 | anon_code）与
-    # mask_code_text 边界安全替换兑底。off → 恒等零开销。
-    from src.python.config.anonymizer import (
-        build_code_display_map,
-        build_report_alias_map,
-        get_anonymization_mode,
-        mask_code_text,
-        mask_display_text,
-    )
-
-    _anon_mode = get_anonymization_mode()
-    if _anon_mode != "off":
-        html = mask_display_text(html, build_report_alias_map(holdings, _anon_mode, include_codes=False))
-        html = mask_code_text(html, _code_display_map)
-    _mark("匿名化")
-
-    _path = _save_html_report(html or "", output_dir, total_mv, total_profit, prog)
-    _mark("落盘")
-    return _path
+    # 后处理三段（资产内嵌 → 匿名化 → 落盘）按表执行：阶段名是 perf 细分口径的单一来源
+    _MASK_CTX["holdings"] = holdings
+    _MASK_CTX["code_map"] = _code_display_map
+    _post_state: dict = {"html": html, "path": None, "save_args": (output_dir, total_mv, total_profit, prog)}
+    _run_post_stages(_post_state, _mark)
+    # 落盘阶段必定写入路径（异常在上一步抛出）；`or ""` 只为收窄类型
+    return str(_post_state["path"] or "")
 
 
 def close_html_generation_stage(
