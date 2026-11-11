@@ -212,7 +212,9 @@ def generate_expert_review(
         system_prompt_default=_SYSTEM_EXPERT_REVIEW,
         prompt_builder=_prompt,
         max_tokens_default=8192,
-        timeout_default=120.0,
+        # 与 config/_llm_settings_defaults.py 的 timeout_expert_review 保持同值：
+        # config 缺键时不得回落到「已证明偏短」的旧值（120s 会撞墙钟截止后重发）
+        timeout_default=240.0,
         output_brief_limit=300,
         holdings_details=holdings_details,
         total_mv=total_mv,

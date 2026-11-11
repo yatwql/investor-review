@@ -32,7 +32,7 @@
     "expert_review": {
       "enabled": true,  // 是否启用（模块启停 / 思考模式）
       "max_tokens": 36000,  // 单次调用最大输出 token
-      "timeout": 120,  // 单次调用超时（秒）
+      "timeout": 240,  // 单次调用超时（秒）——按 max_tokens 与实测速率（≈215s）留余量，防生成完成前被墙钟丢弃后整条重发
       "thinking": {
         "enabled": true,  // 是否启用（模块启停 / 思考模式）
         "budget": 24000,

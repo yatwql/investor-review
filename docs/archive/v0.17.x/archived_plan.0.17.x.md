@@ -33,3 +33,19 @@
 
 
 > 完成态暂存本节，`release.py publish` 前的 archive 步搬入 `archived_plan.*`；不计入上方「在办」计数。
+
+## ✅ `plan-250` LLM 并行编排拆分（已完成）
+
+**完成记录**：`generate_all_llm` 函数体 392 → 101 行；块装配与生成后一遍各自成模块（`llm/_llm_context_blocks.py` / `llm/_llm_post_pass.py`），7 条结构契约用例在拆分前后均绿。契约与实施结果见 [`generate-all-llm-stage-contract.md`](generate-all-llm-stage-contract.md) §8。
+
+## ✅ `plan-251` LLM worker 派发拆分（已完成）
+
+**完成记录**：`_dispatch_llm_workers` 函数体 256 → 75 行；worker 装配与辩论路由各自成模块（`llm/_worker_runner.py` / `llm/_debate_router.py`），11 条结构契约用例在拆分前后均绿。契约与实施结果见 [`llm-dispatch-stage-contract.md`](llm-dispatch-stage-contract.md) §8。
+
+## ✅ `plan-249` both 报告路径拆分（已完成）
+
+**完成记录**：both 编排壳函数体 388 → 43 行；五阶段与阶段表收进 `report/_both_stages.py`，8 条结构契约用例在拆分前后均绿。契约与实施结果见 [`report-both-stage-contract.md`](report-both-stage-contract.md) §8。
+
+## ✅ `plan-248` HTML 报告装配拆分（已完成）
+
+**完成记录**：契约 6 条全部落地（区块顺序表 / 返回 NamedTuple / 阶段名表 / 匿名化时序）；编排壳 388 → 265 行，形态目标按实测调整为「装配与后处理各自成表」，偏离理由见契约文档 §8 末节。装配实现见 `report/html_sections.py`。契约与结果见 [`html-writer-stage-contract.md`](html-writer-stage-contract.md)。

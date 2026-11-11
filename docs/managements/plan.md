@@ -1,6 +1,6 @@
 # 投资复盘助手 — 实现计划
 
-> 文档版本：0.17.9
+> 文档版本：0.18.0
 > **编号源**：`plan-next = 252`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-251，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
@@ -94,13 +94,11 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 
 ### 已完成（待发布归档）
 
-**plan-250 LLM 并行编排拆分**：已完成（函数体 392 → 101 行；块装配与生成后一遍各自成模块，7 条结构契约用例在拆分前后均绿），契约与实施结果见 [`generate-all-llm-stage-contract.md`](../plan/generate-all-llm-stage-contract.md) §8。
+（本开发周期暂无待归档完成项）
 
-**plan-251 LLM worker 派发拆分**：已完成（派发壳函数体 256 → 75 行；worker 装配与辩论路由各自成模块，11 条结构契约用例在拆分前后均绿），契约与实施结果见 [`llm-dispatch-stage-contract.md`](../plan/llm-dispatch-stage-contract.md) §8。
+## 归档
 
-**plan-249 both 报告路径拆分**：已完成（编排壳函数体 388 → 43 行；五阶段与阶段表收进 `_both_stages.py`，8 条结构契约用例在拆分前后均绿），契约与实施结果见 [`report-both-stage-contract.md`](../plan/report-both-stage-contract.md) §8。## 归档
-
-**plan-248 HTML 报告装配拆分**：已完成（契约 6 条全部落地；编排壳 388 → 265 行，形态目标按实测调整为「装配与后处理各自成表」，偏离理由见契约文档 §8 末节），契约与结果见 [`html-writer-stage-contract.md`](../plan/html-writer-stage-contract.md)。
+- [`archived_plan.0.18.x.md`](../archive/v0.18.x/archived_plan.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-12）
 - [`archived_plan.0.17.x.md`](../archive/v0.17.x/archived_plan.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-08）
 - [`archived_plan.0.16.x.md`](../archive/v0.16.x/archived_plan.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-11-03）
 - [`archived_plan.0.15.x.md`](../archive/v0.15.x/archived_plan.0.15.x.md) — v0.15.x（2026-10-24 ~ 2026-10-25）

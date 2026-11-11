@@ -560,6 +560,9 @@ def write_html_report(
         from src.python.report.schedule_replay_panel import build_schedule_replay_view
 
         schedule_replay_view = build_schedule_replay_view(schedule_replay_data)
+    # 三个面板视图（持仓变动 / 事件窗 / 纪律回放）与后续装配同在一个「模板渲染」窗口里，
+    # 慢的时候分不清是视图字符串拼装还是 jinja 渲染，单列一步便于定位
+    _mark("面板视图装配")
     # 章级：enabled_llm 模块禁用的 LLM 分析章整章隐藏（与 Excel 端同函数同配置推导）
     from src.python.llm.skeleton import get_llm_chapter_disabled
 

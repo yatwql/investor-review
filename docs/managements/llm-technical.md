@@ -1,7 +1,7 @@
 # LLM 集成层技术设计
 
 > **文档定位**：本文是 `technical.md` 的 LLM 分部（规则层），只给 LLM 集成层架构、契约与判据；运行/调试/发布等操作流程见 `developer-guide.md`，脚本参数见 `scripts-reference.md`，需求口径见 `requirements.md`。
-> 文档版本：0.17.9
+> 文档版本：0.18.0
 
 本文档是 `technical.md` 的 LLM 集成层专项技术设计补充，对应 `technical.md` §5（LLM 集成层概要设计）。
 `technical.md` §5 提供 LLM 层的总体架构、模块清单、调用链概览、多 Provider 链模式概要及关键机制速览；
@@ -210,7 +210,7 @@ skeleton.py:generate_llm_content()
 | 模块键 | 名称 | 默认 max_tokens | 默认 timeout | 默认 TTL | 默认 system_prompt |
 |:-------|:-----|:---------------:|:------------:|:--------:|:-------------------|
 | `global_macro` | 全球政经局势 | 3072 | 60s | 24h（86400s） | 宏观经济学家角色，500 字内，纯文本 |
-| `expert_review` | 智囊团深度复盘 | 36000 | 120s | 4h（14400s） | 召集令→圆桌会→定音锤三阶段 |
+| `expert_review` | 智囊团深度复盘 | 36000 | 240s | 4h（14400s） | 召集令→圆桌会→定音锤三阶段 |
 | `health_check` | 持仓体检报告 | 24000 | 120s | 4h（14400s） | 五维度评分（风险分散度/流动性/收益合理性/成本结构/数据质量） |
 | `penetration_deep` | 穿透深度分析 | 12288 | 90s | 4h（14400s） | 行业/品种集中度+国别暴露 |
 

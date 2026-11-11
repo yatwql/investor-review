@@ -278,7 +278,14 @@ class TestDatasourceLlmTtl:
 
 class TestLlmDefaults:
     def test_correct_row_passes(self, drift):
-        doc = "| `expert_review` | 智囊团深度复盘 | 36000 | 120s | 4h（14400s） | 三阶段 |\n"
+        # 正确行按默认值表现造：写死数值会在调默认值时把本用例变成假红
+        from src.python.config._llm_settings_defaults import _DEFAULT_LLM_SETTINGS
+
+        d = _DEFAULT_LLM_SETTINGS
+        doc = (
+            "| `expert_review` | 智囊团深度复盘 | "
+            f"{d['max_tokens_expert_review']} | {d['timeout_expert_review']}s | 4h（14400s） | 三阶段 |\n"
+        )
         assert drift.check_llm_defaults(doc) == []
 
     def test_max_tokens_and_timeout_mismatch(self, drift):

@@ -9,12 +9,20 @@
 
 本模块集中 mkstemp + os.replace 原语：散落各处逐字重复实现会沦为第 N 份拷贝。
 
-两处**有意不合并**（契约相反，非疏漏）：
+六处**有意不合并**（契约相反，非疏漏）：
   - `cache/_io.py` + `cache/_store.py`：需 gzip 分支与文件锁，另有读写一致性约束。
   - `config/_core.py::_atomic_write`：契约是「失败即抛且**保留异常类型**」——
     `init_config()` 的 `except PermissionError` Windows 并发容忍分支、TUI 把
     `PermissionError` 映射为「权限不足」提示，都依赖传得出异常类型；而本原语刻意
     吞掉异常、只返回布尔。原子写入要求的 mkstemp + os.replace 语义两者一致。
+  - `report/html_save.py::_write_html_atomic` / `report/excel_writer.py::_save_workbook_atomic`：
+    报告产物不属于原子写入约束管辖的「缓存/配置」域，且需在临时文件阶段就登记到中断收口
+    （`note_temp` 清扫 + `note_artifact` 产物前缀兜底）；本原语不暴露临时路径，
+    强行合并会让中断残留无法清扫。
+  - `report/html_jinja_env.py::_JinjaBytecodeCache`：写的是模板字节码缓存，同一进程
+    还要按保留期 `_prune_stale` 回收旧键，两者是一对动作。
+  - `providers/news_dedup_anchor_policy.py`：锚点分片是 **gzip multi-member 追加** +
+    sha256 旁文件 + fsync 成组落盘，语义不是「整文件替换」。
 
 设计约束遵从（对齐 `core/jsonl_store.py` 先例）：
     分层约束  — 本模块属 core 层，只依赖 stdlib，禁止 import report/llm/analysis

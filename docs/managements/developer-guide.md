@@ -1,6 +1,6 @@
 # 开发者指南
 
-> 文档版本：0.17.9
+> 文档版本：0.18.0
 
 ## 概述
 
@@ -237,7 +237,10 @@ PYTHONWARNDEFAULTENCODING=1 .venv/bin/python -m pytest src/test/unit -q
 
 > 为何不直接跑 Windows runner：GitHub 的 `windows-latest` 是 en-US/cp1252（单字节，只会乱码不会报错），装不住 GBK 类 locale 回退；为何不在 ubuntu 上装 GB18030 跑全套件：中文**文件名**在 POSIX `fsencoding=ascii` 下会失败（18 处中文报表文件名），而 cp936 Windows 反而正常——那是探测方法的伪影，不是缺陷。两道探针因此取「精确模拟消费方」而非「换整个 locale 跑全套件」。
 
-> **CI 轮询纪律**：本地门禁（P0/P1/P2 + 必要时的 `--mode portability`）通过后，**不逐提交轮询 CI**——本地绿而 CI 红的来源本应只有环境差异（3.11/3.12/3.13 矩阵、`LC_ALL=C` locale 探针、系统库/可选依赖、`perf-gate`/`format` 等 CI 独有档）。为收口这类差集，portability 已可本地等价复现；其余档位仅在改动触及它们时才去看 CI 结果。
+> **CI 轮询纪律**：本地门禁（P0/P1/P2 + 必要时的 `--mode portability`）通过后，**不逐提交轮询 CI**
+>
+> **`gh` 不是常规工具**：CI 结果只在两种情形下查——① 用户明确要求；② 排查「本地绿、CI 红」的环境差异。**发布后不做事后确认**：`release.py publish` 的产出（release 提交 / `--no-ff` 合并 / tag / 推送命令）已是结论，再去 `gh run list` 复核属越界轮询；发布闭环由 `devbump` 的「vX 在 master 历史内、master=vX、dev=vX+1-dev」校验保证。
+——本地绿而 CI 红的来源本应只有环境差异（3.11/3.12/3.13 矩阵、`LC_ALL=C` locale 探针、系统库/可选依赖、`perf-gate`/`format` 等 CI 独有档）。为收口这类差集，portability 已可本地等价复现；其余档位仅在改动触及它们时才去看 CI 结果。
 
 > **钩子与守护输出的编码**：pre-commit 以 `export PYTHONUTF8=1` 统一守护子进程的日志编码，`scripts/_shared/checklib.py` 导入时把非 UTF-8 的真实 stdout/stderr 收敛到 UTF-8（`_force_utf8_stream`，已 UTF-8 或 `StringIO` 桩零改写）——中文 Windows 上 stdout 重定向到文件按 locale ANSI（cp936）落盘，UTF-8 终端回放 `run_bg` 守护日志会成乱码；前台直打走控制台 `WriteConsoleW` 本就无损。
 
@@ -1592,7 +1595,7 @@ registry 的测试在 `src/test/unit/core/test_registry.py`，验证 TTL 默认�
 **③ 发布归档迁移（四项强制，未完成不得继续 `gate`/`publish`）**
 
 - ① `review-findings.md`「已解决问题」区**全部**条目迁入对应版本的自审归档（同步更新归档头部涵盖版本/追加行与主文件「归档档案」索引行）——`release.py prepare` 自动：原表逐行搬运 + 占位 + 头部/索引延展，人工复核归属
-- ② `plan.md` 不得残留 ✅/已完成任务节（完成态移入对应版本的 plan 归档）——`release.py prepare` 自动搬已完成节（**支持 `##`~`####` 各级标题**：台账任务节嵌在 `### P1~P4` 下，归档侧统一降为扁平 `## plan-N … ✅`），人工复核完成标记是否打对
+- ② `plan.md` 不得残留 ✅/已完成任务节（完成态移入对应版本的 plan 归档）——`release.py prepare` 自动搬已完成节（**支持 `##`~`####` 各级标题**：台账任务节嵌在 `### P1~P4` 下，归档侧统一降为扁平 `## plan-N … ✅`；完成项**必须用标题形态**——粗体 `**plan-N …**：已完成` 不被搬运，分区纪律会直接拦住提交），人工复核完成标记是否打对
 - ③ changelog 已发布段移入对应版本的 changelog 归档（**归档段必须含实际条目**：`prepare` 归档前先断言开发段不是占位句，`gate` 再校验归档文件该版本段非空——空发布记录一旦落盘无法补回） + 归档头部「涵盖版本」「归档时间」两行重写 + 主文件「最近发布」指针的版本号/日期/归档文件名同步（`release.py prepare` 全部自动执行：段追加与头部区间/并入记录均由归档内 `## [版本] - 日期` 段列表派生；跨小版本时指针链接自动换名到新 train；人工只需核对 diff 中指针与归档索引行）
 - ④ `docs/plan/` 中**已完成任务**的迭代设计文件移入对应版本归档子目录（在办任务的设计文件保留，按其关联 plan/rf 任务状态判定），同步更新 plan.md/folders.md 引用链接与目录树——`release.py prepare` 按「引用编号均已归档」判定候选并自动 `git mv` + 改写引用 + 搬目录树，人工复核候选是否真完成（无任务编号引用者也会列出待确认）
 
