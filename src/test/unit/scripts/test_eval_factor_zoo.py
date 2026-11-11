@@ -404,3 +404,23 @@ def test_inlined_formulas_match_src_implementation():
             assert a is b
         else:
             assert a == pytest.approx(b, abs=1e-12)
+
+
+# ── 因子原语与生产同源 ──────────────────────────────────────────
+
+
+def test_factor_primitives_are_production_objects(ev):
+    """评测用因子原语必须是**生产层同一个对象**，不得是本地副本。
+
+    同名副本是最隐蔽的口径漂移：评测侧自带一份 `_closes` / `_mean` / `_rolling_beta` /
+    `_daily_returns` 时，生产公式改动不会再反映到评测，评出来的通过率只是假数。
+    身份断言（is）能一次性挡住这类「看起来同名」的漂移。
+    """
+    import _eval_factor_zoo.metrics as metrics_mod
+
+    from src.python.analysis import _factor_formulas as formulas
+
+    for name in ("_closes", "_mean", "_rolling_beta", "_daily_returns"):
+        assert getattr(metrics_mod, name) is getattr(formulas, name), (
+            f"{name} 在评测侧仍是本地副本：改生产公式不会反映到评测，须改为导入"
+        )

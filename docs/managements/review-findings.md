@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.9-dev
-> **编号源**：`rf-next = 1124`（新增问题提出后更新为 +1；已用最大 rf-1123，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1125`（新增问题提出后更新为 +1；已用最大 rf-1124，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -73,6 +73,7 @@
 | **rf-1121** | 行业资金流向是唯一没有健康探针的数据面（走 akshare 双通道 + 负缓存 + 陈旧回退，不在 Provider Chain 里），退化后只能翻日志发现——上一轮也正是靠日志才看出东财 push2 连续失败 | `akshare_extras.probe_sector_flow_channels()` 逐通道直连探测（**不读不写缓存、不返回陈旧回退**，否则测到的是缓存而非源），`check_sources._check_sector_flow()` 按全通/部分/全挂三态上报，补 3 条回归（三态文案 / 零缓存触碰 / 单通道异常不连坐） |
 | **rf-1122** | 近 40 小时变更审计：①百分比 token 在 `llm/` 下有四份写法（`self_review._PCT_RE`、`_cross_module._PCT_RE`、`_context._BREAKDOWN_PART_PATTERN`、`_patterns._PERCENT_PATTERN`），改一处符号/空白容错另一处不跟，两个检查会互相打脸；②`_coverage.reset_numerical_coverage` 的 docstring 声称「每次 `run_fact_check` 前调用」，实际只有离线重放调用、报告主路径不复位也不消费，注释与实现相反 | ①`_patterns` 新增 `_SIGNED_PERCENT_PATTERN`（命名组 sign/num）并让跨模块判定与自检引用核对共用，`_context` 的分项模式改指 `_PERCENT_PATTERN`（语义同为「只需幅度」），补单源结构断言；②docstring 改为现状口径（复位权在调用方，逐报告重放先复位再统计全模块） |
 | **rf-1123** | `fact_checker` 三个长函数把语义埋在控制流里：`_evaluate_percent_impl` 246 行（判定顺序=口径，却只存在 in-line if 链中，改顺序无任何结构信号）、`check_numerical_consistency` 133 行、`run_fact_check` 205 行（三项检查+修正+摘要混在一处） | `_evaluate_percent_impl` 拆为 `_GUARD_STEPS` 有序元组（11 个 15~66 行步骤 + `_emit_rate_issue` 终态单点，主函数 20 行；归因中间态用 `_Attribution` 承载）；`check_numerical_consistency` 提取 `_build_detection_refs`/`_make_percent_context`（语境探测单点，23 行→78 行中含 docstring）；`run_fact_check` 提取 `_resolve_tolerance`/`_extract_max_drawdown`/`_run_checks`/`_apply_auto_corrections`/`_build_summary`（205→87 行）；补 3 条结构契约用例（步骤唯一可调用 / 首末锚点与 emit 不在链上 / 每步返回形态） |
+| **rf-1124** | 近 96 小时变更审计：`scripts/_eval_factor_zoo/metrics.py` 一边注释声明「因子公式与生产层同源、各拷一份会漂移」，一边保留 `_closes` / `_mean` / `_rolling_beta` / `_daily_returns` 四份本地拷贝——生产口径改了评测仍跑旧公式，评出的通过率是假数 | 四份拷贝删除，改为从 `src.python.analysis._factor_formulas` 导入（与其余 6 个原语同源）；补身份断言用例（`is` 比对，挡住「同名副本」这类漂移）；其余检查项无债：96h 触及的生产代码无死私有函数、无跨文件同体副本（除报告层 `_tracker()` 这一文档化取数接缝）、无静默吞异常（`test-runner.py` 的控制台兜底带注释且发生在日志可用之前） |
 
 ### 归档档案
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-10）
