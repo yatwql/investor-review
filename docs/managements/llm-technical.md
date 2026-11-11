@@ -161,8 +161,10 @@ skeleton.py:generate_llm_content()
 
 | 模块 | 分类 | 职责 | 入口函数 |
 |:-----|:-----|:------|:---------|
-| `generators_orchestrator.py` | 编排门面 | 缓存预检查（`_compute_module_cache_info` / `_precheck_*`）+ 主编排入口与**生成后一遍**（事实锚定校验 + 可选生成后自检）；worker 装配与线程池分发下沉 `_llm_dispatch.py` 并经本门面 re-export（`_dispatch_llm_workers`，patch 点不变） | `generate_all_llm()` |
+| `generators_orchestrator.py` | 编排门面 | 编排壳：配置与强刷范围归一、缓存预检查（`_compute_module_cache_info` / `_precheck_*`）、并行批调用与结果装配、收尾落盘；上下文块装配下沉 `_llm_context_blocks.py`、**生成后一遍**（事实锚定 + 可选自检 + 跨模块核对）下沉 `_llm_post_pass.py`、worker 装配与线程池分发下沉 `_llm_dispatch.py`，三者均经本门面 re-export（`_dispatch_llm_workers` 等，patch 点不变） | `generate_all_llm()` |
 | `_llm_dispatch.py` | 编排层 | 4+1 模块并行调度：`_build_module_fns` 模块→生成函数映射（`_MODULE_FNS`）、`ThreadPoolExecutor` 分发与进度回调、thinking 串行上限与辩论模式 `_debate_wrapper` 路由、`_LLM_CLIENT_SETTINGS` HTTP 客户端设置 | `_dispatch_llm_workers()` |
+| `_llm_context_blocks.py` | 编排层 | 六类上下文块的**单次渲染/提取**落点（竞争语境块、数据质量详细状态块渲染一次；申购限购 / 持仓变动复盘 / 事件窗分歧例 / 调仓纪律回放引用四块从契约提取同一实例），收成不可变快照 `LlmContextBlocks`，由调用方把**同一实例**分别交指纹与提示词（`is` 身份断言守护） | `build_context_blocks()` / `extract_*_block()` |
+| `_llm_post_pass.py` | 运行作用域 | 生成后一遍的顺序落点：逐模块事实锚定（含缓存回写与摘要拼接，缓存命中跳过排名校验）→ 生成后自检 → 跨模块收益率核对（副产物落运行作用域载体）；自检输入经 `review_text()` 剥掉用量页脚与校验产物段 | `anchor_fact_checks()` / `apply_generation_post_pass()` |
 | `generators.py` | 生成层 | 生成门面（按生成器域拆分）：辩论模式 pro/con/synthesis 生成 + `generate_self_review()`（生成后自检）+ `generate_holding_change_review()` 门面（实现于 `holding_change_review.py`）+ 单例四函数门面再导出 | 各 `generate_*()` |
 | `generators_singletons.py` | 生成层 | 单例生成函数（global_macro / expert_review / health_check / penetration_deep，自 generators 按生成器域下沉；**测试 patch 以本模块为解析点**——`generate_llm_module` 等 seam 名在本域内解析） | 各 `generate_*()` |
 | `self_review.py` | 运行作用域 | 生成后自检的开关判定/输入存在性判定/失败隔离与运行作用域载体（报告层零参 pull；**不经** `_MODULE_FNS` 并行调度）。输入为**纯分析正文**：编排层先剥离 LLM 用量页脚（`skeleton.strip_llm_footer`）与事实校验产物段落（`fact_checker.strip_fact_check_blocks`）——两段均为运行元信息且随缓存态变化，并入自检输入会让同一份正文算出不同缓存键 | `run_self_review()` / `get_self_review_block()` |

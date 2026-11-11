@@ -20,6 +20,7 @@ import pytest
 
 from src.python.llm import generate_all_llm
 from src.test.helpers import SynchronousExecutor
+from src.python.llm import _llm_context_blocks as _llm_context_blocks_mod
 from src.test.unit.llm._cache_fixtures import (  # noqa: F401 — 共享 autouse 夹具（钉住行情口径桶）
     _freeze_market_bucket_for_cache_asserts,
 )
@@ -141,7 +142,7 @@ class TestGenerateAllLlm(unittest.TestCase):
             {"name": "阳光电源", "codes": ["300274"], "mv": 80.0, "ratio": 8.0, "sector": "电力设备"},
         ]
         with (
-            patch("src.python.llm.generators_orchestrator.run_fact_check", side_effect=_fake_fact_check),
+            patch("src.python.llm._llm_post_pass.run_fact_check", side_effect=_fake_fact_check),
             patch("src.python.llm.generators_orchestrator.get_llm_module_names", return_value=_labels),
         ):
             generate_all_llm(
@@ -581,8 +582,8 @@ class TestDataQualityBlockRenderedOnce(unittest.TestCase):
         }
         with (
             patch.object(orch, "get_llm_config", return_value=llm_config),
-            patch.object(orch, "_build_competitive_context_block", return_value=""),
-            patch.object(orch, "_build_data_quality_detail_block", side_effect=_fake_render),
+            patch.object(_llm_context_blocks_mod, "_build_competitive_context_block", return_value=""),
+            patch.object(_llm_context_blocks_mod, "_build_data_quality_detail_block", side_effect=_fake_render),
             patch.object(orch, "_compute_module_cache_info", wraps=orch._compute_module_cache_info) as mock_info,
             patch.object(disp, "generate_health_check", return_value=("<p>体检</p>", False)) as mock_health,
             patch.object(disp, "ThreadPoolExecutor", new=SynchronousExecutor),
@@ -648,7 +649,7 @@ class TestCompetitiveContextRenderedOnce(unittest.TestCase):
         }
         with (
             patch.object(orch, "get_llm_config", return_value=llm_config),
-            patch.object(orch, "_build_competitive_context_block", side_effect=_fake_render),
+            patch.object(_llm_context_blocks_mod, "_build_competitive_context_block", side_effect=_fake_render),
             patch.object(orch, "_compute_module_cache_info", wraps=orch._compute_module_cache_info) as mock_info,
             patch.object(disp, "generate_global_macro", return_value=("<p>宏</p>", False)) as mock_macro,
             patch.object(disp, "generate_expert_review", return_value=("<p>复盘</p>", False)) as mock_expert,
@@ -685,7 +686,7 @@ class TestCompetitiveContextRenderedOnce(unittest.TestCase):
 
         with (
             patch.object(orch, "get_llm_config", return_value=llm_config),
-            patch.object(orch, "_build_competitive_context_block", return_value=""),
+            patch.object(_llm_context_blocks_mod, "_build_competitive_context_block", return_value=""),
             patch.object(disp, "generate_expert_review", return_value=("<p>复盘</p>", False)) as mock_expert,
             patch.object(disp, "ThreadPoolExecutor", new=SynchronousExecutor),
             patch.object(disp, "make_http_client", return_value=MagicMock()),

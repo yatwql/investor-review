@@ -18,6 +18,8 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
+from src.python.llm import _llm_context_blocks as _llm_context_blocks_mod
+from src.python.llm import _llm_post_pass as _llm_post_pass_mod
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_llm, pytest.mark.llm]
 
@@ -95,8 +97,8 @@ def test_context_blocks_are_single_instance_across_fingerprint_and_prompt(llm_en
     marker = "<p>竞争语境块</p>"
     with (
         patch.object(orch, "get_llm_config", return_value=llm_enabled_config),
-        patch.object(orch, "_build_competitive_context_block", return_value=marker),
-        patch.object(orch, "_build_data_quality_detail_block", return_value="<p>质量块</p>"),
+        patch.object(_llm_context_blocks_mod, "_build_competitive_context_block", return_value=marker),
+        patch.object(_llm_context_blocks_mod, "_build_data_quality_detail_block", return_value="<p>质量块</p>"),
         patch.object(orch, "_compute_module_cache_info", return_value={}) as mock_cache_info,
         patch.object(orch, "_precheck_all_modules", return_value=_precheck_mixed()),
         patch.object(orch, "_dispatch_llm_workers", return_value={}) as mock_dispatch,
@@ -198,7 +200,7 @@ def test_self_review_runs_after_fact_check_with_review_text(llm_enabled_config):
         ),
         patch.object(orch, "_dispatch_llm_workers", return_value={}),
         patch("src.python.llm.fingerprint_baseline.save_baseline"),
-        patch.object(orch, "run_fact_check", side_effect=_fake_fact_check),
+        patch.object(_llm_post_pass_mod, "run_fact_check", side_effect=_fake_fact_check),
         patch("src.python.llm.self_review.run_self_review", side_effect=_fake_self_review),
         patch("src.python.llm.skeleton.write_back_module_cache"),
     ):

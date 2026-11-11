@@ -24,6 +24,7 @@
 - fact_checker 三个长函数按语义拆分（rf-1123）：`_evaluate_percent_impl` 246 行 → `_GUARD_STEPS` 有序元组（11 个步骤 + `_emit_rate_issue` 终态，主函数 20 行，顺序从控制流变成可断言的数据）；`check_numerical_consistency` 133 → 78 行（语境探测收口到 `_make_percent_context`，映射构建到 `_build_detection_refs`）；`run_fact_check` 205 → 87 行（容差/回撤/三检查/修正/摘要各自成函数）。行为零变化，补 3 条结构契约用例
 - 因子评测原语改为与生产同源（rf-1124）：`_eval_factor_zoo/metrics.py` 曾一边声称同源一边保留 `_closes`/`_mean`/`_rolling_beta`/`_daily_returns` 四份本地拷贝，生产公式改动后评测仍跑旧口径；现全部改为导入，并补身份断言用例防止「同名副本」回流
 - 大型函数拆分四连项立项（plan-248~251）：HTML 报告装配（397 行）、both 报告路径（388 行）、LLM 并行编排（392 行）、LLM worker 派发（256 行）各自单独立项，**先定结构契约再动代码**——四份契约文档定义不变式（顺序表/返回位序/块实例身份/阶段名与配对/失败隔离/并发闸门）与守护方式（结构用例断言结构关系 + 既有行为用例回归），并列出风险点、逐阶段回滚粒度与非目标
+- LLM 并行编排拆分（rf-1125）：`generate_all_llm` 函数体 392 → 101 行，拆出 `llm/_llm_context_blocks.py`（六类上下文块单次渲染/提取 → `LlmContextBlocks` 快照，指纹与提示词共用同一实例）与 `llm/_llm_post_pass.py`（事实锚定 → 自检 → 跨模块核对的顺序落点，含 `review_text` 剥离与按位取结果）；门面保留 `_compute_module_cache_info` / `_precheck_all_modules` / `_dispatch_llm_workers` 等编排水位与全部 re-export，块渲染器与 `run_fact_check` 的 patch 点随消费方迁移。行为零变化：7 条结构契约用例拆分前后均绿，llm+integration 1780 项全过
 
 （本次发布内容见下方归档索引）
 

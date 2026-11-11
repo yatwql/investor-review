@@ -1,6 +1,6 @@
 # LLM 并行编排拆分 —— 结构契约（plan-250）
 
-> 状态：立项（未开工）
+> 状态：**已完成**（实施结果见文末 §8；文件与契约用例同步落地）
 > 对象：`src/python/llm/generators_orchestrator.py::generate_all_llm`（392 行）
 > 关联：`plan.md` → `plan-250`
 
@@ -72,3 +72,14 @@
 - 不改提示词文本、不加盐、不动 `PROMPT_SCHEMA_VERSION`；
 - 不改 `_llm_dispatch` 的并发与 thinking 闸门（另项 `plan-251`）；
 - 不改辩论模式的生成实现（`generators.generate_debate_*`）。
+
+## 8. 实施结果
+
+| 项 | 结果 |
+|---|---|
+| 编排壳 | `generate_all_llm` 函数体 392 → 101 行（含 docstring 152 行），新增 `_plan_generation` / `_plan_module_needs` / `_finalize_llm_run` 三个编排辅助 |
+| 块装配外移 | 新模块 `llm/_llm_context_blocks.py`：六块单次渲染/提取收成不可变快照 `LlmContextBlocks`，`fingerprint_kwargs()` 与 `prompt_kwargs()` 同源输出；四个 `extract_*` 与 `extract_historical_codes` 一并迁入，门面继续 re-export（`from src.python.llm import extract_*` 不变） |
+| 生成后一遍外移 | 新模块 `llm/_llm_post_pass.py`：`anchor_fact_checks`（逐模块锚定 + 缓存回写 + 摘要）/ `apply_generation_post_pass`（自检 → 跨模块核对）/ `review_text`（剥页脚与校验产物）/ `contents_from_results`（按位取四模块正文与标志） |
+| 契约守护 | `test_generate_all_llm_contract.py` 7 条结构用例（返回位序 / 块实例身份 / 门面 patch 点 / 生成后一遍顺序 / 配置缺席短路 / needs 并入 holding_change）在拆分前后均绿 |
+| patch 点迁移 | 块渲染器与 `run_fact_check` 的调用点随实现迁至新模块，7 处既有 patch 目标同步迁移（`_llm_context_blocks._build_*` / `_llm_post_pass.run_fact_check`）；门面侧已无这两个名字，漏迁即 AttributeError 响亮失败 |
+| 门禁 | `src/test/unit/llm` + `integration` 1780 项、`dev-verify` 全绿；ruff / 类型 / 文档守护全过 |

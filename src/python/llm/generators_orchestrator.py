@@ -26,7 +26,6 @@ from src.python.llm.api_base import (
     _build_cache_hint_and_record,
 )
 from src.python.llm.fingerprint import get_cache_ttl_llm
-from src.python.llm.fact_checker import run_fact_check
 from src.python.llm.module_fingerprint import (
     ModuleFingerprintInputs,
     expert_review_fingerprint,
@@ -38,8 +37,6 @@ from src.python.llm.prompts import (
     CACHE_PREFIX_LLM,
     FAIL_REASON_DISABLED,
     LLM_MODULE_FAILURE,
-    _build_competitive_context_block,
-    _build_data_quality_detail_block,
 )
 from src.python.llm.skeleton import _build_provider_cache_key, is_llm_module_enabled
 from src.python.core.registry import get_llm_module_name, get_llm_module_names
@@ -59,6 +56,21 @@ def reset_fingerprint_audit() -> None:
 
 # ── 子模块 re-export ──────────────────────────────────────
 # news_correlation 安全直调入口在 `_llm_news_correlation.py` 中实现，此处 re-export。
+from src.python.llm._llm_context_blocks import (  # noqa: F401  # 上下文块装配子模块（本门面 re-export 提取器）
+    LlmContextBlocks,
+    build_context_blocks,
+    extract_event_impact_block,
+    extract_historical_codes,
+    extract_holding_change_block,
+    extract_purchase_constraint_block,
+    extract_schedule_replay_block,
+)
+from src.python.llm._llm_post_pass import (  # noqa: F401  # 生成后一遍（锚定/自检/跨模块核对）
+    BASE_MODULES,
+    anchor_fact_checks,
+    apply_generation_post_pass,
+    contents_from_results,
+)
 from src.python.llm._llm_dispatch import (  # noqa: F401  # 并发分发子模块（消费方在本门面）
     _dispatch_llm_workers,
     reset_thinking_wait_total,
@@ -330,6 +342,38 @@ def _precheck_all_modules(
     return results
 
 
+def _plan_module_needs(llm_config: dict, precheck_results: dict) -> dict[str, bool]:
+    """逐模块是否需要生成：缓存未命中 + 开关开启 + 深度档位收窄，再叠加两条路由规则。
+
+    深度档位在逐模块开关之上**收窄**参与集合（brief ⊂ standard），不放大已关闭的模块。
+
+    Args:
+        llm_config: LLM 配置。
+        precheck_results: 预检结果（`{module: {result, cached}}`）。
+
+    Returns:
+        `{module: 是否需要生成}`。
+    """
+    from src.python.config.features import is_feature_enabled
+    from src.python.llm.depth_profile import depth_gate, resolve_depth_profile
+
+    _depth = resolve_depth_profile()
+    needs = {
+        key: (value["result"] is None and depth_gate(is_llm_module_enabled(llm_config, key), key, _depth))
+        for key, value in precheck_results.items()
+    }
+
+    # 辩论模式：强制不走标准 expert_review 缓存预检（辩论路由用独立的 pro/con/synthesis 键，
+    # 与标准 expert_review 键不同，必须绕过标准预检）
+    if is_feature_enabled("llm_debate_procon"):
+        needs["expert_review"] = depth_gate(is_llm_module_enabled(llm_config, "expert_review"), "expert_review", _depth)
+
+    # 持仓变动复盘归因并入并行批：只吃持仓变动契约、不依赖四模块产出，无串行后置必要；
+    # 其单次 4~25s 若串行会完全叠加在 expert_review 之后的关键路径上。
+    needs.setdefault("holding_change", True)
+    return needs
+
+
 def _log_precheck_summary(
     results: dict[str, dict],
     llm_config: dict,
@@ -373,100 +417,91 @@ def _log_precheck_summary(
     )
 
 
-def extract_purchase_constraint_block(pipeline_data: dict | None) -> str:
-    """从管线数据提取申购限购约束块（契约字段 ``constraint_block`` 的唯一提取点）。
+def _plan_generation(
+    llm_config: dict,
+    *,
+    force: bool,
+    force_scope: frozenset[str],
+    blocks: LlmContextBlocks,
+    indices: tuple[dict, dict],
+    totals: tuple[float, float, float, float],
+    holdings_count: int,
+    categories: dict,
+    penetrated_assets: list[dict] | None,
+    holdings_details: list[dict] | None,
+    history_data: dict | None,
+    pipeline_data: dict | None,
+    metrics: dict | None,
+) -> tuple[dict, dict, dict[str, bool]]:
+    """缓存指纹 → 预检 → 逐模块 needs（缓存/开关/深度档位 + 辩论与持仓变动路由）。
 
-    消费方两处必须同源读取：本编排层（LLM 分析章统一附录与指纹）与报告侧新闻
-    批量链（``report/_llm_news.py``）。契约键名或嵌套调整只改此处，避免两份
-    表达式漏改一处导致块静默缺席（降级面被误触）。
-
-    Args:
-        pipeline_data: 管线数据字典（可为 None，如无管线上下文的直调路径）。
-
-    Returns:
-        约束块原文；契约缺席（None/字段缺/降级产出空串）→ ``""``（提示词与缓存键回退原样）。
-    """
-    return str(((pipeline_data or {}).get("purchase_status_data") or {}).get("constraint_block") or "")
-
-
-def extract_holding_change_block(pipeline_data: dict | None) -> str:
-    """从管线数据提取持仓变动复盘提示词块（契约字段 ``prompt_block`` 的唯一提取点）。
-
-    契约（``holding_change_data``）由报告 seam 注入，构建期已渲染一次；此处只提取
-    同一实例，同时交预检侧指纹与写侧提示词（进提示词必进指纹，见 module_fingerprint）。
-
-    Args:
-        pipeline_data: 管线数据字典（可为 None，如无管线上下文的直调路径）。
+    指纹侧与提示词侧传的是**同一批块实例**（`blocks.fingerprint_kwargs()`），
+    这是「进提示词必进指纹」的机械保障。
 
     Returns:
-        提示词块原文；契约缺席（开关关闭/准入未过/字段缺）→ ``""``（提示词与缓存键回退原样）。
+        `(cache_info, precheck_results, needs)`。
     """
-    return str(((pipeline_data or {}).get("holding_change_data") or {}).get("prompt_block") or "")
+    a_indices, us_indices = indices
+    total_mv, total_cost, total_profit, total_today_profit = totals
+    cache_info = _compute_module_cache_info(
+        llm_config,
+        a_indices,
+        us_indices,
+        total_mv,
+        total_cost,
+        total_profit,
+        total_today_profit,
+        holdings_count,
+        categories,
+        penetrated_assets,
+        holdings_details,
+        force,
+        force_modules=force_scope,
+        history_data=history_data,
+        pipeline_data=pipeline_data,
+        metrics=metrics,
+        **blocks.fingerprint_kwargs(),
+    )
+    precheck_results = _precheck_all_modules(llm_config, cache_info, force)
+    return cache_info, precheck_results, _plan_module_needs(llm_config, precheck_results)
 
 
-def extract_event_impact_block(pipeline_data: dict | None) -> str:
-    """从管线数据提取事件窗分歧例提示词块（契约字段 ``prompt_block`` 的唯一提取点）。
+def _finalize_llm_run(
+    contents: dict[str, str | None],
+    cached: dict[str, bool],
+    *,
+    cache_info: dict,
+    debate_info: dict | None,
+    has_debate: bool,
+) -> tuple:
+    """收尾：打一行四模块完成情况、落盘跨进程指纹基线、按模式返回 8/9 元组。"""
+    gm_r, er_r, hc_r, pd_r = (contents.get(key) for key in BASE_MODULES)
+    gm_c, er_c, hc_c, pd_c = (cached.get(key, False) for key in BASE_MODULES)
 
-    契约（``event_impact_data``）由报告 seam 在新闻获取后注入，构建期已渲染一次；
-    此处只提取同一实例，同时交预检侧指纹与写侧提示词（进提示词必进指纹，
-    见 module_fingerprint）。
+    # 持仓变动复盘归因已并入并行批（`_MODULE_FNS["holding_change"]`）：它只吃持仓变动
+    # 契约、不依赖四模块产出，串行后置只会把 4~25s 白加到关键路径上。契约缺席（开关关闭/
+    # 准入未过）时内部直接跳过：不进 LLM、不写载体，报告归因块隐藏（双端同构）。
+    logger.info(
+        "LLM 生成完成: %s=%s, %s=%s, %s=%s, %s=%s",
+        _MN("global_macro"),
+        "OK" if gm_r else "跳过",
+        _MN("expert_review"),
+        "OK" if er_r else "跳过",
+        _MN("health_check"),
+        "OK" if hc_r else "跳过",
+        _MN("penetration_deep"),
+        "OK" if pd_r else "跳过",
+    )
+    # 落盘跨进程基线（组件哈希 + 各模块本轮缓存键）：下个进程据此判定「键变了还是只是老化」
+    from src.python.llm.fingerprint_baseline import save_baseline
 
-    Args:
-        pipeline_data: 管线数据字典（可为 None，如无管线上下文的直调路径）。
-
-    Returns:
-        块原文；契约缺席（开关关闭/无分歧例/字段缺）→ ``""``（提示词与缓存键回退原样）。
-    """
-    return str(((pipeline_data or {}).get("event_impact_data") or {}).get("prompt_block") or "")
-
-
-def extract_historical_codes(pipeline_data: dict | None) -> set[str]:
-    """从管线数据提取历史（已清仓/已变动）品种代码，供事实校验品种存在性白名单。
-
-    LLM 提示词含两类历史代码来源：
-      - 【环比变化】块（``pipeline_data["diff"]`` 的 removed/added 行，如
-        "清仓: 易方达国证自由现金流ETF(159222)"）——进 expert_review / health_check；
-      - 统一附录【持仓变动复盘】块（``holding_change_data.events`` 的 code，
-        含跨期变动品种）——进四个模块。
-
-    这些代码非当前持仓，但属 LLM 合法引用的历史语境（如"环比看，清仓某品种(159222)
-    后…"）。不纳入有效集会被品种存在性校验误报"不在当前持仓中"。
-
-    Args:
-        pipeline_data: 管线数据字典（可为 None）。
-
-    Returns:
-        历史品种代码集合（无数据时为空集）。
-    """
-    codes: set[str] = set()
-    _data = pipeline_data or {}
-    _diff = _data.get("diff") or {}
-    for _side in ("removed", "added"):
-        for _item in _diff.get(_side) or []:
-            _code = (_item or {}).get("code") or ""
-            if _code:
-                codes.add(str(_code))
-    for _ev in (_data.get("holding_change_data") or {}).get("events") or []:
-        _code = (_ev or {}).get("code") or ""
-        if _code:
-            codes.add(str(_code))
-    return codes
-
-
-def extract_schedule_replay_block(pipeline_data: dict | None) -> str:
-    """从管线数据提取调仓纪律回放引用提示词块（契约字段 ``prompt_block`` 的唯一提取点）。
-
-    契约（``schedule_replay_data``）由报告 seam 装配（快照与持仓变动注入后），
-    构建期已渲染一次；此处只提取同一实例，同时交预检侧指纹与写侧提示词（进提示词
-    必进指纹，见 module_fingerprint）。
-
-    Args:
-        pipeline_data: 管线数据字典（可为 None，如无管线上下文的直调路径）。
-
-    Returns:
-        块原文；契约缺席（开关关闭/回放数据不足/字段缺）→ ``""``（提示词与缓存键回退原样）。
-    """
-    return str(((pipeline_data or {}).get("schedule_replay_data") or {}).get("prompt_block") or "")
+    save_baseline(
+        _LAST_FP_COMPONENTS or {},
+        {mk: str((info.get("key") or "")) for mk, info in (cache_info or {}).items() if isinstance(info, dict)},
+    )
+    if has_debate:
+        return (gm_r, er_r, hc_r, pd_r, gm_c, er_c, hc_c, pd_c, debate_info)
+    return (gm_r, er_r, hc_r, pd_r, gm_c, er_c, hc_c, pd_c)
 
 
 def generate_all_llm(
@@ -522,133 +557,44 @@ def generate_all_llm(
     if llm_config is None:
         return (None, None, None, None, False, False, False, False)
 
-    # ── 强刷范围归一：全局 force 与模块级 force_modules 合并为模块键集合 ──
-    # 后续所有 force 判定（预检 can_cache / worker 闭包 / 串行后置模块）均按
-    # 「模块 ∈ 强刷集合」逐模块取值，未指定模块照常命中缓存。
+    # 强刷范围归一：全局 force 与模块级 force_modules → 模块键集合（后续所有 force 判定
+    # 均按「模块 ∈ 强刷集合」逐模块取值，未指定模块照常命中缓存）。
     from src.python.llm.force_scope import resolve_force_scope
 
     _force_scope = resolve_force_scope(force, force_modules)
 
-    # ── 竞争语境块：此处渲染**一次**，同一实例既进指纹（经预检）又进提示词
-    #    （经 worker 分发）。两个消费点各自渲染会让「进键的文本」与「进提示词的
-    #    文本」只能靠纪律对齐——渲染器一改而键不动，预检就会命中旧键复用按旧
-    #    指数算出的对比结论。 ──
-    competitive_context = _build_competitive_context_block(
-        a_indices,
-        total_mv,
-        total_today_profit,
+    # 上下文块：渲染/提取一次，同一实例分别交「预检指纹」与「提示词分发」
+    blocks = build_context_blocks(
+        a_indices=a_indices,
+        total_mv=total_mv,
+        total_today_profit=total_today_profit,
         comparison_indices=comparison_indices,
         history_data=history_data,
         metrics=metrics,
+        degradation_events=degradation_events,
+        pipeline_data=pipeline_data,
     )
 
-    # ── 数据质量详细状态块：同样渲染**一次**，同一实例既进指纹（经预检）又进
-    #    health_check 提示词（经 worker 分发）。否则数据源故障期间生成的体检结论
-    #    会在源恢复后仍被复用——报告陈述与此刻事实相反，且不报错。 ──
-    #    一并注入 data_freshness 契约：体检第 5 维还要评净值新鲜度，其基准是
-    #    交易日（非运行时刻），且滞后清单须与「数据质量仪表盘」可信度区块同源。 ──
-    data_quality_text = _build_data_quality_detail_block(
-        degradation_events, (pipeline_data or {}).get("data_freshness")
-    )
-
-    # ── 申购限购约束块：契约构建期（report 侧）已渲染一次，此处只提取同一实例——
-    #    同时交预检侧指纹与写侧提示词（进提示词必进指纹，见 module_fingerprint）。
-    #    缺席（契约 None/字段缺/降级）→ ""，提示词与键双不变（降级矩阵）。 ──
-    purchase_constraint_block = extract_purchase_constraint_block(pipeline_data)
-    if purchase_constraint_block:
-        logger.debug(
-            "申购限购约束块注入 LLM 分析章（含表头共 %d 行）",
-            purchase_constraint_block.count("\n") + 1,
-        )
-    else:
-        logger.debug("申购限购约束块缺席（准入未过/未产出），提示词与缓存键回退原样")
-
-    # ── 持仓变动复盘提示词块：与申购限购块同构——契约构建期渲染一次，此处只提取
-    #    同一实例（同进预检指纹与写侧附录）。开关关闭/契约缺席 → ""，键与提示词
-    #    双不变（关态逐字节回退）。 ──
-    holding_change_block = extract_holding_change_block(pipeline_data)
-    if holding_change_block:
-        logger.debug(
-            "持仓变动复盘提示词块注入 LLM 分析章（含表头共 %d 行）",
-            holding_change_block.count("\n") + 1,
-        )
-    else:
-        logger.debug("持仓变动复盘提示词块缺席（开关关闭/准入未过），提示词与缓存键回退原样")
-
-    # ── 事件窗分歧例块：与持仓变动块同构——契约构建期渲染一次，此处只提取同一实例
-    #    （同进预检指纹与写侧附录）。开关关闭/契约缺席 → ""，键与提示词双不变
-    #    （关态逐字节回退）。 ──
-    event_impact_block = extract_event_impact_block(pipeline_data)
-    if event_impact_block:
-        logger.debug(
-            "事件窗分歧例块注入 LLM 分析章（含表头共 %d 行）",
-            event_impact_block.count("\n") + 1,
-        )
-    else:
-        logger.debug("事件窗分歧例块缺席（开关关闭/无分歧例），提示词与缓存键回退原样")
-
-    # ── 调仓纪律回放引用块：与事件窗块同构——契约构建期渲染一次，此处只提取同一
-    #    实例（同进预检指纹与写侧附录）。开关关闭/契约缺席 → ""，键与提示词双不变
-    #    （关态逐字节回退）。 ──
-    schedule_replay_block = extract_schedule_replay_block(pipeline_data)
-    if schedule_replay_block:
-        logger.debug(
-            "调仓纪律回放引用块注入 LLM 分析章（含表头共 %d 行）",
-            schedule_replay_block.count("\n") + 1,
-        )
-    else:
-        logger.debug("调仓纪律回放引用块缺席（开关关闭/回放数据不足），提示词与缓存键回退原样")
-
-    cache_info = _compute_module_cache_info(
+    cache_info, precheck_results, needs = _plan_generation(
         llm_config,
-        a_indices,
-        us_indices,
-        total_mv,
-        total_cost,
-        total_profit,
-        total_today_profit,
-        holdings_count,
-        categories,
-        penetrated_assets,
-        holdings_details,
-        force,
-        force_modules=_force_scope,
+        force=force,
+        force_scope=_force_scope,
+        blocks=blocks,
+        indices=(a_indices, us_indices),
+        totals=(total_mv, total_cost, total_profit, total_today_profit),
+        holdings_count=holdings_count,
+        categories=categories,
+        penetrated_assets=penetrated_assets,
+        holdings_details=holdings_details,
         history_data=history_data,
         pipeline_data=pipeline_data,
-        competitive_context=competitive_context,
         metrics=metrics,
-        data_quality_text=data_quality_text,
-        purchase_constraint_block=purchase_constraint_block,
-        holding_change_block=holding_change_block,
-        event_impact_block=event_impact_block,
-        schedule_replay_block=schedule_replay_block,
     )
 
-    precheck_results = _precheck_all_modules(llm_config, cache_info, force)
-
-    from src.python.config.features import is_feature_enabled
-    from src.python.llm.depth_profile import depth_gate, resolve_depth_profile
-
-    # 深度档位：在逐模块开关之上**收窄**参与集合（brief ⊂ standard），不放大已关闭的模块
-    _depth = resolve_depth_profile()
-    needs = {
-        k: (v["result"] is None and depth_gate(is_llm_module_enabled(llm_config, k), k, _depth))
-        for k, v in precheck_results.items()
-    }
-
-    # ── 辩论模式：强制不走标准 expert_review 缓存预检 ──────
-    # 辩论路由使用独立缓存键（llm_debate_pro_/llm_debate_con_/llm_debate_synthesis_），
-    # 与标准 expert_review 缓存键（llm_expert_review_）不同，需绕过标准缓存预检。
-    if is_feature_enabled("llm_debate_procon"):
-        needs["expert_review"] = depth_gate(is_llm_module_enabled(llm_config, "expert_review"), "expert_review", _depth)
-
-    # ── 持仓变动复盘归因并入并行批 ──────────────────────
-    # 只吃持仓变动契约、不依赖四模块产出，无串行后置的必要；其单次 4~25s 若串行后置会完全
-    # 叠加在 expert_review 之后的关键路径上。契约缺席/开关关闭由模块内部跳过。
-    needs.setdefault("holding_change", True)
-
-    # ── 辩论模式容器（用于闭包捕获 debate_info） ────────
+    # 辩论模式容器（用于闭包捕获 debate_info）
     _debate_info_container: list[dict | None] = [None]
+    from src.python.config.features import is_feature_enabled
+
     _has_debate = is_feature_enabled("llm_debate_procon")
 
     worker_results = _dispatch_llm_workers(
@@ -669,195 +615,42 @@ def generate_all_llm(
         pipeline_data=pipeline_data,
         force_modules=_force_scope,
         metrics=metrics,
-        data_quality_text=data_quality_text,
         comparison_indices=comparison_indices,
         history_data=history_data,
         _debate_info_container=_debate_info_container,
-        competitive_context=competitive_context,
-        purchase_constraint_block=purchase_constraint_block,
-        holding_change_block=holding_change_block,
-        event_impact_block=event_impact_block,
-        schedule_replay_block=schedule_replay_block,
         span_recorder=span_recorder,
+        **blocks.prompt_kwargs(),
     )
 
-    # 合并预检结果 + 工作线程结果
-    for k, v in worker_results.items():
-        if k in precheck_results:
-            precheck_results[k] = v
-
-    # 提取最终结果
-    def _get(mk: str) -> tuple[str | None, bool]:
-        r = precheck_results.get(mk, {})
-        return (r.get("result"), r.get("cached", False))
-
-    gm_r, gm_c = _get("global_macro")
-    er_r, er_c = _get("expert_review")
-    hc_r, hc_c = _get("health_check")
-    pd_r, pd_c = _get("penetration_deep")
-
-    # ── 事实锚定校验 ──────────────────────────────────────
-    # 对已生成的 LLM 内容运行纯算法层事实校验，追加校验摘要到 HTML 底部。
-    # 仅检查非缓存且非空的模块（缓存命中说明内容未变化，无需重复校验）。
+    contents, cached = contents_from_results(precheck_results, worker_results)
     _module_labels = get_llm_module_names()
 
-    # 读取事实校验容差配置（来自 llm_settings.json fact_check 段）
-    _fc_cfg = (llm_config or {}).get("fact_check", {})
-    _fc_tolerance: float = _fc_cfg.get("tolerance", get_llm_setting_default("fact_check.tolerance"))
-    _fc_overrides: dict = _fc_cfg.get("tolerance_overrides", {})
-
-    # 提取穿透资产中的股票代码（用于穿透分析的品种存在性校验）
-    _penetrated_codes: set[str] = set()
-    if penetrated_assets:
-        for _asset in penetrated_assets:
-            _codes = _asset.get("codes") or []
-            _penetrated_codes.update(_codes)
-
-    # 历史（已清仓/已变动）品种代码：LLM 提示词含【环比变化】清仓行与统一附录
-    # 【持仓变动复盘】块，引用这些代码属合法历史语境（如"环比看，清仓某品种(159222) 后…"），
-    # 不纳入有效集会被品种存在性校验误报"不在当前持仓中"。
-    _historical_codes = extract_historical_codes(pipeline_data)
-
-    if holdings_details and any(r is not None for r in (gm_r, er_r, hc_r, pd_r)):
-        for _mk, _result, _cached in [
-            ("global_macro", gm_r, gm_c),
-            ("expert_review", er_r, er_c),
-            ("health_check", hc_r, hc_c),
-            ("penetration_deep", pd_r, pd_c),
-        ]:
-            if _result:
-                _mod_tolerance = _fc_overrides.get(_mk, _fc_tolerance)
-                _corrected, _summary = run_fact_check(
-                    _result,
-                    holdings_details,
-                    module_label=_module_labels.get(_mk, _mk),
-                    # 智囊团/持仓体检/穿透深度三模块的提示词均含【穿透 TOP10】数据
-                    # （_format_penetration_block），LLM 会引用穿透股票代码（如宁德时代
-                    # 300750、阳光电源 300274）——它们非直接持仓但属于组合穿透范围，
-                    # 品种存在性校验时须作为额外有效代码，否则误报"不在当前持仓中"。
-                    # 全球政经（global_macro）提示词不含穿透数据，保持严格校验。
-                    # 历史代码（已清仓/已变动）经统一附录进四个模块，故对所有模块均有效。
-                    extra_valid_codes=(
-                        (_penetrated_codes if _mk in ("penetration_deep", "expert_review", "health_check") else set())
-                        | _historical_codes
-                    )
-                    or None,
-                    is_penetration_module=_mk == "penetration_deep",
-                    tolerance_pct=_mod_tolerance,
-                    history_data=history_data,
-                    # 缓存命中：LLM 内容基于生成时的数据快照，用当前市值校验其
-                    # 排名声称会因价格变动产生"排名翻转"误报 → 跳过排名校验。
-                    # 数值/品种校验仍执行，缓存内容中的数值错误仍会被自动修正。
-                    skip_ranking_check=_cached,
-                )
-                # 用修正后的内容替换原结果
-                if _corrected != _result and _corrected != _summary:
-                    # 修正只改产出不改输入：缓存键（内容寻址生成输入）不变，但缓存里的
-                    # 正文仍是修正前的——不回写则每次运行都重做同一批修正，且展示正文
-                    # 与缓存正文口径不一致（不可复现）。回写时机在此（摘要拼接前）：
-                    # 摘要属当轮元信息，不能混进缓存正文。键取预检/写侧同源的
-                    # `cache_info[mk]["key"]`（仅预检命中的模块不经骨架，骨架那边无记录）。
-                    from src.python.llm.skeleton import write_back_module_cache
-
-                    write_back_module_cache(
-                        _corrected,
-                        cache_key=(cache_info.get(_mk) or {}).get("key", ""),
-                        module_key=_mk,
-                        cached=_cached,
-                    )
-                    _result = _corrected
-                if _summary and _summary not in _result:
-                    _result = _result + "\n" + _summary
-                # 写回元组变量
-                if _mk == "global_macro":
-                    gm_r = _result
-                elif _mk == "expert_review":
-                    er_r = _result
-                elif _mk == "health_check":
-                    hc_r = _result
-                elif _mk == "penetration_deep":
-                    pd_r = _result
-
-    # ── 生成后自检（开关开启时执行；自检输入是上面四个模块的产出，必须在它们之后）──
-    # 不属线程池并行调度模块，故**不登记**进 _MODULE_FNS（注册纪律：无独立调度语义的
-    # 编排注册属注册漂移）；模块本身仍在 core/registry.py 登记以复用缓存/统计/失败载体。
-    from src.python.llm.fact_checker import strip_fact_check_blocks
-    from src.python.llm.self_review import run_self_review
-    from src.python.llm.skeleton import strip_llm_footer
-
-    def _review_text(html: str | None) -> str | None:
-        """自检输入只取分析正文：剥离用量页脚与事实校验产物段落。
-
-        两者都是「本次运行的元信息」而非分析结论：页脚随缓存态必然不同（新生成含
-        Token/耗时/费用，命中含"使用缓存"），校验摘要的检查项计数随缓存态变化、
-        修正条数随正文变化。任一混进自检输入，同一份分析正文都会算出不同的缓存键，
-        表现为「上游重算后必多一次自检调用」。报告渲染仍用含这两段的完整正文。
-        """
-        if not html:
-            return html
-        return strip_fact_check_blocks(strip_llm_footer(html))
-
-    run_self_review(
-        {
-            "global_macro": _review_text(gm_r),
-            "expert_review": _review_text(er_r),
-            "health_check": _review_text(hc_r),
-            "penetration_deep": _review_text(pd_r),
-        },
-        holdings_details,
-        penetrated_assets,
-        llm_config,
-        force="self_review" in _force_scope,
-        purchase_constraint_block=purchase_constraint_block,
-        holding_change_block=holding_change_block,
-        event_impact_block=event_impact_block,
-        schedule_replay_block=schedule_replay_block,
+    # 生成后一遍：逐模块事实锚定 → 自检 → 跨模块一致性核对（顺序是契约）
+    contents = anchor_fact_checks(
+        contents,
+        cached,
+        holdings_details=holdings_details,
+        penetrated_assets=penetrated_assets,
+        pipeline_data=pipeline_data,
+        history_data=history_data,
+        llm_config=llm_config,
+        cache_info=cache_info,
+        module_labels=_module_labels,
+    )
+    apply_generation_post_pass(
+        contents,
+        holdings_details=holdings_details,
+        penetrated_assets=penetrated_assets,
+        llm_config=llm_config,
+        force_self_review="self_review" in _force_scope,
+        blocks=blocks,
+        module_labels=_module_labels,
     )
 
-    # ── 跨模块一致性核对（确定性，零 token）──────────────────────────────
-    # 单模块事实校验只回答「这段文字与本模块数据是否相符」，看不出模块之间互相打架
-    # （实测同一只基金一处 -8.5%、两处 -5.06%）。这类冲突是纯算术可判定的，放在
-    # 模型层自检之外做；检出时并入复核区块的**最前**（事实先于观点）。
-    from src.python.llm.fact_checker import build_cross_module_block, check_cross_module_claims
-    from src.python.llm.self_review import prepend_review_block
-
-    _cross_issues = check_cross_module_claims(
-        {
-            _module_labels.get("global_macro", "全球政经局势"): _review_text(gm_r) or "",
-            _module_labels.get("expert_review", "智囊团深度复盘"): _review_text(er_r) or "",
-            _module_labels.get("health_check", "持仓体检报告"): _review_text(hc_r) or "",
-            _module_labels.get("penetration_deep", "穿透深度分析"): _review_text(pd_r) or "",
-        },
-        holdings_details,
+    return _finalize_llm_run(
+        contents,
+        cached,
+        cache_info=cache_info,
+        debate_info=_debate_info_container[0] if _has_debate else None,
+        has_debate=_has_debate,
     )
-    if _cross_issues:
-        prepend_review_block(build_cross_module_block(_cross_issues))
-        logger.info("[cross_module] 检出 %d 处跨模块收益率口径冲突", len(_cross_issues))
-
-    # ── 持仓变动复盘归因：已在上面并入并行批（`_MODULE_FNS["holding_change"]`）──
-    # 早先串行后置是因为它与自检同属「章内块」，但它只吃持仓变动契约、不依赖四模块
-    # 产出，串行只是把 4~25s 白加到关键路径上。契约缺席（开关关闭/准入未过）时内部
-    # 直接跳过：不进 LLM、不写载体，`llm_review` 保持 None，报告归因块隐藏（双端同构）。
-
-    logger.info(
-        "LLM 生成完成: %s=%s, %s=%s, %s=%s, %s=%s",
-        _MN("global_macro"),
-        "OK" if gm_r else "跳过",
-        _MN("expert_review"),
-        "OK" if er_r else "跳过",
-        _MN("health_check"),
-        "OK" if hc_r else "跳过",
-        _MN("penetration_deep"),
-        "OK" if pd_r else "跳过",
-    )
-    # 落盘跨进程基线（组件哈希 + 各模块本轮缓存键）：下个进程据此判定「键变了还是只是老化」
-    from src.python.llm.fingerprint_baseline import save_baseline
-
-    save_baseline(
-        _LAST_FP_COMPONENTS or {},
-        {mk: str((info.get("key") or "")) for mk, info in (cache_info or {}).items() if isinstance(info, dict)},
-    )
-    _raw_debate_info = _debate_info_container[0] if _has_debate else None
-    if _has_debate:
-        return (gm_r, er_r, hc_r, pd_r, gm_c, er_c, hc_c, pd_c, _raw_debate_info)
-    return (gm_r, er_r, hc_r, pd_r, gm_c, er_c, hc_c, pd_c)
