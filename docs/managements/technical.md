@@ -1,5 +1,5 @@
 # 投资复盘助手 — 技术设计
-> 文档版本：0.17.8
+> 文档版本：0.17.9
 
 ## 目录
 
@@ -1728,7 +1728,8 @@ verbose 模式的颜色按 **stderr 自己的流**判定：取 `core.ansi_colors
 
 | 组件 | 文件 | 职责 |
 |:-----|:-----|:------|
-| 编排器 | `html_writer.py` | 调用 builders → 渲染 → 保存 |
+| 编排器 | `html_writer.py` | 区块装配（`html_sections.assemble_sections`）→ 模板渲染 → 后处理表（资产内嵌/匿名化/落盘）→ 保存 |
+| 区块装配 | `html_sections.py` | `SECTION_BUILDERS` 连续区段表 + `HtmlAssembly` 上下文；产物经 `SectionBindings`（NamedTuple）具名返回，顺序即契约 |
 | 数据构建器 | `html_builders.py` | 原始数据 → 结构化渲染对象 |
 | 渲染器 | `html_renderers.py` | Markdown→HTML 转换、格式处理 |
 | 模板 | `tmpl/report_template.html` + `tmpl/partials/` | Jinja2 模板 + 宏 + 章节级 partial（主模板经 include 按组拆入） |
@@ -3086,7 +3087,11 @@ llm/skeleton.py                 # 教训区块注入专家复盘提示词（开�
 入口层         generators_orchestrator.py    4+1 模块并行编排 + 缓存预检 + 生成后一遍（事实锚定/自检）
                   │
 编排层         skeleton.py                   标准/批量模式共享骨架
-               _llm_dispatch.py              worker 装配/线程池分发/辩论路由（经门面 re-export，patch 点不变）
+               _llm_context_blocks.py        上下文块单次渲染/提取（六块 → LlmContextBlocks，指纹与提示词共用实例）
+               _llm_post_pass.py             生成后一遍（事实锚定 → 自检 → 跨模块核对，顺序即契约）
+               _llm_dispatch.py              线程池提交与归集/总时间预算闸/收尾汇总（经门面 re-export，patch 点不变）
+               _worker_runner.py             单模块 worker 装配（thinking 闸门 / client 装配与缺 h2 降级 / span 记录）
+               _debate_router.py             辩论槽位替换（expert_review → pro/con/synthesis，两级回退）
                _batch_mode.py                批量模式分块执行（10 条/批、≤3 批并行）
                self_review.py                生成后自检（串行后置，不经并行调度）
                holding_change_review.py      持仓变动复盘归因（并入并行批，契约缺席自跳过）
@@ -3118,7 +3123,7 @@ API 层         api.py        Provider 路由 + Multi-Provider Chain 遍历
 
 **LLM 模块配置化**：每个 LLM 模块（global_macro / expert_review / health_check / penetration_deep / news_correlation）在 `core/registry.py` 中通过 `settings_suffix` 注册，自动派生 `llm_settings.json` 的所有合法键名。
 
-**辩论模式（报告章节与增强路由）**：当 Feature Flag `llm_debate_procon` 启用时，`_llm_dispatch.py` 中的 `_debate_wrapper` 闭包替换 `_MODULE_FNS["expert_review"]`；`llm_debate_conditional`（同组、默认开）仅叠加模式组合，不触发路由。辩论模式与标准模式互斥（辩论优先），路由后 `skeleton.generate_llm_module()` 走辩论三段缓存（`llm_debate_pro_` / `llm_debate_con_` / `llm_debate_synthesis_`）而非标准 expert_review 缓存。三段缓存由缓存专属登记 `_CACHE_ONLY_REGISTRY`（`core/data_registry.py`）承载——不在模块注册表内，故菜单/配置编辑/`llm_settings` 键域均不含其键；缓存侧访问器 `get_cache_registry()` 合并输出前缀/TTL/组归属（preload 组，24h TTL），缓存 key 与既有磁盘缓存不变。
+**辩论模式（报告章节与增强路由）**：当 Feature Flag `llm_debate_procon` 启用时，`_debate_router.py` 的 `install_debate_route` 中的 `_debate_wrapper` 闭包替换 `_MODULE_FNS["expert_review"]`；`llm_debate_conditional`（同组、默认开）仅叠加模式组合，不触发路由。辩论模式与标准模式互斥（辩论优先），路由后 `skeleton.generate_llm_module()` 走辩论三段缓存（`llm_debate_pro_` / `llm_debate_con_` / `llm_debate_synthesis_`）而非标准 expert_review 缓存。三段缓存由缓存专属登记 `_CACHE_ONLY_REGISTRY`（`core/data_registry.py`）承载——不在模块注册表内，故菜单/配置编辑/`llm_settings` 键域均不含其键；缓存侧访问器 `get_cache_registry()` 合并输出前缀/TTL/组归属（preload 组，24h TTL），缓存 key 与既有磁盘缓存不变。
 
 各子模块的详细设计见 `llm-technical.md` §1~§4（架构总览、模块清单、骨架流程、并行编排）。
 
@@ -3163,7 +3168,7 @@ LLM 集成层的分析模块由 `llm_settings.json` 的 `enabled_llm` 逐模块�
 
 每个模块的详细参数（model、temperature、timeout、max_tokens 等）通过 `{参数}_{标识}` 命名约定在 `llm_settings.json` 中配置。
 
-**辩论模式路由**：当 Feature Flag 开启时，expert_review 模块的生成入口被 `_debate_wrapper` 接管，输出路径变为 debate 三段式。辩论模式使用独立的缓存键（`llm_debate_pro_`/`llm_debate_con_`/`llm_debate_synthesis_`）和 Token 预算守卫，三段缓存共用 expert_review 的持仓指纹（排除行情波动），默认 TTL 24h。辩论模式启用时，HTML 的模块状态标签与 Excel 用量页对 expert_review 显示模式标识：`llm_debate_procon` 启用 → "辩论模式"，仅条件推理启用 → "情景推理模式"。
+**辩论模式路由**：当 Feature Flag 开启时，expert_review 模块的生成入口被 `_debate_router.install_debate_route` 替换为 `_debate_wrapper`，输出路径变为 debate 三段式。辩论模式使用独立的缓存键（`llm_debate_pro_`/`llm_debate_con_`/`llm_debate_synthesis_`）和 Token 预算守卫，三段缓存共用 expert_review 的持仓指纹（排除行情波动），默认 TTL 24h。辩论模式启用时，HTML 的模块状态标签与 Excel 用量页对 expert_review 显示模式标识：`llm_debate_procon` 启用 → "辩论模式"，仅条件推理启用 → "情景推理模式"。
 
 各模块的详细配置参数、System Prompt 设计、User Prompt 构建逻辑见 `llm-technical.md` §8（提示词管理）。辩论模式相关生成器见 `llm-technical.md` §2.1（子模块总览）。
 
@@ -3197,7 +3202,7 @@ LLM API 调用支持多 Provider 链式容错，与数据获取层的 Provider C
 | LLM 熔断 | `llm/circuit_breaker.py` — 连续 N 次失败 → 60s 冷却 → 半开状态试探 | 防止无效调用浪费 token |
 | 指纹缓存 | `fingerprint.py` — 依赖数据指纹过滤（排除行情波动字段） | 仅品种/份额/成本变化时重新调用 |
 | 乐观缓存预检 | 从 Provider 链中取链首 Provider 优先检查缓存，命中即返回 | 减少链遍历开销 |
-| 辩论路由 | `_debate_wrapper` 闭包替换 `_MODULE_FNS["expert_review"]`，Feature Flag 控制启停（默认关闭） | 辩论模式与标准模式互斥，辩论优先 |
+| 辩论路由 | `_debate_router.install_debate_route` 用 `_debate_wrapper` 替换 `_MODULE_FNS["expert_review"]`（pro/con 失败回退普通生成），Feature Flag 控制启停（默认关闭） | 辩论模式与标准模式互斥，辩论优先 |
 | Token 预算守卫 | pro+con 累计输出字符数 > `int(max_total_tokens_per_report)`（1 字符 ≈ 1 token，默认预算 72000）时触发保护：1× 超限→跳过 synthesis 阶段并拼接 pro+con；2× 超限→回退标准模式。配合 `per_call_max_tokens`（默认 18432，经 `max_tokens_override` 生效）单段上限双闸保护 | 防止辩论模式过度消耗 token |
 | 虚构代码过滤 | `_filter_hallucinated_codes()` 正则句段级过滤，经 `skeleton.py` 的 `raw_filter_fn` 钩子在 markdown_to_html 之前作用于 LLM 原始 Markdown；按"行→句末标点"两级切分精确删除，`TOP\d` 排名表述 + 英文白名单豁免误报 | 消除 LLM 产生的虚构证券代码，且不因 HTML 单行拼接误删整段 |
 
@@ -3472,7 +3477,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `depth_profile` | 报告深度档位表与解析（brief/standard/deep：只收窄模块集合与新闻采集规模，缺省档与既有行为逐字节一致） | LLM 智能分析 | 内容生成 | `config.json → llm_report_depth` |
 | `force_scope` | 模块级强刷范围（可强刷键清单 FORCEABLE_LLM_MODULES / resolve_force_scope 粒度优先归一与未知键校验 / is_module_forced；全局 force 与模块子集合并为模块键集合，强刷不改缓存键构造） | LLM 智能分析 | 内容生成 | 无（CLI `--llm-module` / TUI 多选 / Web 勾选，命令行一次性参数） |
 | `llm_providers.priority` | LLM 多链线路优先级（降级顺序三渠道调序：共享编辑层 reorder 动作归一化写盘，CLI `--llm-provider-order` / TUI [M] 面板 / Web 配置面 ▲▼） | LLM 智能分析 | 内容生成 | `llm_providers.json → providers[].priority` |
-| `self_review` | 生成后自检（模型层复核各模块产出与数据是否自洽；分层于确定性事实校验之上，出厂默认关——单份报告输入最大的一遍，批量评估走离线抽样。上屏两条硬保证：模块一律以中文显示名出现（残留内部键由代码兜底替换）、自检引用的百分比须在本次语料中逐字可定位，否则追加上「无法核实」注记） | LLM 智能分析 | 内容生成 | `llm_settings.json → enabled_llm.self_review` |
+| `self_review` | 生成后自检（模型层复核各模块产出与数据是否自洽；分层于确定性事实校验之上，出厂默认关——单份报告输入最大的一遍，批量评估走离线抽样。上屏两条硬保证：模块一律以中文显示名出现（残留内部键由代码兜底替换）、自检引用的百分比须能在本次语料中定位——逐字出现，或由语料取值经 1~3 项加减组合得到（合计/差值口径，容差 0.02pp），否则追加上「无法核实」注记） | LLM 智能分析 | 内容生成 | `llm_settings.json → enabled_llm.self_review` |
 | `quarter_walk_anchor` | 季报回溯窗口的时间锚点上下文（记录-回放时固定为 cassette 录制时点，去时间依赖而保留请求形状漂移信号） | 数据源 | 数据获取 | 无 |
 | `apply_compliance_guardrails` | 合规声明集中注入（在 system prompt 尾部幂等叠加「仅供复盘参考、不构成投资建议」，窄判定角色可追加专属约束） | LLM 智能分析 | 内容生成 | 无 |
 | `cost_forecast` | 事前费用预估与日预算（计划参与模块×模型单价区间预估：历史实际费用优先、静态包络兜底、无法定价降级不阻塞；重新生成范围感知——`force_llm`/`force_modules` 与创建运行同源 `resolve_force_scope` 归一，范围内模块按静态单价口径、范围外维持历史口径，摘要行拆分显示；日预算超限交互询问降级/中止、非交互硬闸——TUI/CLI/Web 三渠道同源数据面） | LLM 智能分析 | 内容生成 | `llm_settings.json → daily_cost_limit` |

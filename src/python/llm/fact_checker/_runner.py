@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import re
+from dataclasses import dataclass
 
 from src.python.llm.fact_checker._constants import _DEFAULT_TOLERANCE_PCT
 from src.python.llm.fact_checker._corrections import (
@@ -22,6 +23,237 @@ from src.python.llm.fact_checker._symbols import check_symbol_existence
 from src.python.llm.fact_checker._utils import _sentence_snippet, _strip_html
 
 logger = logging.getLogger("invest")
+
+
+@dataclass(frozen=True)
+class _CheckOutcome:
+    """三项检查的汇总结果（数值 / 品种存在性 / 排名）。"""
+
+    issues: list[str]
+    total_checks: int
+    total_passed: int
+    corrections: list[tuple[str, str, str, str]]
+    symbol_issues: list[str]
+    symbol_suggestions: list[str]
+
+
+@dataclass(frozen=True)
+class _CorrectionOutcome:
+    """自动修正的结果（改写后的正文 + 摘要片段 + 已判定未改写的数值）。"""
+
+    corrected_html: str
+    auto_part: str
+    correction_lines: str
+    skipped_values: set[str]
+    applied_corrections: list[tuple[str, str, str, str]]
+    code_corrections: list[tuple[str, str, str, str]]
+
+
+def _resolve_tolerance(
+    tolerance_pct: float | None,
+    tolerance_overrides: dict[str, float] | None,
+    module_label: str,
+) -> float:
+    """生效容差：调用级覆盖 > 模块级映射 > 默认值。"""
+    if tolerance_pct is not None:
+        return tolerance_pct
+    if tolerance_overrides and module_label:
+        return tolerance_overrides.get(module_label.replace(" ", "_"), _DEFAULT_TOLERANCE_PCT)
+    return _DEFAULT_TOLERANCE_PCT
+
+
+def _extract_max_drawdown(history_data: dict | None) -> float | None:
+    """从组合历史走势数据取最大回撤（无数据返回 None，回撤语境即不探测）。"""
+    if history_data and history_data.get("max_drawdown_pct"):
+        return float(history_data["max_drawdown_pct"])
+    return None
+
+
+def _run_checks(
+    text: str,
+    holdings_details: list[dict] | None,
+    *,
+    tolerance: float,
+    max_drawdown_pct: float | None,
+    extra_valid_codes: set[str] | None,
+    is_penetration_module: bool,
+    skip_ranking_check: bool,
+) -> _CheckOutcome:
+    """依次跑三项检查并汇总（数值一致性 → 品种存在性 → 排名正确性）。
+
+    排名校验在 ``skip_ranking_check``（缓存命中场景）时跳过：缓存内容基于生成时的价格
+    快照，用当前市值校验其排名声称会因价格变动产生「排名翻转」误报。
+    """
+    issues: list[str] = []
+    corrections: list[tuple[str, str, str, str]] = []
+    total_checks = 0
+    total_passed = 0
+
+    num_issues, num_checked, num_passed, num_corrections = check_numerical_consistency(
+        text,
+        holdings_details,
+        tolerance_pct=tolerance,
+        max_drawdown_pct=max_drawdown_pct,
+    )
+    issues.extend(num_issues)
+    total_checks += num_checked
+    total_passed += num_passed
+    corrections.extend(num_corrections)
+
+    sym_issues, sym_checked, sym_passed, sym_suggestions = check_symbol_existence(
+        text,
+        holdings_details,
+        extra_valid_codes,
+    )
+    issues.extend(sym_issues)
+    total_checks += sym_checked
+    total_passed += sym_passed
+
+    # 穿透分析模块使用穿透排名基线
+    if skip_ranking_check:
+        rank_issues, rank_checked, rank_passed = [], 0, 0
+    else:
+        rank_issues, rank_checked, rank_passed = check_ranking_correctness(
+            text, holdings_details, is_penetration_module
+        )
+    issues.extend(rank_issues)
+    total_checks += rank_checked
+    total_passed += rank_passed
+
+    return _CheckOutcome(
+        issues=issues,
+        total_checks=total_checks,
+        total_passed=total_passed,
+        corrections=corrections,
+        symbol_issues=sym_issues,
+        symbol_suggestions=sym_suggestions,
+    )
+
+
+def _apply_auto_corrections(
+    html_content: str,
+    text: str,
+    holdings_details: list[dict] | None,
+    extra_valid_codes: set[str] | None,
+    *,
+    auto_correct: bool,
+    outcome: _CheckOutcome,
+    module_label: str,
+) -> _CorrectionOutcome:
+    """自动修正（数值 + 品种代码笔误）并产出摘要片段。
+
+    代码笔误纠正通道：以品种存在性告警为输入，仅当错码非持仓/穿透/指数/建议语境、
+    唯一持仓近邻（编辑距离≤1）、且其后权重声称与候选真实权重容差内吻合时才纠正
+    （见 ``_corrections.detect_code_corrections``）。
+
+    归属不可知而被跳过的数值（同值异义/同句多义/表格并列裸百分比）既不算修正、也不该
+    作为告警列出——检查器本就没能判定它们是错的（宁漏改不误改）。
+    """
+    code_corrections: list[tuple[str, str, str, str]] = []
+    if auto_correct and outcome.symbol_issues:
+        code_corrections = detect_code_corrections(text, holdings_details, extra_valid_codes)
+
+    corrected_html = html_content
+    correction_lines = ""
+    auto_part = ""
+    skipped_values: set[str] = set()
+    all_corrections = list(outcome.corrections)
+
+    if not (auto_correct and (all_corrections or code_corrections)):
+        return _CorrectionOutcome(
+            corrected_html, auto_part, correction_lines, skipped_values, all_corrections, code_corrections
+        )
+
+    if all_corrections:
+        judged_values = {c[0] for c in all_corrections}
+        applied_values: list[str] = []
+        corrected_html = apply_numerical_corrections(corrected_html, all_corrections, applied_values)
+        skipped_values = judged_values - set(applied_values)
+        all_corrections = [c for c in all_corrections if c[0] in set(applied_values)]
+    if code_corrections:
+        corrected_html = apply_code_corrections(corrected_html, code_corrections)
+
+    # 修正明细：日志记录 + HTML 摘要灰色行（供用户直接查看具体修正了什么）。
+    # 数值 4 元组 correction 带语义 reason（如"601939实际收益率187.12%"），代码 4 元组
+    # reason 带候选权重语义，展示「修正的是哪个数字/代码、其语义」而非仅截断句段。
+    _parts = []
+    for cx in all_corrections:
+        w, c, s = cx[0], cx[1], cx[2]
+        reason = cx[3] if len(cx) >= 4 and cx[3] else _sentence_snippet(s)
+        _parts.append(f"{w}%→{c}%（{reason}）")
+    for bc, gc, _s, code_reason in code_corrections:
+        _parts.append(f"{bc}→{gc}（{code_reason}）")
+    _corr_detail = "; ".join(_parts)
+    _num_n = len(all_corrections)
+    _code_n = len(code_corrections)
+    if _num_n and _code_n:
+        auto_part = f"{_num_n} 处数值、{_code_n} 处代码"
+    elif _code_n:
+        auto_part = f"{_code_n} 处代码"
+    else:
+        auto_part = f"{_num_n} 处数值"
+    logger.info(
+        "[%s] 事实校验自动修正 %s: %s",
+        module_label or "LLM",
+        auto_part,
+        _corr_detail,
+    )
+    # 修正次数跨模块累计（报告层汇入 perf_history.counters，供跨期趋势对拍）
+    _note_auto_correction(module_label, _num_n, _code_n)
+    correction_lines = f'\n<span style="color:#888;font-size:11px">已修正明细: {_corr_detail}</span>'
+    return _CorrectionOutcome(
+        corrected_html, auto_part, correction_lines, skipped_values, all_corrections, code_corrections
+    )
+
+
+def _build_summary(
+    *,
+    outcome: _CheckOutcome,
+    correction: _CorrectionOutcome,
+    auto_correct: bool,
+    module_label: str,
+) -> str:
+    """构建校验摘要 HTML（全通过绿色 / 有不一致黄色；建议提及与修正明细为灰色行）。"""
+    tag = f"[{module_label}] " if module_label else ""
+    suggestion_lines = ""
+    if outcome.symbol_suggestions:
+        sug_detail = "; ".join(outcome.symbol_suggestions)
+        suggestion_lines = (
+            f'\n<span style="color:#999;font-size:11px">ℹ {tag}建议提及（不计入校验）: {sug_detail}</span>'
+        )
+    correction_lines = correction.correction_lines
+
+    if not outcome.issues:
+        summary = f"{tag}✓ 事实校验通过：{outcome.total_passed}/{outcome.total_checks} 项检查全部通过"
+        result = f'<p style="color:#4a4;font-size:12px">{summary}</p>'
+        return result + suggestion_lines + correction_lines
+
+    # 存在不一致 — 黄色告警摘要（已修正项不再重复列出）
+    corrected_values = {c[0] for c in correction.applied_corrections} if auto_correct else set()
+    corrected_codes = {c[0] for c in correction.code_corrections} if auto_correct else set()
+    detail_lines: list[str] = []
+    for issue in outcome.issues:
+        # 跳过已自动修正的数值/代码的告警（正文里已看不到该值/码，列出徒增困惑）
+        if any(cv in issue for cv in corrected_values):
+            continue
+        # 归属不可知而未改写的数值：检查器未判定其为错值，不列为告警
+        if any(sv in issue for sv in correction.skipped_values):
+            continue
+        if any(cc in issue for cc in corrected_codes):
+            continue
+        detail_lines.append(f"⚠ {tag}{issue}")
+
+    auto_msg = (
+        f"（自动修正 {correction.auto_part}）"
+        if auto_correct and (correction.applied_corrections or correction.code_corrections)
+        else ""
+    )
+    if detail_lines:
+        summary = f"{tag}事实校验：{outcome.total_passed}/{outcome.total_checks} 项通过，{len(detail_lines)} 项提示{auto_msg}\n"
+        summary += "\n".join(detail_lines)
+    else:
+        summary = f"{tag}✓ 事实校验通过：{outcome.total_passed}/{outcome.total_checks} 项检查全部通过{auto_msg}"
+    return f'<p style="color:#a40;font-size:12px">{summary}</p>{suggestion_lines}{correction_lines}'
 
 
 def run_fact_check(
@@ -80,155 +312,37 @@ def run_fact_check(
     if not html_content:
         return html_content, ""
 
-    # 确定容差（模块级覆盖优先）
-    effective_tolerance = _DEFAULT_TOLERANCE_PCT
-    if tolerance_pct is not None:
-        effective_tolerance = tolerance_pct
-    elif tolerance_overrides and module_label:
-        key = module_label.replace(" ", "_")
-        effective_tolerance = tolerance_overrides.get(key, _DEFAULT_TOLERANCE_PCT)
-
-    # 从 history_data 提取最大回撤
-    _max_dd = None
-    if history_data and history_data.get("max_drawdown_pct"):
-        _max_dd = float(history_data["max_drawdown_pct"])
-
+    effective_tolerance = _resolve_tolerance(tolerance_pct, tolerance_overrides, module_label)
+    max_dd = _extract_max_drawdown(history_data)
     text = _strip_html(html_content)
-    all_issues: list[str] = []
-    total_checks = 0
-    total_passed = 0
-    all_corrections: list[tuple[str, str, str, str]] = []
 
-    # 检查 1：数值一致性（含回撤语境检测）
-    num_issues, num_checked, num_passed, corrections = check_numerical_consistency(
+    outcome = _run_checks(
         text,
         holdings_details,
-        tolerance_pct=effective_tolerance,
-        max_drawdown_pct=_max_dd,
+        tolerance=effective_tolerance,
+        max_drawdown_pct=max_dd,
+        extra_valid_codes=extra_valid_codes,
+        is_penetration_module=is_penetration_module,
+        skip_ranking_check=skip_ranking_check,
     )
-    all_issues.extend(num_issues)
-    total_checks += num_checked
-    total_passed += num_passed
-    all_corrections.extend(corrections)
-
-    # 检查 2：品种存在性（支持穿透分析的额外有效代码）
-    sym_issues, sym_checked, sym_passed, sym_suggestions = check_symbol_existence(
+    correction = _apply_auto_corrections(
+        html_content,
         text,
         holdings_details,
         extra_valid_codes,
+        auto_correct=auto_correct,
+        outcome=outcome,
+        module_label=module_label,
     )
-    all_issues.extend(sym_issues)
-    total_checks += sym_checked
-    total_passed += sym_passed
-
-    # 检查 3：排名正确性（穿透分析模块使用穿透排名基线）
-    # skip_ranking_check=True（缓存命中场景）时跳过排名校验：
-    # 缓存内容基于生成时的价格快照，当前市值可能已发生排名翻转 → 误报。
-    if skip_ranking_check:
-        rank_issues, rank_checked, rank_passed = [], 0, 0
-    else:
-        rank_issues, rank_checked, rank_passed = check_ranking_correctness(
-            text, holdings_details, is_penetration_module
-        )
-    all_issues.extend(rank_issues)
-    total_checks += rank_checked
-    total_passed += rank_passed
-
-    # ── 自动修正（数值 + 品种代码笔误）──
-    # 代码笔误纠正通道：品种存在性告警（sym_issues）基础上，当错码非
-    # 持仓/穿透/指数/建议语境、且唯一持仓近邻（编辑距离≤1）、且其后
-    # 权重声称与候选真实权重容差内吻合时才自动纠正（见 _corrections.detect_code_corrections）。
-    code_corrections: list[tuple[str, str, str, str]] = []
-    if auto_correct and sym_issues:
-        code_corrections = detect_code_corrections(text, holdings_details, extra_valid_codes)
-
-    _auto_part = ""
-    corrected_html = html_content
-    correction_lines = ""
-    # 归属不可知而被跳过的数值（同值异义/同句多义/表格并列裸百分比）：它们既不算
-    # 修正，也不该作为告警列出——检查器本来就没能判定它们是错的（宁漏改不误改）。
-    _skipped_values: set[str] = set()
-    if auto_correct and (all_corrections or code_corrections):
-        if all_corrections:
-            _judged_values = {c[0] for c in all_corrections}
-            _applied_values: list[str] = []
-            corrected_html = apply_numerical_corrections(corrected_html, all_corrections, _applied_values)
-            _skipped_values = _judged_values - set(_applied_values)
-            all_corrections = [c for c in all_corrections if c[0] in set(_applied_values)]
-        if code_corrections:
-            corrected_html = apply_code_corrections(corrected_html, code_corrections)
-        # 修正明细：日志记录 + HTML 摘要灰色行（供用户直接查看具体修正了什么）。
-        # 数值 4 元组 correction 带语义 reason（如"601939实际收益率187.1%"），
-        # 代码 4 元组 reason 带候选权重语义（如"561910（招商中证电池主题ETF）
-        # 实际权重10.2%…"），展示"修正的是哪个数字/代码、其语义"而非仅截断句段。
-        _parts = []
-        for cx in all_corrections:
-            w, c, s = cx[0], cx[1], cx[2]
-            reason = cx[3] if len(cx) >= 4 and cx[3] else _sentence_snippet(s)
-            _parts.append(f"{w}%→{c}%（{reason}）")
-        for bc, gc, _s, code_reason in code_corrections:
-            _parts.append(f"{bc}→{gc}（{code_reason}）")
-        _corr_detail = "; ".join(_parts)
-        _num_n = len(all_corrections)
-        _code_n = len(code_corrections)
-        if _num_n and _code_n:
-            _auto_part = f"{_num_n} 处数值、{_code_n} 处代码"
-        elif _code_n:
-            _auto_part = f"{_code_n} 处代码"
-        else:
-            _auto_part = f"{_num_n} 处数值"
-        logger.info(
-            "[%s] 事实校验自动修正 %s: %s",
-            module_label or "LLM",
-            _auto_part,
-            _corr_detail,
-        )
-        # 修正次数跨模块累计（报告层汇入 perf_history.counters，供跨期趋势对拍）
-        _note_auto_correction(module_label, _num_n, _code_n)
-        correction_lines = f'\n<span style="color:#888;font-size:11px">已修正明细: {_corr_detail}</span>'
-
-    if total_checks == 0:
-        return corrected_html, ""
-
-    tag = f"[{module_label}] " if module_label else ""
-
-    # 构建建议提及行（灰色，不计入告警）
-    suggestion_lines = ""
-    if sym_suggestions:
-        sug_detail = "; ".join(sym_suggestions)
-        suggestion_lines = (
-            f'\n<span style="color:#999;font-size:11px">ℹ {tag}建议提及（不计入校验）: {sug_detail}</span>'
-        )
-
-    if not all_issues:
-        # 全部通过 — 绿色摘要（含建议提及则灰色追加）
-        summary = f"{tag}✓ 事实校验通过：{total_passed}/{total_checks} 项检查全部通过"
-        result = f'<p style="color:#4a4;font-size:12px">{summary}</p>'
-        if suggestion_lines:
-            result += suggestion_lines
-        return corrected_html, result + correction_lines
-
-    # 存在不一致 — 黄色告警摘要（若已修正则标注修正条数，已修正项不重复列出）
-    corrected_values = {c[0] for c in all_corrections} if auto_correct else set()
-    corrected_codes = {c[0] for c in code_corrections} if auto_correct else set()
-    detail_lines: list[str] = []
-    for issue in all_issues:
-        # 跳过已自动修正的数值/代码的告警（用户在内容中已看不到该值/码，列出徒增困惑）
-        if any(cv in issue for cv in corrected_values):
-            continue
-        # 归属不可知而未改写的数值：检查器未判定其为错值，不列为告警
-        if any(sv in issue for sv in _skipped_values):
-            continue
-        if any(cc in issue for cc in corrected_codes):
-            continue
-        detail_lines.append(f"⚠ {tag}{issue}")
-    auto_msg = f"（自动修正 {_auto_part}）" if auto_correct and (all_corrections or code_corrections) else ""
-    if detail_lines:
-        summary = f"{tag}事实校验：{total_passed}/{total_checks} 项通过，{len(detail_lines)} 项提示{auto_msg}\n"
-        summary += "\n".join(detail_lines)
-    else:
-        summary = f"{tag}✓ 事实校验通过：{total_passed}/{total_checks} 项检查全部通过{auto_msg}"
-    return corrected_html, f'<p style="color:#a40;font-size:12px">{summary}</p>{suggestion_lines}{correction_lines}'
+    # 无任何检查项（空正文/无持仓）：修正照常落盘，但不给摘要（无可报的数字）
+    if outcome.total_checks == 0:
+        return correction.corrected_html, ""
+    return correction.corrected_html, _build_summary(
+        outcome=outcome,
+        correction=correction,
+        auto_correct=auto_correct,
+        module_label=module_label,
+    )
 
 
 #: 校验产物段落（摘要 / 建议提及 / 已修正明细）——它们描述「校验结果」而非分析正文。

@@ -42,7 +42,13 @@ _skipped_samples: dict[str, list[dict[str, str]]] = {}
 
 
 def reset_numerical_coverage() -> None:
-    """清空累计（每次 run_fact_check / 评测开始前调用）。"""
+    """清空累计（**每次报告重放/评测开始前**由调用方显式调用）。
+
+    报告主路径不消费本统计、也不复位：计数在进程内累积（长驻 TUI 多轮报告
+    会一直加），唯一消费者是离线重放（`_eval_halluc_sampler.from_report`，
+    按「一份报告」为单位先复位再统计全模块）。之所以不在 `run_fact_check` 内
+    自动复位：那会切断重放的跨模块汇总，复位权因此留在调用方。
+    """
     global _total, _verified, _mismatched
     with _lock:
         _total = _verified = _mismatched = 0

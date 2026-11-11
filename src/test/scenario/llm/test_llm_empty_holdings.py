@@ -12,7 +12,7 @@ import unittest
 
 import pytest
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from src.test.helpers import SynchronousExecutor
 
@@ -43,12 +43,9 @@ class TestEmptyHoldingsWithLlm(unittest.TestCase):
         cls._cfg_patcher.start()
         cls._exec_patcher = patch("src.python.llm._llm_dispatch.ThreadPoolExecutor", new=SynchronousExecutor)
         cls._exec_patcher.start()
-        cls._httpx_patcher = patch("src.python.llm._llm_dispatch.httpx.Client", new=MagicMock())
-        cls._httpx_patcher.start()
 
     @classmethod
     def tearDownClass(cls):
-        cls._httpx_patcher.stop()
         cls._exec_patcher.stop()
         cls._cfg_patcher.stop()
 

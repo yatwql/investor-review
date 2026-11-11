@@ -83,7 +83,8 @@ class TestHallucinationDetection:
         # 必须点名「组合累计收益率」与实际值：否则任意无关告警都能让本用例转绿（测不出该口径）
         assert len(issues) >= 1, "应检测到组合收益率偏离"
         assert "累计收益率" in issues[0], f"告警应对照组合累计收益率口径：{issues[0]}"
-        assert "9.7%" in issues[0], f"告警应引用实际值而非仅报告偏离：{issues[0]}"
+        # 修正值/告警值与摘要同精度（两位小数），不再按一位小数截断
+        assert "9.73%" in issues[0], f"告警应引用实际值而非仅报告偏离：{issues[0]}"
         assert len(corrections) >= 1, "偏离应生成数值修正"
         logger.info("组合收益率偏离检出: %s", issues)
 

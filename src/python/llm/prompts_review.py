@@ -94,20 +94,27 @@ def _strip_html_for_review(text: str) -> str:
 
 
 def _self_review_holdings_digest(holdings_details: list | None) -> str:
-    """持仓比对基准：名称/代码/市值/盈亏/占比（每行一条，截断至 40 行）。"""
+    """持仓比对基准：名称/代码/市值/盈亏/占比/收益率（每行一条，截断至 40 行）。
+
+    收益率必须入摘要：它是模型被要求复核的最主要一组数字（也是事实校验自动
+    修正的对象），摘要不给出时自检只能写「摘要未给收益率，无法核实」，按其他
+    模块正文引用的错值（如把 +64.08% 写成 +64.96%）也无从对账。
+    """
     if not holdings_details:
         return "（无持仓明细）"
     rows: list[str] = []
     for d in holdings_details[:40]:
         get = d.get if isinstance(d, dict) else lambda k, _d=d: getattr(_d, k, None)
         raw_code = get("code")
+        rate = get("profit_rate")
         rows.append(
-            "- {name}({code}) 市值 {mv} 盈亏 {profit} 占比 {ratio}".format(
+            "- {name}({code}) 市值 {mv} 盈亏 {profit} 占比 {ratio} 收益率 {rate}".format(
                 name=get("name") or "?",
                 code=mask_holding_code(str(raw_code)) if raw_code is not None else "?",
                 mv=get("market_value") if get("market_value") is not None else get("mv"),
                 profit=get("profit"),
                 ratio=get("weight_pct") if get("weight_pct") is not None else get("ratio_pct"),
+                rate=f"{rate:+.2f}%" if isinstance(rate, (int, float)) else "--",
             )
         )
     return "\n".join(rows)

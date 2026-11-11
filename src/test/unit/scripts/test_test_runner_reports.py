@@ -102,3 +102,31 @@ class TestIndexLinks:
             load_script("test-runner.py", module_name="test_runner_report_paths"), tmp_path, monkeypatch, []
         )
         assert "无" in html
+
+
+class TestDebugLogWriteFailure:
+    """失败详情落盘失败时必须留痕——不得静默吞掉（诊断链在那一步断掉）。"""
+
+    def test_debug_log_write_failure_is_reported(self, monkeypatch, tmp_path, capsys):
+        runner = load_script("test-runner.py", module_name="test_runner_debug_log_fail")
+        blocker = tmp_path / "not_a_dir"
+        blocker.write_text("x", encoding="utf-8")
+        # 实现已拆到 `_test_runner/runner.py`：按其函数全局命名空间打补丁
+        # （父级是文件 → 目录不可创建，落盘必然失败）
+        globals_ns = runner._run_phased.__globals__
+        monkeypatch.setitem(globals_ns, "_LATEST_DIR", str(blocker / "latest"))
+        monkeypatch.setitem(globals_ns, "_check_pytest_html", lambda: False)
+        monkeypatch.setitem(globals_ns, "_build_pytest_args", lambda *a, **k: ["pytest"])
+
+        class _Proc:
+            returncode = 1
+            stdout = "1 failed\n===== FAILURES ====="
+            stderr = ""
+
+        monkeypatch.setitem(globals_ns, "subprocess", type("_Sub", (), {"run": staticmethod(lambda *a, **k: _Proc())}))
+
+        result = runner._run_phased([{"marker": "unit", "desc": "d"}], "verify", False)
+
+        out = capsys.readouterr().out
+        assert "详细日志写入失败" in out, f"落盘失败必须留痕，实际输出: {out!r}"
+        assert result["exit_code"] == 1, "落盘失败不得改变本轮失败判定"

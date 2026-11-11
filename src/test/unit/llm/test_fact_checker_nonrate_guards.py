@@ -101,13 +101,13 @@ class TestNonRateValueGuards:
         text = "各品种持仓收益率分层合理：纳指联接 016055 +99.9%、建信装备 +21.91% 属中等偏上。"
         _issues, _checked, _passed, corrections = check_numerical_consistency(text, holdings)
         assert len(corrections) == 1, f"应只纠正 99.9 一处: {corrections}"
-        assert corrections[0][0] == "99.9" and corrections[0][1] == "18.7"
+        assert corrections[0][0] == "99.9" and corrections[0][1] == "18.66"
 
     def test_resolved_full_name_still_corrected(self, holdings):
         """全名主体（省略类型尾缀「股票A」）解析得到 → 错值仍须纠正。"""
         text = "建信高端装备持仓收益率 +25.0% 领先。"
         _issues, _checked, _passed, corrections = check_numerical_consistency(text, holdings)
-        assert len(corrections) == 1 and corrections[0][1] == "21.9", f"全名主体错值应被纠正: {corrections}"
+        assert len(corrections) == 1 and corrections[0][1] == "21.91", f"全名主体错值应被纠正: {corrections}"
 
     def test_time_filler_does_not_shield_real_rate(self, holdings):
         """时间填充词（本季度）不遮蔽主体：主体在更左侧仍能解析并纠正。"""

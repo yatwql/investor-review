@@ -1,7 +1,7 @@
 # 投资复盘助手 — 实现计划
 
-> 文档版本：0.17.8
-> **编号源**：`plan-next = 248`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-247，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> 文档版本：0.17.9
+> **编号源**：`plan-next = 252`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-251，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -77,7 +77,6 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 **事实位**：判据常量在 `qa/telemetry.py`；转正/撤销条款与当前态在本条维护，技术机制见 §6.9。
 
 #### `plan-243` 决策依据章与 LLM 章职责切分（已收口，仅留观察项）
-
 **结论**：R0~R7、R9 已落地（含提示词两刀与版本盐递增、R9 约束标注默认关），R8 未启动即收口。
 **已定调**：估值分位/因子目录信号按「已回测未通过」「样本不足」**归档**（三态标注照常呈现；真实 PE/PB 口径不入管线；`scripts/eval-decision-quality.py` 保留，供样本累积后一次性复跑，日常不排期）；独立章节形态 B 不启用；LLM 章维持解读层。
 **长期观察（不排期，触发条件满足时再评估）**：① R8 纪律规则重构——前置 V5 成熟样本 ≥100（现 2 条）；② V7 相关性约束启用——前置样本期 ≥250 交易日（现 146）；③ 讨论稿优先级 6 与 V4/V6/V7 模型 A/B（人工采样，不入自动化）。以上任一前置达成前，资源投向其他任务。
@@ -95,8 +94,13 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 
 ### 已完成（待发布归档）
 
-## 归档
+**plan-250 LLM 并行编排拆分**：已完成（函数体 392 → 101 行；块装配与生成后一遍各自成模块，7 条结构契约用例在拆分前后均绿），契约与实施结果见 [`generate-all-llm-stage-contract.md`](../plan/generate-all-llm-stage-contract.md) §8。
 
+**plan-251 LLM worker 派发拆分**：已完成（派发壳函数体 256 → 75 行；worker 装配与辩论路由各自成模块，11 条结构契约用例在拆分前后均绿），契约与实施结果见 [`llm-dispatch-stage-contract.md`](../plan/llm-dispatch-stage-contract.md) §8。
+
+**plan-249 both 报告路径拆分**：已完成（编排壳函数体 388 → 43 行；五阶段与阶段表收进 `_both_stages.py`，8 条结构契约用例在拆分前后均绿），契约与实施结果见 [`report-both-stage-contract.md`](../plan/report-both-stage-contract.md) §8。## 归档
+
+**plan-248 HTML 报告装配拆分**：已完成（契约 6 条全部落地；编排壳 388 → 265 行，形态目标按实测调整为「装配与后处理各自成表」，偏离理由见契约文档 §8 末节），契约与结果见 [`html-writer-stage-contract.md`](../plan/html-writer-stage-contract.md)。
 - [`archived_plan.0.17.x.md`](../archive/v0.17.x/archived_plan.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-08）
 - [`archived_plan.0.16.x.md`](../archive/v0.16.x/archived_plan.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-11-03）
 - [`archived_plan.0.15.x.md`](../archive/v0.15.x/archived_plan.0.15.x.md) — v0.15.x（2026-10-24 ~ 2026-10-25）

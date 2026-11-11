@@ -333,7 +333,7 @@ class TestRunFactCheck:
         assert "持仓体检报告" in summ
         assert "600036" in summ
         # 自动修正：5.0% → 30.3%
-        assert "30.3%" in corr
+        assert "30.28%" in corr
         assert "5.0%" not in corr
 
     def test_no_module_label(self, sample_holdings):
@@ -408,7 +408,7 @@ class TestRunFactCheck:
         # 排名误报不出现
         assert "最大持仓" not in summ
         # 数值修正仍生效：5.0% → 30.3%
-        assert "30.3%" in corr
+        assert "30.28%" in corr
         assert "5.0%" not in corr
         assert "自动修正 1 处数值" in summ
 
@@ -425,13 +425,13 @@ class TestRunFactCheck:
 <p>组合累计收益率为 5.0%。</p>"""
         corr, summ = run_fact_check(html, sample_holdings, "智囊团深度复盘")
         # 内容中 5.0% 已被替换为 30.3%
-        assert "30.3%" in corr
+        assert "30.28%" in corr
         assert "5.0%" not in corr
         # 摘要追加灰色「已修正明细」行，含 wrong→correct 与语义 reason
         # （语义 reason 替代原截断句段，说明修正的是哪个数字的含义）
         assert "已修正明细" in summ
-        assert "5.0%→30.3%" in summ
-        assert "组合实际收益率30.3%" in summ
+        assert "5.0%→30.28%" in summ
+        assert "组合实际收益率30.28%" in summ
 
     def test_run_fact_check_change_rate_not_corrected(self, sample_holdings):
         """run_fact_check 整链路：环比变化率不被自动修正。
@@ -461,4 +461,4 @@ class TestRunFactCheck:
         joined = caplog.text
         assert "智囊团深度复盘" in joined
         assert "自动修正 1 处数值" in joined
-        assert "5.0%→30.3%" in joined
+        assert "5.0%→30.28%" in joined

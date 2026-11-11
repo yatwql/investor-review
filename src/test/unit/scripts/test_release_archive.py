@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from pathlib import Path
 
@@ -106,6 +107,14 @@ class TestLedgerArchive:
         main, arch, moved = rel.apply_rf_archive("# 空台账\n", _SAMPLE_RF_ARCHIVE, "0.12.6", "2026-10-08")
         assert moved == 0
         assert main == "# 空台账\n" and arch == _SAMPLE_RF_ARCHIVE
+
+    def test_unbolded_rows_warn_instead_of_silent_skip(self, rel, caplog):
+        """行不是 `| **rf-N** |` 形态时返回 0 但留告警——否则发布漏搬表现为「已迁档，跳过」。"""
+        main = _SAMPLE_RF.replace("| **rf-901** |", "| rf-901 |").replace("| **rf-902** |", "| rf-902 |")
+        with caplog.at_level(logging.WARNING, logger="invest"):
+            _main, _arch, moved = rel.apply_rf_archive(main, _SAMPLE_RF_ARCHIVE, "0.12.6", "2026-10-08")
+        assert moved == 0
+        assert any("rf-N" in str(record.message) for record in caplog.records), "应留下可诊断告警"
 
     def test_archive_status_three_states(self, rel):
         assert rel.rf_archive_status("# 空台账\n", "0.12.6")[0] == "absent"

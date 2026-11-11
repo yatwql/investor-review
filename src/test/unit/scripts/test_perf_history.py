@@ -9,31 +9,12 @@
 from __future__ import annotations
 
 import pytest
+from src.test.unit.scripts._perf_history_fixtures import (  # noqa: F401 — 分片共享夹具
+    _records,
+    fixture_mod,
+)
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_scripts]
-
-
-@pytest.fixture(name="mod")
-def fixture_mod():
-    """加载 `scripts/perf-history.py` 为可测模块。"""
-    from src.test._script_loader import load_script
-
-    return load_script("perf-history.py")
-
-
-def _records(count: int = 3, version: str = "0.1.0", report_type: str = "full", start: int = 0) -> list[dict]:
-    return [
-        {
-            "version": version,
-            "report_type": report_type,
-            "timestamp": f"2026-01-{start + i:02d} 10:00:00",
-            "total_seconds": 10.0 + i,
-            "holdings_count": 20,
-            "phases": {"采集": 1.0 + i},
-            "errors": [],
-        }
-        for i in range(count)
-    ]
 
 
 # ── 统计工具 ──

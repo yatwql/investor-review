@@ -64,8 +64,8 @@ class TestThinkingConcurrencyLimit(unittest.TestCase):
 
         with (
             patch("src.python.llm._llm_dispatch._build_module_fns", return_value=fns),
-            patch("src.python.llm.generators_orchestrator._build_competitive_context_block", return_value=""),
-            patch("src.python.llm._llm_dispatch.make_http_client", return_value=MagicMock()),
+            patch("src.python.llm._llm_context_blocks._build_competitive_context_block", return_value=""),
+            patch("src.python.llm._worker_runner.make_http_client", return_value=MagicMock()),
         ):
             result = _dispatch_llm_workers(needs, llm_config, False, {}, {}, 0, 0, 0, 0, 0, {}, None, None, None)
 
@@ -102,8 +102,8 @@ class TestThinkingConcurrencyLimit(unittest.TestCase):
 
         with (
             patch("src.python.llm._llm_dispatch._build_module_fns", return_value=fns),
-            patch("src.python.llm.generators_orchestrator._build_competitive_context_block", return_value=""),
-            patch("src.python.llm._llm_dispatch.make_http_client", return_value=MagicMock()),
+            patch("src.python.llm._llm_context_blocks._build_competitive_context_block", return_value=""),
+            patch("src.python.llm._worker_runner.make_http_client", return_value=MagicMock()),
             patch("src.python.llm._llm_dispatch._THINKING_WAIT_LOG_SECONDS", 0.02),
             self.assertLogs("invest", level="INFO") as logs,
         ):
@@ -141,8 +141,8 @@ class TestThinkingWaitQuantified(unittest.TestCase):
         disp.reset_thinking_wait_total()
         with (
             patch("src.python.llm._llm_dispatch._build_module_fns", return_value=fns),
-            patch("src.python.llm.generators_orchestrator._build_competitive_context_block", return_value=""),
-            patch("src.python.llm._llm_dispatch.make_http_client", return_value=MagicMock()),
+            patch("src.python.llm._llm_context_blocks._build_competitive_context_block", return_value=""),
+            patch("src.python.llm._worker_runner.make_http_client", return_value=MagicMock()),
             patch("src.python.llm._llm_dispatch._THINKING_WAIT_HINT_SECONDS", hint_threshold),
             self.assertLogs("invest", level="INFO") as logs,
         ):
@@ -173,8 +173,8 @@ class TestDispatchModuleSpans(unittest.TestCase):
         needs = dict.fromkeys(keys, True)
         with (
             patch("src.python.llm._llm_dispatch._build_module_fns", return_value=fns),
-            patch("src.python.llm.generators_orchestrator._build_competitive_context_block", return_value=""),
-            patch("src.python.llm._llm_dispatch.make_http_client", return_value=MagicMock()),
+            patch("src.python.llm._llm_context_blocks._build_competitive_context_block", return_value=""),
+            patch("src.python.llm._worker_runner.make_http_client", return_value=MagicMock()),
         ):
             return _dispatch_llm_workers(
                 needs, {}, False, {}, {}, 0, 0, 0, 0, 0, {}, None, None, None, span_recorder=span_recorder
@@ -232,8 +232,8 @@ class TestNewsCorrelationNotOrchestrated(unittest.TestCase):
 
         with (
             patch("src.python.llm._llm_dispatch._build_module_fns", return_value=fns),
-            patch("src.python.llm.generators_orchestrator._build_competitive_context_block", return_value=""),
-            patch("src.python.llm._llm_dispatch.make_http_client", return_value=MagicMock()),
+            patch("src.python.llm._llm_context_blocks._build_competitive_context_block", return_value=""),
+            patch("src.python.llm._worker_runner.make_http_client", return_value=MagicMock()),
         ):
             result = _dispatch_llm_workers(needs, {}, False, {}, {}, 0, 0, 0, 0, 0, {}, None, None, None)
 

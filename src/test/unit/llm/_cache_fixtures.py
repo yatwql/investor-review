@@ -14,6 +14,8 @@ from __future__ import annotations
 from contextlib import ExitStack
 from typing import Any
 
+import pytest
+
 HOLDING_CODE = "600900"
 
 #: 多链配置（首选 probe-main；备链 probe-backup 仅故障转移用例用）
@@ -149,3 +151,19 @@ def run_generate_all_llm(
             force_modules=force_modules,
         )
     return out[4:8]  # type: ignore[return-value]
+
+
+@pytest.fixture(autouse=True)
+def _freeze_market_bucket_for_cache_asserts(monkeypatch):
+    """缓存命中断言与钟面无关：统一钉在收盘档。
+
+    行情口径桶随钟面变化（盘中档禁止复用价格相关模块），不钉死时同一批断言在
+    交易时段必红、收盘后转绿——时间相关用例的典型不稳定形态。
+
+    定义在此而非各测试文件内：原先 11 个缓存相关测试文件各自复制一份同名同体的
+    autouse 夹具，口径调整时要改十一遍。导入即生效（各文件顶部
+    `from ... import _freeze_market_bucket_for_cache_asserts  # noqa: F401`）。
+    """
+    from src.test._market_clock import freeze_market_bucket
+
+    freeze_market_bucket(monkeypatch)

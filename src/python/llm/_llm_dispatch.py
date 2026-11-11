@@ -20,11 +20,10 @@ from typing import Any
 
 import httpx
 
-from src.python.core.http_client import make_http_client
 from src.python.core.registry import get_llm_module_names
-from src.python.llm.api_base import LLM_TIMEOUT
+from src.python.llm._debate_router import install_debate_route
+from src.python.llm._worker_runner import make_module_runner, thinking_concurrency_limit
 from src.python.llm.generators import (
-    generate_debate_procon,
     generate_expert_review,
     generate_global_macro,
     generate_health_check,
@@ -313,6 +312,69 @@ def make_budget_guard(
     return _guard
 
 
+def _run_workers(
+    module_fns: dict[str, Callable],
+    needs: dict[str, bool],
+    runner_kwargs: dict,
+    label_map: dict[str, str],
+    thinking_limit: int,
+) -> dict[str, dict]:
+    """提交并归集：只提交 `needs=True` 的模块，结果键集合与提交集合相等。
+
+    单个模块线程异常不外抛（记 WARNING 且不写该键）：一份报告不该因一个模块挂掉而
+    整体失败，但缺失必须留痕，否则「模块静默缺失」无人知晓。
+
+    总时间预算在此构造：每个模块**启动前**检查已用时长，超预算不再提交新模块；
+    已提交的模块不打断（强杀线程会留下半截内容与未释放连接）。预算 0/缺省 = 不启用。
+    """
+    results_dict: dict[str, dict] = {}
+    cfg = runner_kwargs.get("llm_config") or {}
+    max_workers = cfg.get("llm_max_concurrency", get_llm_setting_default("llm_max_concurrency"))
+    budget_skipped: list[str] = []
+    budget_guard = make_budget_guard(
+        float(cfg.get("llm_total_time_budget_sec") or 0),
+        time.monotonic(),
+        budget_skipped,
+        label_map,
+    )
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures: dict[Future, str] = {
+            executor.submit(budget_guard(key, make_module_runner(label=key, fn=fn, **runner_kwargs))): key
+            for key, fn in module_fns.items()
+            if needs.get(key)
+        }
+        for future in as_completed(futures):
+            try:
+                result, from_cache = future.result()
+                key = futures[future]
+                results_dict[key] = {"result": result, "cached": from_cache}
+                _log_module_outcome(key, result, label_map, budget_skipped)
+            except Exception:  # noqa: PERF203
+                logger.warning("LLM 生成线程异常", exc_info=True)
+
+    _log_dispatch_tail(budget_skipped, label_map, thinking_limit)
+    return results_dict
+
+
+def _log_dispatch_tail(budget_skipped: list[str], label_map: dict[str, str], thinking_limit: int) -> None:
+    """收尾两条汇总：预算跳过清单 + thinking 串行等待量化（把上限提到 2 能省多少）。"""
+    if budget_skipped:
+        logger.warning(
+            "本次 LLM 生成因总时间预算跳过 %d 个模块：%s（报告按已生成内容呈现）",
+            len(budget_skipped),
+            "、".join(label_map.get(k, k) for k in budget_skipped),
+        )
+    wait_total = thinking_wait_total_seconds()
+    if wait_total >= _THINKING_WAIT_HINT_SECONDS and thinking_limit < 2:
+        logger.info(
+            "[llm/thinking] 本轮 thinking 模块串行等待合计 %.1fs（上限 %d）：提到 2 约可省该时长，"
+            "前提是端点并发两个 thinking 请求不出现空响应（改 llm_settings.json 的 llm_max_thinking_concurrency）",
+            wait_total,
+            thinking_limit,
+        )
+
+
 def _dispatch_llm_workers(
     needs: dict[str, bool],
     llm_config: dict | None,
@@ -360,79 +422,17 @@ def _dispatch_llm_workers(
     if not any(needs.values()):
         return {}
 
-    # 量化指标 + 数据质量块传递
-    _metrics = metrics
-    _data_quality_text = data_quality_text
-
-    results_dict: dict[str, dict] = {}
     _label_map: dict[str, str] = get_llm_module_names()
 
-    # ── thinking 并发限制：开启 Extended Thinking 的模块（health_check / expert_review
-    #    ）并发涌向 DeepSeek 时偶发返回空 content（HTTP 200 + 空响应）。用信号量限制
-    #    thinking 请求同时最多 llm_max_thinking_concurrency 个（默认 2），从源头降低
-    #    偶发概率；非 thinking 模块不受限，保持原有并发。 ──
-    try:
-        _thinking_limit = max(
-            1,
-            int(
-                (llm_config or {}).get(
-                    "llm_max_thinking_concurrency", get_llm_setting_default("llm_max_thinking_concurrency")
-                )
-            ),
-        )
-    except (TypeError, ValueError):
-        _thinking_limit = 1
+    # thinking 并发闸门：开启 Extended Thinking 的模块并发涌向端点时偶发返回空 content
+    # （HTTP 200 + 空响应）。信号量把这类请求限制在 llm_max_thinking_concurrency 个；
+    # 非 thinking 模块不受限，保持原有并发。等待时长累加到总账供收尾判断。
+    _thinking_limit = thinking_concurrency_limit(llm_config)
     _thinking_sem = threading.BoundedSemaphore(_thinking_limit)
 
-    def _is_thinking_module(label: str) -> bool:
-        return bool((llm_config or {}).get(f"thinking_enabled_{label}", False))
-
-    def _make_runner(label: str, fn: Callable) -> Callable:
-        """创建闭包：持 httpx.Client（HTTP/2 + 连接池）运行 fn(c, llm_config)。
-
-        thinking 模块（thinking_enabled_{label}=true）受信号量约束，同一时刻最多
-        llm_max_thinking_concurrency 个并发请求；非 thinking 模块直接运行。
-        """
-
-        def _run() -> tuple[str | None, bool]:
-            if _is_thinking_module(label):
-                waited_from = time.monotonic()
-                with _thinking_sem:
-                    waited = time.monotonic() - waited_from
-                    with _THINKING_WAIT_TOTAL_LOCK:
-                        _THINKING_WAIT_TOTAL["seconds"] += waited
-                    # 信号量等待完全静默时，只有对时间轴才能发现「thinking 模块被串行」
-                    # （实测两个 thinking 模块各 37s/51s 被 llm_max_thinking_concurrency=1
-                    # 完全串行，白等 38s 却无任何日志线索）→ 超阈值即报一行 INFO。
-                    if waited >= _THINKING_WAIT_LOG_SECONDS:
-                        logger.info(
-                            "[llm/thinking] %s 等待 thinking 并发槽 %.1fs（上限 %d，已并发占满时串行化）",
-                            _label_map.get(label, label),
-                            waited,
-                            _thinking_limit,
-                        )
-                    return _execute(label, fn)
-            return _execute(label, fn)
-
-        def _execute(label: str, fn: Callable) -> tuple[str | None, bool]:
-            logger.info("正在生成：%s...", _label_map.get(label, label))
-            try:
-                c = make_http_client(timeout=LLM_TIMEOUT, **_LLM_CLIENT_SETTINGS)
-            except ImportError:
-                # h2 包未安装时降级到 HTTP/1.1
-                logger.info("h2 包未安装，降级到 HTTP/1.1")
-                _settings = dict(_LLM_CLIENT_SETTINGS)
-                _settings.pop("http2", None)
-                c = make_http_client(timeout=LLM_TIMEOUT, **_settings)
-            _started = time.perf_counter()
-            try:
-                return fn(c, llm_config)
-            finally:
-                c.close()
-                if span_recorder is not None:
-                    span_recorder.record(_label_map.get(label, label), time.perf_counter() - _started)
-
-        return _run
+    def _record_thinking_wait(seconds: float) -> None:
+        with _THINKING_WAIT_TOTAL_LOCK:
+            _THINKING_WAIT_TOTAL["seconds"] += seconds
 
     _MODULE_FNS = _build_module_fns(
         a_indices=a_indices,
@@ -450,8 +450,8 @@ def _dispatch_llm_workers(
         force_modules=force_modules,
         pipeline_data=pipeline_data,
         competitive_context=competitive_context,
-        metrics=_metrics,
-        data_quality_text=_data_quality_text,
+        metrics=metrics,
+        data_quality_text=data_quality_text,
         history_data=history_data,
         purchase_constraint_block=purchase_constraint_block,
         holding_change_block=holding_change_block,
@@ -459,113 +459,38 @@ def _dispatch_llm_workers(
         schedule_replay_block=schedule_replay_block,
     )
 
-    # ── 辩论模式路由：替换 expert_review 条目 ─────────────────
-    from src.python.config.features import is_feature_enabled
+    # 辩论模式：槽位替换 expert_review（键名不变，失败回退普通生成）
+    install_debate_route(
+        _MODULE_FNS,
+        needs=needs,
+        total_mv=total_mv,
+        total_cost=total_cost,
+        total_profit=total_profit,
+        total_today_profit=total_today_profit,
+        holdings_count=holdings_count,
+        categories=categories,
+        penetrated_assets=penetrated_assets,
+        holdings_details=holdings_details,
+        force=force,
+        force_modules=force_modules,
+        pipeline_data=pipeline_data,
+        competitive_context=competitive_context,
+        metrics=metrics,
+        purchase_constraint_block=purchase_constraint_block,
+        holding_change_block=holding_change_block,
+        event_impact_block=event_impact_block,
+        schedule_replay_block=schedule_replay_block,
+        debate_info_container=_debate_info_container,
+    )
 
-    def _build_debate_mode_combination() -> str:
-        """构建当前启用的辩论模式组合标识字符串。
+    _runner_kwargs = {
+        "llm_config": llm_config,
+        "label_map": _label_map,
+        "thinking_sem": _thinking_sem,
+        "thinking_limit": _thinking_limit,
+        "span_recorder": span_recorder,
+        "record_thinking_wait": _record_thinking_wait,
+        "wait_log_seconds": _THINKING_WAIT_LOG_SECONDS,
+    }
 
-        Returns:
-            如 "正反辩论+条件推理" 等形式。集中度问答段已内建于辩论流程
-            （阈值触发），不再作为组合维度。
-        """
-        _parts = []
-        if is_feature_enabled("llm_debate_procon"):
-            _parts.append("正反辩论")
-        if is_feature_enabled("llm_debate_conditional"):
-            _parts.append("条件推理")
-        return "+".join(_parts) if _parts else ""
-
-    if is_feature_enabled("llm_debate_procon") and needs.get("expert_review"):
-        _original_expert = _MODULE_FNS["expert_review"]
-
-        def _debate_wrapper(c, lc) -> tuple[str | None, bool]:
-            """辩论包装闭包：pro→con→synthesis，两级 fallback。"""
-            try:
-                _result = generate_debate_procon(
-                    total_mv,
-                    total_cost,
-                    total_profit,
-                    total_today_profit,
-                    holdings_count,
-                    categories,
-                    penetrated_assets,
-                    holdings_details=holdings_details,
-                    force=force or (force_modules is not None and "expert_review" in force_modules),
-                    http_client=c,
-                    llm_config=lc,
-                    pipeline_data=pipeline_data,
-                    competitive_context=competitive_context,
-                    metrics=_metrics,
-                    purchase_constraint_block=purchase_constraint_block,
-                    holding_change_block=holding_change_block,
-                    event_impact_block=event_impact_block,
-                    schedule_replay_block=schedule_replay_block,
-                )
-                pro, con, synthesis = _result
-                if pro and con:
-                    # 记录 debate_info
-                    if _debate_info_container is not None:
-                        _debate_info_container[0] = {
-                            "pro_text": pro,
-                            "con_text": con,
-                            "mode_label": "辩论模式",
-                            "mode_combination": _build_debate_mode_combination(),
-                        }
-                    if synthesis:
-                        return (synthesis, True)
-                    # synthesis 失败 → 返回 pro+con 拼接
-                    logger.warning("[debate] 综合失败，返回 pro+con 拼接")
-                    return (f"【白脸观点】\n{pro}\n\n【黑脸观点】\n{con}", True)
-                # pro 或 con 失败 → 回退普通 expert_review
-                logger.warning("[debate] pro/con 失败，回退普通 expert_review")
-                if _debate_info_container is not None:
-                    _debate_info_container[0] = None
-                return _original_expert(c, lc)
-            except Exception:
-                logger.warning("[debate] 异常，回退普通 expert_review", exc_info=True)
-                if _debate_info_container is not None:
-                    _debate_info_container[0] = None
-                return _original_expert(c, lc)
-
-        _MODULE_FNS["expert_review"] = _debate_wrapper
-        logger.info("[debate] 辩论模式已启用，expert_review 路由已替换")
-
-    _max_workers = (llm_config or {}).get("llm_max_concurrency", get_llm_setting_default("llm_max_concurrency"))
-    # 总时间预算：每个模块**启动前**检查已用时长；超预算不再提交新模块（已提交的
-    # 模块不打断——强杀线程会留下半截内容与未释放连接）。预算 0/缺省 = 不启用。
-    _budget = float((llm_config or {}).get("llm_total_time_budget_sec") or 0)
-    _budget_skipped: list[str] = []
-    _budget_guard = make_budget_guard(_budget, time.monotonic(), _budget_skipped, _label_map)
-
-    with ThreadPoolExecutor(max_workers=_max_workers) as executor:
-        _futures: dict[Future, str] = {
-            executor.submit(_budget_guard(k, _make_runner(k, fn))): k for k, fn in _MODULE_FNS.items() if needs.get(k)
-        }
-
-        for future in as_completed(_futures):
-            try:
-                result, from_cache = future.result()
-                key = _futures[future]
-                results_dict[key] = {"result": result, "cached": from_cache}
-                _log_module_outcome(key, result, _label_map, _budget_skipped)
-            except Exception:  # noqa: PERF203
-                logger.warning("LLM 生成线程异常", exc_info=True)
-
-    if _budget_skipped:
-        logger.warning(
-            "本次 LLM 生成因总时间预算跳过 %d 个模块：%s（报告按已生成内容呈现）",
-            len(_budget_skipped),
-            "、".join(_label_map.get(k, k) for k in _budget_skipped),
-        )
-
-    # 串行等待汇总：这是「把上限提到 2 能省多少」的直接量化（见 llm-technical 决策记录）
-    _wait_total = thinking_wait_total_seconds()
-    if _wait_total >= _THINKING_WAIT_HINT_SECONDS and _thinking_limit < 2:
-        logger.info(
-            "[llm/thinking] 本轮 thinking 模块串行等待合计 %.1fs（上限 %d）：提到 2 约可省该时长，"
-            "前提是端点并发两个 thinking 请求不出现空响应（改 llm_settings.json 的 llm_max_thinking_concurrency）",
-            _wait_total,
-            _thinking_limit,
-        )
-    return results_dict
+    return _run_workers(_MODULE_FNS, needs, _runner_kwargs, _label_map, _thinking_limit)

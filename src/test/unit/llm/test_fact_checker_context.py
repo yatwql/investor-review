@@ -142,7 +142,7 @@ class TestFalseCorrectionContexts:
         issues, checked, passed, corrections = check_numerical_consistency(text, real_holdings)
         assert len(corrections) == 1
         assert corrections[0][0] == "80"
-        assert corrections[0][1] == "-8.9"
+        assert corrections[0][1] == "-8.86"
         assert "518880" in corrections[0][3]
 
     def test_win_rate_run_fact_check_not_rewritten(self, real_holdings):
@@ -190,7 +190,7 @@ class TestExplicitSubjectBeatsGlobalNearest:
         issues, checked, passed, corrections = check_numerical_consistency(text, holdings)
         assert len(corrections) == 1, f"句中主体 601939 偏差超容差，应被检出: {corrections}"
         assert corrections[0][0] == "3.2"
-        assert corrections[0][1] == "1.9"
+        assert corrections[0][1] == "1.87"
         assert "601939" in corrections[0][3]
 
     def test_explicit_code_wrong_value_corrected_to_subject(self):
@@ -201,7 +201,7 @@ class TestExplicitSubjectBeatsGlobalNearest:
         # 与主体 240012 的 2.24 差 1.66 > 容差 → 应按 240012 修正。
         issues, checked, passed, corrections = check_numerical_consistency(text, holdings)
         assert len(corrections) == 1
-        assert corrections[0][1] == "2.2"
+        assert corrections[0][1] == "2.24"
         assert "240012" in corrections[0][3]
 
     def test_explicit_name_right_value_passes(self):
@@ -525,7 +525,7 @@ class TestNameAliasNormalized:
         issues, checked, passed, corrections = check_numerical_consistency(text, holdings)
         assert len(corrections) == 1, f"华安纳指被写成 180.5%，应被检出修正: {corrections}"
         assert corrections[0][0] == "180.5"
-        assert corrections[0][1] == "130.6"
+        assert corrections[0][1] == "130.61"
         assert "040046" in corrections[0][3]
 
     def test_alias_shortname_right_value_passes(self):
@@ -547,7 +547,7 @@ class TestNameAliasNormalized:
         holdings = self._alias_holdings()
         html = "<p>本质分歧在于如何处理已实现的巨额浮盈（华安纳指+180.5%、建设银行+180.55%）。</p>"
         corr, summ = run_fact_check(html, holdings, "智囊团深度复盘")
-        assert "华安纳指+130.6%" in corr
+        assert "华安纳指+130.61%" in corr
         assert "建设银行+180.55%" in corr  # 建设银行正确值不被连带修改
 
 
@@ -613,7 +613,7 @@ class TestDescriptiveTailMatch:
         issues, checked, passed, corrections = check_numerical_consistency(text, holdings)
         assert len(corrections) == 1, f"电池主题ETF 被写成 5.0%，应被检出修正: {corrections}"
         assert corrections[0][0] == "5.0"
-        assert corrections[0][1] == "-3.9"
+        assert corrections[0][1] == "-3.92"
         assert "561910" in corrections[0][3]
 
     def test_locate_tail_abbrev(self):
@@ -876,7 +876,7 @@ class TestNonReturnMetricAndSignNormalization:
         text = "超短债（012325，最大持仓12.3%，持仓收益率+45.5%），华宝增强债券A（240012）收益率为-9.0%。"
         _issues, _checked, _passed, corrections = check_numerical_consistency(text, self._holdings())
         assert len(corrections) == 1, f"应只修正 45.5 一处: {corrections}"
-        assert corrections[0][0] == "45.5" and corrections[0][1] == "4.5"
+        assert corrections[0][0] == "45.5" and corrections[0][1] == "4.55"
         assert "012325" in corrections[0][3], f"应归属 012325: {corrections[0][3]}"
 
     def test_subject_scoped_by_clause(self):

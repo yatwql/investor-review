@@ -17,7 +17,7 @@
 #: 判定语义的当前口径见 `_numerical._evaluate_percent` 的守卫顺序与 `_context` 的
 #: 各 `_is_*_context`；逐版沿革与原因记在 `changelog.md` / `review-findings.md`，
 #: 不在代码里重复叙述。
-FACT_CHECK_RULES_VERSION = "fact-rules-6"
+FACT_CHECK_RULES_VERSION = "fact-rules-7"
 
 # 组合级收益语境关键词 — 数值应归到组合总收益率而非某个个股。
 # "组合累计收益""组合收益率""总收益""整体收益"等修饰明确指向组合级，

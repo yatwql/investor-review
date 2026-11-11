@@ -22,6 +22,9 @@ import pytest
 
 from src.python.llm import generate_all_llm
 from src.test.helpers import SynchronousExecutor
+from src.test.unit.llm._cache_fixtures import (  # noqa: F401 — 共享 autouse 夹具（钉住行情口径桶）
+    _freeze_market_bucket_for_cache_asserts,
+)
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_llm, pytest.mark.llm]
 
@@ -56,12 +59,9 @@ class TestExtractFromPipelineData(unittest.TestCase):
         cls._cfg_patcher.start()
         cls._exec_patcher = patch("src.python.llm._llm_dispatch.ThreadPoolExecutor", new=SynchronousExecutor)
         cls._exec_patcher.start()
-        cls._httpx_patcher = patch("src.python.llm._llm_dispatch.httpx.Client", new=MagicMock())
-        cls._httpx_patcher.start()
 
     @classmethod
     def tearDownClass(cls) -> None:
-        cls._httpx_patcher.stop()
         cls._exec_patcher.stop()
         cls._cfg_patcher.stop()
 
@@ -640,7 +640,6 @@ def test_registry_notes_match_parallel_dispatch():
 
 def test_self_review_receives_text_without_fact_check_blocks():
     """编排层喂给自检的正文剔除校验产物段落（报告渲染仍用含校验段落的完整正文）。"""
-    from unittest.mock import MagicMock
 
     from src.test.helpers import SynchronousExecutor
 
@@ -685,15 +684,3 @@ def test_self_review_receives_text_without_fact_check_blocks():
         if text:
             assert "事实校验" not in text, f"{name}: 自检输入不得含校验摘要段落"
             assert "<p>正文</p>" in text
-
-
-@pytest.fixture(autouse=True)
-def _freeze_market_bucket_for_cache_asserts(monkeypatch):
-    """缓存命中断言与钟面无关：统一钉在收盘档。
-
-    行情口径桶随钟面变化（盘中档禁止复用价格相关模块），不钉死时同一批断言在
-    交易时段必红、收盘后转绿——时间相关用例的典型不稳定形态。
-    """
-    from src.test._market_clock import freeze_market_bucket
-
-    freeze_market_bucket(monkeypatch)

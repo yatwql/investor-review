@@ -197,7 +197,7 @@ class TestOrchestratorForceModules:
 
         with (
             patch("src.python.llm._llm_dispatch._build_module_fns", return_value={}) as mock_build,
-            patch("src.python.llm._llm_dispatch.make_http_client", return_value=MagicMock()),
+            patch("src.python.llm._worker_runner.make_http_client", return_value=MagicMock()),
         ):
             _dispatch_llm_workers(
                 {"health_check": True},

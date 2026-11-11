@@ -1,7 +1,7 @@
 # LLM 集成层技术设计
 
 > **文档定位**：本文是 `technical.md` 的 LLM 分部（规则层），只给 LLM 集成层架构、契约与判据；运行/调试/发布等操作流程见 `developer-guide.md`，脚本参数见 `scripts-reference.md`，需求口径见 `requirements.md`。
-> 文档版本：0.17.8
+> 文档版本：0.17.9
 
 本文档是 `technical.md` 的 LLM 集成层专项技术设计补充，对应 `technical.md` §5（LLM 集成层概要设计）。
 `technical.md` §5 提供 LLM 层的总体架构、模块清单、调用链概览、多 Provider 链模式概要及关键机制速览；
@@ -161,8 +161,12 @@ skeleton.py:generate_llm_content()
 
 | 模块 | 分类 | 职责 | 入口函数 |
 |:-----|:-----|:------|:---------|
-| `generators_orchestrator.py` | 编排门面 | 缓存预检查（`_compute_module_cache_info` / `_precheck_*`）+ 主编排入口与**生成后一遍**（事实锚定校验 + 可选生成后自检）；worker 装配与线程池分发下沉 `_llm_dispatch.py` 并经本门面 re-export（`_dispatch_llm_workers`，patch 点不变） | `generate_all_llm()` |
-| `_llm_dispatch.py` | 编排层 | 4+1 模块并行调度：`_build_module_fns` 模块→生成函数映射（`_MODULE_FNS`）、`ThreadPoolExecutor` 分发与进度回调、thinking 串行上限与辩论模式 `_debate_wrapper` 路由、`_LLM_CLIENT_SETTINGS` HTTP 客户端设置 | `_dispatch_llm_workers()` |
+| `generators_orchestrator.py` | 编排门面 | 编排壳：配置与强刷范围归一、缓存预检查（`_compute_module_cache_info` / `_precheck_*`）、并行批调用与结果装配、收尾落盘；上下文块装配下沉 `_llm_context_blocks.py`、**生成后一遍**（事实锚定 + 可选自检 + 跨模块核对）下沉 `_llm_post_pass.py`、worker 装配与线程池分发下沉 `_llm_dispatch.py`，三者均经本门面 re-export（`_dispatch_llm_workers` 等，patch 点不变） | `generate_all_llm()` |
+| `_llm_dispatch.py` | 编排层 | 4+1 模块并行调度壳：`_build_module_fns` 模块→生成函数映射（`_MODULE_FNS`）、`ThreadPoolExecutor` 提交与归集（预算闸/异常不外抛/结果键集合=提交集合）、收尾汇总；worker 装配下沉 `_worker_runner.py`、辩论槽位路由下沉 `_debate_router.py`，`_LLM_CLIENT_SETTINGS` 仍在此定义 | `_dispatch_llm_workers()` |
+| `_worker_runner.py` | 编排层 | 单模块 worker 装配：thinking 闸门（`thinking_enabled_{label}` + 并发上限，非法值回落 1）→ client 装配（缺 h2 时去 `http2` 降级重试一次）→ 调用生成函数 → span 记录；等待时长经回调记入总账 | `make_module_runner()` / `thinking_concurrency_limit()` |
+| `_debate_router.py` | 编排层 | 辩论模式**槽位替换**：把 `expert_review` 换成 pro→con→synthesis 串行组合（键名不变），两级回退（synthesis 失败 → pro+con 拼接；pro/con 失败或异常 → 回退普通生成并清空辩论信息） | `install_debate_route()` |
+| `_llm_context_blocks.py` | 编排层 | 六类上下文块的**单次渲染/提取**落点（竞争语境块、数据质量详细状态块渲染一次；申购限购 / 持仓变动复盘 / 事件窗分歧例 / 调仓纪律回放引用四块从契约提取同一实例），收成不可变快照 `LlmContextBlocks`，由调用方把**同一实例**分别交指纹与提示词（`is` 身份断言守护） | `build_context_blocks()` / `extract_*_block()` |
+| `_llm_post_pass.py` | 运行作用域 | 生成后一遍的顺序落点：逐模块事实锚定（含缓存回写与摘要拼接，缓存命中跳过排名校验）→ 生成后自检 → 跨模块收益率核对（副产物落运行作用域载体）；自检输入经 `review_text()` 剥掉用量页脚与校验产物段 | `anchor_fact_checks()` / `apply_generation_post_pass()` |
 | `generators.py` | 生成层 | 生成门面（按生成器域拆分）：辩论模式 pro/con/synthesis 生成 + `generate_self_review()`（生成后自检）+ `generate_holding_change_review()` 门面（实现于 `holding_change_review.py`）+ 单例四函数门面再导出 | 各 `generate_*()` |
 | `generators_singletons.py` | 生成层 | 单例生成函数（global_macro / expert_review / health_check / penetration_deep，自 generators 按生成器域下沉；**测试 patch 以本模块为解析点**——`generate_llm_module` 等 seam 名在本域内解析） | 各 `generate_*()` |
 | `self_review.py` | 运行作用域 | 生成后自检的开关判定/输入存在性判定/失败隔离与运行作用域载体（报告层零参 pull；**不经** `_MODULE_FNS` 并行调度）。输入为**纯分析正文**：编排层先剥离 LLM 用量页脚（`skeleton.strip_llm_footer`）与事实校验产物段落（`fact_checker.strip_fact_check_blocks`）——两段均为运行元信息且随缓存态变化，并入自检输入会让同一份正文算出不同缓存键 | `run_self_review()` / `get_self_review_block()` |
@@ -452,9 +456,9 @@ _LLM_CLIENT_SETTINGS = {
 }
 ```
 
-每个工作线程创建**独立**的 `httpx.Client` 实例（`_make_runner` 闭包），避免全局共享连接池的线程安全问题。`h2` 包不可用时自动降级到 HTTP/1.1。
+每个工作线程创建**独立**的 client 实例（`_worker_runner.make_module_runner` 闭包），避免全局共享连接池的线程安全问题。`h2` 包不可用时自动降级到 HTTP/1.1。
 
-**缺省兜底（未注入客户端的调用）**：客户端装配只发生在分发层（`_llm_dispatch._execute` 为并行 worker 装配）；**编排层串行后置调用**（现只剩 `run_self_review`，`run_holding_change_review` 已并入并行批并复用 worker 客户端）不注入 `http_client`，None 会直达 provider 层 `assert client is not None` 秒败，且 AssertionError 被 `call_llm` 的 per-provider `except Exception` 吞成「provider 异常，切换下一 provider」整链连环失败（归因整章静默丢失）。因此兜底收口在多链与 legacy 两路的**唯一汇聚点** `api.call_single_provider`：`http_client is None` 且 provider 受支持（claude/openai/gemini）时经 `core.http_client.make_http_client`（HTTP 客户端统一工厂约束）自建一次性客户端，`with` 块内完成调用后关闭；不支持的 provider 不建（避免浪费连接），调用方自备客户端则原样透传、漏斗不代为关闭。
+**缺省兜底（未注入客户端的调用）**：客户端装配只发生在分发层（`_worker_runner._build_client` 为并行 worker 装配，含缺 h2 降级）；**编排层串行后置调用**（现只剩 `run_self_review`，`run_holding_change_review` 已并入并行批并复用 worker 客户端）不注入 `http_client`，None 会直达 provider 层 `assert client is not None` 秒败，且 AssertionError 被 `call_llm` 的 per-provider `except Exception` 吞成「provider 异常，切换下一 provider」整链连环失败（归因整章静默丢失）。因此兜底收口在多链与 legacy 两路的**唯一汇聚点** `api.call_single_provider`：`http_client is None` 且 provider 受支持（claude/openai/gemini）时经 `core.http_client.make_http_client`（HTTP 客户端统一工厂约束）自建一次性客户端，`with` 块内完成调用后关闭；不支持的 provider 不建（避免浪费连接），调用方自备客户端则原样透传、漏斗不代为关闭。
 
 `max_workers=llm_config.llm_max_concurrency`（config 默认 3）控制并行调用数。开启 Extended Thinking 的模块（`thinking_enabled_{suffix}=true`）受独立信号量 `llm_max_thinking_concurrency`（默认 2）约束——多 thinking 模块并发涌向 DeepSeek 等强制推理端点时偶发返回空 content（HTTP 200 空响应），该信号量从源头降低并发（thinking 请求同时最多 N 个），非 thinking 模块不受此限。
 
@@ -1441,6 +1445,8 @@ reload_pricing() → 读 llm_pricing_ref.json
 **指纹**：`module_fingerprint.self_review_fingerprint()` 为**内容寻址**（各模块产出正文 + 持仓/穿透摘要），仅写侧使用、不进 `MODULE_FINGERPRINT_BUILDERS`（该表供预检/写两侧共享同一 `ModuleFingerprintInputs` 形状）——产出未变（含全部缓存命中）时键不变，自检同样命中缓存。
 
 **防线**：开关关闭时**零 LLM 调用**；生成器异常/空产出不影响主内容（仅登记失败原因）；固定尾注「自检为辅助信号，不构成质量保证」由代码在渲染前确定性补全（防把「自检通过」读作质量背书）；提示词硬禁投资建议（并经 `call_llm` 漏斗叠加合规声明）。
+
+**引用数值核对（上屏前确定性兜底）**：自检正文里的百分比须能在本次语料（其余模块正文 + 持仓/穿透摘要 + 附加事实块）中**定位**，否则由代码追加「下列百分比未能定位，应按无法核实处理」注记（`self_review._unverified_percentages`）。定位分两档：① 数值**逐字**出现在语料里；② 由语料取值经 **1~3 项加组合**得到（容差 0.02pp，残差搜索）——合计/差值（如 `18.43%+13.17%=31.60%`）是语料可推出的合法结果，纯子串匹配会把正确算术标成幻觉，把真告警湮没。持仓摘要行携带**收益率**维度（`{rate:+.2f}%`，与提示词真值块同精度），否则自检拿不到收益率真值口径，只能写「摘要未给、无法核实」。
 
 ### 12.5 LLM 模块配置合并（get_llm_config）
 

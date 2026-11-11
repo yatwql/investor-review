@@ -23,6 +23,20 @@ _ATTACHED_SUBJECT_SEPARATORS = " \u3000\t:：，,、（）()「」“”\"'+-~�
 _ATTACHED_SUBJECT_PREFIX_WORDS: tuple[str, ...] = _ATTACHED_SUBJECT_STRIP_WORDS + _NON_SUBJECT_FILLER_WORDS
 
 
+def _format_rate_pct(value: float) -> str:
+    """修正值上屏格式：与提示词真值块（``{rate:+.2f}%``）同精度。
+
+    修正后的正文会写回模块缓存、被同一份报告的其他模块与摘要并列引用，1 位小数
+    会把 20.66 写成 20.7——摘要口径仍是 20.66，模块间随即互斥，模型层自检只能
+    把它报成「同一实体被赋予不同收益率」（实测 3 处修正里有 1 处这样制出矛盾）。故统一取两位小数，再剥掉仅表示精度的尾随零（9.90 → 9.9），使修正值
+    与摘要逐字一致。
+    """
+    text = f"{value:.2f}"
+    if text.endswith("0"):
+        text = text[:-1]
+    return text
+
+
 def _strip_html(html: str) -> str:
     """去除 HTML 标签，返回纯文本。"""
     if not html:

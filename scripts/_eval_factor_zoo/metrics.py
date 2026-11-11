@@ -34,8 +34,12 @@ from src.python.analysis.correlation import _pearson_pvalue  # 共享 Pearson + 
 # 因子公式与生产层同源（各拷一份会因改一处忘另一处导致评测口径漂移）
 from src.python.analysis._factor_formulas import (  # noqa: F401 — 供评测与测试按原面引用
     _aligned_index_returns,
+    _closes,
+    _daily_returns,
     _ema,
+    _mean,
     _pearson,
+    _rolling_beta,
     _std,
     compute_factor_values,
     cross_sectional_series,
@@ -72,42 +76,6 @@ def metric_a(catalog: list[dict[str, Any]], field_results: dict[str, Any]) -> di
 # ═══════════════════════════════════════════════════════════════
 #  因子值计算（纯函数：bars + 指数 → 逐日值，None = 数据不足）
 # ═══════════════════════════════════════════════════════════════
-
-
-def _closes(bars: list[dict]) -> list[float]:
-    out = []
-    for bar in bars:
-        try:
-            out.append(float(bar["close"]))
-        except (KeyError, TypeError, ValueError):
-            out.append(float("nan"))
-    return out
-
-
-def _mean(values: list[float]) -> float | None:
-    vals = [v for v in values if v == v]
-    return sum(vals) / len(vals) if vals else None
-
-
-def _rolling_beta(rets: list[float], mkt: list[float], window: int) -> list[float | None]:
-    """滚动 Beta（协方差法，与 metrics_risk.portfolio_beta 同口径）。"""
-    out: list[float | None] = [None] * len(rets)
-    for i in range(window, len(rets) + 1):
-        pr = rets[i - window : i]
-        br = mkt[i - window : i]
-        mp, mb = sum(pr) / window, sum(br) / window
-        cov = sum((a - mp) * (b - mb) for a, b in zip(pr, br)) / (window - 1)
-        var = sum((b - mb) ** 2 for b in br) / (window - 1)
-        out[i - 1] = cov / var if var > 0 else None
-    return out
-
-
-def _daily_returns(closes: list[float]) -> list[float]:
-    rets = [float("nan")]
-    for i in range(1, len(closes)):
-        prev = closes[i - 1]
-        rets.append((closes[i] / prev - 1) if prev == prev and prev else float("nan"))
-    return rets
 
 
 def build_family_series(

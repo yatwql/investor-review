@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 import logging
@@ -73,6 +74,10 @@ logger = logging.getLogger("invest")
 
 # ── 桥接 import：_ENV + 过滤器已在 html_jinja_env.py ────────
 from src.python.report.html_jinja_env import _ENV  # noqa: E402
+from src.python.report.html_sections import (  # noqa: E402
+    HtmlAssembly,
+    assemble_sections,
+)
 
 # ── 辅助函数 ──────────────────────────────────────────────
 
@@ -319,6 +324,51 @@ def _inject_section_order_css(html: str, section_numbers: dict) -> str:
 # ── 核心生成函数 ────────────────────────────────────────────
 
 
+#: HTML 后处理阶段表：**名字即 perf 细分口径**（`stage_recorder` 的 record 名），
+#: 顺序即执行顺序。匿名化必须排在落盘之前——否则脱敏泄漏进产物文件。
+HTML_POST_STAGES: tuple[tuple[str, Callable[[dict], None]], ...] = (
+    ("资产内嵌", lambda state: state.update(html=_inline_js_assets(state["html"]))),
+    ("匿名化", lambda state: state.update(html=_mask_report_text(state))),
+    ("落盘", lambda state: state.update(path=_save_html_report(state["html"] or "", *state["save_args"]))),
+)
+
+#: 匿名化清扫所需的当轮上下文（holdings 与代码显示映射）；由 write_html_report 每轮写入。
+_MASK_CTX: dict[str, Any] = {}
+
+
+def _mask_report_text(state: dict) -> str:
+    """产物文本清扫（匿名化）：字段层未覆盖的派生面在最终 HTML 文本统一真名→代号。
+
+    明细区块已在字段层替换，重复命中无副作用。仅名称（中文串）全局安全，自由文本
+    清扫因此**不含代码**——代码是纯数字串，全文子串替换会误伤金额与 JSON 数值；
+    代码面由渲染点结构化掩码（模板 ``| anon_code``）与 ``mask_code_text`` 边界安全
+    替换兜底。off → 恒等零开销。
+    """
+    from src.python.config.anonymizer import (
+        build_report_alias_map,
+        get_anonymization_mode,
+        mask_code_text,
+        mask_display_text,
+    )
+
+    html = state["html"]
+    mode = get_anonymization_mode()
+    if mode == "off":
+        return html
+    holdings = _MASK_CTX.get("holdings") or []
+    code_map = _MASK_CTX.get("code_map") or {}
+    html = mask_display_text(html, build_report_alias_map(holdings, mode, include_codes=False))
+    # mask_code_text 的返回类型是 str | None（无替换时不保证原样）；落盘前统一收窄
+    return mask_code_text(html, code_map) or ""
+
+
+def _run_post_stages(state: dict, mark: Callable[[str], None]) -> None:
+    """按 :data:`HTML_POST_STAGES` 顺序执行后处理，每步后记一次细分耗时。"""
+    for name, step in HTML_POST_STAGES:
+        step(state)
+        mark(name)
+
+
 def write_html_report(
     holdings: list[Holding],
     output_dir: str = "reports",
@@ -417,97 +467,71 @@ def write_html_report(
     prog = progress if progress is not None else SilentProgressReporter()
     now_str, today_str, trading_day = _time_strings()
 
-    # ── 1) 市值核算 ──
-    details, totals = _render_market_value_section(holdings, details, today_str, prog)
-    total_mv, total_cost, total_profit, total_today_profit = totals[:4]
-    total_profit_rate, today_profit_rate = totals[4:]
-
-    # ── 2) 按账户分组 ──
-    accounts, account_totals = _render_account_grouping(details, prog)
-
-    # ── 3) 分类信息 + 指数 ──
-    cat_counts, update_status_dict = _render_category_info(holdings, details, trading_day)
-
-    # ── 4) 市场指数 ──
-    a_indices, us_indices, a_indices_list, us_indices_list = _render_index_section(prog, a_indices, us_indices)
-
-    # ── 5~7) 分类表 / 穿透 / 基金业绩 ──
-    cat_data, cat_dividend_ok = _render_category_table(holdings, details, prog)
-    penetration, penetration_profit_ok, penetration_dividend_ok = _render_penetration_section(holdings, details, prog)
-    perf_data, candidate_data = _render_fund_performance_section(holdings, details, prog)
-
-    # ── 5b) Chart.js 数据集补齐：category_doughnut / industry_bar / penetration_bar ──
-    # 这三张图的数据源（cat_data / penetration）只在 write_html_report 内计算，
-    # 调用侧传入的 chart_datasets 拿不到它们，导致图表误显示"暂不可用"。
-    # 此处用权威数据重建并覆盖，保证图表与表格同源（单图失败仅跳过该图）。
-    if chart_datasets is not None:
-        from src.python.report.chart_data_builder import (
-            _build_category_doughnut_dataset,
-            _build_corr_rolling_dataset,
-            _build_excess_rolling_dataset,
-            _build_industry_bar_dataset,
-            _build_penetration_bar_dataset,
+    # 区块装配：7 个连续区段按 `SECTION_BUILDERS` 表执行（顺序即契约），产物以
+    # `SectionBindings`（NamedTuple）一次取回——字段顺序即契约，类型逐字段保留。
+    bindings = assemble_sections(
+        HtmlAssembly(
+            holdings=holdings,
+            details=details,
+            prog=prog,
+            today_str=today_str,
+            trading_day=trading_day,
+            a_indices=a_indices,
+            us_indices=us_indices,
+            include_news=include_news,
+            news_data=news_data,
+            news_top_count=news_top_count,
+            news_llm_meta=news_llm_meta,
+            enable_llm=enable_llm,
+            llm_content=llm_content,
+            chart_datasets=chart_datasets,
+            enable_fund_deep_analysis=enable_fund_deep_analysis,
+            risk_adjusted_excess_data=risk_adjusted_excess_data,
+            position_relationship_data=position_relationship_data,
+            debate_info=debate_info,
         )
-
-        try:
-            chart_datasets["category_doughnut"] = _build_category_doughnut_dataset(None, cat_data)
-        except Exception:
-            logger.warning("[chart] category_doughnut 数据补齐失败，保留原数据集", exc_info=True)
-        try:
-            chart_datasets["industry_bar"] = _build_industry_bar_dataset(penetration)
-        except Exception:
-            logger.warning("[chart] industry_bar 数据补齐失败，保留原数据集", exc_info=True)
-        try:
-            chart_datasets["penetration_bar"] = _build_penetration_bar_dataset(penetration)
-        except Exception:
-            logger.warning("[chart] penetration_bar 数据补齐失败，保留原数据集", exc_info=True)
-        try:
-            chart_datasets["excess_rolling"] = _build_excess_rolling_dataset(risk_adjusted_excess_data)
-        except Exception:
-            logger.warning("[chart] excess_rolling 数据补齐失败，保留原数据集", exc_info=True)
-        try:
-            chart_datasets["corr_rolling"] = _build_corr_rolling_dataset(position_relationship_data)
-        except Exception:
-            logger.warning("[chart] corr_rolling 数据补齐失败，保留原数据集", exc_info=True)
-
-    # ── 13) 基金经理变更监控 ──
-    manager_analysis = _render_manager_analysis(holdings, enable_fund_deep_analysis, prog)
-
-    # ── 14) 持仓关系矩阵·重合度区块 ──
-    overlap_matrix = _render_overlap_matrix(holdings, details, enable_fund_deep_analysis, prog)
-
-    # ── 15) 持仓集中度监控 ──
-    concentration_analysis = _render_concentration(holdings, enable_fund_deep_analysis, prog)
-
-    # ── 16) 风格与因子分析 ──
-    style_analysis = _render_style_analysis(holdings, enable_fund_deep_analysis, prog)
-
-    # ── 8) 财经新闻 ──
-    news_data, _news_llm_meta = _render_news_section(
-        include_news, news_data, news_llm_meta, holdings, news_top_count, penetration, prog
-    )
-
-    # ── 9) LLM 智能分析内容 ──
-    llm_enabled_flag, global_macro_content, expert_review_content, health_check_content, penetration_deep_content = (
-        _render_llm_content_section(
-            enable_llm,
-            llm_content,
-        )
-    )
-
-    # ── LLM 模块状态收集 ──
-    llm_module_info, llm_endpoint, module_disabled, _llm_session_usage = _render_llm_module_info(llm_enabled_flag)
-
-    # ── 辩论模式标签 ──
-    from src.python.report._debate_utils import detect_debate_mode
-
-    _debate_mode_label, _debate_mode_combination = detect_debate_mode(debate_info)
-
-    # 辩论模式启用时覆盖 llm_module_info 中 expert_review 的状态标签
-    if _debate_mode_label:
-        for _mi in llm_module_info:
-            if _mi.get("key") == "expert_review" and _mi.get("status") in ("success", "cached"):
-                _mi["status_label"] = _debate_mode_label
+    ).bindings()
+    (
+        details,
+        total_mv,
+        total_cost,
+        total_profit,
+        total_today_profit,
+        total_profit_rate,
+        today_profit_rate,
+        accounts,
+        account_totals,
+        cat_counts,
+        update_status_dict,
+        a_indices,
+        us_indices,
+        a_indices_list,
+        us_indices_list,
+        cat_data,
+        cat_dividend_ok,
+        penetration,
+        penetration_profit_ok,
+        penetration_dividend_ok,
+        perf_data,
+        candidate_data,
+        manager_analysis,
+        overlap_matrix,
+        concentration_analysis,
+        style_analysis,
+        news_data,
+        _news_llm_meta,
+        llm_enabled_flag,
+        global_macro_content,
+        expert_review_content,
+        health_check_content,
+        penetration_deep_content,
+        llm_module_info,
+        llm_endpoint,
+        module_disabled,
+        _llm_session_usage,
+        _debate_mode_label,
+        _debate_mode_combination,
+    ) = bindings
 
     # ── 10) 渲染模板 ──
     prog.info("正在渲染 HTML...")
@@ -688,34 +712,13 @@ def write_html_report(
     )
     _mark("模板渲染")
 
-    # 内嵌 Chart.js 资产 → HTML 单文件自包含（下载/移动/单发移动端浏览
-    # 不再依赖同目录松散 JS；不产出松散副本）
-    html = _inline_js_assets(html)
-    _mark("资产内嵌")
-
-    # 产物文本清扫（匿名化）：字段层未覆盖的派生面（分类/业绩/管理人等从
-    # holdings 直取名称的区块）在最终 HTML 文本统一真名→代号；明细区块已
-    # 在字段层替换，重复命中无副作用。仅名称（中文串）全局安全，自由文本
-    # 清扫因此**不含代码**——代码是纯数字串，全文子串替换会误伤金额与
-    # JSON 数值；代码面由渲染点结构化掩码（模板 | anon_code）与
-    # mask_code_text 边界安全替换兑底。off → 恒等零开销。
-    from src.python.config.anonymizer import (
-        build_code_display_map,
-        build_report_alias_map,
-        get_anonymization_mode,
-        mask_code_text,
-        mask_display_text,
-    )
-
-    _anon_mode = get_anonymization_mode()
-    if _anon_mode != "off":
-        html = mask_display_text(html, build_report_alias_map(holdings, _anon_mode, include_codes=False))
-        html = mask_code_text(html, _code_display_map)
-    _mark("匿名化")
-
-    _path = _save_html_report(html or "", output_dir, total_mv, total_profit, prog)
-    _mark("落盘")
-    return _path
+    # 后处理三段（资产内嵌 → 匿名化 → 落盘）按表执行：阶段名是 perf 细分口径的单一来源
+    _MASK_CTX["holdings"] = holdings
+    _MASK_CTX["code_map"] = _code_display_map
+    _post_state: dict = {"html": html, "path": None, "save_args": (output_dir, total_mv, total_profit, prog)}
+    _run_post_stages(_post_state, _mark)
+    # 落盘阶段必定写入路径（异常在上一步抛出）；`or ""` 只为收窄类型
+    return str(_post_state["path"] or "")
 
 
 def close_html_generation_stage(

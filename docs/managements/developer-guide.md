@@ -1,6 +1,6 @@
 # 开发者指南
 
-> 文档版本：0.17.8
+> 文档版本：0.17.9
 
 ## 概述
 
@@ -1004,6 +1004,12 @@ INVEST_RUN_CONTEXT=demo \                                  # 启动时一行上�
 INVEST_CACHE_DIR=docs/tmp/screenshots/demo/data/cache \    # 缓存改落（不读写真实 data/cache）
   .venv/bin/python -m src.python.cli --config <demo/config.json> report --type both
 ```
+
+**持久化路径必须成套隔离，不只是日志/缓存**：基准跑（`test-perf-report.py`）、评测脚本、体检脚本这类**非 pytest 的一次性 CLI** 拿不到 `conftest` 的 autouse 隔离，必须自己在入口把每一个持久化目标重定向到临时目录——漏一个就是真实用户数据的静默污染（**日志也算**：基准按设计禁网，一轮能产出上千条「连接失败」告警，写进真实 `logs/app.log` 会把真实告警密度冲淡到看不出来）。已发生过的实例：`HISTORY_SNAPSHOT_DIR` 未隔离，合成持仓快照落进共享主目录，按日去重时当权当天最后一个快照，`holding_change_events` / `portfolio_evolution` / `trade_cost_model` 随即把真实序列判成「基线切换」（代码重合度 0.09），两段区间的交易事件被永久跳过，且快照保留 180 天不会自愈。
+
+**日志路径的特殊性**：`core.logger` 在**模块导入期**就把 `INVEST_LOG_PATH` 解析成 `_LOG_FILE`，隔离必须在导入任何 `src.python` 模块之前完成（`test-perf-report.py::_isolate_log_writes` 因此放在 `run_perf_test` 首行）。
+
+两个易踩的技术细节：① **按值绑定的路径改不动**——`report/history_snapshot.py` 在导入时`from core.constants import HISTORY_SNAPSHOT_DIR`，改写 `core.constants` 的同名常量对它无效，必须改**持有该名字的模块属性**（同 `# 门面 re-export` 的坑）；② **路径隔离之外再加命名空间双保险**——快照支持 `namespace` 域（`save(sd, "bench")`），域内闭环、`load_all(None)` 读不到，目录隔离失效时仍有第二道闸。
 
 不隔离的后果是**分析面**污染：演示持仓的告警（源侧名称对不上/缺凭据/陈旧锁）混进真实日志，按「读了哪个持仓文件」事后反推才能区分；演示取数结果与真实缓存互串还会让截图与真机不一致。`scripts/make-screenshots.py` 已自动注入这三个变量（`scripts/_screenshots/demo_workspace.py::isolation_env`）。
 
