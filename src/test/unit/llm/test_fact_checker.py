@@ -838,3 +838,55 @@ class TestCorrectionPrecision:
         assert _format_rate_pct(20.66) == "20.66"
         assert _format_rate_pct(-5.06) == "-5.06"
         assert _format_rate_pct(249.0) == "249.0"
+
+
+class TestGuardChainContract:
+    """守卫链结构契约：顺序单源、步骤唯一、终态单点。
+
+    顺序曾长期隐在 246 行的 if 链里（改一处顺序 = 改判定口径，却没有任何结构信号）。
+    现在顺序是 `_GUARD_STEPS` 这个元组，本类锁死「它仍是一条有序链」这件事。
+    """
+
+    def test_steps_are_unique_callables(self):
+        from src.python.llm.fact_checker._numerical import _GUARD_STEPS
+
+        assert isinstance(_GUARD_STEPS, tuple) and _GUARD_STEPS
+        names = [step.__name__ for step in _GUARD_STEPS]
+        assert len(names) == len(set(names)), f"守卫步骤重名（可能是复制粘贴漏改）: {names}"
+        for step in _GUARD_STEPS:
+            assert callable(step), f"{step} 不是可调用步骤"
+
+    def test_chain_boundaries_and_terminal_emitter(self):
+        """首步是「非收益率语境」早退、末步是叙述语境；产出修正的 emit 不在链上。
+
+        两端是判定口径的锚：首步必须最先生效（否则非收益率数值会被下游当作收益率），
+        末步之后才允许判定「不一致」。emit 若混进链中，任何调用都会得到一个 issue。
+        """
+        from src.python.llm.fact_checker import _numerical as mod
+
+        assert mod._GUARD_STEPS[0] is mod._step_non_rate_contexts
+        assert mod._GUARD_STEPS[-1] is mod._step_narrative_scopes
+        assert mod._emit_rate_issue not in mod._GUARD_STEPS
+
+    def test_each_step_returns_none_or_final_pair(self):
+        """每个步骤只回两种：`None`（不归本段）或 `(issue, correction)`（含 `(None, None)` 跳过）。"""
+        from src.python.llm.fact_checker import _numerical as mod
+
+        ctx = mod.PercentContext(
+            value=1.23,
+            value_str="1.23",
+            sentence="组合累计收益率 1.23%。",
+            stock_rates_abs={"600900": 64.08},
+            holding_codes={"600900"},
+            profit_rate=20.66,
+            profit_sign="盈利",
+            stock_rates={"600900": 64.08},
+            profit_rate_signed=20.66,
+        )
+        attr = mod._Attribution(allow_rewrite=False)
+
+        for step in mod._GUARD_STEPS:
+            verdict = step(ctx, attr)
+            assert verdict is None or (isinstance(verdict, tuple) and len(verdict) == 2), (
+                f"{step.__name__} 返回了非法形态: {verdict!r}"
+            )

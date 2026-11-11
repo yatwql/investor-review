@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.9-dev
-> **编号源**：`rf-next = 1123`（新增问题提出后更新为 +1；已用最大 rf-1122，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1124`（新增问题提出后更新为 +1；已用最大 rf-1123，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -72,6 +72,7 @@
 | **rf-1120** | 告警可靠性两处缺陷：①基准跑只隔离了状态文件、未隔离日志路径，按设计禁网的一轮把 **1347 行**「连接失败」告警写进真实 `logs/app.log`，真实告警密度被冲淡到只能逐行筛字才能还原；②巨潮资讯健康探针把「负缓存命中」报成同一句「未解析到 orgId」，使探针失败率虚高（实测 23.7%），把「等窗口过期」的已知降级态读成「源在持续抖动」 | ①`test-perf-report.py` 增 `_isolate_log_writes()`（`INVEST_LOG_PATH` + `INVEST_RUN_CONTEXT=perf`，`setdefault` 尊重外层覆盖，须在导入任何 `src` 模块前调用），补 3 条回归（含子进程端到端验落盘路径）；②`cninfo` 导出 `ORGID_MISS_CACHE_REASON_PREFIX`，探针据此分「近期已失败、本轮按负缓存跳过」与「本轮真失败」两种文案，补 2 条回归 |
 | **rf-1121** | 行业资金流向是唯一没有健康探针的数据面（走 akshare 双通道 + 负缓存 + 陈旧回退，不在 Provider Chain 里），退化后只能翻日志发现——上一轮也正是靠日志才看出东财 push2 连续失败 | `akshare_extras.probe_sector_flow_channels()` 逐通道直连探测（**不读不写缓存、不返回陈旧回退**，否则测到的是缓存而非源），`check_sources._check_sector_flow()` 按全通/部分/全挂三态上报，补 3 条回归（三态文案 / 零缓存触碰 / 单通道异常不连坐） |
 | **rf-1122** | 近 40 小时变更审计：①百分比 token 在 `llm/` 下有四份写法（`self_review._PCT_RE`、`_cross_module._PCT_RE`、`_context._BREAKDOWN_PART_PATTERN`、`_patterns._PERCENT_PATTERN`），改一处符号/空白容错另一处不跟，两个检查会互相打脸；②`_coverage.reset_numerical_coverage` 的 docstring 声称「每次 `run_fact_check` 前调用」，实际只有离线重放调用、报告主路径不复位也不消费，注释与实现相反 | ①`_patterns` 新增 `_SIGNED_PERCENT_PATTERN`（命名组 sign/num）并让跨模块判定与自检引用核对共用，`_context` 的分项模式改指 `_PERCENT_PATTERN`（语义同为「只需幅度」），补单源结构断言；②docstring 改为现状口径（复位权在调用方，逐报告重放先复位再统计全模块） |
+| **rf-1123** | `fact_checker` 三个长函数把语义埋在控制流里：`_evaluate_percent_impl` 246 行（判定顺序=口径，却只存在 in-line if 链中，改顺序无任何结构信号）、`check_numerical_consistency` 133 行、`run_fact_check` 205 行（三项检查+修正+摘要混在一处） | `_evaluate_percent_impl` 拆为 `_GUARD_STEPS` 有序元组（11 个 15~66 行步骤 + `_emit_rate_issue` 终态单点，主函数 20 行；归因中间态用 `_Attribution` 承载）；`check_numerical_consistency` 提取 `_build_detection_refs`/`_make_percent_context`（语境探测单点，23 行→78 行中含 docstring）；`run_fact_check` 提取 `_resolve_tolerance`/`_extract_max_drawdown`/`_run_checks`/`_apply_auto_corrections`/`_build_summary`（205→87 行）；补 3 条结构契约用例（步骤唯一可调用 / 首末锚点与 emit 不在链上 / 每步返回形态） |
 
 ### 归档档案
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-10）

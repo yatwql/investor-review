@@ -21,6 +21,7 @@
 - 基准跑日志隔离 + 巨潮探针区分负缓存（rf-1120）：`test-perf-report.py` 新增 `_isolate_log_writes()`（`INVEST_LOG_PATH` 落临时目录 + `INVEST_RUN_CONTEXT=perf`，导入任何 `src` 模块前生效），止住禁网跑把 1347 行告警写进真实 `logs/app.log`；`cninfo` 导出 `ORGID_MISS_CACHE_REASON_PREFIX`，健康探针把「负缓存命中」与「本轮真失败」分开报，不再让失败率虚高误导排查
 - 行业资金流向补健康探针（rf-1121）：此前 12 个探针不覆盖这个数据面（走 akshare 双通道 + 负缓存 + 陈旧回退，不进 Provider Chain），退化只能翻日志发现。新增 `probe_sector_flow_channels()` 逐通道直连（不读不写缓存、不返回陈旧回退），探针按全通/部分/全挂三态上报；探针总数 12 → 13
 - 百分比 token 单源 + 覆盖率复位口径纠偏（rf-1122）：`llm/` 下原有一份模式四处写法，跨模块冲突判定与自检引用核对各带一份，符号/空白容错改一处漏一处就互相打脸——现统一到 `_patterns._SIGNED_PERCENT_PATTERN`（命名组 sign/num）；`_coverage` 的复位 docstring 按实际（离线重放逐报告复位）改正，补一条单源结构断言
+- fact_checker 三个长函数按语义拆分（rf-1123）：`_evaluate_percent_impl` 246 行 → `_GUARD_STEPS` 有序元组（11 个步骤 + `_emit_rate_issue` 终态，主函数 20 行，顺序从控制流变成可断言的数据）；`check_numerical_consistency` 133 → 78 行（语境探测收口到 `_make_percent_context`，映射构建到 `_build_detection_refs`）；`run_fact_check` 205 → 87 行（容差/回撤/三检查/修正/摘要各自成函数）。行为零变化，补 3 条结构契约用例
 
 （本次发布内容见下方归档索引）
 
