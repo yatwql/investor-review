@@ -27,6 +27,7 @@
 - LLM 并行编排拆分（rf-1125）：`generate_all_llm` 函数体 392 → 101 行，拆出 `llm/_llm_context_blocks.py`（六类上下文块单次渲染/提取 → `LlmContextBlocks` 快照，指纹与提示词共用同一实例）与 `llm/_llm_post_pass.py`（事实锚定 → 自检 → 跨模块核对的顺序落点，含 `review_text` 剥离与按位取结果）；门面保留 `_compute_module_cache_info` / `_precheck_all_modules` / `_dispatch_llm_workers` 等编排水位与全部 re-export，块渲染器与 `run_fact_check` 的 patch 点随消费方迁移。行为零变化：7 条结构契约用例拆分前后均绿，llm+integration 1780 项全过
 - LLM worker 派发拆分（rf-1126）：`_dispatch_llm_workers` 函数体 256 → 75 行，拆出 `llm/_worker_runner.py`（thinking 闸门 + client 装配与缺 h2 降级 + span 记录，等待时长回调记账）与 `llm/_debate_router.py`（`expert_review` 槽位替换 + 两级回退）；提交归集与收尾汇总收进 `_run_workers` / `_log_dispatch_tail`。`make_http_client` 的 patch 点随消费方迁移，另删除 9 处从未生效的 `_llm_dispatch.httpx.Client` patch（client 一律经 `make_http_client` 构造）。行为零变化：11 条结构契约用例拆分前后均绿，llm+integration 1791 项全过
 - both 报告路径拆分（rf-1127）：`_generate_report_both` 函数体 388 → 43 行，五个 perf 阶段与阶段表收进 `report/_both_stages.py`（`BOTH_STAGES` 五元组 + `stage_runner` 保证 start/stop 配对，含异常路径）；历史取数按旧口径只在开关开启时计时、装配段不计时，`perf_history` 读法与拆分前一致；HTML/Excel 失败隔离仍是各自 try/except。行为零变化：8 条结构契约用例拆分前后均绿，另同步更新 3 个源扫描用例的目标文件
+- HTML 装配拆分第一批（plan-248）：先补 6 条结构契约用例（装配顺序 / 哨兵归属（每个 `_render_*` 的产物只能落到自己的模板变量，封住元组解包串位）/ 后处理阶段名 / 匿名化时序 / 原子落盘 / 单区块异常），再把「资产内嵌 → 匿名化 → 落盘」收敛成 `HTML_POST_STAGES` 有序表（阶段名成为 perf 细分口径的单一来源），`_mask_report_text` / `_run_post_stages` 独立成函数；`write_html_report` 编排体 388 → 289 行。第二批（19 处区块装配外移 + 模板变量显式映射）待做
 
 （本次发布内容见下方归档索引）
 
