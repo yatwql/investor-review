@@ -18,8 +18,8 @@
 | 测试用例 | — | — | 13,693 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 15 | 7,083 | 含 README.md；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 14 | 6,846 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 217 | 74,137 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 14,279 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 217 | 74,143 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 14,285 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 193 | 58,293 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 10 | ~1469 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + TUI 交互改进（议题 + 第一/二批实施方案） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -289,7 +289,7 @@ investor-review/
 │   │   │   ├── _llm_context_blocks.py #  LLM 上下文块单次渲染/提取（六块收成快照，指纹与提示词共用同一实例）
 │   │   │   ├── _llm_post_pass.py    #     LLM 生成后一遍（事实锚定 → 自检 → 跨模块核对，顺序为契约）
 │   │   │   ├── generators_singletons.py #   单例生成函数（global_macro/expert_review/health_check/penetration_deep，自 generators 域下沉，门面再导出；测试 patch 解析点）
-│   │   │   ├── _llm_dispatch.py        #   worker 装配与线程池并发分发（_MODULE_FNS 映射/进度回调/辩论路由）
+│   │   │   ├── _llm_dispatch.py        #   线程池提交与归集/总时间预算闸/收尾汇总（worker 装配见 _worker_runner，辩论路由见 _debate_router）
 │   │   │   ├── _worker_runner.py    #     LLM worker 装配（thinking 闸门/client 硬降级/span 记录）
 │   │   │   ├── _debate_router.py    #     辩论模式槽位替换（expert_review 换成 pro→con→synthesis，两级回退）
 │   │   │   ├── _api_claude.py         #   Claude API 调用实现
@@ -410,7 +410,7 @@ investor-review/
 │   │   │   ├── _report_generation.py #   报告生成实现（both/full 两种路径，聚合门面）
 │   │   │   ├── _generation_shared.py   #   两条生成路径共用步骤（LLM 上下文记录与按报告用量基线 delta）
 │   │   │   ├── _run_scope.py           #   报告运行边界（本轮降级事件/自检载体重置 + LLM 用量基线）
-│   │   │   ├── _generation_both.py     #   both 路径编排（HTML+Excel，不含 LLM）
+│   │   │   ├── _generation_both.py     #   both 路径编排壳（阶段实现与阶段表见 _both_stages）
 │   │   │   ├── _both_stages.py      #     both 路径五阶段实现与阶段表（阶段名即 perf 口径，start/stop 由 stage_runner 配对）
 │   │   │   ├── _generation_full.py     #   full 路径编排（+ LLM 章节与实验挂载点）
 │   │   │   ├── _report_output.py         #   full 路径 HTML/Excel 产物落盘包装（章节顺序/开关透传/失败登记/标志位回填）
