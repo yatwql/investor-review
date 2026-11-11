@@ -1,7 +1,7 @@
 # LLM 集成层技术设计
 
 > **文档定位**：本文是 `technical.md` 的 LLM 分部（规则层），只给 LLM 集成层架构、契约与判据；运行/调试/发布等操作流程见 `developer-guide.md`，脚本参数见 `scripts-reference.md`，需求口径见 `requirements.md`。
-> 文档版本：0.17.9-dev
+> 文档版本：0.17.9
 
 本文档是 `technical.md` 的 LLM 集成层专项技术设计补充，对应 `technical.md` §5（LLM 集成层概要设计）。
 `technical.md` §5 提供 LLM 层的总体架构、模块清单、调用链概览、多 Provider 链模式概要及关键机制速览；

@@ -1,5 +1,5 @@
 # 投资复盘助手 - 自我审查问题记录
-> 文档版本：0.17.9-dev
+> 文档版本：0.17.9
 > **编号源**：`rf-next = 1130`（新增问题提出后更新为 +1；已用最大 rf-1129，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
@@ -11,7 +11,6 @@
 
 | # | 问题 | 修复方向 |
 |---|------|----------|
-| **rf-257** | Web 模式真机验收余 4 类人工项（进度观察、结果区按钮、提交即禁用、拖拽与键位） | 判定标准见 [`web-browser-verification.md`](../archive/v0.15.x/web-browser-verification/web-browser-verification.md)；复跑 `scripts/test-smoke-web.py` 与 `docs/tmp/browser-verify/cdp-check.mjs`；收尾 kill 服务与浏览器、清空 `data/holdings/uploads/` |
 
 ### P2 — 中优先：价值明确、成本可控（下批排期）
 
@@ -66,19 +65,6 @@
 
 
 > 本表为本开发周期已修条目的**摘要行**（详情见 `changelog.md` 对应段）；发布时由 `release.py prepare` 的 archive 步原表搬入版本归档并在此留占位。
-| **rf-1117** | 发布台账归档在「行首编号未加粗」时静默返回 0（表现为「该版本已迁档，跳过」），v0.17.8 发布因此漏搬 10 条自审条目至归档，gate 前置断言才发现 | `apply_rf_archive()` 增加 `logging` 告警（点名编号需加粗），补 `caplog` 用例；v0.17.8 归档条目已按原表搬运补齐 |
-| **rf-1118** | 报告运行日志排查出的四类缺陷：①`test-perf-report.py` 状态隔离漏 `HISTORY_SNAPSHOT_DIR`，合成持仓快照污染真实历史（按日去重当权 2026-11-06 最后一个快照 → 代码重合度 0.09，两段区间交易事件永久跳过，180 天不自愈）；②`_unverified_percentages` 纯子串匹配，把合法的分项合计（18.43+13.17=31.60）判成幻觉并上屏「无法核实」；③事实校验修正值按一位小数上屏，与摘要两位小数口径互斥（20.66 → 20.7），矛盾由修正本身制造；④自检持仓摘要不含收益率，核不了收益率声称 | ①补快照目录隔离 + `snapshot_namespace="bench"` 双保险，删污染快照，补 3 条回归（含命名空间不可见性）；②百分比核对允许 1~3 项加减组合（容差 0.02pp，残差搜索），分项推不出的仍标出；③`_format_rate_pct` 统一两位小数并剥精度零（`FACT_CHECK_RULES_VERSION` → `fact-rules-7`，同步 4 个测试文件的期望值）；④摘要行补 `收益率 {rate:+.2f}%` |
-| **rf-1119** | 近 50 小时变更审计的测试基建技术债：①`_freeze_market_bucket_for_cache_asserts`（autouse 夹具）在 11 个缓存相关测试文件各复制一份同名同体，口径调整要改十一遍；②`test_perf_history*.py` 两个分片各复制一份 `fixture_mod` + `_records`（记录形状改一处要改两遍）；③`scripts/_test_runner/runner.py` 失败详情落盘失败时 `except Exception: pass`，诊断链在该步静默断掉 | ①夹具收口到既有 `src/test/unit/llm/_cache_fixtures.py`，11 文件改为顶部导入即生效；②新增 `src/test/unit/scripts/_perf_history_fixtures.py` 承载共享成员；③改 `except OSError` + 上报「详细日志写入失败（原因）」，补回归（落盘失败留痕且不改判定）；④顺手清掉 `test_generate_all_llm.py` 里 5 处以 `[]` 充 `dict` 形参的类型噪声 |
-| **rf-1120** | 告警可靠性两处缺陷：①基准跑只隔离了状态文件、未隔离日志路径，按设计禁网的一轮把 **1347 行**「连接失败」告警写进真实 `logs/app.log`，真实告警密度被冲淡到只能逐行筛字才能还原；②巨潮资讯健康探针把「负缓存命中」报成同一句「未解析到 orgId」，使探针失败率虚高（实测 23.7%），把「等窗口过期」的已知降级态读成「源在持续抖动」 | ①`test-perf-report.py` 增 `_isolate_log_writes()`（`INVEST_LOG_PATH` + `INVEST_RUN_CONTEXT=perf`，`setdefault` 尊重外层覆盖，须在导入任何 `src` 模块前调用），补 3 条回归（含子进程端到端验落盘路径）；②`cninfo` 导出 `ORGID_MISS_CACHE_REASON_PREFIX`，探针据此分「近期已失败、本轮按负缓存跳过」与「本轮真失败」两种文案，补 2 条回归 |
-| **rf-1121** | 行业资金流向是唯一没有健康探针的数据面（走 akshare 双通道 + 负缓存 + 陈旧回退，不在 Provider Chain 里），退化后只能翻日志发现——上一轮也正是靠日志才看出东财 push2 连续失败 | `akshare_extras.probe_sector_flow_channels()` 逐通道直连探测（**不读不写缓存、不返回陈旧回退**，否则测到的是缓存而非源），`check_sources._check_sector_flow()` 按全通/部分/全挂三态上报，补 3 条回归（三态文案 / 零缓存触碰 / 单通道异常不连坐） |
-| **rf-1122** | 近 40 小时变更审计：①百分比 token 在 `llm/` 下有四份写法（`self_review._PCT_RE`、`_cross_module._PCT_RE`、`_context._BREAKDOWN_PART_PATTERN`、`_patterns._PERCENT_PATTERN`），改一处符号/空白容错另一处不跟，两个检查会互相打脸；②`_coverage.reset_numerical_coverage` 的 docstring 声称「每次 `run_fact_check` 前调用」，实际只有离线重放调用、报告主路径不复位也不消费，注释与实现相反 | ①`_patterns` 新增 `_SIGNED_PERCENT_PATTERN`（命名组 sign/num）并让跨模块判定与自检引用核对共用，`_context` 的分项模式改指 `_PERCENT_PATTERN`（语义同为「只需幅度」），补单源结构断言；②docstring 改为现状口径（复位权在调用方，逐报告重放先复位再统计全模块） |
-| **rf-1123** | `fact_checker` 三个长函数把语义埋在控制流里：`_evaluate_percent_impl` 246 行（判定顺序=口径，却只存在 in-line if 链中，改顺序无任何结构信号）、`check_numerical_consistency` 133 行、`run_fact_check` 205 行（三项检查+修正+摘要混在一处） | `_evaluate_percent_impl` 拆为 `_GUARD_STEPS` 有序元组（11 个 15~66 行步骤 + `_emit_rate_issue` 终态单点，主函数 20 行；归因中间态用 `_Attribution` 承载）；`check_numerical_consistency` 提取 `_build_detection_refs`/`_make_percent_context`（语境探测单点，23 行→78 行中含 docstring）；`run_fact_check` 提取 `_resolve_tolerance`/`_extract_max_drawdown`/`_run_checks`/`_apply_auto_corrections`/`_build_summary`（205→87 行）；补 3 条结构契约用例（步骤唯一可调用 / 首末锚点与 emit 不在链上 / 每步返回形态） |
-| **rf-1124** | 近 96 小时变更审计：`scripts/_eval_factor_zoo/metrics.py` 一边注释声明「因子公式与生产层同源、各拷一份会漂移」，一边保留 `_closes` / `_mean` / `_rolling_beta` / `_daily_returns` 四份本地拷贝——生产口径改了评测仍跑旧公式，评出的通过率是假数 | 四份拷贝删除，改为从 `src.python.analysis._factor_formulas` 导入（与其余 6 个原语同源）；补身份断言用例（`is` 比对，挡住「同名副本」这类漂移）；其余检查项无债：96h 触及的生产代码无死私有函数、无跨文件同体副本（除报告层 `_tracker()` 这一文档化取数接缝）、无静默吞异常（`test-runner.py` 的控制台兜底带注释且发生在日志可用之前） |
-| **rf-1125** | 拆分前必须先立的契约面缺失：`generate_all_llm` 392 行内混着「块装配 / 缓存预检 / 并行派发 / 事实锚定 / 自检 / 跨模块核对」，其中三条不变式（返回元组位序、块实例只渲染一次且同进指纹与提示词、门面 patch 点）没有任何断言，拆分时极易静默漂移（缓存键与请求体脱钩、patch 变 no-op） | 先补 7 条结构契约用例（拆分前后均绿）再动代码；块装配整组下沉 `llm/_llm_context_blocks.py`（六块 → `LlmContextBlocks` 快照，`fingerprint_kwargs()`/`prompt_kwargs()` 同源），生成后一遍下沉 `llm/_llm_post_pass.py`（锚定 → 自检 → 跨模块核对 + `review_text` 剥离），门面缩为编排壳（函数体 392 → 101 行）；块渲染器与 `run_fact_check` 的 7 处 patch 目标随消费方迁移（漏迁即 AttributeError） |
-| **rf-1126** | `_dispatch_llm_workers` 256 行、6 个嵌套闭包把三条运行契约埋在闭包里：client 装配与缺 h2 降级、thinking 并发闸门与等待记账、辩论槽位替换与回退——「提交哪些模块 / 返回什么形状 / 失败如何沉淀」只能靠读闭包；另有 9 处 `_llm_dispatch.httpx.Client` patch 从未生效（client 一律经 `make_http_client` 构造，patch 是残留） | 先补 11 条结构契约用例（拆分前后均绿）再动代码；worker 装配下沉 `llm/_worker_runner.py`（`make_module_runner` / `thinking_concurrency_limit` / `is_thinking_module`），辩论路由下沉 `llm/_debate_router.py`（`install_debate_route` 槽位替换 + 两级回退）；派发壳 256 → 75 行，提交归集与收尾汇总收进 `_run_workers` / `_log_dispatch_tail`；`make_http_client` 的 6 处 patch 随消费方迁移、9 处残留 patch 删除 |
-| **rf-1127** | `_generate_report_both` 388 行把五个 perf 阶段、运行边界、后台健康检查与双产物成败混在一处：阶段名与顺序是 `perf_history` 跨版本可比性的口径，却只以 `perf.start("…")` 字面量存在；start/stop 是否成对、历史关闭时哪些装配仍须执行，都只能逐行读 | 先补 8 条结构契约用例（拆分前后均绿）再动代码；五阶段与阶段表收进 `report/_both_stages.py`（`BOTH_STAGES` 五元组：名字/实现/是否执行/跳过提示/是否计时，`stage_runner` 用 try/finally 配对），编排壳 388 → 43 行；历史取数按旧口径只在开关开启时计时、装配段不计时（perf 读数与拆分前一致）；既有源扫描用例目标同步到新模块 |
-| **rf-1128** | `write_html_report` 397 行把 19 处区块装配、模板参数与后处理三段混在一处：装配顺序（= 章序）与「哪个装配产物进哪个模板变量」只能靠读行；后处理阶段名散在三处 `_mark` 字面量；匿名化时序无结构保证 | 先立 6 条结构契约用例（装配顺序 / **哨兵归属** / 后处理阶段名 / 匿名化时序 / 原子落盘 / 单区块异常）；分批实施：①后处理三段成 `HTML_POST_STAGES` 表；②19 处装配迁入 `report/html_sections.py`（`SECTION_BUILDERS` 连续区段表 + `HtmlAssembly` 上下文 + `SectionBindings` NamedTuple）；编排壳 397 → 265 行。形态目标按实测调整为「装配与后处理各自成表」（剩余约 110 行为模板参数显式绑定，偏离理由记入契约文档）；过程中修正一处口径陷阱：装配上下文对 details/指数/新闻保持 None 透传（转 []/{} 会让渲染器跳过物化 → 匿名化失效） |
-| **rf-1129** | 近 56 小时变更审计：`test_excel_generator.py` 仍 patch `excel_news_warning.get_report_sheet_name`（带 `create=True`），而该模块从不使用这个名字——`create=True` 把「目标不存在」变成静默通过，这条 patch 一直是死脚手架、证明不了任何事 | 删除该死 patch；同轮其余项无债：56h 触及的生产代码无跨文件同体函数、无死私有函数、无新增 TODO/FIXME；`scripts/test-runner.py` 的 `except Exception: pass` 是日志可用前的控制台兜底（带注释） |
 
 ### 归档档案
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-10）
