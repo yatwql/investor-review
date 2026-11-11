@@ -1116,7 +1116,7 @@ INVEST_CACHE_DIR=docs/tmp/screenshots/demo/data/cache \    # 缓存改落（不�
 | 端到端报告耗时门禁 | `scripts/test-perf-report.py --gate` | 主动压测 mock 管线，basic ≤60s（CI `perf-gate` job 阻塞） |
 | 阶段级耗时 | `PerfCollector.stage_progress` / `reporter.print_timing_summary()` | TUI 报告收尾会打印耗时排行；数据准备按 `行情与明细/穿透/因子暴露/行业 Beta/相关性矩阵/…` 逐子项计时 |
 | 写盘停顿 | `core/perf.warn_slow_write`（阈值 5s） | 落盘超阈即 WARNING，带产物大小与路径；告警按段分流——`HTML 模板渲染 渲染偏慢` 指向模板内逐行循环/过滤器，`HTML 页面写入 落盘偏慢` 才指向磁盘/挂载（实测 0.98MB 产物落盘仅 0.003s，慢的几乎总是渲染/编译） |
-| HTML 生成四步 | `perf_history` 的 `breakdown["HTML 生成"]` | `图表数据装配` / `页面写入`（总值）+ `模板渲染` / `资产内嵌` / `匿名化` / `落盘`（细分）；其中**模板编译**占绝大多数——首次运行编译 18 个模板约 0.65s，命中 `data/cache/jinja/` 字节码缓存后约 0.03s（删该目录只是下次慢一次） |
+| HTML 生成细分 | `perf_history` 的 `breakdown["HTML 生成"]` | `页面写入`（总值）+ `图表数据装配` / `面板视图装配` / `模板渲染` / `资产内嵌` / `匿名化` / `落盘`（细分）；慢的通常是**面板视图装配**（持仓变动/事件窗/纪律回放的表格串拼装，实测 2.1s of 2.13s），`模板渲染` 本身约 0.0s（首次编译 18 个模板约 0.65s，命中 `data/cache/jinja/` 字节码缓存后约 0.03s）——慢段先看这两个细分，不要默认指向 jinja |
 | 单路取数偏慢 | `[factor] 取数偏慢` / `[event_impact] 基准指数取数偏慢` WARNING（阈值 5s） | 风格因子、行业 Beta 与事件窗基准的单路耗时 + 标的标签（慢请求不再只体现为阶段总数） |
 | 新闻源单源耗时 | `[news] 源耗时` INFO（每次抓取一行，按耗时降序）+ `[news] 源抓取偏慢` WARNING（阈值 3s） | 多源并行时单源长尾会顶住整段「新闻源抓取」（实测 4.1s），逐源耗时直接点名 |
 | 新闻去重/关联分段 | `[news] 去重 X.XXs（a→b 条）/ 关联 Y.YYs` + `[news] 去重内部: … 两两比较 N 对` | 判断 2s 级「去重与关联」花在 O(n²) 比较还是关联打分 |
