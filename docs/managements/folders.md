@@ -18,9 +18,9 @@
 | 测试用例 | — | — | 13,696 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 15 | 7,083 | 含 README.md；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 14 | 6,846 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 217 | 74,178 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 14,256 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
-| ├ archive/ | 版本归档 | 197 | 58,674 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
+| 项目文档 | Markdown | 220 | 74,209 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 14,263 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| ├ archive/ | 版本归档 | 200 | 58,698 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 6 | ~1152 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + TUI 交互改进（议题 + 第一/二批实施方案） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
 
@@ -1925,14 +1925,18 @@ investor-review/
 │   │   │   │   └── llm-critical-path-instrumentation-design.md # 关键路径测量：逐模块耗时入台账、归因并入并行批、A1~A6 实测与风险
 │   │   │   └── llm-expression-budget/               # 关键路径尾部时延与超时余量治理（五条路径预算约束）；四组实测后不采纳
 │   │   │       └── llm-critical-path-design.md      # 表达预算评估：设计与量化评估（结论：不采纳；预算档、补写接缝、TTL、指纹瘦身四组实测）
-│   │   └── v0.17.x/                         # v0.17.x 版本归档（changelog/plan/review-findings + 设计文档）
-│   │       ├── archived_changelog.0.17.x.md # 变更日志归档 v0.17.x
-│   │       ├── archived_plan.0.17.x.md      # 实现计划归档 v0.17.x
-│   │       ├── archived_review-findings.0.17.x.md # 自审记录归档 v0.17.x
-│   │       ├── html-writer-stage-contract.md # HTML 报告装配拆分结构契约（plan-248：区块顺序表/返回元组形状/阶段名/匿名化时序）
-│   │       ├── report-both-stage-contract.md # both 报告路径拆分结构契约（plan-249：阶段表/start-stop 配对/生命周期/双产物成败隔离）
-│   │       ├── generate-all-llm-stage-contract.md # LLM 并行编排拆分结构契约（plan-250：返回位序/块实例身份/阶段顺序/失败隔离）
-│   │       └── llm-dispatch-stage-contract.md # LLM worker 派发拆分结构契约（plan-251：键集合/返回形状/并发闸门/辩论槽位替换）
+│   │   ├── v0.17.x/                         # v0.17.x 版本归档（changelog/plan/review-findings + 设计文档）
+│   │   │   ├── archived_changelog.0.17.x.md # 变更日志归档 v0.17.x
+│   │   │   ├── archived_plan.0.17.x.md      # 实现计划归档 v0.17.x
+│   │   │   ├── archived_review-findings.0.17.x.md # 自审记录归档 v0.17.x
+│   │   │   ├── html-writer-stage-contract.md # HTML 报告装配拆分结构契约（plan-248：区块顺序表/返回元组形状/阶段名/匿名化时序）
+│   │   │   ├── report-both-stage-contract.md # both 报告路径拆分结构契约（plan-249：阶段表/start-stop 配对/生命周期/双产物成败隔离）
+│   │   │   ├── generate-all-llm-stage-contract.md # LLM 并行编排拆分结构契约（plan-250：返回位序/块实例身份/阶段顺序/失败隔离）
+│   │   │   └── llm-dispatch-stage-contract.md # LLM worker 派发拆分结构契约（plan-251：键集合/返回形状/并发闸门/辩论槽位替换）
+│   │   └── v0.18.x/                         # v0.18.x 版本归档（changelog/plan/review-findings + 设计文档）
+│   │       ├── archived_changelog.0.18.x.md # 变更日志归档 v0.18.x
+│   │       ├── archived_plan.0.18.x.md      # 实现计划归档 v0.18.x
+│   │       └── archived_review-findings.0.18.x.md # 自审记录归档 v0.18.x
 │   └── plan/                          #   在办设计文档（扁平存放，原型就近建子目录）
 │       ├── jev-news-judgment-evaluation.md # 判定通道迁移的对照评测方案（三方对照、语料冻结、预注册阈值）
 │       ├── jev-news-judgment-design.md # 判定通道接入设计（独立于对话链、模板理由、降级矩阵）
