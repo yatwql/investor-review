@@ -83,9 +83,14 @@ def _sentinel_returns(name: str):
     return tuple(_marker(name, i) for i in range(arity))
 
 
-def _run(html_writer_module, *, raiser: str | None = None):
-    """跑一次 write_html_report：全部装配与落盘替身，只有编排逻辑真实执行。"""
-    w = html_writer_module
+def _run(*, raiser: str | None = None):
+    """跑一次 write_html_report：全部装配与落盘替身，只有编排逻辑真实执行。
+
+    `w` = 渲染器消费点（`html_sections`，装配已迁入），`hw` = 编排/后处理（`html_writer`）。
+    """
+    from src.python.report import html_sections as w
+    from src.python.report import html_writer as hw
+
     order: list[str] = []
     recorded: list[str] = []
     calls: list[str] = []
@@ -93,7 +98,7 @@ def _run(html_writer_module, *, raiser: str | None = None):
     recorder = MagicMock()
     recorder.record.side_effect = lambda name, _elapsed: recorded.append(name)
 
-    patches = [patch.object(w, "_time_strings", return_value=("now", "today", "2026-11-11"))]
+    patches = [patch.object(hw, "_time_strings", return_value=("now", "today", "2026-11-11"))]
     for name in ASSEMBLY_ORDER:
         if name not in RENDER_ARITY:
             # 返回单值的装配函数（dict/None）：统一返回带标记的 dict
@@ -115,12 +120,14 @@ def _run(html_writer_module, *, raiser: str | None = None):
         return "RENDERED"
 
     patches += [
-        patch.object(w, "_render_template", side_effect=_fake_template),
-        patch.object(w, "_inline_js_assets", side_effect=lambda html, *_a, **_k: calls.append("资产内嵌") or html),
-        patch.object(w, "_save_html_report", side_effect=lambda html, *_a, **_k: calls.append("落盘") or "/tmp/x.html"),
+        patch.object(hw, "_render_template", side_effect=_fake_template),
+        patch.object(hw, "_inline_js_assets", side_effect=lambda html, *_a, **_k: calls.append("资产内嵌") or html),
+        patch.object(
+            hw, "_save_html_report", side_effect=lambda html, *_a, **_k: calls.append("落盘") or "/tmp/x.html"
+        ),
         # 数据状态与矩阵装配（非区块装配，替身即可）
-        patch.object(w, "_build_data_status_sections", return_value=("a", "b", "c", "d")),
-        patch.object(w, "_build_history_data_status", return_value=None),
+        patch.object(hw, "_build_data_status_sections", return_value=("a", "b", "c", "d")),
+        patch.object(hw, "_build_history_data_status", return_value=None),
         patch("src.python.report.data_source_matrix.build_data_source_matrix", return_value={}),
         patch("src.python.report.data_source_matrix.build_data_source_catalog", return_value={}),
         patch("src.python.report._debate_utils.detect_debate_mode", return_value=(None, "")),
@@ -130,14 +137,14 @@ def _run(html_writer_module, *, raiser: str | None = None):
             "src.python.config.anonymizer.build_code_display_map",
             side_effect=lambda *_a, **_k: calls.append("匿名化") or {},
         ),
-        patch.object(w, "get_report_section_order", return_value=[]),
-        patch.object(w, "get_llm_module_names", return_value={"global_macro": "全球政经局势"}),
+        patch.object(hw, "get_report_section_order", return_value=[]),
+        patch.object(hw, "get_llm_module_names", return_value={"global_macro": "全球政经局势"}),
     ]
 
     for p in patches:
         p.start()
     try:
-        path = w.write_html_report(
+        path = hw.write_html_report(
             holdings=[],
             details=[],
             output_dir="/tmp",
@@ -156,9 +163,8 @@ def _run(html_writer_module, *, raiser: str | None = None):
 
 def test_assembly_order_matches_contract():
     """区块装配顺序 == 契约顺序（顺序即报告章序）。"""
-    from src.python.report import html_writer
 
-    result = _run(html_writer)
+    result = _run()
 
     executed = [n for n in result["order"]]
     assert executed == [n for n in ASSEMBLY_ORDER if n in executed], (
@@ -168,9 +174,8 @@ def test_assembly_order_matches_contract():
 
 def test_each_renderer_output_binds_to_its_own_template_vars():
     """哨兵值归属：每个装配函数的产物只能出现在它自己的模板变量里（杀解包串位）。"""
-    from src.python.report import html_writer
 
-    captured = _run(html_writer)["captured"]
+    captured = _run()["captured"]
     flat = repr(captured)
 
     for name, arity in RENDER_ARITY.items():
@@ -191,9 +196,8 @@ def test_each_renderer_output_binds_to_its_own_template_vars():
 
 def test_post_stage_names_recorded():
     """后处理四个阶段名都记进 recorder（perf 细分口径）。"""
-    from src.python.report import html_writer
 
-    result = _run(html_writer)
+    result = _run()
 
     assert tuple(result["recorded"][-len(POST_STAGE_NAMES) :]) == POST_STAGE_NAMES, (
         f"后处理阶段名与契约不一致: {result['recorded']}"
@@ -202,9 +206,8 @@ def test_post_stage_names_recorded():
 
 def test_anonymization_runs_between_render_and_save():
     """后处理顺序：资产内嵌 → 匿名化 → 落盘（匿名化必须在落盘之前）。"""
-    from src.python.report import html_writer
 
-    calls = _run(html_writer)["calls"]
+    calls = _run()["calls"]
 
     assert "匿名化" in calls and "落盘" in calls, f"缺少后处理步骤: {calls}"
     assert calls.index("匿名化") < calls.index("落盘"), "匿名化必须早于落盘（否则脱敏泄漏）"
@@ -225,7 +228,6 @@ def test_save_html_report_writes_atomically():
 
 def test_single_block_failure_does_not_break_report():
     """单区块装配抛异常：报告仍返回落盘路径（异常隔离由各装配函数内部承担，外层不整份失败）。"""
-    from src.python.report import html_writer
 
-    result = _run(html_writer, raiser=None)
+    result = _run(raiser=None)
     assert result["path"] == "/tmp/x.html"
