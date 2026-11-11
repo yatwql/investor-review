@@ -252,6 +252,36 @@ class TestManagementPartitions:
         findings = drift.audit_management_partitions(review_findings="", plan=plan, changelog=self._CHANGELOG_OK)
         assert any("plan-9" in f and "已完成项须移入归档" in f for f in findings)
 
+    def test_unbold_rf_row_in_resolved_flagged(self, drift):
+        """已解决区未加粗的台账行 → 报 finding（归档侧只识别 `| **rf-N** |`）。
+
+        回归：已修项写成 `| rf-N | …` 时归档步按「本版无待迁档」跳过，
+        主台账仍留着整张表（已实发一次）。
+        """
+        rf = (
+            "## 已解决问题\n\n### 开发期已修复（9.9.9-dev）\n\n"
+            "| # | 问题 | 修复 |\n| --- | --- | --- |\n| rf-900 | 某问题 | 已修 |\n\n### 归档档案\n"
+        )
+        findings = drift.audit_management_partitions(
+            review_findings=rf,
+            plan="## 当前迭代待办\n\n## 归档\n",
+            changelog=self._CHANGELOG_OK + "\n- 修复 `rf-900`\n",
+        )
+        assert any("rf-900" in f and "未加粗" in f for f in findings)
+
+    def test_bold_rf_row_not_flagged_as_unbold(self, drift):
+        """加粗台账行不误报（正常形态）。"""
+        rf = (
+            "## 已解决问题\n\n### 开发期已修复（9.9.9-dev）\n\n"
+            "| # | 问题 | 修复 |\n| --- | --- | --- |\n| **rf-900** | 某问题 | 已修 |\n\n### 归档档案\n"
+        )
+        findings = drift.audit_management_partitions(
+            review_findings=rf,
+            plan="## 当前迭代待办\n\n## 归档\n",
+            changelog=self._CHANGELOG_OK + "\n- 修复 `rf-900`\n",
+        )
+        assert [f for f in findings if "未加粗" in f] == []
+
     def test_bold_form_completed_plan_in_todo(self, drift):
         """粗体形态的已完成项滞留在未完成区 → 报 finding。
 
