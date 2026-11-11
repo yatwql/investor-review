@@ -7,7 +7,7 @@
 
 ## 概述
 
-在办 9 项：P1 2 项（**plan-238**、**plan-239**）、P2 1 项（**plan-92**）、P3 5 项（**plan-70**、**plan-233**、**plan-243**、**plan-248**、**plan-249**）、P4 1 项（**plan-55**）。命名与实现纪律见 `CLAUDE.md`（单一事实位，本表不重复）。
+在办 8 项：P1 2 项（**plan-238**、**plan-239**）、P2 1 项（**plan-92**）、P3 4 项（**plan-70**、**plan-233**、**plan-243**、**plan-248**）、P4 1 项（**plan-55**）。命名与实现纪律见 `CLAUDE.md`（单一事实位，本表不重复）。
 
 ---
 
@@ -89,15 +89,6 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 **目标形态**：编排壳 ≤ 90 行，区块按主题拆到 `html_sections_*.py`，顺序表与模板变量映射成为单一事实位。
 **验收**：结构用例（顺序表↔实调顺序 / 阶段名集合）+ 生成一份真实报告逐章 diff 为空。
 
-#### `plan-249` both 报告路径拆分（先定结构契约）
-
-**现状**：`report/_generation_both.py::_generate_report_both` 388 行——五个 perf 阶段串行、一份 report_run 生命周期、后台健康检查、HTML/Excel 双产物各自成败混在一处。**契约缺口**：阶段名与顺序是 `perf_history` 跨版本可比性的口径，却只以 `perf.start("…")` 字面量存在。
-**结构契约**（6 条）：[`report-both-stage-contract.md`](../plan/report-both-stage-contract.md) —— 阶段名与顺序固定且以阶段表表达、start/stop 必配对（含异常路径）、report_run 生命周期单点、HTML/Excel 成败互不连带、健康检查不阻塞主路径、快照捕获走 `capture_snapshot`（不自行判定）。
-**目标形态**：编排壳 ≤ 100 行，五阶段各成 `_stage_*.py`，阶段表 `_BOTH_STAGES` 唯一。
-**验收**：阶段表名字序列 == 实跑 `perf.phases` 键序列；`test-perf-report.py --gate` 不退化。
-
-> **P3 大型函数拆分（plan-248/249）共同约束**：两项均为「只动结构、不动行为」的重构，开工前**先定结构契约、再动代码**；每项按契约表逐条写成可断言的结构用例（不写死条数/清单，断言结构关系），既有行为用例全绿后才准提交；两项互不依赖、可各自单独立项推进。
-
 ### P4 — 实验候选（先决门槛未过，暂缓）
 入选标准：接入前有硬性先决门槛，门槛未过不排期。
 
@@ -113,7 +104,8 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 **plan-250 LLM 并行编排拆分**：已完成（函数体 392 → 101 行；块装配与生成后一遍各自成模块，7 条结构契约用例在拆分前后均绿），契约与实施结果见 [`generate-all-llm-stage-contract.md`](../plan/generate-all-llm-stage-contract.md) §8。
 
 **plan-251 LLM worker 派发拆分**：已完成（派发壳函数体 256 → 75 行；worker 装配与辩论路由各自成模块，11 条结构契约用例在拆分前后均绿），契约与实施结果见 [`llm-dispatch-stage-contract.md`](../plan/llm-dispatch-stage-contract.md) §8。
-## 归档
+
+**plan-249 both 报告路径拆分**：已完成（编排壳函数体 388 → 43 行；五阶段与阶段表收进 `_both_stages.py`，8 条结构契约用例在拆分前后均绿），契约与实施结果见 [`report-both-stage-contract.md`](../plan/report-both-stage-contract.md) §8。## 归档
 
 - [`archived_plan.0.17.x.md`](../archive/v0.17.x/archived_plan.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-08）
 - [`archived_plan.0.16.x.md`](../archive/v0.16.x/archived_plan.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-11-03）

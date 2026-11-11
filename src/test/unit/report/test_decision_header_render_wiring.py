@@ -14,7 +14,7 @@ from src.python.core.constants import PROJECT_ROOT
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
 
 _ASSEMBLY = Path(PROJECT_ROOT) / "src" / "python" / "report" / "_generation_full.py"
-_ASSEMBLY_BOTH = Path(PROJECT_ROOT) / "src" / "python" / "report" / "_generation_both.py"
+_ASSEMBLY_BOTH = Path(PROJECT_ROOT) / "src" / "python" / "report" / "_both_stages.py"
 
 
 class TestHeaderStripWiring:

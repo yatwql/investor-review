@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.17.9-dev
-> **编号源**：`rf-next = 1127`（新增问题提出后更新为 +1；已用最大 rf-1126，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1128`（新增问题提出后更新为 +1；已用最大 rf-1127，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -76,6 +76,7 @@
 | **rf-1124** | 近 96 小时变更审计：`scripts/_eval_factor_zoo/metrics.py` 一边注释声明「因子公式与生产层同源、各拷一份会漂移」，一边保留 `_closes` / `_mean` / `_rolling_beta` / `_daily_returns` 四份本地拷贝——生产口径改了评测仍跑旧公式，评出的通过率是假数 | 四份拷贝删除，改为从 `src.python.analysis._factor_formulas` 导入（与其余 6 个原语同源）；补身份断言用例（`is` 比对，挡住「同名副本」这类漂移）；其余检查项无债：96h 触及的生产代码无死私有函数、无跨文件同体副本（除报告层 `_tracker()` 这一文档化取数接缝）、无静默吞异常（`test-runner.py` 的控制台兜底带注释且发生在日志可用之前） |
 | **rf-1125** | 拆分前必须先立的契约面缺失：`generate_all_llm` 392 行内混着「块装配 / 缓存预检 / 并行派发 / 事实锚定 / 自检 / 跨模块核对」，其中三条不变式（返回元组位序、块实例只渲染一次且同进指纹与提示词、门面 patch 点）没有任何断言，拆分时极易静默漂移（缓存键与请求体脱钩、patch 变 no-op） | 先补 7 条结构契约用例（拆分前后均绿）再动代码；块装配整组下沉 `llm/_llm_context_blocks.py`（六块 → `LlmContextBlocks` 快照，`fingerprint_kwargs()`/`prompt_kwargs()` 同源），生成后一遍下沉 `llm/_llm_post_pass.py`（锚定 → 自检 → 跨模块核对 + `review_text` 剥离），门面缩为编排壳（函数体 392 → 101 行）；块渲染器与 `run_fact_check` 的 7 处 patch 目标随消费方迁移（漏迁即 AttributeError） |
 | **rf-1126** | `_dispatch_llm_workers` 256 行、6 个嵌套闭包把三条运行契约埋在闭包里：client 装配与缺 h2 降级、thinking 并发闸门与等待记账、辩论槽位替换与回退——「提交哪些模块 / 返回什么形状 / 失败如何沉淀」只能靠读闭包；另有 9 处 `_llm_dispatch.httpx.Client` patch 从未生效（client 一律经 `make_http_client` 构造，patch 是残留） | 先补 11 条结构契约用例（拆分前后均绿）再动代码；worker 装配下沉 `llm/_worker_runner.py`（`make_module_runner` / `thinking_concurrency_limit` / `is_thinking_module`），辩论路由下沉 `llm/_debate_router.py`（`install_debate_route` 槽位替换 + 两级回退）；派发壳 256 → 75 行，提交归集与收尾汇总收进 `_run_workers` / `_log_dispatch_tail`；`make_http_client` 的 6 处 patch 随消费方迁移、9 处残留 patch 删除 |
+| **rf-1127** | `_generate_report_both` 388 行把五个 perf 阶段、运行边界、后台健康检查与双产物成败混在一处：阶段名与顺序是 `perf_history` 跨版本可比性的口径，却只以 `perf.start("…")` 字面量存在；start/stop 是否成对、历史关闭时哪些装配仍须执行，都只能逐行读 | 先补 8 条结构契约用例（拆分前后均绿）再动代码；五阶段与阶段表收进 `report/_both_stages.py`（`BOTH_STAGES` 五元组：名字/实现/是否执行/跳过提示/是否计时，`stage_runner` 用 try/finally 配对），编排壳 388 → 43 行；历史取数按旧口径只在开关开启时计时、装配段不计时（perf 读数与拆分前一致）；既有源扫描用例目标同步到新模块 |
 
 ### 归档档案
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-10）

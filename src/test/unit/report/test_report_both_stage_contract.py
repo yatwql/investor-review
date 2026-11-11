@@ -58,13 +58,13 @@ def _patches(*, html_error: bool = False, excel_error: bool = False, history_ena
 
     return [
         # 数据获取与契约装配（全部替身，避免任何真实取数）
-        patch("src.python.report._generation_both._compute_details", return_value=[MagicMock()]),
+        patch("src.python.report._both_stages._compute_details", return_value=[MagicMock()]),
         patch("src.python.report.orchestrator.compute_valuation_data", return_value=None),
         patch("src.python.report.orchestrator.compute_market_temperature_data", return_value=None),
         patch("src.python.report.purchase_status.build_purchase_status_data", return_value=None),
-        patch("src.python.report._generation_both._inject_evolution_data", side_effect=lambda data, **_: data),
-        patch("src.python.report._generation_both._inject_snapshot_diff_data", side_effect=lambda data, **_: data),
-        patch("src.python.report._generation_both.inject_holding_change_data"),
+        patch("src.python.report._both_stages._inject_evolution_data", side_effect=lambda data, **_: data),
+        patch("src.python.report._both_stages._inject_snapshot_diff_data", side_effect=lambda data, **_: data),
+        patch("src.python.report._experimental_seams.inject_holding_change_data"),
         patch(
             "src.python.core.holding_status.build_coverage_summary",
             return_value={"available": True, "items": [], "abnormal_count": 0, "summary": ""},
@@ -82,11 +82,11 @@ def _patches(*, html_error: bool = False, excel_error: bool = False, history_ena
         patch("src.python.analysis.action_advisor.build_action_data", return_value={"available": True}),
         patch("src.python.analysis.metrics.compute_portfolio_peak_mv", return_value=None),
         patch("src.python.report.decision_basis.build_decision_basis_data", return_value={"available": True}),
-        patch("src.python.report._generation_both.record_deterministic_decisions"),
-        patch("src.python.report._generation_both.record_llm_decisions_and_review_block"),
-        patch("src.python.report._generation_both.record_prosperity_diagnosis"),
+        patch("src.python.report._experimental_seams.record_deterministic_decisions"),
+        patch("src.python.report._experimental_seams.record_llm_decisions_and_review_block"),
+        patch("src.python.report._experimental_seams.record_prosperity_diagnosis"),
         patch("src.python.report._report_aux_metrics.compute_market_sentiment_data", return_value=None),
-        patch("src.python.report._generation_both._build_chart_datasets_for_report", return_value={}),
+        patch("src.python.report._both_stages._build_chart_datasets_for_report", return_value={}),
         # 产物落盘
         patch("src.python.report.html_writer.write_html_report", html_side),
         patch("src.python.report.excel_generator.generate_excel_report", excel_side),

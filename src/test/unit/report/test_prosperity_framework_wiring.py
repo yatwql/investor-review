@@ -312,7 +312,7 @@ class TestHtmlCallSiteSeam:
         return "\n".join(
             Path(f).read_text(encoding="utf-8")
             for f in (
-                "src/python/report/_generation_both.py",
+                "src/python/report/_both_stages.py",
                 "src/python/report/_generation_full.py",
                 "src/python/report/_report_output.py",
             )

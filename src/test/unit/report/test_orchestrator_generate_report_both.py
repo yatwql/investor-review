@@ -617,11 +617,11 @@ class TestDecisionReviewWiring:
                 return_value={"available": True, "summary": "", "rebalance_signals": []},
             ),
             patch(
-                "src.python.report._generation_both.record_deterministic_decisions",
+                "src.python.report._experimental_seams.record_deterministic_decisions",
                 side_effect=_fake_record_deterministic,
             ),
             patch(
-                "src.python.report._generation_both.record_llm_decisions_and_review_block",
+                "src.python.report._experimental_seams.record_llm_decisions_and_review_block",
                 side_effect=_fake_record_review,
             ),
         ):

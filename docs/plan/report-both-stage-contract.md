@@ -1,6 +1,6 @@
 # both 报告路径拆分 —— 结构契约（plan-249）
 
-> 状态：立项（未开工）
+> 状态：**已完成**（实施结果见文末 §8）
 > 对象：`src/python/report/_generation_both.py::_generate_report_both`（388 行）
 > 关联：`plan.md` → `plan-249`
 
@@ -55,3 +55,17 @@
 - 不改行情/快照/历史/HTML/Excel 各阶段内部实现；
 - 不动 `_generation_full.py`（含 LLM 的 full 路径）与 `_generation_basic.py`；
 - 不改 perf 记录格式与门禁阈值。
+
+## 8. 实施结果
+
+| 项 | 结果 |
+|---|---|
+| 编排壳 | `_generate_report_both` 函数体 388 → 43 行（文件 91 行）：配置解析、perf/运行边界/健康检查、阶段表执行、收尾三行 |
+| 阶段外移 | 新模块 `report/_both_stages.py`（483 行）：`resolve_both_options` 单点解析开关与输出参数；`stage_quotes` / `stage_snapshot` / `stage_history_fetch` / `stage_history_assembly` / `stage_html` / `stage_excel` 各自成函数，只读写 `BothRun` 上下文 |
+| 阶段表 | `BOTH_STAGES` 为**唯一**阶段定义处（五元组：名字 / 实现 / 是否执行 / 跳过提示 / 是否计时）；历史取数按旧口径只在开关开启时启停 perf，装配段不单独计时（与拆分前 perf 读数一致） |
+| 配对与隔离 | `stage_runner` 用 try/finally 保证每个 `perf.start` 都有配对 `stop`（异常路径同样收口）；HTML/Excel 阶段各自 try/except，失败只置 `*_ok=False` 并追加 `errors` |
+| 契约守护 | `test_report_both_stage_contract.py` 8 条结构用例在拆分前后均绿（阶段名与序列 / 配对 / 运行边界 / 双产物成败 / 快照命名空间透传 / 健康检查收尾 / 历史关闭） |
+| 既有源码级用例 | `test_report_output_spans.py`、`test_prosperity_framework_wiring.py`、`test_decision_header_render_wiring.py` 的源扫描目标同步到 `_both_stages.py`（契约不变，只换文件）；`record_*` 挂载点 patch 目标按「延迟导入 → patch 源模块」指向 `_experimental_seams` |
+| 门禁 | `src/test/unit` + `scenario` + `integration` 全绿；`dev-verify` 通过；ruff / 类型 / 文档守护全过 |
+
+拆分口径的一处偏离：契约 §4 原写「五阶段各成 `_stage_*.py`」，实施改为**单模块** `_both_stages.py` 内五个阶段函数——五份几十行的文件会让「阶段表」与实现分散，单模块内阶段表 + 阶段函数更利于对照 §3 契约阅读。

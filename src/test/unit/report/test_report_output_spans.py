@@ -321,7 +321,7 @@ class TestDecisionBasisContractForwarding:
     """
 
     _MODULES = (
-        "src/python/report/_generation_both.py",
+        "src/python/report/_both_stages.py",
         "src/python/report/_generation_full.py",
         "src/python/report/_report_output.py",
     )
@@ -344,9 +344,9 @@ class TestDecisionBasisContractForwarding:
         """both 路径须按历史峰值重装配（风险预算的回撤现状依赖它）。"""
         import inspect
 
-        from src.python.report import _generation_both
+        from src.python.report import _both_stages
 
-        src = inspect.getsource(_generation_both._generate_report_both)
+        src = inspect.getsource(_both_stages.stage_history_assembly)
         assert 'pipeline_data["decision_basis_data"] = build_decision_basis_data(' in src
         assert "discipline_signals=" in src, "纪律触发条须与峰值同批重装配（否则纪律行空）"
 
@@ -355,12 +355,12 @@ class TestDecisionReviewContractForwarding:
     """决策复盘区块契约（decision_review_data）的 both 路径接线守卫。
 
     现场（自审挂账）：`decision_reflection` 开启时，full 路径行动章正常渲染
-    「决策跨期反思」块，both 路径整块静默不渲染——`_generation_both.py` 既不
+    「决策跨期反思」块，both 路径整块静默不渲染——both 阶段实现既不
     调用确定性登记挂载点，也未向 `write_html_report` 转发该契约（Excel 侧因
     消费 `pipeline_data` 本身不难，但区块从未装配 → 双端同缺）。
     """
 
-    _BOTH = "src/python/report/_generation_both.py"
+    _BOTH = "src/python/report/_both_stages.py"
 
     def test_both_path_assembles_review_block_via_seams(self):
         """both 路径须走同一对挂载点（确定性登记 + 复盘区块装配）。"""
