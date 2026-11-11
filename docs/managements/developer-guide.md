@@ -237,7 +237,10 @@ PYTHONWARNDEFAULTENCODING=1 .venv/bin/python -m pytest src/test/unit -q
 
 > 为何不直接跑 Windows runner：GitHub 的 `windows-latest` 是 en-US/cp1252（单字节，只会乱码不会报错），装不住 GBK 类 locale 回退；为何不在 ubuntu 上装 GB18030 跑全套件：中文**文件名**在 POSIX `fsencoding=ascii` 下会失败（18 处中文报表文件名），而 cp936 Windows 反而正常——那是探测方法的伪影，不是缺陷。两道探针因此取「精确模拟消费方」而非「换整个 locale 跑全套件」。
 
-> **CI 轮询纪律**：本地门禁（P0/P1/P2 + 必要时的 `--mode portability`）通过后，**不逐提交轮询 CI**——本地绿而 CI 红的来源本应只有环境差异（3.11/3.12/3.13 矩阵、`LC_ALL=C` locale 探针、系统库/可选依赖、`perf-gate`/`format` 等 CI 独有档）。为收口这类差集，portability 已可本地等价复现；其余档位仅在改动触及它们时才去看 CI 结果。
+> **CI 轮询纪律**：本地门禁（P0/P1/P2 + 必要时的 `--mode portability`）通过后，**不逐提交轮询 CI**
+>
+> **`gh` 不是常规工具**：CI 结果只在两种情形下查——① 用户明确要求；② 排查「本地绿、CI 红」的环境差异。**发布后不做事后确认**：`release.py publish` 的产出（release 提交 / `--no-ff` 合并 / tag / 推送命令）已是结论，再去 `gh run list` 复核属越界轮询；发布闭环由 `devbump` 的「vX 在 master 历史内、master=vX、dev=vX+1-dev」校验保证。
+——本地绿而 CI 红的来源本应只有环境差异（3.11/3.12/3.13 矩阵、`LC_ALL=C` locale 探针、系统库/可选依赖、`perf-gate`/`format` 等 CI 独有档）。为收口这类差集，portability 已可本地等价复现；其余档位仅在改动触及它们时才去看 CI 结果。
 
 > **钩子与守护输出的编码**：pre-commit 以 `export PYTHONUTF8=1` 统一守护子进程的日志编码，`scripts/_shared/checklib.py` 导入时把非 UTF-8 的真实 stdout/stderr 收敛到 UTF-8（`_force_utf8_stream`，已 UTF-8 或 `StringIO` 桩零改写）——中文 Windows 上 stdout 重定向到文件按 locale ANSI（cp936）落盘，UTF-8 终端回放 `run_bg` 守护日志会成乱码；前台直打走控制台 `WriteConsoleW` 本就无损。
 
