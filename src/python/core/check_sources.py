@@ -145,6 +145,32 @@ def _check_cninfo() -> tuple[str, float, str]:
     return _WARN, elapsed, "未解析到 orgId（搜索接口变动 / 网络异常，详见 logs/app.log）"
 
 
+def _check_sector_flow() -> tuple[str, float, str]:
+    """行业资金流向探针：逐通道直连（东财 push2 / 同花顺），不碰缓存。
+
+    资金流不在 Provider Chain 里（走 akshare 双通道 + 负缓存 + 陈旧回退），此前所有
+    探针都不覆盖它——退化了只能翻日志发现。探针只回答「通道此刻能不能取到数」，
+    不命中缓存、不写负缓存、不返回陈旧回退（否则测到的是缓存而不是源）。
+    """
+    start = time.perf_counter()
+    try:
+        from src.python.providers.akshare_extras import probe_sector_flow_channels
+
+        channels = probe_sector_flow_channels()
+    except Exception as e:  # 探针自身异常不得中断体检
+        return _ERR, (time.perf_counter() - start) * 1000, str(e).split("\n")[0][:60]
+    elapsed = (time.perf_counter() - start) * 1000
+    if not channels:
+        return _WARN, elapsed, "未注册任何取数通道（配置缺失）"
+    detail = "；".join(f"{label} {msg}" if ok else f"{label} 失败（{msg}）" for label, ok, msg in channels)
+    ok_count = sum(1 for _label, ok, _msg in channels if ok)
+    if ok_count == len(channels):
+        return _OK, elapsed, f"{elapsed:.0f}ms 全通道正常（{detail}）"
+    if ok_count:
+        return _WARN, elapsed, f"部分通道不可用：{detail}"
+    return _ERR, elapsed, f"全部通道失败：{detail}"
+
+
 # ── 检查项定义 ──────────────────────────────────────────
 # 四元组 (source_id, 显示名, 用途, 探测函数)：source_id 用于凭据就绪预检
 # （见 core/datasource_credential.py），与 fetcher/chain.py 的 provider 名对齐。
@@ -260,6 +286,14 @@ _checks: list[tuple[str, str, str, Callable[[], tuple[str, float, str]]]] = [
         "巨潮资讯",
         "财报备源",
         _check_cninfo,
+    ),
+    # 行业资金流向：不在 Provider Chain 里（akshare 双通道 + 负缓存/陈旧回退），
+    # 此前无探针覆盖——只靠翻日志发现退化。
+    (
+        "sector_flow",
+        "行业资金流向",
+        "行业资金流",
+        _check_sector_flow,
     ),
 ]
 

@@ -293,6 +293,64 @@ class TestFinancialReportProbes:
         assert symbol == cs._OK
         assert "orgId" in message
 
+    def test_sector_flow_probe_reports_per_channel(self, monkeypatch):
+        """逐通道报状态：全通 OK / 部分通 WARN / 全挂 ERR，且文案点名是哪一条挂了。"""
+        from src.python.providers import akshare_extras
+
+        def _run(results):
+            monkeypatch.setattr(akshare_extras, "probe_sector_flow_channels", lambda: results)
+            return cs._check_sector_flow()
+
+        ok = [("东财 push2", True, "120ms 90 行业"), ("同花顺", True, "480ms 90 行业")]
+        symbol, _latency, message = _run(ok)
+        assert symbol == cs._OK and "全通道正常" in message
+
+        partial = [("东财 push2", False, "connection"), ("同花顺", True, "480ms 90 行业")]
+        symbol, _latency, message = _run(partial)
+        assert symbol == cs._WARN and "部分通道不可用" in message and "东财 push2 失败" in message
+
+        down = [("东财 push2", False, "connection"), ("同花顺", False, "empty")]
+        symbol, _latency, message = _run(down)
+        assert symbol == cs._ERR and "全部通道失败" in message
+
+        symbol, _latency, message = _run([])
+        assert symbol == cs._WARN and "未注册任何取数通道" in message
+
+    def test_sector_flow_probe_does_not_touch_cache(self, monkeypatch):
+        """探针不得读写缓存：命中缓存会把「缓存还在不在」当成源可用性。"""
+        from src.python.providers import akshare_extras
+
+        def _no_cache(*_a, **_k):
+            raise AssertionError("探针不应读写缓存")
+
+        monkeypatch.setattr(akshare_extras, "cache_get", _no_cache)
+        monkeypatch.setattr(akshare_extras, "cache_set", _no_cache)
+        monkeypatch.setattr(akshare_extras, "cache_clear", _no_cache)
+        monkeypatch.setattr(akshare_extras, "_SECTOR_FLOW_FETCHERS", {"em_push2": lambda: [{"name": "银行"}]})
+        monkeypatch.setattr(akshare_extras, "_SECTOR_FLOW_CHANNELS", ("em_push2",))
+
+        results = akshare_extras.probe_sector_flow_channels()
+
+        assert results and results[0][1] is True, results
+
+    def test_sector_flow_channel_exception_does_not_break_others(self, monkeypatch):
+        """单通道抛非预期异常 → 记为该通道失败，其余通道照常探测。"""
+        from src.python.providers import akshare_extras
+
+        def _boom():
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr(
+            akshare_extras,
+            "_SECTOR_FLOW_FETCHERS",
+            {"em_push2": _boom, "ths_industry": lambda: [{"name": "银行"}]},
+        )
+        monkeypatch.setattr(akshare_extras, "_SECTOR_FLOW_CHANNELS", ("em_push2", "ths_industry"))
+
+        results = akshare_extras.probe_sector_flow_channels()
+
+        assert [ok for _label, ok, _msg in results] == [False, True], results
+
     def test_cninfo_probe_distinguishes_negative_cache(self, monkeypatch):
         """负缓存命中 ≠ 本轮新失败：文案必须点名「按负缓存跳过」。
 

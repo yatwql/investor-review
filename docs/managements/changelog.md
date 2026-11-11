@@ -19,6 +19,7 @@
 - 测试基建去重与诊断留痕（rf-1119）：`_freeze_market_bucket_for_cache_asserts` 原在 11 个缓存测试文件各一份，收口到 `_cache_fixtures.py`（导入即生效）；`test_perf_history*.py` 分片的 `fixture_mod`/`_records` 收口到新增 `_perf_history_fixtures.py`；`scripts/_test_runner/runner.py` 失败详情落盘失败不再 `except Exception: pass`，改为上报路径与原因（补回归：留痕且不改判定）
 - 文档复核回写（rf-1118/rf-1119）：llm-technical §12.4 补「引用数值核对（逐字 + 1~3 项加减组合）」与摘要收益率维度；requirements R-LLM-12 同步该口径；developer-guide 增「持久化路径必须成套隔离（非 pytest 一次性 CLI + 按值绑定路径改模块属性 + 命名空间双保险）」；scripts-reference 补 `test-perf-report.py` 的状态隔离范围；reports-instruction 的修正明细格式改为语义说明 + 两位小数口径；另清 `test_generate_all_llm.py` 5 处以 `[]` 充 `dict` 形参的类型噪声
 - 基准跑日志隔离 + 巨潮探针区分负缓存（rf-1120）：`test-perf-report.py` 新增 `_isolate_log_writes()`（`INVEST_LOG_PATH` 落临时目录 + `INVEST_RUN_CONTEXT=perf`，导入任何 `src` 模块前生效），止住禁网跑把 1347 行告警写进真实 `logs/app.log`；`cninfo` 导出 `ORGID_MISS_CACHE_REASON_PREFIX`，健康探针把「负缓存命中」与「本轮真失败」分开报，不再让失败率虚高误导排查
+- 行业资金流向补健康探针（rf-1121）：此前 12 个探针不覆盖这个数据面（走 akshare 双通道 + 负缓存 + 陈旧回退，不进 Provider Chain），退化只能翻日志发现。新增 `probe_sector_flow_channels()` 逐通道直连（不读不写缓存、不返回陈旧回退），探针按全通/部分/全挂三态上报；探针总数 12 → 13
 
 （本次发布内容见下方归档索引）
 

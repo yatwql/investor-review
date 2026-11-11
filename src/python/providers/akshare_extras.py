@@ -219,6 +219,38 @@ def _struct_sector_flow_rows(df: Any, fields: tuple[tuple[str, str], ...], chann
     return result
 
 
+def probe_sector_flow_channels() -> list[tuple[str, bool, str]]:
+    """健康探针：逐通道直连验可用性（**不读不写缓存**）。
+
+    为何不直接复用 :func:`get_sector_fund_flow`：它会命中内存/文件缓存（探针就变成
+    「缓存还在不在」）、失败时写入负缓存（一次探针就记成一次真实失败，反过来把源
+    钉死一小时）、并可能返回陈旧回退（把过期数据当成功）。探针只回答：「此刻这两个
+    通道各自能不能取到数」。
+
+    Returns:
+        ``[(通道显示名, 是否可用, 说明)]``，顺序同 `_SECTOR_FLOW_CHANNELS`。
+    """
+    results: list[tuple[str, bool, str]] = []
+    for name in _SECTOR_FLOW_CHANNELS:
+        label = _SECTOR_FLOW_CHANNEL_LABELS.get(name, name)
+        fetch = _SECTOR_FLOW_FETCHERS.get(name)
+        if fetch is None:
+            results.append((label, False, "未注册取数函数"))
+            continue
+        start = _time.perf_counter()
+        try:
+            rows = fetch()
+        except _SectorFlowUnavailable as exc:
+            results.append((label, False, exc.kind))
+            continue
+        except Exception as exc:  # noqa: BLE001 — 探针不得因单通道异常中断整表
+            results.append((label, False, f"{type(exc).__name__}: {exc}"[:60]))
+            continue
+        elapsed = (_time.perf_counter() - start) * 1000
+        results.append((label, True, f"{elapsed:.0f}ms {len(rows)} 行业"))
+    return results
+
+
 def _channel_failures() -> dict[str, str]:
     """读取各通道的失败态（进程内 memo → 跨进程负缓存）。"""
     raw = _memo_get(_memo_key("sector_flow_fail"))
