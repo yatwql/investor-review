@@ -157,6 +157,53 @@ class TestCircuitBreaker:
             assert state.backoff_level == 2, "跨批次重新熔断应升一级"
             assert state.cooldown_secs == 300
 
+    def test_custom_cooldown_survives_backoff_table(self):
+        """注册时显式给的冷却期不被退避表首档覆盖（eastmoney_industry=120s）。
+
+        回归背景：退避表首档 60s 无条件写入 `cooldown_secs`，注册时的自定义冷却期
+        形同虚设——日志还打印「熔断 60s」，与实际冷却期（应为 120s）不一致。
+        """
+
+        r = _fresh_registry()
+        r.register_provider("eastmoney_industry", failure_threshold=6, cooldown_secs=120)
+        with mock.patch("time.time", return_value=1000.0):
+            for _ in range(6):
+                r.record_failure("eastmoney_industry", "push2:600900")
+            state = r._providers["eastmoney_industry"]
+            assert state.is_skipped is True
+            assert state.cooldown_override == 120
+            assert state.cooldown_secs == 120, "自定义冷却期不得被退避表首档 60s 覆盖"
+        # 冷却期满重新熔断时取「自定义值与退避档的较大者」，仍不低于 120s
+        with mock.patch("time.time", return_value=1121.0):
+            assert r.is_circuit_broken("eastmoney_industry") is False
+        with mock.patch("time.time", return_value=1130.0):
+            for _ in range(6):
+                r.record_failure("eastmoney_industry", "push2:600900")
+            assert r._providers["eastmoney_industry"].cooldown_secs >= 120
+
+    def test_custom_cooldown_restored_after_success(self):
+        """成功恢复后退避级别归零，冷却期回落自定义值而非全局默认 300s。"""
+        r = _fresh_registry()
+        r.register_provider("eastmoney_industry", failure_threshold=6, cooldown_secs=120)
+        with mock.patch("time.time", return_value=1000.0):
+            for _ in range(6):
+                r.record_failure("eastmoney_industry", "push2:x")
+            r.record_success("eastmoney_industry")
+            state = r._providers["eastmoney_industry"]
+            assert state.backoff_level == 0
+            assert state.cooldown_secs == 120
+
+    def test_default_provider_keeps_backoff_table(self):
+        """未指定自定义冷却期的源仍走退避表（首档 60s），语义不变。"""
+        r = _fresh_registry()
+        r.register_provider("t1")
+        with mock.patch("time.time", return_value=1000.0):
+            for _ in range(3):
+                r.record_failure("t1", "timeout")
+            state = r._providers["t1"]
+            assert state.cooldown_override is None
+            assert state.cooldown_secs == 60
+
     def test_is_chain_broken_all(self):
         """全链熔断返回 True。"""
         r = _fresh_registry()

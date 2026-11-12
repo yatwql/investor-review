@@ -913,7 +913,7 @@ Provider Chain 采用**职责链（Chain of Responsibility）模式**：每个�
 
 #### Chain 自动注册
 
-`fetcher/chain_config.py`（模块加载注册，符号经 `fetcher/chain.py` 门面 re-export）在模块加载时自动调用 `get_registry().register_default_chains()`，从 `_DEFAULT_CHAINS` 配置注册所有 provider 和 chain。在 `register_default_chains()` 中 per-provider 配置 tier/timeout/failure_threshold/cooldown_secs（如 eastmoney_industry 阈值 6 次/冷却 120s）。
+`fetcher/chain_config.py`（模块加载注册，符号经 `fetcher/chain.py` 门面 re-export）在模块加载时自动调用 `get_registry().register_default_chains()`，从 `_DEFAULT_CHAINS` 配置注册所有 provider 和 chain。在 `register_default_chains()` 中 per-provider 配置 tier/timeout/failure_threshold/cooldown_secs（如 eastmoney_industry 阈值 6 次/冷却 120s）。自定义冷却期会被记为 `ProviderState.cooldown_override`：熔断时取「自定义值与退避档的较大者」、成功后回落自定义值——否则退避表首档 60s 会把注册时给的冷却期盖掉，配置形同虚设（日志也会打印成 60s）。
 
 #### 策略选择器
 

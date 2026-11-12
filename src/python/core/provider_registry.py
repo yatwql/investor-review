@@ -94,6 +94,8 @@ class ProviderState:
     total_successes: int = 0
     failure_threshold: int = _PROVIDER_SKIP_THRESHOLD
     cooldown_secs: float = _PROVIDER_COOLDOWN_SECS
+    cooldown_override: float | None = None
+    """注册时显式指定的冷却期；非 None 时熔断/恢复都以此为准（不被退避表/全局默认覆盖）。"""
     backoff_level: int = 0
     """当前指数退避级别索引（0=60s, 1=300s, 2=900s, 3=3600s）。成功时重置。"""
 
@@ -180,6 +182,7 @@ class DataSourceRegistry:
                     old.failure_threshold = failure_threshold
                 if cooldown_secs is not None:
                     old.cooldown_secs = cooldown_secs
+                    old.cooldown_override = cooldown_secs
             else:
                 self._providers[name] = ProviderState(
                     name=name,
@@ -188,6 +191,7 @@ class DataSourceRegistry:
                     timeout=timeout,
                     failure_threshold=failure_threshold or _PROVIDER_SKIP_THRESHOLD,
                     cooldown_secs=cooldown_secs or _PROVIDER_COOLDOWN_SECS,
+                    cooldown_override=cooldown_secs,
                 )
 
     def register_default_chains(self, chains: dict[str, list[str]] | None = None) -> None:
@@ -244,6 +248,7 @@ class DataSourceRegistry:
                         "last_failure_context": ps.last_failure_context,
                         "backoff_level": ps.backoff_level,
                         "cooldown_secs": ps.cooldown_secs,
+                        "cooldown_override": ps.cooldown_override,
                         "_saved_at": now,
                     }
         # 落盘委托 core/atomic_write（唯一原语）。失败已在原语内记日志并返回 False；
@@ -283,6 +288,9 @@ class DataSourceRegistry:
                 state.last_failure_context = ps_data.get("last_failure_context", "")
                 state.backoff_level = ps_data.get("backoff_level", 0)
                 state.cooldown_secs = ps_data.get("cooldown_secs", _PROVIDER_COOLDOWN_SECS)
+                override = ps_data.get("cooldown_override")
+                if override is not None:
+                    state.cooldown_override = override
                 loaded += 1
         if loaded:
             logger.info("[registry] 已加载 %d 个 Provider 熔断状态（%d 条已过期）", loaded, expired)
@@ -300,7 +308,11 @@ class DataSourceRegistry:
             if state.backoff_level > 0:
                 logger.info("[registry] %s 调用成功，重置退避级别(%d→0)", provider, state.backoff_level)
                 state.backoff_level = 0
-                state.cooldown_secs = _PROVIDER_COOLDOWN_SECS
+                state.cooldown_secs = (
+                    state.cooldown_override
+                    if state.cooldown_override is not None
+                    else _PROVIDER_COOLDOWN_SECS
+                )
                 changed = True
             elif state.total_successes == 1:
                 changed = True
@@ -343,14 +355,18 @@ class DataSourceRegistry:
                 # 指数退避：每次熔断递增退避级别，上限 _BACKOFF_LEVELS[-1]
                 level = min(state.backoff_level, len(_BACKOFF_LEVELS) - 1)
                 backoff = _BACKOFF_LEVELS[level]
-                state.cooldown_secs = backoff
+                # 注册时显式给过冷却期的源（如 eastmoney_industry=120s）以该值为下限：
+                # 退避表首档 60s 小于自定义值，直接覆盖会让自定义配置形同虚设。
+                state.cooldown_secs = (
+                    max(state.cooldown_override, backoff) if state.cooldown_override is not None else backoff
+                )
                 state.backoff_level += 1
                 logger.warning(
                     "[registry] %s 连续 %d 次失败（最新: %s），熔断 %ds（退避级别 %d）",
                     provider,
                     state.consecutive_failures,
                     context,
-                    backoff,
+                    state.cooldown_secs,
                     state.backoff_level - 1,
                 )
                 # 熔断状态变化→持久化
