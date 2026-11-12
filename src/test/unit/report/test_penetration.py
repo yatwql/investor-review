@@ -593,3 +593,42 @@ class TestRunScopedMemo(unittest.TestCase):
             pene.compute_penetration_top10(holdings, details)
             pene.compute_penetration_top10(holdings, details_changed)
         self.assertEqual(calls["n"], 2)
+
+class TestRunMemoConcurrency(unittest.TestCase):
+    """单轮复用并发安全：同 key 并发只算一次，不同 key 互不阻塞。
+
+    单轮内若出现并发装配（未来把渲染拆到线程池），无锁字典会让同一份重计算被
+    多个线程各跑一遍（结果仍正确，但白花网络与 CPU）。
+    """
+
+    def test_same_key_computed_once_under_threads(self):
+        import threading
+        import time as _t
+
+        from src.python.report._run_scope import clear_run_memo, run_memo
+
+        clear_run_memo()
+        calls = {"n": 0}
+        lock = threading.Lock()
+
+        def slow_factory():
+            with lock:
+                calls["n"] += 1
+            _t.sleep(0.05)
+            return "value"
+
+        results: list = []
+        threads = [threading.Thread(target=lambda: results.append(run_memo("k", slow_factory))) for _ in range(5)]
+        for th in threads:
+            th.start()
+        for th in threads:
+            th.join()
+        self.assertEqual(calls["n"], 1, "同 key 并发应只算一次")
+        self.assertEqual(results, ["value"] * 5)
+
+    def test_different_keys_do_not_block(self):
+        from src.python.report._run_scope import clear_run_memo, run_memo
+
+        clear_run_memo()
+        self.assertEqual(run_memo("a", lambda: 1), 1)
+        self.assertEqual(run_memo("b", lambda: 2), 2)

@@ -45,8 +45,6 @@
 
 | 文件 | 现状与拆分方向 |
 |------|----------------|
-| `src/python/report/html_sections.py` 区块装配（非行数问题，归因/职责） | 穿透 / 基金业绩 / 基金风格 / 财务指标的**取数发生在 HTML 渲染阶段**（`assemble_sections` 内），使 `区块装配` 计时点在冷缓存时达 6.8s、热缓存 1.4s，且两个渠道各算一遍；方向：把这几类取数前置到数据准备阶段并落 `pipeline_data` 契约，渲染阶段只做串拼装（改动涉及双端契约，待下次动渲染管线时一并做） |
-| `src/python/report/_run_scope.py` `run_memo`（并发） | 单轮复用的字典无锁：同一轮内若有并发调用，最坏情况是重复计算一次（结果仍正确，不产生错误数据），当前调用路径（HTML/Excel）串行执行故未加锁；方向：若将来出现并发装配，补 per-key 锁或改用 `functools.lru_cache` + 显式清空 |
 | `src/test/conftest.py` 1190 行（测试登记线 900） | fixture 族按域下沉（行情/LLM/网络/持久化各一模块），conftest 只留 autouse 装配与 marker 注册 |
 | `src/python/llm/generators_orchestrator.py` 656 行（主程序登记线 700） | 块装配与生成后一遍已下沉（`_llm_context_blocks` / `_llm_post_pass`）；预检键/指纹段后续可再下沉 `generators_orchestrator_cache.py` |
 | `src/python/llm/skeleton.py` 847 行（主程序登记线 700） | 模板数据与渲染逻辑可下沉 `llm/skeleton_*`（骨架模板 / 占位渲染 / 缓存归因 / 回写四簇并存） |

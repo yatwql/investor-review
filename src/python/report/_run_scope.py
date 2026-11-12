@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import copy
 import logging
+import threading
 from typing import Any
 
 logger = logging.getLogger("invest")
@@ -30,14 +31,19 @@ logger = logging.getLogger("invest")
 __all__ = ["start_report_run", "finish_report_run", "run_memo", "clear_run_memo"]
 
 
-#: 单轮内复用重计算结果（穿透 / 基金业绩）：同一份输入只算一次，跨轮清空。
+#: 单轮内复用重计算结果（穿透 / 基金业绩 / 基金风格）：同一份输入只算一次，跨轮清空。
 #: 键含输入指纹——同一轮里输入变了（如峰值就绪后重装配）仍会重算，不返回陈旧结果。
 _RUN_MEMO: dict[Any, Any] = {}
+#: per-key 锁：并发调用同一 key 时只让一个线程算，其余等结果（否则最坏重复算一次）
+_RUN_MEMO_LOCKS: dict[Any, threading.Lock] = {}
+_RUN_MEMO_GUARD = threading.Lock()
 
 
 def clear_run_memo() -> None:
-    """清空单轮复用缓存（报告边界与测试隔离调用）。"""
-    _RUN_MEMO.clear()
+    """清空单轮复用缓存与配套锁（报告边界与测试隔离调用）。"""
+    with _RUN_MEMO_GUARD:
+        _RUN_MEMO.clear()
+        _RUN_MEMO_LOCKS.clear()
 
 
 def run_memo(key: Any, factory: Any) -> Any:
@@ -53,11 +59,18 @@ def run_memo(key: Any, factory: Any) -> Any:
     Returns:
         ``factory()`` 的返回值（命中时直接复用上轮同键结果）。
     """
-    if key in _RUN_MEMO:
-        return _RUN_MEMO[key]
-    value = factory()
-    _RUN_MEMO[key] = value
-    return value
+    with _RUN_MEMO_GUARD:
+        if key in _RUN_MEMO:
+            return _RUN_MEMO[key]
+        lock = _RUN_MEMO_LOCKS.setdefault(key, threading.Lock())
+    with lock:
+        with _RUN_MEMO_GUARD:
+            if key in _RUN_MEMO:  # 等锁期间别的线程已算完
+                return _RUN_MEMO[key]
+        value = factory()
+        with _RUN_MEMO_GUARD:
+            _RUN_MEMO[key] = value
+        return value
 
 
 def start_report_run() -> dict[str, Any]:

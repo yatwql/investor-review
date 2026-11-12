@@ -319,6 +319,17 @@ def _render_manager_analysis(
 
 
 def _fetch_fund_holdings_with_period(fund_codes: list[str]) -> dict[str, dict]:
+    """按基金代码取回持仓明细（同一轮内同代码集只取一次，见 `_run_scope.run_memo`）。
+
+    报告期时效判定随持仓一并产出，预取阶段与 HTML 区块装配共用同一份结果。
+    """
+    from src.python.report._run_scope import run_memo
+
+    codes = tuple(sorted(str(c) for c in fund_codes or []))
+    return run_memo(("fund_holdings_with_period", codes), lambda: _fetch_fund_holdings_with_period_uncached(list(codes)))
+
+
+def _fetch_fund_holdings_with_period_uncached(fund_codes: list[str]) -> dict[str, dict]:
     """按基金代码取回持仓明细，并附报告期时效判定（HTML 侧深度分析共用）。
 
     报告期须随持仓一并透出：持仓是定期报告的静态快照，接口可能回退到数年前

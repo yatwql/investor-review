@@ -186,6 +186,26 @@ def _build_perf_data(
     details: list[DetailRow],
     progress: ProgressReporter | None = None,
 ) -> list[dict[str, Any]]:
+    """构建基金业绩分析数据（同一轮内同输入只取一次，见 `_run_scope.run_memo`）。
+
+    预取阶段（`prepare_report_data` 的「渲染前置取数」）先算一遍，HTML 区块装配
+    再调时直接命中，避免冷缓存下把 4~6s 的基金排名取数算进渲染阶段。
+    """
+    from src.python.report._run_scope import run_memo
+
+    key = (
+        "perf_data",
+        tuple((h.code, str(getattr(h, "shares", ""))) for h in holdings or []),
+        tuple((d.code, str(getattr(d, "market_value", ""))) for d in details or []),
+    )
+    return run_memo(key, lambda: _build_perf_data_uncached(holdings, details, progress))
+
+
+def _build_perf_data_uncached(
+    holdings: list[Holding],
+    details: list[DetailRow],
+    progress: ProgressReporter | None = None,
+) -> list[dict[str, Any]]:
     """构建基金业绩分析数据。
     筛选出基金持仓，对每只基金调用 API 获取区间收益和同类排名，
     按市值降序排列。

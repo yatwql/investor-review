@@ -18,6 +18,7 @@
 
 ### 性能
 
+- **渲染期取数前置 + 单轮复用加锁**：基金业绩排名与基金风格取数原本发生在 HTML「区块装配」内（冷缓存实测 4~6s），既让该计时点看起来像渲染慢，也把取数算在渲染阶段；现由 `prepare_report_data` 的「渲染前置取数」段预取，并把 `_build_perf_data` / `_fetch_fund_holdings_with_period` 接入 `_run_scope.run_memo`（补 per-key 锁，同 key 并发只算一次），HTML 区块装配直接命中。`technical.md` 编排器职责链与需求侧 breakdown 清单同步。
 - **HTML 生成慢段归因纠正 + 穿透单轮复用**：原 `面板视图装配` 计时点覆盖「函数入口 → 该 mark」，把 `html_sections.assemble_sections` 的取数（穿透 / 基金业绩 / 基金风格 / 财务指标）也算进「视图拼装」，实测 1.4s ~ 6.8s 双峰全落在取数冷热上而非渲染。现拆出 `区块装配` 计时点，并把 `compute_penetration_top10` 接入 `_run_scope.run_memo`（同轮同输入只算一次，HTML 与 Excel 两端共用，报告边界清空），`developer-guide.md` 慢段排查表与 `technical.md` 编排器职责链同步。
 
 ### 修复

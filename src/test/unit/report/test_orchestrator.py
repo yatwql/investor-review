@@ -230,6 +230,47 @@ class TestPrepareReportData:
 
 @pytest.mark.unit
 @pytest.mark.unit_report
+class TestWarmRenderContracts:
+    """预取阶段把渲染期取数前置（基金业绩 / 基金风格），渲染阶段直接复用。
+
+    回归背景：基金业绩排名取数原本发生在 HTML「区块装配」内（冷缓存 4~6s），
+    既让该计时点看起来像渲染慢，也把取数算在渲染阶段。
+    """
+
+    def test_perf_data_fetched_once_when_warmed(self):
+        from src.python.core.models import Holding
+        from src.python.report import html_builders
+        from src.python.report._orchestrator_data import _warm_render_contracts
+        from src.python.report._run_scope import clear_run_memo
+        from src.python.report.market_value import DetailRow
+
+        clear_run_memo()
+        holdings = [Holding("证券", "电池ETF招商", "561910", shares=100.0, cost_price=1.0)]
+        details = [DetailRow(account="证券", name="电池ETF招商", code="561910", shares=100.0, market_value=1000.0)]
+        with (
+            patch.object(html_builders, "fetch_fund_rankings_batch", return_value={}) as batch,
+            patch.object(html_builders, "_build_single_perf_item", return_value={"code": "561910"}),
+        ):
+            _warm_render_contracts(holdings, details, MagicMock(), {})
+            _build = html_builders._build_perf_data
+            first = _build(holdings, details)
+            second = _build(holdings, details)
+        assert batch.call_count == 1, "预取 + 渲染两次调用只应触发一次取数"
+        assert first == second
+
+    def test_style_prefetch_skipped_when_feature_off(self):
+        from src.python.core.models import Holding
+        from src.python.report import html_renderers
+        from src.python.report._orchestrator_data import _warm_render_contracts
+        from src.python.report._run_scope import clear_run_memo
+
+        clear_run_memo()
+        holdings = [Holding("证券", "电池ETF招商", "561910", shares=100.0, cost_price=1.0)]
+        with patch.object(html_renderers, "_render_style_analysis") as style:
+            _warm_render_contracts(holdings, [], MagicMock(), {"enable_fund_deep_analysis": False})
+        style.assert_not_called()
+
+
 class TestReportLlmModuleResults:
     """_report_llm_module_results 统一 LLM 结果报告测试。"""
 
