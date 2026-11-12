@@ -17,9 +17,10 @@ from src.python.analysis._fee_estimation import (
     _classify_fund_type,
     portfolio_fee_estimation,
 )
+from src.python.analysis._math_utils import TRADING_DAYS_PER_YEAR
 
 # ── TWR 计算常量 ────────────────────────────────
-_TRADING_DAYS_PER_YEAR = 252
+_TRADING_DAYS_PER_YEAR = TRADING_DAYS_PER_YEAR
 
 
 def cash_stripping(

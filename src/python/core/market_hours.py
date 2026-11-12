@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from src.python.core.constants import BEIJING_TZ, CACHE_WEEKLY
+from src.python.core.constants import BEIJING_TZ, CACHE_WEEKLY, EASTMONEY_PUSH2_BASE
 
 logger = logging.getLogger("invest")
 
@@ -42,7 +42,8 @@ _OTC_NAV_DISCLOSE_MIN = 20 * 60  # 20:00
 
 # ── 官方交易状态缓存 ───────────────────────────────────
 _CACHE_KEY_MARKET_HOURS = "market_hours"
-_PUSH2_BASE = "https://push2.eastmoney.com/api/qt/stock/get"
+#: 东方财富快照接口地址（单一事实位在 `core.constants`，与行业取数共用）
+_PUSH2_BASE = EASTMONEY_PUSH2_BASE
 _EM_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     "Referer": "https://www.eastmoney.com/",

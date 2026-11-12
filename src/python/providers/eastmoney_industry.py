@@ -23,6 +23,7 @@ import httpx
 
 
 from src.python.core.code_symbols import get_push2_secid
+from src.python.core.constants import EASTMONEY_PUSH2_BASE
 from src.python.core.http_client import make_http_client
 from src.python.core.num_utils import safe_num
 from src.python.core.retry import (
@@ -35,7 +36,8 @@ from src.python.core.throttle import RateLimiter  # 间隔节流唯一原语（�
 
 logger = logging.getLogger("invest")
 
-_PUSH2_BASE = "https://push2.eastmoney.com/api/qt/stock/get"
+#: 东方财富快照接口地址（单一事实位在 `core.constants`，与交易状态判定共用）
+_PUSH2_BASE = EASTMONEY_PUSH2_BASE
 _TIMEOUT = 5.0
 #: push2 批量接口节流键（per-key 计量，RateLimiter 原语单源）
 _PUSH2_LIMIT_KEY = "eastmoney_industry"

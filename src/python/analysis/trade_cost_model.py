@@ -47,14 +47,15 @@ from src.python.analysis.fee_schedule_model import (
     select_purchase_tier,
     select_redemption_tier,
 )
+from src.python.analysis._math_utils import SHARES_EPS
 from src.python.analysis.portfolio_evolution import _dedup_by_date
 from src.python.core.constants import SIDE_BUY, SIDE_SELL
 from src.python.core.num_utils import is_finite_number
 
 # ── 常量 ────────────────────────────────────────────────
 
-_SHARES_EPS = 1e-3
-"""份额比较容差（与 holding_change_events._SHARES_EPS 同值）。"""
+_SHARES_EPS = SHARES_EPS
+"""份额比较容差（单源：`_math_utils.SHARES_EPS`）。"""
 
 #: 交易日计数注入类型：(start, end) → 经过的交易日数（YYYY-MM-DD）
 TradingDayCounter = Callable[[str, str], int | None]

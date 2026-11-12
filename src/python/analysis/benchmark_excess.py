@@ -27,10 +27,11 @@ from __future__ import annotations
 
 import math
 from typing import Any
+from src.python.analysis._math_utils import TRADING_DAYS_PER_YEAR
 
 # ── 口径常量 ─────────────────────────────────────────────
 
-_TRADING_DAYS_PER_YEAR = 252
+_TRADING_DAYS_PER_YEAR = TRADING_DAYS_PER_YEAR
 """A 股年化交易日数（IR / TE / 年化超额）。"""
 
 ROLLING_WINDOW_DAYS = 250
