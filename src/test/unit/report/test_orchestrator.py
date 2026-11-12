@@ -270,6 +270,23 @@ class TestWarmRenderContracts:
             _warm_render_contracts(holdings, [], MagicMock(), {"enable_fund_deep_analysis": False})
         style.assert_not_called()
 
+    def test_style_prefetch_runs_when_flag_key_missing(self):
+        """配置里没写开关 ≠ 关闭：解析器默认 True，预取必须跟着解析器走。
+
+        回归背景：预取若直接读原始键，缺键（几乎所有用户的 config.json）会被判成关闭 →
+        风格取数又落回渲染阶段，预取形同虚设。
+        """
+        from src.python.core.models import Holding
+        from src.python.report import html_renderers
+        from src.python.report._orchestrator_data import _warm_render_contracts
+        from src.python.report._run_scope import clear_run_memo
+
+        clear_run_memo()
+        holdings = [Holding("证券", "电池ETF招商", "561910", shares=100.0, cost_price=1.0)]
+        with patch.object(html_renderers, "_render_style_analysis") as style:
+            _warm_render_contracts(holdings, [], MagicMock(), {})
+        style.assert_called_once()
+
 
 class TestReportLlmModuleResults:
     """_report_llm_module_results 统一 LLM 结果报告测试。"""

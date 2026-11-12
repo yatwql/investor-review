@@ -54,7 +54,11 @@ def _warm_render_contracts(holdings: list, details: list, reporter, config: dict
     except Exception:  # 预取失败不阻断主链路：渲染阶段会重取并各自降级
         logger.debug("[prefetch] 基金业绩预取失败，渲染阶段重取", exc_info=True)
     try:
-        if config.get("enable_fund_deep_analysis"):
+        # 开关判定必须走 config 解析器（缺失键默认 True）：直接读原始键会把「配置里没写」
+        # 当成关闭，渲染阶段再补取一次——预取白做，且取数又回到渲染阶段
+        from src.python.config import is_enable_fund_deep_analysis
+
+        if is_enable_fund_deep_analysis(config):
             from src.python.report.html_renderers import _render_style_analysis
 
             _render_style_analysis(holdings, True, reporter)
