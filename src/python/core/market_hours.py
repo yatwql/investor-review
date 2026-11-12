@@ -36,6 +36,10 @@ _MORNING_END = 690  # 11:30
 _AFTERNOON_START = 780  # 13:00
 _AFTERNOON_END = 900  # 15:00
 
+#: 场外基金当日净值披露时点（北京时间，按「多数渠道已更新」取晚档）——
+#: 披露前当日 T 净值在发行方/渠道侧尚不存在，要求「已到 T」属不可能满足的条件。
+_OTC_NAV_DISCLOSE_MIN = 20 * 60  # 20:00
+
 # ── 官方交易状态缓存 ───────────────────────────────────
 _CACHE_KEY_MARKET_HOURS = "market_hours"
 _PUSH2_BASE = "https://push2.eastmoney.com/api/qt/stock/get"
@@ -236,6 +240,27 @@ def is_midday_break() -> bool:
         return False
     current_min = now.hour * 60 + now.minute
     return _MORNING_END < current_min < _AFTERNOON_START
+
+
+def is_otc_nav_disclosed(now: datetime | None = None) -> bool:
+    """场外基金当日净值是否已到披露时点（默认 20:00 北京时间）。
+
+    场外产品没有盘中价，只有官方净值：国内场外 T 日净值当晚披露，QDII 因海外收盘
+    与换算再滞后一天。因此「当日净值」在披露前根本不存在，价格缓存新鲜度不能按
+    「是否等于 T」判——披露前只能要求「最近可得的一档」（T-1 / QDII 的 T-2）。
+
+    Args:
+        now: 注入的当前时刻（测试用）；缺省取北京时间当前时刻。
+
+    Returns:
+        True 表示当日净值已过披露时点（此时才可要求缓存到 T / QDII 的 T-1）。
+    """
+    current = now or datetime.now(_BJ_TZ)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=_BJ_TZ)
+    else:
+        current = current.astimezone(_BJ_TZ)
+    return current.hour * 60 + current.minute >= _OTC_NAV_DISCLOSE_MIN
 
 
 # ── 行情口径桶（LLM 缓存复用判定的时间口径） ──────────────
