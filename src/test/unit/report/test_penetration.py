@@ -556,3 +556,40 @@ class TestPenetrationRatioNormalization(unittest.TestCase):
         top10 = result.get("top10", [])
         for item in top10:
             self.assertGreaterEqual(item.get("ratio_pct", -1), 0, f"{item.get('name')} 占比为负")
+
+class TestRunScopedMemo(unittest.TestCase):
+    """单轮复用：同一次报告里穿透只算一次（HTML 端与 Excel 端各调一遍的重复取数）。
+
+    回归背景：同轮 HTML 与 Excel 各调一遍 `compute_penetration_top10`，冷缓存时
+    两遍都要等网络（单看 HTML 阶段就占了页面写入的大头）。
+    """
+
+    def test_same_input_computed_once(self):
+        calls = {"n": 0}
+
+        def fake_uncached(_holdings, _details):
+            calls["n"] += 1
+            return {"top10": [], "summary": {}, "update_time": "x"}
+
+        holdings = [Holding("证券", "长江电力", "600900", 100.0, 10.0)]
+        details = [DetailRow(account="证券", name="长江电力", code="600900", shares=100.0, market_value=1000.0)]
+        with patch.object(pene, "_compute_penetration_top10_uncached", side_effect=fake_uncached):
+            first = pene.compute_penetration_top10(holdings, details)
+            second = pene.compute_penetration_top10(holdings, details)
+        self.assertEqual(calls["n"], 1)
+        self.assertIs(first, second)
+
+    def test_changed_input_recomputed(self):
+        calls = {"n": 0}
+
+        def fake_uncached(_holdings, _details):
+            calls["n"] += 1
+            return {"top10": [], "summary": {}, "update_time": "x"}
+
+        holdings = [Holding("证券", "长江电力", "600900", 100.0, 10.0)]
+        details = [DetailRow(account="证券", name="长江电力", code="600900", shares=100.0, market_value=1000.0)]
+        details_changed = [DetailRow(account="证券", name="长江电力", code="600900", shares=200.0, market_value=2000.0)]
+        with patch.object(pene, "_compute_penetration_top10_uncached", side_effect=fake_uncached):
+            pene.compute_penetration_top10(holdings, details)
+            pene.compute_penetration_top10(holdings, details_changed)
+        self.assertEqual(calls["n"], 2)

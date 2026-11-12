@@ -517,10 +517,13 @@ def _auto_reset_run_history_state():
     memo 里直接拿数据，表现为「mock 未被调用」或「全量刷新未发生」。
     """
     from src.python.fetcher.chain_incremental import reset_run_history_state
+    from src.python.report._run_scope import clear_run_memo
 
     reset_run_history_state()
+    clear_run_memo()
     yield
     reset_run_history_state()
+    clear_run_memo()
 
 
 @pytest.fixture(autouse=True)

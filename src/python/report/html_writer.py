@@ -532,6 +532,10 @@ def write_html_report(
         _debate_mode_label,
         _debate_mode_combination,
     ) = bindings
+    # 区块装配（含穿透/基金业绩/风格等取数）与三面板视图串在一个窗口里时，慢的
+    # 时候分不清是「取数」还是「视图拼装」——实测同机同数据 1.4s / 6.8s 双峰，
+    # 归因显示落差全在前者（财务指标/基金业绩取数）。分两步记，名字才对得上内容。
+    _mark("区块装配")
 
     # ── 10) 渲染模板 ──
     prog.info("正在渲染 HTML...")
@@ -560,8 +564,8 @@ def write_html_report(
         from src.python.report.schedule_replay_panel import build_schedule_replay_view
 
         schedule_replay_view = build_schedule_replay_view(schedule_replay_data)
-    # 三个面板视图（持仓变动 / 事件窗 / 纪律回放）与后续装配同在一个「模板渲染」窗口里，
-    # 慢的时候分不清是视图字符串拼装还是 jinja 渲染，单列一步便于定位
+    # 三个面板视图（持仓变动 / 事件窗 / 纪律回放）单列一步：与区块装配分开记，
+    # 免得住取数时间算到视图拼装头上
     _mark("面板视图装配")
     # 章级：enabled_llm 模块禁用的 LLM 分析章整章隐藏（与 Excel 端同函数同配置推导）
     from src.python.llm.skeleton import get_llm_chapter_disabled

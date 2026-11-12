@@ -27,7 +27,37 @@ from typing import Any
 
 logger = logging.getLogger("invest")
 
-__all__ = ["start_report_run", "finish_report_run"]
+__all__ = ["start_report_run", "finish_report_run", "run_memo", "clear_run_memo"]
+
+
+#: 单轮内复用重计算结果（穿透 / 基金业绩）：同一份输入只算一次，跨轮清空。
+#: 键含输入指纹——同一轮里输入变了（如峰值就绪后重装配）仍会重算，不返回陈旧结果。
+_RUN_MEMO: dict[Any, Any] = {}
+
+
+def clear_run_memo() -> None:
+    """清空单轮复用缓存（报告边界与测试隔离调用）。"""
+    _RUN_MEMO.clear()
+
+
+def run_memo(key: Any, factory: Any) -> Any:
+    """单轮复用：同一 ``key`` 在**本轮**只执行一次 ``factory()``，返回同一结果。
+
+    用途：穿透 TOP10 与基金业绩/风格这类「纯读 + 重 IO」的装配在同一次报告里被
+    HTML 端与 Excel 端各调一遍（实测同轮重复 2 次），冷缓存时两遍都要等网络。
+
+    Args:
+        key: 结果指纹（须包含全部影响结果的输入）。
+        factory: 未命中时的计算函数（无参闭包）。
+
+    Returns:
+        ``factory()`` 的返回值（命中时直接复用上轮同键结果）。
+    """
+    if key in _RUN_MEMO:
+        return _RUN_MEMO[key]
+    value = factory()
+    _RUN_MEMO[key] = value
+    return value
 
 
 def start_report_run() -> dict[str, Any]:
@@ -39,6 +69,7 @@ def start_report_run() -> dict[str, Any]:
         ``get_session_usage()`` 的深拷贝基线；取不到时返回空 dict（delta 退化为
         全量，与引入前行为一致）。
     """
+    clear_run_memo()
     # 缓存未命中归因的「上一轮键」随报告边界复位：跨报告比对才成立，
     # 把上一次进程遗留的键当"上一轮"会误判内容变化。
     try:
