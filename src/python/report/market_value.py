@@ -391,9 +391,7 @@ def count_today_profit_reference(rows) -> int:
 
 
 #: 滞后净值品种的本日盈亏口径脚注（HTML 与 Excel 同一条文案）
-TODAY_PROFIT_REFERENCE_NOTE = (
-    "注：{n} 只品种净值日早于当日，其本日盈亏为各自净值日的涨跌（仅参考），未计入合计"
-)
+TODAY_PROFIT_REFERENCE_NOTE = "注：{n} 只品种净值日早于当日，其本日盈亏为各自净值日的涨跌（仅参考），未计入合计"
 
 
 def today_profit_reference_note(rows) -> str:
