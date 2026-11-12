@@ -120,6 +120,7 @@ class TestTodayProfitEdgeCases(unittest.TestCase):
         }
         detail = _compute_detail_row(h, mkt)
         self.assertEqual(detail.today_profit, 0.0)
+        self.assertFalse(detail.today_profit_reference)
 
     @patch("src.python.report.market_value.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)
@@ -199,7 +200,7 @@ class TestForeignDenominatedMarketValue(unittest.TestCase):
 
     @patch("src.python.report.market_value.get_last_trading_day")
     def test_qdii_today_profit_t1(self, mock_td):
-        """QDII 净值日期=T-1 → today_profit=0（当前行为，待扩展）。"""
+        """QDII 净值日期=T-1 → 显示 T-1 涨跌并标参考（不计入组合合计）。"""
         mock_td.return_value = "2026-07-01"
         h = Holding("支付宝", "华夏纳斯达克100ETF(QDII)", "513300", 100, 2.0)
         mkt = {
@@ -211,7 +212,8 @@ class TestForeignDenominatedMarketValue(unittest.TestCase):
             "nav_date": "2026-06-30",
         }
         detail = _compute_detail_row(h, mkt)
-        self.assertEqual(detail.today_profit, 0.0)
+        self.assertTrue(detail.today_profit_reference)
+        self.assertAlmostEqual(detail.today_profit, round((2.1 - 2.0) * 100, 2))
 
     @patch("src.python.report.market_value.get_last_trading_day")
     def test_price_update_status_qdii_t1_updated(self, mock_td):

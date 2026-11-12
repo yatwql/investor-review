@@ -33,7 +33,7 @@
                             <td class="text-right">{{ d.cost | money }}</td>
                             <td class="text-right {{ d.profit | profit_class }}">{{ d.profit | money }}</td>
                             <td class="text-right {{ d.profit_rate | profit_class }}">{{ d.profit_rate | pct }}</td>
-                            <td class="text-right {{ d.today_profit | profit_class }}">{{ d.today_profit | money }}</td>
+                            <td class="text-right {{ d.today_profit | profit_class }}">{{ d.today_profit | money }}{% if d.today_profit_reference %}<span class="text-muted"> 参考</span>{% endif %}</td>
                             <td>{{ d.source }}</td>
                             {% if flow_display %}
                             {% set wac = flow_display.cost_map.get(d.code) %}
@@ -111,7 +111,7 @@
                             <td class="text-right">{{ item["cost"] | money }}</td>
                             <td class="text-right {{ item["profit"] | profit_class }}">{{ item["profit"] | money }}</td>
                             <td class="text-right {{ item["profit_rate"] | profit_class }}">{{ item["profit_rate"] | pct }}</td>
-                            <td class="text-right {{ item["today_profit"] | profit_class }}">{{ item["today_profit"] | money }}</td>
+                            <td class="text-right {{ item["today_profit"] | profit_class }}">{{ item["today_profit"] | money }}{% if item.get("today_profit_reference") %}<span class="text-muted"> 参考</span>{% endif %}</td>
                             <td>{{ item.get("yield_text", "--") }}</td>
                             {% if flow_display %}
                             <td>{{ flow_display.tier_map.get(item["code"], "--") }}</td>

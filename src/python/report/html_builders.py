@@ -11,7 +11,7 @@ from src.python.core.models import Holding
 from src.python.report.category import _categorize_holding, calc_yield_text
 from src.python.report.fund_performance import _fund_display_type, is_fund
 from src.python.report._fund_rating import _RATING_COMMENT, _format_rank
-from src.python.report.market_value import DetailRow
+from src.python.report.market_value import DetailRow, sum_today_profit
 from src.python.report.progress import ProgressReporter, SilentProgressReporter
 
 logger = logging.getLogger("invest")
@@ -83,13 +83,14 @@ def _build_category_data(
                     "profit": d.profit if d else 0.0,
                     "profit_rate": d.profit_rate if d else 0.0,
                     "today_profit": d.today_profit if d else 0.0,
+                    "today_profit_reference": bool(getattr(d, "today_profit_reference", False)) if d else False,
                     "yield_text": calc_yield_text(h.code, d, dividend_data),
                 }
             )
         sub_mv = sum(i["market_value"] for i in items)
         sub_cost = sum(i["cost"] for i in items)
         sub_profit = sum(i["profit"] for i in items)
-        sub_today = sum(i["today_profit"] for i in items)
+        sub_today = sum_today_profit(items)
         sub_rate = sub_profit / sub_cost if sub_cost > 0 else 0.0
         result.append(
             {

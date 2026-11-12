@@ -70,6 +70,7 @@ def prepare_report_data(
         classify_holdings,
         get_last_trading_day,
         get_prev_trading_day,
+        sum_today_profit,
     )
     from src.python.report.penetration import compute_penetration_top10
 
@@ -81,7 +82,7 @@ def prepare_report_data(
     total_mv = sum(d.market_value for d in details)
     total_cost = sum(d.cost for d in details)
     total_profit = sum(d.profit for d in details)
-    total_today_profit = sum(d.today_profit for d in details)
+    total_today_profit = sum_today_profit(details)
     categories = classify_holdings(holdings)
     _record_span(recorder, "行情与明细", _t0)
 

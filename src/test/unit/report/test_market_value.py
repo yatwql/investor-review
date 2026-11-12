@@ -738,6 +738,42 @@ class TestGetPrevTradingDay(unittest.TestCase):
             self.assertEqual(result, "2026-06-25")
 
 
+
+class TestTodayProfitReference(unittest.TestCase):
+    """本日盈亏「参考」口径：滞后净值照实呈现，但不计入组合合计。
+
+    口径：场外净值滞后（QDII T-1/T-2）时 `today_profit` 是该净值日（非当日）的涨跌，
+    行内照实呈现并标「参考」；组合合计只累加当日已更新品种，否则会把 T-1/T-2 的涨跌
+    混进「今日」。
+    """
+
+    def _row(self, today_profit, reference):
+        return {"today_profit": today_profit, "today_profit_reference": reference}
+
+    def test_sum_excludes_reference_rows(self):
+        rows = [self._row(120.0, False), self._row(-30.0, True), self._row(0.0, True)]
+        self.assertEqual(mv.sum_today_profit(rows), 120.0)
+
+    def test_sum_accepts_detail_rows_and_dicts(self):
+        from src.python.report.market_value import DetailRow
+
+        rows = [
+            DetailRow(account="A", name="场内", code="600900", today_profit=50.0),
+            DetailRow(account="A", name="QDII", code="040046", today_profit=-10.0, today_profit_reference=True),
+            self._row(25.0, False),
+        ]
+        self.assertEqual(mv.sum_today_profit(rows), 75.0)
+
+    def test_note_wording_only_when_reference_present(self):
+        self.assertEqual(mv.today_profit_reference_note([self._row(1.0, False)]), "")
+        note = mv.today_profit_reference_note([self._row(1.0, True), self._row(2.0, True)])
+        self.assertIn("2 只", note)
+        self.assertIn("未计入合计", note)
+
+    def test_count_matches_rows(self):
+        rows = [self._row(1.0, True), self._row(2.0, False), self._row(3.0, True)]
+        self.assertEqual(mv.count_today_profit_reference(rows), 2)
+
 class TestTradingCalendarConcurrency(unittest.TestCase):
     """回归测试：并发调用交易日历会串行化 akshare(V8) 调用。
 

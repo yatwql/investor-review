@@ -25,6 +25,7 @@ from src.python.fetcher.price import (
 )
 from src.python.core.market_hours import is_market_open as _mh_is_market_open
 from src.python.core.market_hours import is_midday_break as _mh_is_midday_break
+from src.python.core.detail_view import detail_value
 from src.python.core.num_utils import finite_or, is_finite_number
 from src.python.core.concurrency import worker_pool
 from src.python.core.models import Holding
@@ -101,6 +102,9 @@ class DetailRow:
     profit: float = 0.0
     profit_rate: float | None = None
     today_profit: float = 0.0
+    #: 本日盈亏是否为「参考值」：场外净值未到当日（滞后 T-1/T-2），显示的是该净值日
+    #: 的涨跌而非今日涨跌，合计不累加（避免把 T-1 涨跌当成今日）。
+    today_profit_reference: bool = False
     source: str = ""
     source_api: str = ""
 
@@ -324,11 +328,15 @@ def _compute_detail_row(h: Holding, mkt: dict | None) -> DetailRow:
     profit_rate = profit / cost if cost > 0 else None
 
     # 本日盈亏（昨收不可用时记 0.0，不猜测）
+    today_profit_reference = False
     if source_api == "tencent" and yclose_usable:
         today_profit = round((price - yclose) * h.shares, 2)
     elif nav_date and yclose_usable:
         trading_day = get_last_trading_day()
-        today_profit = round((price - yclose) * h.shares, 2) if nav_date == trading_day else 0.0
+        today_profit = round((price - yclose) * h.shares, 2)
+        # 场外净值未到当日（QDII T-1/T-2 等滞后）：该值是「净值日当日」涨跌，
+        # 不是今日涨跌——照实呈现（不归零误导「没涨没跌」）但标参考、不计入合计。
+        today_profit_reference = nav_date != trading_day
     else:
         today_profit = 0.0
 
@@ -350,9 +358,48 @@ def _compute_detail_row(h: Holding, mkt: dict | None) -> DetailRow:
         profit=profit,
         profit_rate=profit_rate,
         today_profit=today_profit,
+        today_profit_reference=today_profit_reference,
         source=source,
         source_api=source_api,
     )
+
+
+def sum_today_profit(rows) -> float:
+    """组合本日盈亏合计：只累加「当日已更新」的行。
+
+    滞后净值的行（`today_profit_reference=True`）显示的是其净值日当日涨跌，
+    与「今日」不同口径，因此**不**计入合计——否则合计会把 T-1/T-2 的涨跌
+    混进今日，行内与合计又无法对上。
+
+    Args:
+        rows: `DetailRow` 列表或明细行字典列表（两种形态均可）。
+
+    Returns:
+        本日盈亏合计（无行时为 0.0）。
+    """
+    total = 0.0
+    for row in rows or []:
+        if detail_value(row, "today_profit_reference", False):
+            continue
+        total += finite_or(detail_value(row, "today_profit", 0.0))
+    return total
+
+
+def count_today_profit_reference(rows) -> int:
+    """滞后净值行数（本日盈亏标参考的品种数）——汇总说明文案用。"""
+    return sum(1 for row in rows or [] if detail_value(row, "today_profit_reference", False))
+
+
+#: 滞后净值品种的本日盈亏口径脚注（HTML 与 Excel 同一条文案）
+TODAY_PROFIT_REFERENCE_NOTE = (
+    "注：{n} 只品种净值日早于当日，其本日盈亏为各自净值日的涨跌（仅参考），未计入合计"
+)
+
+
+def today_profit_reference_note(rows) -> str:
+    """本日盈亏「参考」口径脚注（无滞后品种时返回空串，两端口径同一条文案）。"""
+    count = count_today_profit_reference(rows)
+    return "" if count <= 0 else TODAY_PROFIT_REFERENCE_NOTE.format(n=count)
 
 
 def _generate_details(holdings: list[Holding], today_str: str = "") -> list[DetailRow]:

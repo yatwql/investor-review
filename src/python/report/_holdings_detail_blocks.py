@@ -39,7 +39,7 @@ from src.python.report.excel_writer import (
     write_subtotal_row,
     write_total_row,
 )
-from src.python.report.market_value import DetailRow
+from src.python.report.market_value import DetailRow, sum_today_profit
 from src.python.report.styles import BLUE_FONT, FMT_MONEY, FMT_PERCENT, FMT_PRICE, FMT_SHARES, profit_font
 from src.python.report.market_value import PRICE_TYPE_OFFICIAL_NAV_T1
 
@@ -320,7 +320,7 @@ def _write_account_groupings(
         acc_mv = sum(d.market_value for d in acc_details)
         acc_cost = sum(d.cost for d in acc_details)
         acc_profit = sum(d.profit for d in acc_details)
-        acc_today = sum(d.today_profit for d in acc_details)
+        acc_today = sum_today_profit(acc_details)
         acc_rate = acc_profit / acc_cost if acc_cost > 0 else 0.0
 
         subtotal_vals = [
@@ -514,7 +514,7 @@ def _write_category_group(
     sub_mv = sum(detail_map.get(h.code, DetailRow()).market_value for h in group if h.code in detail_map)
     sub_cost = sum(detail_map.get(h.code, DetailRow()).cost for h in group if h.code in detail_map)
     sub_profit = sum(detail_map.get(h.code, DetailRow()).profit for h in group if h.code in detail_map)
-    sub_today = sum(detail_map.get(h.code, DetailRow()).today_profit for h in group if h.code in detail_map)
+    sub_today = sum_today_profit([detail_map[h.code] for h in group if h.code in detail_map])
     sub_rate = sub_profit / sub_cost if sub_cost > 0 else 0.0
 
     subtotal_vals = ["", "", len(group), sub_mv, sub_cost, sub_profit, sub_rate, sub_today, "--"]

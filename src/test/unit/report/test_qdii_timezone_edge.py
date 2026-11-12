@@ -92,10 +92,11 @@ class TestQdiiNavDateConsistency(unittest.TestCase):
         detail = self._make_us_qdii_detail(nav_date="2026-07-01", trading_day="2026-07-01")
         self.assertGreater(detail.today_profit, 0)
 
-    def test_qdii_today_profit_t1_is_zero(self):
-        """QDII 净值日期 = T-1 → today_profit = 0（当前限制）。"""
+    def test_qdii_today_profit_t1_is_reference(self):
+        """QDII 净值日期 = T-1 → 显示 T-1 涨跌并标参考（不冒充今日、不计入合计）。"""
         detail = self._make_us_qdii_detail(nav_date="2026-06-30", trading_day="2026-07-01")
-        self.assertEqual(detail.today_profit, 0.0)
+        self.assertTrue(detail.today_profit_reference)
+        self.assertAlmostEqual(detail.today_profit, round((detail.price - detail.yesterday_close) * detail.shares, 2))
 
     def test_mixed_qdii_types_updated_status(self):
         """混合美股+港股 QDII → 各自正确判定更新状态。"""

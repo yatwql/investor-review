@@ -29,6 +29,7 @@ from src.python.report.market_value import (
     _generate_details,
     classify_holdings,
     price_update_status,
+    sum_today_profit,
 )
 from src.python.report.penetration import compute_penetration_top10
 from src.python.report.progress import ProgressReporter
@@ -66,7 +67,7 @@ def _render_market_value_section(
     total_mv = sum(d.market_value for d in details)
     total_cost = sum(d.cost for d in details)
     total_profit = sum(d.profit for d in details)
-    total_today_profit = sum(d.today_profit for d in details)
+    total_today_profit = sum_today_profit(details)
     total_profit_rate = total_profit / total_cost if total_cost > 0 else 0.0
     today_denom = total_cost + total_profit - total_today_profit
     today_profit_rate = total_today_profit / today_denom if today_denom > 0 else 0.0
@@ -109,7 +110,7 @@ def _render_account_grouping(
         acc_mv = sum(d.market_value for d in acc_details)
         acc_cost = sum(d.cost for d in acc_details)
         acc_profit = sum(d.profit for d in acc_details)
-        acc_today = sum(d.today_profit for d in acc_details)
+        acc_today = sum_today_profit(acc_details)
         acc_rate = acc_profit / acc_cost if acc_cost > 0 else 0.0
         account_totals[acc_name] = {
             "market_value": acc_mv,

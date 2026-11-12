@@ -320,6 +320,7 @@ def fold_detail_rows_summary(rows: list) -> list:
     from dataclasses import replace
 
     from src.python.core.code_utils import is_fund_holding
+    from src.python.report.market_value import sum_today_profit
 
     buckets: dict[str, list] = {}
     for row in rows:
@@ -343,7 +344,7 @@ def fold_detail_rows_summary(rows: list) -> list:
                 cost=cost,
                 profit=profit,
                 profit_rate=(mv - cost) / cost if cost else None,
-                today_profit=sum(i.today_profit or 0 for i in items),
+                today_profit=sum_today_profit(items),
             )
         )
     return folded
