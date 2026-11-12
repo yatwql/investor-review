@@ -13,6 +13,10 @@ from src.python.providers.eastmoney_industry import (
 )
 import pytest
 
+#: 真实实现快照（本文件 autouse fixture 会把 `_push2_interval` 打成 0 秒以跳过节流，
+#: 间隔专项用例须绕过该补丁才能验证配置读取）
+_REAL_PUSH2_INTERVAL = _real_push2_interval
+
 pytestmark = [pytest.mark.unit, pytest.mark.unit_providers]
 
 
@@ -217,7 +221,7 @@ class TestFetchIndustryAndConcepts(unittest.TestCase):
         """正常返回：正确解析行业和概念。"""
         mock_client_cls.side_effect = _mock_httpx(json.dumps(_MOCK_SUCCESS_RESPONSE))
         result = fetch_industry_and_concepts("600900")
-        self.assertIsNotNone(result)
+        assert result is not None  # 同时供类型检查收窄（unittest 断言不收窄）
         self.assertEqual(result["code"], "600900")
         self.assertEqual(result["industry"], "电力")
         self.assertEqual(result["industry_id"], "BK0428")
@@ -229,7 +233,7 @@ class TestFetchIndustryAndConcepts(unittest.TestCase):
         """API 返回空概念列表 → 正确返回空列表。"""
         mock_client_cls.side_effect = _mock_httpx(json.dumps(_MOCK_NO_CONCEPT_RESPONSE))
         result = fetch_industry_and_concepts("600900")
-        self.assertIsNotNone(result)
+        assert result is not None  # 同时供类型检查收窄（unittest 断言不收窄）
         self.assertEqual(result["industry"], "电力")
         self.assertEqual(result["concepts"], [])
         self.assertEqual(result["concept_ids"], [])
@@ -279,7 +283,7 @@ class TestFetchIndustryAndConcepts(unittest.TestCase):
         """基金代码也正常处理。"""
         mock_client_cls.side_effect = _mock_httpx(json.dumps(_MOCK_SUCCESS_RESPONSE))
         result = fetch_industry_and_concepts("000961")
-        self.assertIsNotNone(result)
+        assert result is not None  # 同时供类型检查收窄（unittest 断言不收窄）
         self.assertEqual(result["code"], "000961")
         self.assertEqual(result["industry"], "电力")
 
@@ -288,7 +292,7 @@ class TestFetchIndustryAndConcepts(unittest.TestCase):
         """概念字段 API 返回数字 → 概念为空列表。"""
         mock_client_cls.side_effect = _mock_httpx(json.dumps(_MOCK_CONCEPTS_IS_NUMBER_RESPONSE))
         result = fetch_industry_and_concepts("600900")
-        self.assertIsNotNone(result)
+        assert result is not None  # 同时供类型检查收窄（unittest 断言不收窄）
         self.assertEqual(result["industry"], "电力")
         self.assertEqual(result["concepts"], [])
         self.assertEqual(result["concept_ids"], [])
@@ -298,7 +302,7 @@ class TestFetchIndustryAndConcepts(unittest.TestCase):
         """概念字段 API 返回 None → 概念为空列表。"""
         mock_client_cls.side_effect = _mock_httpx(json.dumps(_MOCK_CONCEPTS_IS_NONE_RESPONSE))
         result = fetch_industry_and_concepts("600900")
-        self.assertIsNotNone(result)
+        assert result is not None  # 同时供类型检查收窄（unittest 断言不收窄）
         self.assertEqual(result["industry"], "电力")
         self.assertEqual(result["concepts"], [])
         self.assertEqual(result["concept_ids"], [])
@@ -308,7 +312,7 @@ class TestFetchIndustryAndConcepts(unittest.TestCase):
         """概念字段 API 返回 '-' → 概念为空列表。"""
         mock_client_cls.side_effect = _mock_httpx(json.dumps(_MOCK_CONCEPTS_IS_DASH_RESPONSE))
         result = fetch_industry_and_concepts("600900")
-        self.assertIsNotNone(result)
+        assert result is not None  # 同时供类型检查收窄（unittest 断言不收窄）
         self.assertEqual(result["industry"], "电力")
         self.assertEqual(result["concepts"], [])
         self.assertEqual(result["concept_ids"], [])
@@ -318,7 +322,7 @@ class TestFetchIndustryAndConcepts(unittest.TestCase):
         """行业字段 API 返回 '-' → 行业/ID 均为空字符串。"""
         mock_client_cls.side_effect = _mock_httpx(json.dumps(_MOCK_INDUSTRY_IS_DASH_RESPONSE))
         result = fetch_industry_and_concepts("600900")
-        self.assertIsNotNone(result)
+        assert result is not None  # 同时供类型检查收窄（unittest 断言不收窄）
         self.assertEqual(result["industry"], "")
         self.assertEqual(result["industry_id"], "")
         # 概念仍正常解析
@@ -330,7 +334,7 @@ class TestFetchIndustryAndConcepts(unittest.TestCase):
         """行业字段 API 返回数字 → 行业/ID 均为空字符串。"""
         mock_client_cls.side_effect = _mock_httpx(json.dumps(_MOCK_INDUSTRY_IS_NUMBER_RESPONSE))
         result = fetch_industry_and_concepts("600900")
-        self.assertIsNotNone(result)
+        assert result is not None  # 同时供类型检查收窄（unittest 断言不收窄）
         self.assertEqual(result["industry"], "")
         self.assertEqual(result["industry_id"], "")
         # 概念仍正常解析
@@ -342,7 +346,7 @@ class TestFetchIndustryAndConcepts(unittest.TestCase):
         """ETF (518880 黄金ETF) 无行业/概念数据 → 正确返回空值。"""
         mock_client_cls.side_effect = _mock_httpx(json.dumps(_MOCK_ETF_NO_INDUSTRY_RESPONSE))
         result = fetch_industry_and_concepts("518880")
-        self.assertIsNotNone(result)
+        assert result is not None  # 同时供类型检查收窄（unittest 断言不收窄）
         self.assertEqual(result["code"], "518880")
         self.assertEqual(result["industry"], "")
         self.assertEqual(result["industry_id"], "")
@@ -369,7 +373,7 @@ class TestIndustryExtendedFields(unittest.TestCase):
         """行业结果字典带出 pe/pb/market_cap（同一请求，无重复请求）。"""
         mock_client_cls.side_effect = _mock_httpx(json.dumps(_MOCK_SUCCESS_RESPONSE))
         result = fetch_industry_and_concepts("600900")
-        self.assertIsNotNone(result)
+        assert result is not None  # 同时供类型检查收窄（unittest 断言不收窄）
         self.assertEqual(result["pe"], 12.34)
         self.assertEqual(result["pb"], 1.56)
         self.assertIn("market_cap", result)
@@ -379,7 +383,7 @@ class TestIndustryExtendedFields(unittest.TestCase):
         """字段缺失（无 f9/f23）→ pe/pb 为 None（不因缺字段而整条失败）。"""
         mock_client_cls.side_effect = _mock_httpx(json.dumps(_MOCK_NO_CONCEPT_RESPONSE))
         result = fetch_industry_and_concepts("600900")
-        self.assertIsNotNone(result)
+        assert result is not None  # 同时供类型检查收窄（unittest 断言不收窄）
         self.assertIsNone(result["pe"])
         self.assertIsNone(result["pb"])
 
@@ -407,6 +411,7 @@ class TestIndustryExtendedFields(unittest.TestCase):
             ]
             first = fetch_industry_and_concepts("600900")
             second = fetch_industry_and_concepts("600900")
+            assert first is not None and second is not None  # 供类型收窄：缓存命中也不得返回 None
             self.assertEqual(first["pe"], 10.0)
             self.assertEqual(second["pe"], 10.0)
             self.assertEqual(first["market_cap"], 1e11)
@@ -423,7 +428,7 @@ class TestIndustryExtendedFields(unittest.TestCase):
         with patch.object(ei, "_get_limiter", return_value=mock_limiter):
             result = fetch_industry_and_concepts("600900")
 
-        self.assertIsNotNone(result)
+        assert result is not None  # 同时供类型检查收窄（unittest 断言不收窄）
         mock_limiter.acquire_interval.assert_called_once_with(
             ei._PUSH2_LIMIT_KEY, ei._push2_interval(), jitter_ratio=ei._PUSH2_JITTER_RATIO
         )
@@ -520,9 +525,6 @@ class TestAbruptDisconnectFastFail:
         assert result is None
         assert calls["n"] == 1, f"断连不应重试（实际请求 {calls['n']} 次）"
 
-#: 真实实现快照（本文件 autouse fixture 会把 `_push2_interval` 打成 0 秒以跳过节流，
-#: 间隔专项用例须绕过该补丁才能验证配置读取）
-_REAL_PUSH2_INTERVAL = _real_push2_interval
 
 class TestPush2Interval(unittest.TestCase):
     """push2 请求间隔单源：配置 `batch_rate_limit.eastmoney_industry` 生效。

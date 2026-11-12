@@ -141,7 +141,7 @@
     "sina": 0.0,
     "eastmoney": 0.1,
     "tiantian": 0.5,
-    "eastmoney_industry": 0.05
+    "eastmoney_industry": 0.1
   }
 }
 ```
