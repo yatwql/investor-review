@@ -19,7 +19,7 @@
 from __future__ import annotations
 
 #: 提示词文本版本（改动标签/表头/口径说明等静态文案时递增）
-PROMPT_SCHEMA_VERSION = "rate-caliber-4"
+PROMPT_SCHEMA_VERSION = "rate-caliber-5"
 
 #: 单品种持仓收益率（自买入、按成本、未年化；独立成句/表头用）
 LABEL_POSITION = "持仓收益率（自买入，未年化）"
@@ -37,6 +37,12 @@ CALIBER_NOTE = (
     "三者含义不同，引用时必须使用提示词中给出的口径标签，不得互相替换或相加。"
 )
 
+#: 金额符号口径（表格「金额」列一律绝对值，方向由操作列的方向词承担）
+MONEY_SIGN_NOTE = (
+    "金额口径：表格里的「金额」列一律写**绝对值**（如 7600 / 22000），"
+    "买卖方向只由「建议操作 / 操作」列的方向词承担，不得用正负号表示买入或卖出。"
+)
+
 __all__ = [
     "PROMPT_SCHEMA_VERSION",
     "LABEL_POSITION",
@@ -44,4 +50,5 @@ __all__ = [
     "LABEL_PORTFOLIO",
     "LABEL_INTERVAL",
     "CALIBER_NOTE",
+    "MONEY_SIGN_NOTE",
 ]

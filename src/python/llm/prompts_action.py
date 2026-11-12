@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 
-from src.python.llm.rate_caliber import CALIBER_NOTE, LABEL_POSITION_SHORT
+from src.python.llm.rate_caliber import CALIBER_NOTE, LABEL_POSITION_SHORT, MONEY_SIGN_NOTE
 
 from src.python.core.constants import BEIJING_TZ
 from datetime import datetime
@@ -302,6 +302,7 @@ def _build_expert_review_prompt(
         "| 🔴 高 | XXX | 减仓/加仓/持有 | 简述理由 |\n"
         "| 🟡 中 | XXX | 减仓/加仓/持有 | 简述理由 |\n"
         "| 🟢 低 | XXX | 减仓/加仓/持有 | 简述理由 |\n"
+        f"\n{MONEY_SIGN_NOTE}\n"
     )
     # 结构化决策头（已内置不可关闭）：与上表同源，供抽取侧优先读取。
     parts.append(build_structured_header_instruction())
@@ -324,6 +325,7 @@ def _build_expert_review_prompt(
         "而非虚构具体百分比。\n"
         "4. 提及指数基准时（如沪深300涨跌幅），请保持数值大致合理，"
         "避免与基准指数的实际表现严重偏离。\n"
+        f"5. {MONEY_SIGN_NOTE}\n"
         "给出优化建议和风险预警。",
     ]
 
@@ -473,6 +475,7 @@ def _build_health_check_prompt(
         "2. 如果需要引用收益归因，请参考【收益归因】段落，并标注为「贡献占比」而非收益率。",
         "3. 不确定具体数字时使用定性描述（如「表现较好」「有盈利」「亏损」）而非虚构具体百分比。",
         "4. 持仓排名已通过【持仓TOP3】段明确给出，不得自行推测「最大持仓」或「第一重仓」。",
+        f"5. {MONEY_SIGN_NOTE}",
     ]
     return "\n".join(parts)
 
