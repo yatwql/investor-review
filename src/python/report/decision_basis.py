@@ -36,139 +36,53 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from src.python.analysis.portfolio_constraints import evaluate_constraints, max_single_weight, status_of
 from src.python.config import get_config
 from src.python.config.features import is_feature_enabled
-from src.python.core import signal_ledger as sl
-from src.python.core.decision_ledger import DIRECTION_FLAT, DIRECTION_LONG, DIRECTION_SHORT, fold_ledger
+
+# ── 子模块 re-export（聚合门面：对外导入面不变）────────────────
+from src.python.report.decision_basis_settlement import (  # noqa: F401
+    PERFORMANCE_TITLE,
+    SETTLEMENT_HORIZONS,
+    SETTLEMENT_MAX_BATCHES,
+    _mean,
+    _tone_class_of,
+    _tone_of,
+    build_performance,
+    build_settlement_summary,
+    performance_verdict,
+)
+from src.python.report.decision_basis_signals import (  # noqa: F401
+    BACKTEST_CONCLUSIONS,
+    _build_signal_rows,
+    BACKTEST_DATE_FALLBACK,
+    BACKTEST_REF,
+    BACKTEST_SOURCE,
+    DISCRIMINATION_FAILED,
+    DISCRIMINATION_INSUFFICIENT,
+    DISCRIMINATION_NOT_BACKTESTED,
+    DISCRIMINATION_PASSED,
+    PERF_PHASE_ASSEMBLY,
+    SIGNAL_TYPES,
+    _BASIS_LABELS,
+    _BASIS_PRICE_PROXY,
+    _BASIS_VALUATION_REAL,
+    _DEFAULT_CONCLUSION,
+    _DIRECTION_ENUM,
+    _DIRECTION_LABELS,
+    _DISCRIMINATION_LABELS,
+    backtest_run_date,
+    in_direction_axis,
+)
 
 #: 功能开关名（登记见 config/_feature_registry.py，TUI [C] 面板可切换）
 FEATURE_FLAG = "decision_basis"
 #: 区块显示名（双端同源；归一化名与 section_block_registry 清单一致）
 BLOCK_TITLE = "判断依据"
 
-# ── 区分度三态（设计稿 §2.1 discrimination 契约）──────────────
-DISCRIMINATION_NOT_BACKTESTED = "not_backtested"
-DISCRIMINATION_INSUFFICIENT = "insufficient_sample"
-DISCRIMINATION_PASSED = "passed"
-DISCRIMINATION_FAILED = "failed"
-
-_DISCRIMINATION_LABELS: dict[str, str] = {
-    DISCRIMINATION_NOT_BACKTESTED: "未回测",
-    DISCRIMINATION_INSUFFICIENT: "样本不足",
-    DISCRIMINATION_PASSED: "回测通过",
-    DISCRIMINATION_FAILED: "回测未通过",
-}
-
-# ── 首批回测结论登记（唯一事实源；复跑回测出新结论后更新本表 + changelog）──
-# 来源：scripts/eval-decision-quality.py（阶段 horizon/factor-ic/valuation，
-# 判据预注册：视界 5/20/60 交易日、样本门槛 100、|IC| 拒绝线 0.05、三分位单调）；
-# 结论证据见归档讨论稿 `docs/archive/v0.16.x/investment-decision-quality/investment-decision-quality.md` §8.1。
-BACKTEST_SOURCE = "scripts/eval-decision-quality.py"
-#: 产物缺失时的兜底采样日（归档讨论稿 §8.1 结论的采样日，不随开发演进）
-BACKTEST_DATE_FALLBACK = "2026-11-02"
-BACKTEST_REF = "docs/archive/v0.16.x/investment-decision-quality/investment-decision-quality.md §8.1"
-
-#: 装配阶段名（perf 计时口径，full/both 双路径共用同一字面量）
-PERF_PHASE_ASSEMBLY = "判断依据块装配"
-
-
-def backtest_run_date(products_dir: str | Path | None = None) -> str:
-    """回测产物的最新运行日（``YYYY-MM-DD``）。
-
-    回测结论会随样本累积变化（累计成熟样本过后重跑），采样日因此不能写成常量——
-    日期口径由 `core/eval_status.last_eval_date()` 单一实现（读产物目录内最新一份
-    JSON 的修改日期），产物缺失（新克隆/产物被清理）时回落到归档结论采样日
-    ``BACKTEST_DATE_FALLBACK``，全部只读。
-
-    Args:
-        products_dir: 产物目录（测试注入 ``tmp_path`` 用；缺省取 `docs/tmp/decision-quality`）。
-
-    Returns:
-        日期字符串；产物缺失或不可读时返回兜底值。
-    """
-    from src.python.core.eval_status import last_eval_date
-
-    try:
-        latest = last_eval_date(products_dir)
-    except OSError:
-        latest = None
-    return latest.strftime("%Y-%m-%d") if latest is not None else BACKTEST_DATE_FALLBACK
-
-
-BACKTEST_CONCLUSIONS: dict[str, dict[str, Any]] = {
-    # 估值分位：5 日视界两口径（n=117）均无区分度 → 已回测未通过，不进方向轴；
-    # 代理 IC=+0.0399 / 真实 IC=−0.0267 同判无区分度 → 不在管线内计算真实
-    # PE/PB 口径，口径透明由 basis=price_proxy 表达（账本 detail.pe/pb 为 null）。
-    sl.SIGNAL_VALUATION: {
-        "discrimination": DISCRIMINATION_FAILED,
-        "n_backtest": 117,
-        "ic": 0.0399,
-        "monotonic": False,
-        "note": "价格分位代理；5 日视界回测未通过（叙述性维度），不进方向轴",
-    },
-    # 因子目录：因子单因子 IC 回测已跑、单因子 × 视界最大可结算样本 19 < 100 门槛 → 样本不足。
-    sl.SIGNAL_FACTOR_CATALOG: {
-        "discrimination": DISCRIMINATION_INSUFFICIENT,
-        "n_backtest": 19,
-        "ic": None,
-        "monotonic": None,
-        "note": "样本不足 n=19（<100 不裁决）",
-    },
-}
-_DEFAULT_CONCLUSION: dict[str, Any] = {
-    "discrimination": DISCRIMINATION_NOT_BACKTESTED,
-    "n_backtest": None,
-    "ic": None,
-    "monotonic": None,
-    "note": "未回测",
-}
-
-# ── 清单覆盖的判断类信号（按稳定顺序呈现）────────────────────
-# 排除再平衡超限：它是动作信号，已由「① 再平衡信号」块呈现，本块只装判断依据，
-# 与既有块分工见设计稿 §3「与既有块分工」行。
-SIGNAL_TYPES: tuple[str, ...] = (
-    sl.SIGNAL_MARKET_TEMPERATURE,
-    sl.SIGNAL_VALUATION,
-    sl.SIGNAL_TAIL_RISK,
-    sl.SIGNAL_STYLE_FACTOR,
-    sl.SIGNAL_FACTOR_CATALOG,
-)
-
-# ── 展示映射（装配层算好，渲染层零计算——渲染数据走模板 context）────────
-_DIRECTION_ENUM: dict[int, str] = {DIRECTION_LONG: "bullish", DIRECTION_SHORT: "bearish", DIRECTION_FLAT: "neutral"}
-_DIRECTION_LABELS: dict[int, str] = {DIRECTION_LONG: "看多", DIRECTION_SHORT: "看空", DIRECTION_FLAT: "中性"}
-
-_BASIS_PRICE_PROXY = "price_proxy"
-_BASIS_VALUATION_REAL = "valuation_real"
-_BASIS_LABELS: dict[str, str] = {
-    _BASIS_VALUATION_REAL: "真实估值",
-    _BASIS_PRICE_PROXY: "价格代理",
-    "rule_based": "规则推导",
-    "stat_model": "统计模型",
-    "unknown": "未知",
-}
-
-#: 各信号类型的口径（估值分位按 detail.pe/pb 特判，见 _basis_of）
-_BASIS_BY_TYPE: dict[str, str] = {
-    sl.SIGNAL_MARKET_TEMPERATURE: _BASIS_PRICE_PROXY,
-    sl.SIGNAL_TAIL_RISK: "stat_model",
-    sl.SIGNAL_STYLE_FACTOR: "stat_model",
-    sl.SIGNAL_FACTOR_CATALOG: "stat_model",
-}
-
-#: 各信号类型的观测样本字段（账本 detail 键；缺失 → None 显式给出）
-_N_OBS_KEY: dict[str, str] = {
-    sl.SIGNAL_MARKET_TEMPERATURE: "sample_count",
-    sl.SIGNAL_VALUATION: "sample_count",
-    sl.SIGNAL_TAIL_RISK: "sample_size",
-    sl.SIGNAL_STYLE_FACTOR: "sample_count",
-    sl.SIGNAL_FACTOR_CATALOG: "computed",
-}
-
+#: 可信度等级标签（规则四枚举的展示名）
 _LEVEL_LABELS: dict[str, str] = {"high": "高", "medium": "中", "low": "低", "unknown": "暂不可判"}
 #: 可信度 → data-status 语义色（ok/warn/info，不用涨跌域色；设计契约）
 _LEVEL_STATUS_CLASS: dict[str, str] = {
@@ -182,98 +96,6 @@ _LEVEL_STATUS_CLASS: dict[str, str] = {
 def is_decision_basis_enabled() -> bool:
     """开关 `decision_basis` 生效值（默认开——纯事实块，不增加风险）。"""
     return is_feature_enabled(FEATURE_FLAG)
-
-
-# ── 信号清单装配（只读账本快照，零取数零 LLM）────────────────
-
-
-def _basis_of(signal_type: str, detail: dict[str, Any]) -> str:
-    """口径判定：估值分位按账本事实（detail.pe/pb 均为 null ⇒ 价格分位代理）。"""
-    if signal_type == sl.SIGNAL_VALUATION:
-        if detail.get("pe") is None and detail.get("pb") is None:
-            return _BASIS_PRICE_PROXY
-        return _BASIS_VALUATION_REAL
-    return _BASIS_BY_TYPE.get(signal_type, "unknown")
-
-
-def in_direction_axis(
-    basis: str | None,
-    n_obs: Any,
-    ic: Any,
-    monotonic: Any,
-    discrimination: str | None,
-) -> bool:
-    """信号是否进方向轴：区分度回测通过 **且** 三组必填字段齐全且口径非 unknown。
-
-    设计稿 §2.1：`basis`/`n_obs`/`ic`/`monotonic` 缺任一即不进方向轴；
-    `unknown` 口径不得进方向轴。负向用例见 test_decision_basis。
-    """
-    return (
-        discrimination == DISCRIMINATION_PASSED
-        and basis not in (None, "", "unknown")
-        and n_obs is not None
-        and ic is not None
-        and monotonic is not None
-    )
-
-
-def _latest_signals() -> dict[str, dict[str, Any]]:
-    """读账本快照，取各判断类信号的最新一条（写入顺序末条即最新，同 fold 口径）。"""
-    latest: dict[str, dict[str, Any]] = {}
-    for record in sl.load_signals():
-        if not isinstance(record, dict):
-            continue
-        signal_type = record.get("signal_type")
-        if signal_type in SIGNAL_TYPES:
-            latest[signal_type] = record  # 追加顺序覆盖 → 末条即最新
-    return latest
-
-
-def _build_signal_rows() -> list[dict[str, Any]]:
-    """信号清单行（字段齐即显式给出，可空值为 None；note 如实标注区分度三态）。"""
-    rows: list[dict[str, Any]] = []
-    latest = _latest_signals()
-    for signal_type in SIGNAL_TYPES:
-        record = latest.get(signal_type)
-        if record is None:
-            continue
-        raw_detail = record.get("detail")
-        detail: dict[str, Any] = raw_detail if isinstance(raw_detail, dict) else {}
-        conclusion = BACKTEST_CONCLUSIONS.get(signal_type, _DEFAULT_CONCLUSION)
-        basis = _basis_of(signal_type, detail)
-        n_obs = detail.get(_N_OBS_KEY.get(signal_type, ""))
-        ic = conclusion.get("ic")
-        monotonic = conclusion.get("monotonic")
-        discrimination = conclusion.get("discrimination", DISCRIMINATION_NOT_BACKTESTED)
-        eligible = in_direction_axis(basis, n_obs, ic, monotonic, discrimination)
-        direction = record.get("direction", DIRECTION_FLAT)
-        if not isinstance(direction, int):
-            direction = DIRECTION_FLAT
-        rows.append(
-            {
-                "name": sl.SIGNAL_TYPE_LABELS.get(signal_type, signal_type),
-                "direction": _DIRECTION_ENUM.get(direction, "neutral"),
-                "direction_label": _DIRECTION_LABELS.get(direction, "中性"),
-                "basis": basis,
-                "basis_label": _BASIS_LABELS.get(basis, "未知"),
-                "basis_sample_label": (
-                    f"{_BASIS_LABELS.get(basis, '未知')}·n={n_obs}"
-                    if n_obs is not None
-                    else _BASIS_LABELS.get(basis, "未知")
-                ),
-                "n_obs": n_obs,
-                "n_backtest": conclusion.get("n_backtest"),
-                "ic": ic,
-                "monotonic": monotonic,
-                "discrimination": discrimination,
-                # 无效信号标「仅参考」（中性态，不染状态色——设计契约）
-                "discrimination_label": _DISCRIMINATION_LABELS.get(discrimination, "未回测")
-                + ("" if eligible else "（仅参考）"),
-                "note": conclusion.get("note", "未回测"),
-                "in_axis": eligible,
-            }
-        )
-    return rows
 
 
 # ── 风险预算（上限 vs 现状：只读呈现，不产动作）──────────
@@ -528,266 +350,6 @@ def build_discipline_detail(
 
 
 # ── 结算摘要（最近 5 批 × 多视界；批次 = 结算交易日）────────────
-SETTLEMENT_HORIZONS: tuple[int, ...] = (5, 20, 60)
-SETTLEMENT_MAX_BATCHES = 5
-
-
-def _tone_of(value: float | None) -> str:
-    """涨跌域色变量（红涨绿跌，A 股口径；与状态域互斥，不混用）。"""
-    if value is None or value == 0:
-        return ""
-    return "--profit" if value > 0 else "--loss"
-
-
-def _tone_class_of(value: float | None) -> str:
-    """涨跌域语义类（红涨绿跌；零/缺失不加类，与状态域互斥）。"""
-    if value is None or value == 0:
-        return ""
-    return "tone-profit" if value > 0 else "tone-loss"
-
-
-def _mean(values: list[float]) -> float | None:
-    return sum(values) / len(values) if values else None
-
-
-PERFORMANCE_TITLE = "我的建议历史表现（按视界）"
-
-
-def performance_verdict(accuracy: float | None, excess_pct: float | None) -> str:
-    """按「命中率 × 均值超额」两轴给一句人话结论（四象限 + 缺轴降级）。
-
-    命中过半只看 > 50%（含 50% 视为「过半」边界；口径与账本「方向命中」一致），
-    超额正负按 0 分界。任一轴缺数据时只说可得的那一轴，不拿单项冒充整体。
-
-    Args:
-        accuracy: 命中率（0~1；None = 无方向性样本）。
-        excess_pct: 均值超额（百分数；None = 无基准数据）。
-
-    Returns:
-        一句结论文本；两轴都缺 → 「—」。
-    """
-    if accuracy is None and excess_pct is None:
-        return "—"
-    if accuracy is None:
-        return "仅有超额：跑赢基准" if excess_pct is not None and excess_pct >= 0 else "仅有超额：跑输基准"
-    hit_half = accuracy >= 0.5
-    if excess_pct is None:
-        return "方向命中过半（缺基准，无法比超额）" if hit_half else "方向命中不足一半（缺基准，无法比超额）"
-    if hit_half and excess_pct >= 0:
-        return "方向有效且跑赢基准"
-    if hit_half:
-        return "方向命中但跑输基准"
-    if excess_pct >= 0:
-        return "方向偏错但选品仍跑赢基准"
-    return "方向与超额双弱"
-
-
-def build_performance(
-    decisions: list[dict[str, Any]] | None = None,
-) -> list[dict[str, Any]]:
-    """按视界聚合「我的建议历史表现」（只读账本，与 `settle-decisions` 同口径）。
-
-    口径单源：命中判定复用 `core.decision_ledger.classify_direction_outcome`
-    （含 ±1.5% 平盘不判定阈值），均值超额 = 原始收益 − 同期基准收益（基准缺失
-    的条目不进超额均值）。命中率仅在方向性有效样本 ≥ `MEANINGFUL_SAMPLE` 时给
-    百分比结论，否则以「命中/总数」并列并标注样本不足——与命令行结算、`doctor`
-    账本概览同一判据，不另立口径。
-
-    Args:
-        decisions: `fold_ledger()` 的 decisions；None 时读当前账本。
-
-    Returns:
-        每个视界一行：{horizon, settled, directional, hit, miss, flat, gap,
-        accuracy_label, accuracy_value, mean_excess_label, sample_sufficient,
-        tone_class}
-    """
-    from src.python.core import decision_ledger as dl
-
-    ledger_decisions: list[dict[str, Any]] = (
-        decisions if decisions is not None else list(fold_ledger().get("decisions") or [])
-    )
-    per_horizon: dict[int, dict[str, Any]] = {}
-    for decision in ledger_decisions:
-        settlements = decision.get("settlements") or {}
-        if not isinstance(settlements, dict):
-            continue
-        try:
-            direction = int(decision.get("direction") or 0)
-        except (TypeError, ValueError):
-            direction = 0
-        for raw_horizon, event in settlements.items():
-            if not isinstance(event, dict):
-                continue
-            try:
-                horizon = int(raw_horizon)
-            except (TypeError, ValueError):
-                continue
-            raw_return = event.get("raw_return")
-            raw_value: float | None = None
-            if isinstance(raw_return, (int, float)) and not isinstance(raw_return, bool):
-                raw_value = float(raw_return)
-            bucket = per_horizon.setdefault(horizon, {"counts": {}, "excess": []})
-            # 缺失收益的行计入 gap（数据缺口），不能静默丢样本——否则已结算数与账本不符
-            outcome, _hit = dl.classify_direction_outcome(raw_value, direction)
-            bucket["counts"][outcome] = bucket["counts"].get(outcome, 0) + 1
-            bench_return = event.get("bench_return")
-            if raw_value is not None and isinstance(bench_return, (int, float)) and not isinstance(bench_return, bool):
-                bucket["excess"].append(raw_value - float(bench_return))
-
-    rows: list[dict[str, Any]] = []
-    for horizon in SETTLEMENT_HORIZONS:
-        bucket = per_horizon.get(horizon)
-        if bucket is None:
-            continue
-        counts = bucket["counts"]
-        hit = counts.get("hit", 0)
-        miss = counts.get("miss", 0)
-        directional = hit + miss
-        settled = sum(counts.values())
-        mean_excess = _mean(bucket["excess"])
-        excess_pct = None if mean_excess is None else mean_excess * 100
-        sufficient = directional >= dl.MEANINGFUL_SAMPLE
-        accuracy = hit / directional if directional else None
-        if accuracy is None:
-            accuracy_label = "—"
-        elif sufficient:
-            accuracy_label = f"{accuracy:.0%}"
-        else:
-            accuracy_label = f"{hit}/{directional}（样本不足）"
-        rows.append(
-            {
-                "horizon": horizon,
-                "settled": settled,
-                "directional": directional,
-                "hit": hit,
-                "miss": miss,
-                "flat": counts.get("flat", 0),
-                "gap": counts.get("gap", 0),
-                "accuracy_label": accuracy_label,
-                "accuracy_value": None if accuracy is None else round(accuracy, 4),
-                "mean_excess_label": "—" if excess_pct is None else f"{excess_pct:+.2f}%",
-                "verdict": performance_verdict(accuracy, excess_pct),
-                # 样本不足时把结论降级为「仅参考」标注，避免小样本被当定论
-                "verdict_label": (
-                    performance_verdict(accuracy, excess_pct)
-                    if sufficient or accuracy is None
-                    else f"{performance_verdict(accuracy, excess_pct)}（样本不足，仅参考）"
-                ),
-                "sample_sufficient": sufficient,
-                "tone_class": _tone_class_of(excess_pct),
-            }
-        )
-    return rows
-
-
-def build_settlement_summary(
-    decisions: list[dict[str, Any]] | None = None,
-    *,
-    max_batches: int = SETTLEMENT_MAX_BATCHES,
-) -> dict[str, Any]:
-    """装配结算摘要块（最近 N 批 × 5/20/60 视界，均值收益与均值超额）。
-
-    批次口径 = 结算交易日（与「历史决策复盘」块同一数据源 `fold_ledger`，不另算
-    一套）；超额 = 该条原始收益 − 同期基准收益，基准缺失的条目只计入收益均值。
-
-    Args:
-        decisions: `fold_ledger()` 的 decisions（含 `settlements` 多视界映射）；
-            None 时读当前账本。
-        max_batches: 批次上限（默认 5）。
-
-    Returns:
-        {available, reason, horizons, batches[{date, n, cells[{horizon, n,
-        state, mean_return_pct, mean_excess_pct, value_label, excess_label,
-        color_var}]}], note}
-    """
-    ledger_decisions: list[dict[str, Any]] = (
-        decisions if decisions is not None else list(fold_ledger().get("decisions") or [])
-    )
-    # settle_date → horizon → [(raw_return, excess|None)]
-    buckets: dict[str, dict[int, list[tuple[float, float | None]]]] = {}
-    for decision in ledger_decisions:
-        settlements = decision.get("settlements") or {}
-        if not isinstance(settlements, dict):
-            continue
-        for raw_horizon, event in settlements.items():
-            if not isinstance(event, dict):
-                continue
-            try:
-                horizon = int(raw_horizon)
-            except (TypeError, ValueError):
-                continue
-            settle_date = str(event.get("settle_date") or "")
-            raw_return = event.get("raw_return")
-            if not settle_date or not isinstance(raw_return, (int, float)) or isinstance(raw_return, bool):
-                continue
-            try:
-                raw_value = float(raw_return)
-            except (TypeError, ValueError):
-                continue
-            bench_return = event.get("bench_return")
-            excess: float | None = None
-            if isinstance(bench_return, (int, float)) and not isinstance(bench_return, bool):
-                try:
-                    excess = raw_value - float(bench_return)
-                except (TypeError, ValueError):
-                    excess = None
-            buckets.setdefault(settle_date, {}).setdefault(horizon, []).append((raw_value, excess))
-
-    dates = sorted(buckets, reverse=True)[: max(int(max_batches), 1)]
-    batches: list[dict[str, Any]] = []
-    for date in dates:
-        cells: list[dict[str, Any]] = []
-        batch_n = 0
-        for horizon in SETTLEMENT_HORIZONS:
-            samples: list[tuple[float, float | None]] = buckets[date].get(horizon) or []
-            batch_n = max(batch_n, len(samples))
-            if not samples:
-                cells.append(
-                    {
-                        "horizon": horizon,
-                        "n": 0,
-                        "state": "pending",
-                        "mean_return_pct": None,
-                        "mean_excess_pct": None,
-                        "value_label": "未到期",
-                        "excess_label": "—",
-                        "color_var": "",
-                        "tone_class": "",
-                    }
-                )
-                continue
-            mean_return = _mean([raw for raw, _ in samples])
-            excess_values = [exc for _, exc in samples if exc is not None]
-            mean_excess = _mean(excess_values)
-            return_pct = None if mean_return is None else mean_return * 100
-            excess_pct = None if mean_excess is None else mean_excess * 100
-            cells.append(
-                {
-                    "horizon": horizon,
-                    "n": len(samples),
-                    "state": "settled",
-                    "mean_return_pct": None if return_pct is None else round(return_pct, 2),
-                    "mean_excess_pct": None if excess_pct is None else round(excess_pct, 2),
-                    # 展示口径：收益（超额）——超额缺失只显示收益
-                    "value_label": "—" if return_pct is None else f"{return_pct:+.2f}%",
-                    "excess_label": "—" if excess_pct is None else f"{excess_pct:+.2f}%",
-                    "color_var": _tone_of(return_pct),
-                    "tone_class": _tone_class_of(return_pct),
-                }
-            )
-        batches.append({"date": date, "n": batch_n, "cells": cells})
-    return {
-        "available": True,
-        "reason": "",
-        "horizons": list(SETTLEMENT_HORIZONS),
-        "batches": batches,
-        # 「我的建议历史表现」按视界聚合：只读账本、不依赖 decision_reflection 开关
-        "performance_title": PERFORMANCE_TITLE,
-        "performance": build_performance(ledger_decisions),
-        "note": ("批次按结算交易日聚合（上限 5 批），更多明细见「历史决策复盘」块" if batches else "暂无结算样本"),
-    }
-
-
 # ── 信号可信度仲裁（规则引擎，非模型自评）────────────────────
 
 
