@@ -10,6 +10,7 @@
 
 ### 测试
 
+- **补两处新代码的直接覆盖（rf-1137）**：`is_otc_nav_disclosed` 原先只在别的用例里被 patch，补披露时点边界（19:59 / 20:00 / 早间）与 naive/跨时区换算 5 条；`ProviderState.cooldown_override` 补落盘回读 1 条（否则重启后自定义冷却期会丢）。
 - **发布编排测试按命令域拆分**：`test_release_tool_gate.py` 1147 行（测试登记线 900）按域拆为三份——`gate` 保留门禁编排与归档前置、`test_release_tool_publish.py` 收 publish/devbump 与 check 本地门禁前置、`test_release_tool_refresh.py` 收 refresh 条件化与 archive-init/prepare 文档手术命令；运行态路径隔离夹具下沉 `_release_fixtures.isolate_release_runtime_paths`（三份共用，断言与用例数不变）。P4 存量监控清单对应行随之删除。
 
 ### 重构

@@ -193,6 +193,27 @@ class TestCircuitBreaker:
             assert state.backoff_level == 0
             assert state.cooldown_secs == 120
 
+    def test_custom_cooldown_survives_state_roundtrip(self):
+        """自定义冷却期随熔断状态落盘并可回读（跨进程恢复后仍按 120s 判定）。
+
+        回归背景：`cooldown_override` 是新加的字段，若不落盘，重启后加载的状态只剩
+        `cooldown_secs`，下一次成功恢复会把它重置成全局默认 300s。
+        """
+        r = _fresh_registry()
+        r.register_provider("eastmoney_industry", failure_threshold=6, cooldown_secs=120)
+        with mock.patch("time.time", return_value=1000.0):
+            for _ in range(6):
+                r.record_failure("eastmoney_industry", "push2:x")
+        # 落盘时刻用真实时间：`_saved_at` 过旧会被 `_load_state` 按 TTL 丢弃
+        r._save_state()
+
+        other = _fresh_registry()
+        other.register_provider("eastmoney_industry", failure_threshold=6)
+        other._load_state()
+        state = other._providers["eastmoney_industry"]
+        assert state.cooldown_override == 120
+        assert state.cooldown_secs == 120
+
     def test_default_provider_keeps_backoff_table(self):
         """未指定自定义冷却期的源仍走退避表（首档 60s），语义不变。"""
         r = _fresh_registry()

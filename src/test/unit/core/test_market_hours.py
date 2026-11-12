@@ -663,3 +663,48 @@ class TestIsIntradayTimestamp:
 
         assert is_intraday_timestamp(None) is False
         assert is_intraday_timestamp("not-a-ts") is False
+
+class TestOtcNavDisclosed:
+    """场外净值披露时点判定（价格缓存新鲜度分档的依据）。
+
+    披露前当日 T 净值在渠道侧尚不存在，门禁只能要求「最近可得的一档」；该判定错一天
+    就会让白天运行反复判定过期并重取（或反过来用过时净值当已披露）。
+    """
+
+    @staticmethod
+    def _bj(hour: int, minute: int):
+        from datetime import datetime
+
+        from src.python.core.constants import BEIJING_TZ
+
+        return datetime(2026, 11, 12, hour, minute, tzinfo=BEIJING_TZ)
+
+    def test_boundary_1959_not_disclosed(self):
+        from src.python.core.market_hours import is_otc_nav_disclosed
+
+        assert is_otc_nav_disclosed(self._bj(19, 59)) is False
+
+    def test_boundary_2000_disclosed(self):
+        from src.python.core.market_hours import is_otc_nav_disclosed
+
+        assert is_otc_nav_disclosed(self._bj(20, 0)) is True
+
+    def test_morning_not_disclosed(self):
+        from src.python.core.market_hours import is_otc_nav_disclosed
+
+        assert is_otc_nav_disclosed(self._bj(8, 30)) is False  # 早间：当日净值尚未披露
+
+    def test_naive_datetime_treated_as_beijing(self):
+        from datetime import datetime
+
+        from src.python.core.market_hours import is_otc_nav_disclosed
+
+        assert is_otc_nav_disclosed(datetime(2026, 11, 12, 21, 0)) is True
+
+    def test_other_timezone_converted(self):
+        from datetime import datetime, timedelta, timezone
+
+        from src.python.core.market_hours import is_otc_nav_disclosed
+
+        # UTC 12:00 = 北京 20:00
+        assert is_otc_nav_disclosed(datetime(2026, 11, 12, 12, 0, tzinfo=timezone(timedelta(hours=0)))) is True
