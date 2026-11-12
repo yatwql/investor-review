@@ -22,6 +22,7 @@
 
 ### 修复
 
+- **行业接口节流单源化 + 并发下调**：`providers/eastmoney_industry.py` 只用模块常量喂限速器，配置 `batch_rate_limit.eastmoney_industry` 从未被读取（改配置不生效）；现由 `_push2_interval()` 读该配置、缺失才回落内置 100ms，`batch.industry_workers` 默认 8 → 4（push2 逐只调用，并发过高易被对端主动断连 → 连续失败 6 次熔断、行业数据整段降级）。用户手册两处配置表同步。
 - **Provider 自定义冷却期不再被退避表覆盖**：`register_default_chains` 给 `eastmoney_industry` 设的 `cooldown_secs=120` 在熔断时被退避表首档 60s 无条件覆盖、成功后又被重置为全局 300s，配置实际从不生效（日志也打印 60s）。现记为 `ProviderState.cooldown_override`：熔断取「自定义值与退避档的较大者」、成功后回落自定义值，并随熔断状态落盘；新增 3 条回归用例（自定义生效 / 成功后回落 / 默认源仍走退避表）。
 - **操作建议表「金额」列符号口径统一为绝对值**：模型自拟该列时用现金流口径（减仓 `+7600`、加仓 `-22000`），与「操作」列方向词冲突，读者容易读反；现将口径单源为 `rate_caliber.MONEY_SIGN_NOTE` 并在专家复盘/持仓体检两处提示词注入（金额写绝对值、方向由操作列承担，与机械建议表的 `amount` 同口径），`PROMPT_SCHEMA_VERSION` 递增至 `rate-caliber-5`。
 - **滞后净值品种的「本日盈亏」不再静默归零**：原实现里场外行只有净值日等于当日才算本日盈亏，否则记 0.0——QDII/国内场外滞后时报告显示「本日盈亏 0」，读者会误以为当天没涨没跌。现改为照实呈现该净值日的涨跌并标「参考」（HTML 行内小字 + Excel 明细脚注），组合合计只累加当日已更新品种（`market_value.sum_today_profit`），避免把 T-1/T-2 涨跌混进「今日」。

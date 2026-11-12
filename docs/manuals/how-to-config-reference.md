@@ -440,7 +440,7 @@ TUI 主菜单 `[C]`「配置报告章节显隐」把**所有会决定「哪一�
 | `batch.max_total_workers` | `15` | 各池共享的**进程级预算**：每次建池从余额里分配，不足时缩到至少 1 并打 WARNING（不抢占已运行的池）；同时按本机 CPU 核数再钳一次，弱机器不会多开线程 |
 | `batch.profile` | `"high"` | 并发档位（借鉴 test-runner 的并行级别系数）：high=100% / medium=50% / low=25%，只按系数缩各池申请值，不改各模块打磨过的相对权重；默认 high = 改动前行为 |
 | `batch.fund_workers` | `3` | 基金排名/持仓/费率批量并发数；配 1 = 串行（季报探测的对冲也只剩 2 路） |
-| `batch.industry_workers` | `8` | 行业分类批量并发数 |
+| `batch.industry_workers` | `4` | 行业分类批量并发数（push2 逐只调用，并发过高易被对端断连） |
 | `batch.datasink_workers` | `3` | 财报全文取数并发数（DataSinking 免费档 3 请求/秒，≥3 才吃满） |
 | `batch.akshare_workers` | `2` | akshare 财务指标取数并发数（财务指标章 + 景气度框架②维基金重仓 ROE 推演共用） |
 | `batch.index_workers` | `5` | 指数历史批量并发数（基准/风格指数） |
@@ -456,7 +456,7 @@ TUI 主菜单 `[C]`「配置报告章节显隐」把**所有会决定「哪一�
   "max_total_workers": 15,
   "profile": "high",
   "fund_workers": 3,
-  "industry_workers": 8,
+  "industry_workers": 4,
   "datasink_workers": 3,
   "akshare_workers": 2,
   "index_workers": 5,
@@ -476,7 +476,7 @@ TUI 主菜单 `[C]`「配置报告章节显隐」把**所有会决定「哪一�
 | `sina` | `0.0` | 新浪行情（不限速） |
 | `eastmoney` | `0.1` | 东方财富行情（100ms） |
 | `tiantian` | `0.5` | 天天基金（500ms） |
-| `eastmoney_industry` | `0.05` | 东方财富行业（50ms） |
+| `eastmoney_industry` | `0.1` | 东方财富行业（100ms；push2 逐只调用，实现按此值节流，缺失才回落内置 100ms） |
 
 值为 0 表示不限速。配置后可通过菜单 `R` 刷新配置立即生效，无需重启程序。
 

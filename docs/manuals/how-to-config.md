@@ -126,7 +126,7 @@
     "max_total_workers": 15,
     "profile": "high",
     "fund_workers": 3,
-    "industry_workers": 8,
+    "industry_workers": 4,
     "datasink_workers": 3,
     "akshare_workers": 2,
     "index_workers": 5,

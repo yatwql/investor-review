@@ -8,6 +8,7 @@ from unittest.mock import Mock, patch
 
 from src.python.providers.eastmoney_industry import (
     fetch_industry_and_concepts,
+    _push2_interval as _real_push2_interval,
     _secid,
 )
 import pytest
@@ -169,8 +170,8 @@ def _fast_throttle(monkeypatch):
     """测试内屏蔽 push2 请求前节流（节流本身由专项用例验证，其余用例不真睡）。"""
     from src.python.providers import eastmoney_industry as ei
 
-    # 最小间隔置 0 → RateLimiter.acquire_interval 直接放行，不触碰限速器状态
-    monkeypatch.setattr(ei, "_PUSH2_MIN_INTERVAL", 0.0)
+    # 间隔取 0 → RateLimiter.acquire_interval 直接放行，不触碰限速器状态
+    monkeypatch.setattr(ei, "_push2_interval", lambda: 0.0)
 
 
 class TestSecid(unittest.TestCase):
@@ -424,7 +425,7 @@ class TestIndustryExtendedFields(unittest.TestCase):
 
         self.assertIsNotNone(result)
         mock_limiter.acquire_interval.assert_called_once_with(
-            ei._PUSH2_LIMIT_KEY, ei._PUSH2_MIN_INTERVAL, jitter_ratio=ei._PUSH2_JITTER_RATIO
+            ei._PUSH2_LIMIT_KEY, ei._push2_interval(), jitter_ratio=ei._PUSH2_JITTER_RATIO
         )
 
     def test_limiter_singleton_and_reset(self):
@@ -518,3 +519,40 @@ class TestAbruptDisconnectFastFail:
 
         assert result is None
         assert calls["n"] == 1, f"断连不应重试（实际请求 {calls['n']} 次）"
+
+#: 真实实现快照（本文件 autouse fixture 会把 `_push2_interval` 打成 0 秒以跳过节流，
+#: 间隔专项用例须绕过该补丁才能验证配置读取）
+_REAL_PUSH2_INTERVAL = _real_push2_interval
+
+class TestPush2Interval(unittest.TestCase):
+    """push2 请求间隔单源：配置 `batch_rate_limit.eastmoney_industry` 生效。
+
+    回归背景：实现只用模块常量（最小间隔兜底值）喂限速器，配置里的间隔从未被读取——
+    用户改配置不生效，属配置双源。
+    """
+
+    def test_reads_config_value(self):
+        from src.python.providers import eastmoney_industry as ei
+
+        from src.python import config as cfg_mod
+
+        with (
+            patch.object(ei, "_push2_interval", _REAL_PUSH2_INTERVAL),
+            patch.object(cfg_mod, "get_config", return_value={"batch_rate_limit": {"eastmoney_industry": 0.3}}),
+        ):
+            self.assertAlmostEqual(ei._push2_interval(), 0.3)
+
+    def test_falls_back_when_missing(self):
+        from src.python.providers import eastmoney_industry as ei
+        from src.python import config as cfg_mod
+
+        with (
+            patch.object(ei, "_push2_interval", _REAL_PUSH2_INTERVAL),
+            patch.object(cfg_mod, "get_config", return_value={}),
+        ):
+            self.assertAlmostEqual(ei._push2_interval(), ei._PUSH2_MIN_INTERVAL)
+        with (
+            patch.object(ei, "_push2_interval", _REAL_PUSH2_INTERVAL),
+            patch.object(cfg_mod, "get_config", return_value={"batch_rate_limit": {"eastmoney_industry": 0}}),
+        ):
+            self.assertAlmostEqual(ei._push2_interval(), ei._PUSH2_MIN_INTERVAL)

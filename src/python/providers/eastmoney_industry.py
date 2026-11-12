@@ -39,12 +39,32 @@ _PUSH2_BASE = "https://push2.eastmoney.com/api/qt/stock/get"
 _TIMEOUT = 5.0
 #: push2 批量接口节流键（per-key 计量，RateLimiter 原语单源）
 _PUSH2_LIMIT_KEY = "eastmoney_industry"
-#: push2 批量接口最小请求间隔（秒；批量同速连续请求易触发服务端反爬断连）
+#: push2 批量接口最小请求间隔的**兜底默认值**（秒；批量同速连续请求易触发服务端反爬断连）。
+#: 实际间隔取配置 ``batch_rate_limit.eastmoney_industry``（见 :func:`_push2_interval`），
+#: 缺失/非正数时才回落到本常量——两处各写一个值会让配置静默失效。
 _PUSH2_MIN_INTERVAL = 0.1
 #: 抖动比例（间隔上叠加 uniform(0, 比例 × 间隔)，避免固定节奏的机器特征）
 _PUSH2_JITTER_RATIO = 0.5
 _limiter: RateLimiter | None = None
 _limiter_lock = threading.Lock()
+
+
+def _push2_interval() -> float:
+    """push2 请求间隔（秒）：配置 `batch_rate_limit.eastmoney_industry` 为单源。
+
+    配置缺失/非正数时回落到模块内置的兜底间隔。间隔必须由配置单源给出：只喂模块
+    常量时 `RateLimiter.acquire_interval` 会忽略配置值（改配置不生效）。
+    """
+    try:
+        from src.python.config import get_config
+
+        rate = (get_config() or {}).get("batch_rate_limit") or {}
+        value = rate.get(_PUSH2_LIMIT_KEY)
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
+            return float(value)
+    except Exception:  # 配置读取失败不阻断取数：回落到兜底间隔
+        logger.debug("[industry] 读取 push2 限速配置失败，使用兜底间隔", exc_info=True)
+    return _PUSH2_MIN_INTERVAL
 
 
 def _get_limiter() -> RateLimiter:
@@ -134,7 +154,7 @@ def make_push2_request(code: str, retries: int = _MAX_RETRIES) -> dict | None:
     logger.debug("东方财富 push2 请求: %s", code)
 
     def _attempt() -> str:
-        _get_limiter().acquire_interval(_PUSH2_LIMIT_KEY, _PUSH2_MIN_INTERVAL, jitter_ratio=_PUSH2_JITTER_RATIO)
+        _get_limiter().acquire_interval(_PUSH2_LIMIT_KEY, _push2_interval(), jitter_ratio=_PUSH2_JITTER_RATIO)
         with make_http_client(timeout=_TIMEOUT) as client:
             resp = client.get(_PUSH2_BASE, params=params, headers=_HEADERS)
             return resp.text
