@@ -900,3 +900,31 @@ class TestNewsTableMobileLayout(unittest.TestCase):
         """序号与标题作卡片头：窄屏下不显示字段名前缀。"""
         assert ".news-table td.news-title::before { display: none; }" in self.html
         assert ".news-table td.news-seq::before { display: none; }" in self.html
+
+class TestEtfNameExpansion(unittest.TestCase):
+    """ETF 名称扩展走 code_utils 单源（大小写不敏感）。
+
+    回归背景：`_index_holdings` 内自建 `"ETF" in name` 判定（违反「代码类型判定
+    集中化」约束），小写 `etf` 的品种既不进 ETF 扩展分支、也不会被剥离出核心词，
+    关键词召回与资产类型口径分叉。
+    """
+
+    def test_lowercase_etf_name_expands_core_terms(self):
+        lookup: dict = {}
+        nc._index_holdings(lookup, [Holding("证券", "华安纳斯达克etf联接", "040046", 100.0, 1.0)])
+        # ETF 分支产出「剥掉 etf 后的中文核心词」；自建大写判定时该词不会出现
+        assert "华安纳斯达克联接" in lookup, lookup.keys()
+
+    def test_uppercase_etf_still_expands(self):
+        lookup: dict = {}
+        nc._index_holdings(lookup, [Holding("证券", "电池ETF招商", "561910", 100.0, 1.0)])
+        assert "电池招商" in lookup, lookup.keys()
+
+    def test_etf_judgment_single_source(self):
+        """判定必须与 code_utils.is_etf_by_name 同源（大小写不敏感）。"""
+        from src.python.core.code_utils import is_etf_by_name
+
+        assert is_etf_by_name("某基金etf联接") is True
+        lookup: dict = {}
+        nc._index_holdings(lookup, [Holding("证券", "某基金etf联接", "000001", 100.0, 1.0)])
+        assert "某基金联接" in lookup, lookup.keys()
