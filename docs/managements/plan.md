@@ -1,13 +1,13 @@
 # 投资复盘助手 — 实现计划
 
 > 文档版本：0.18.1-dev
-> **编号源**：`plan-next = 252`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-251，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`plan-next = 254`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-251，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
 ## 概述
 
-在办 7 项：P1 2 项（**plan-238**、**plan-239**）、P2 1 项（**plan-92**）、P3 3 项（**plan-70**、**plan-233**、**plan-243**）、P4 1 项（**plan-55**）。命名与实现纪律见 `CLAUDE.md`（单一事实位，本表不重复）。
+在办 9 项：P1 2 项（**plan-238**、**plan-239**）、P2 3 项（**plan-92**、**plan-252**、**plan-253**）、P3 3 项（**plan-70**、**plan-233**、**plan-243**）、P4 1 项（**plan-55**）。命名与实现纪律见 `CLAUDE.md`（单一事实位，本表不重复）。
 
 ---
 
@@ -55,6 +55,22 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 
 **现状**：19 页签为静态数字与文字，收益率高低、集中度偏离需逐格读数。
 **动作**：高价值数值列加色阶/数据条，趋势列加迷你折线（openpyxl 原生）；先做持仓明细 / 量化指标 / 集中度 2~3 个页签，验证后再扩。
+
+#### `plan-252` 建议后验评估政策单源化 + 不动作类命中评估
+
+**来源**：PanWatch 借鉴分析（[`panwatch-borrowing-review.md`](../plan/panwatch-borrowing-review.md) §2.1），commit `97f1813`。
+**缺口**：账本对 `DIRECTION_FLAT`（持有/观望/不操作）只记平盘不判命中，模型输出里「不操作」占比不低却从不被评估；「什么算命中」的口径散在 `decision_ledger` / `decision_basis_settlement` / `decision_review_block` / `eval-decision-quality` 四处。
+**动作**：新增 `core/decision_eval_policy.py` 作评估口径唯一事实位（方向阈值沿用 1.5%、不动作容忍带 2.0%、样本门槛沿用 20、视界单位声明），结算新增 `flat_judged` 字段（旧账本无字段按未判、不回填），折叠汇总新增 `flat` 分项与 `by_carrier.flat_*`，报告/`doctor` 并列呈现不动作命中率。
+**不做**：不改方向性阈值与样本门槛；不做置信度加权；不参与 `plan-70` 转正判据。
+**设计**：[`decision-eval-policy-design.md`](../plan/decision-eval-policy-design.md)（三期：政策与结算 → 呈现 → 自检提示）。
+
+#### `plan-253` LLM 复盘结论结构化契约（claim / evidence / verdict）
+
+**来源**：PanWatch 借鉴分析（[`panwatch-borrowing-review.md`](../plan/panwatch-borrowing-review.md) §2.2 与 §2.3）。
+**缺口**：LLM 输出是自由 markdown；`fact_checker` 只校验数值，`decision_llm_capture` 只抽表格；没有「主张→证据→判决」链，也没有「证据时点 ≤ 分析截止」这类可机检约束，建议的 triggers/invalidations 只停留在提示词口头要求。
+**动作**：新增开关 `llm_research_contract`（默认关，关闭逐字节不变）。P1 为既有语料生成内容寻址 `evidence_id` 池并追加结构头 `{claims[{id,statement,evidence[],inference,invalidations}],verdict}`；P2 引入 verdict 枚举（ready/revise/evidence_needed/reject）+ 一次预算受限补证；P3 报告「决策书」区块 + 建议硬约束（review/blocked 不得带数量、限购品种自动带执行约束）。
+**不做**：不做 agent 图与工具调用循环；不引入 Pydantic 契约模型；不自动改写正文。
+**设计**：[`llm-research-contract-design.md`](../plan/llm-research-contract-design.md)（三期与验收、golden 回归方案）。
 
 ### P3 — 预期实施，有空时安排
 
