@@ -207,6 +207,44 @@ def _render_category_table(
     return cat_data, dividend_success
 
 
+def _profit_forecast_for_run() -> dict[str, dict]:
+    """机构盈利预测（全量 2000+ 只）：同一轮内只载入一次（见 `_run_scope.run_memo`）。
+
+    载入本身是缓存读 + 大字典构建，实测约 2.5s——落在渲染阶段会把「区块装配」
+    顶成渲染慢；预取阶段先载一次后，渲染阶段直接命中。
+    """
+    from src.python.report._run_scope import run_memo
+
+    return run_memo(("profit_forecast",), get_profit_forecast)
+
+
+def _dividend_data_for_run(a_codes: list[str]) -> dict[str, dict]:
+    """股息率数据（按 A 股代码集）：同一轮内同代码集只取一次。"""
+    from src.python.report._run_scope import run_memo
+
+    codes = tuple(sorted(a_codes))
+    return run_memo(("dividend_data", codes), lambda: get_dividend_data(list(codes)))
+
+
+def prefetch_penetration_side_data(holdings: list[Holding], details: list) -> None:
+    """预取穿透块的附属取数（盈利预测 / 股息率），供「渲染前置取数」阶段调用。
+
+    穿透本体由 `compute_penetration_top10` 自身单轮复用；这里只补齐它的两个附属
+    取数，使 HTML 区块装配阶段只剩字符串拼装。
+    """
+    from src.python.report.penetration import compute_penetration_top10
+
+    pen_result = compute_penetration_top10(holdings, details) or {}
+    top10 = pen_result.get("top10") or []
+    if not top10:
+        return
+    _profit_forecast_for_run()
+    all_codes = list(set().union(*(set(e.get("codes") or []) for e in top10)))
+    a_codes = [c for c in all_codes if is_a_share_code(c)]
+    if a_codes:
+        _dividend_data_for_run(a_codes)
+
+
 def _render_penetration_section(
     holdings: list[Holding],
     details: list,
@@ -226,7 +264,7 @@ def _render_penetration_section(
     profit_success = True
     profit_forecast: dict[str, dict] = {}
     try:
-        profit_forecast = get_profit_forecast()
+        profit_forecast = _profit_forecast_for_run()
         if not profit_forecast:
             profit_success = False
             logger.warning("[penetration] 盈利预测数据为空（API 返回空结果），EPS 列将显示 --")
@@ -240,7 +278,7 @@ def _render_penetration_section(
     try:
         all_codes = list(set().union(*(e.get("codes", []) for e in pen_result["top10"])))
         a_codes = [c for c in all_codes if is_a_share_code(c)]
-        dividend_data = get_dividend_data(a_codes) if a_codes else {}
+        dividend_data = _dividend_data_for_run(a_codes) if a_codes else {}
         if not dividend_data and a_codes:
             dividend_success = False
             logger.warning("[penetration] 股息率数据为空（API 返回空结果）")

@@ -270,6 +270,29 @@ class TestWarmRenderContracts:
             _warm_render_contracts(holdings, [], MagicMock(), {"enable_fund_deep_analysis": False})
         style.assert_not_called()
 
+    def test_penetration_side_data_prefetched_once(self):
+        """穿透附属取数（盈利预测/股息率）预取后，渲染阶段不再重复载入。
+
+        回归背景：盈利预测（2000+ 只）在 HTML 渲染阶段载入约 2.5s，`区块装配` 因此
+        看起来像渲染慢；预取 + 单轮复用后渲染阶段只剩字符串拼装。
+        """
+        from src.python.core.models import Holding
+        from src.python.report import html_renderers, penetration
+        from src.python.report._run_scope import clear_run_memo
+
+        clear_run_memo()
+        holdings = [Holding("证券", "长江电力", "600900", shares=100.0, cost_price=10.0)]
+        pen_stub = {"top10": [{"codes": ["600900"], "name": "长江电力"}]}
+        with (
+            patch.object(penetration, "compute_penetration_top10", return_value=pen_stub),
+            patch.object(html_renderers, "get_profit_forecast", return_value={"600900": {"eps_2026e": 1.2}}) as fc,
+            patch.object(html_renderers, "get_dividend_data", return_value={}) as dv,
+        ):
+            html_renderers.prefetch_penetration_side_data(holdings, [])
+            html_renderers._render_penetration_section(holdings, [], MagicMock())
+        assert fc.call_count == 1, "预取 + 渲染只应载入一次盈利预测"
+        assert dv.call_count == 1, "股息率同样只应取一次"
+
     def test_style_prefetch_runs_when_flag_key_missing(self):
         """配置里没写开关 ≠ 关闭：解析器默认 True，预取必须跟着解析器走。
 
