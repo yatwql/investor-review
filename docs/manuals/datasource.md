@@ -22,7 +22,7 @@
 | 机构盈利预测 | akshare `stock_profit_forecast_em()` 全量获取 | — | `profit_forecast_` | 基础类 |
 | 行业资金流向 | akshare `stock_sector_fund_flow_rank()` 今日排名（主）/ `stock_fund_flow_industry("即时")` 同花顺行业资金流（备） | 主通道被限流时自动切备用 | `sector_flow_` | 基础类 |
 | 股票历史分红 | akshare `stock_history_dividend()` 无参全量拉取后按代码过滤 | — | `dividend_` | 基础类 |
-| 无风险利率（Rf） | akshare `bond_zh_us_rate`（国债收益率，单值 + 历史序列双键） | config.json 手动配置兜底 | `bond_yield_rf`/`bond_yield_history`¹ | 基础类 |
+| 无风险利率（Rf） | akshare 国债收益率接口（符号 `bond_zh_us_rate` 或 `bond_zh_us_yield_em`，按可用性探测；单值 + 历史序列双键） | config.json 手动配置兜底 | `bond_yield_rf`/`bond_yield_history`¹ | 基础类 |
 | 指数估值历史（市场温度估值因子） | akshare 乐咕 `stock_index_pe_lg`/`stock_index_pb_lg`（沪深300 月频 PE/PB，2005 起） | 过期缓存兜底（30 天）→ 仍不可得时温度第一因子回落点位分位 | `idx_valuation_` | 基础类 |
 | 财经新闻（多源聚合） | 新浪 + 东方财富 + 财联社 + 华尔街见闻 + akshare 并行获取，统一聚合去重 | — | `news_` | 基础类 |
 | 股票/ETF 历史日线 | 腾讯财经 K 线接口 | 新浪财经 K 线接口 → **同花顺官方日 K**（前复权，需 key；支持增量起点） | `history_stock_` | 历史走势 |

@@ -309,9 +309,7 @@ class DataSourceRegistry:
                 logger.info("[registry] %s 调用成功，重置退避级别(%d→0)", provider, state.backoff_level)
                 state.backoff_level = 0
                 state.cooldown_secs = (
-                    state.cooldown_override
-                    if state.cooldown_override is not None
-                    else _PROVIDER_COOLDOWN_SECS
+                    state.cooldown_override if state.cooldown_override is not None else _PROVIDER_COOLDOWN_SECS
                 )
                 changed = True
             elif state.total_successes == 1:

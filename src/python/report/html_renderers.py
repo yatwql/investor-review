@@ -364,7 +364,9 @@ def _fetch_fund_holdings_with_period(fund_codes: list[str]) -> dict[str, dict]:
     from src.python.report._run_scope import run_memo
 
     codes = tuple(sorted(str(c) for c in fund_codes or []))
-    return run_memo(("fund_holdings_with_period", codes), lambda: _fetch_fund_holdings_with_period_uncached(list(codes)))
+    return run_memo(
+        ("fund_holdings_with_period", codes), lambda: _fetch_fund_holdings_with_period_uncached(list(codes))
+    )
 
 
 def _fetch_fund_holdings_with_period_uncached(fund_codes: list[str]) -> dict[str, dict]:

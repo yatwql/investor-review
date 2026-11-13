@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.18.1-dev
-> **编号源**：`rf-next = 1139`（新增问题提出后更新为 +1；已用最大 rf-1135，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1140`（新增问题提出后更新为 +1；已用最大 rf-1135，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -45,7 +45,7 @@
 
 | 文件 | 现状与拆分方向 |
 |------|----------------|
-| `src/test/conftest.py` 1190 行（测试登记线 900） | fixture 族按域下沉（行情/LLM/网络/持久化各一模块），conftest 只留 autouse 装配与 marker 注册 |
+| `src/test/conftest.py` 1191 行（测试登记线 900） | fixture 族按域下沉（行情/LLM/网络/持久化各一模块），conftest 只留 autouse 装配与 marker 注册 |
 | `src/python/llm/generators_orchestrator.py` 656 行（主程序登记线 700） | 块装配与生成后一遍已下沉（`_llm_context_blocks` / `_llm_post_pass`）；预检键/指纹段后续可再下沉 `generators_orchestrator_cache.py` |
 | `src/python/llm/skeleton.py` 847 行（主程序登记线 700） | 模板数据与渲染逻辑可下沉 `llm/skeleton_*`（骨架模板 / 占位渲染 / 缓存归因 / 回写四簇并存） |
 | `src/python/cli/_handlers.py` 858 行（主程序登记线 700） | 命令处理器按渠道分文件（generate/config/data 三簇），保持入口薄壳 |
@@ -60,6 +60,7 @@
 
 | # | 问题 | 修复 |
 | --- | --- | --- |
+| **rf-1139** | akshare 1.19+ 把 `bond_zh_us_rate` 改名为 `bond_zh_us_yield_em`（数据集/中文列名不变），而取数只认旧名：CI 装到 1.20.42 后 11 条无风险利率用例在 `@patch("akshare.bond_zh_us_rate")` 处 AttributeError 直接失败；生产侧还把「属性不存在」当调用异常，白记一次 akshare 熔断失败（新版用户每份报告都误报数据源故障） | 新增 `_resolve_bond_yield_api()` 按版本探测两代 API（旧名优先，探测结果进程内记忆，缺失只降级不记熔断），两处调用点改走 `_bond_yield_frame()`；用例改为 patch 本方 seam（版本无关），新增 4 条探测/降级用例；文档四处口径同步 |
 | **rf-1138** | 全仓扫描发现 4 组「跨模块各写一份」的常量（注释里还写着「与 X 同值」）：退出码 `_EXIT_*`（CLI / Web worker 各一份）、push2 快照接口 URL（`core/market_hours` / `providers/eastmoney_industry`）、年化交易日数 252（3 个 analysis 模块）、最小样本 20 与份额容差 1e-3（各 2 个模块）——改一处漏改另一处会让两条路径口径分叉 | 单源归位：退出码与 push2 URL 进 `core/constants.py`（`EXIT_*` / `EASTMONEY_PUSH2_BASE`），统计/容差常量进 `analysis/_math_utils.py`（`TRADING_DAYS_PER_YEAR` / `_MIN_SAMPLE_DAYS` / `SHARES_EPS`），各调用点保留原名做别名；新增 `test_cross_layer_constants.py` 7 条守卫断言各处值等于单源值 |
 | **rf-1137** | 18h 自查发现两处新代码缺直接覆盖：`market_hours.is_otc_nav_disclosed` 在所有用例里都被 patch 掉（边界/时区换算没测过），`ProviderState.cooldown_override` 新增的持久化字段无落盘往返用例（重启后自定义冷却期会丢） | 补 6 条用例：披露时点边界（19:59/20:00/早间）、naive 视为北京时区、跨时区换算、自定义冷却期落盘回读 |
 | **rf-1136** | 「代码类型判定中心化」纪律被违反：`report/news_correlation._index_holdings` 自建 `"ETF" in name` 判定，既绕过 `core/code_utils.is_etf_by_name`，又因大小写敏感导致小写 `etf` 的品种不进 ETF 关键词扩展分支、且 `replace("ETF","")` 剥不掉，关键词召回与该品种的资产类型口径分叉 | 改为 `is_etf_by_name(name)` 判定 + `re.sub(r"(?i)etf", "", name)` 剥离，补 3 条回归用例（小写扩展 / 大写保持 / 判定单源） |

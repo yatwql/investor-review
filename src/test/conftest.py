@@ -368,7 +368,7 @@ def _auto_reset_module_state():
         from src.python.config._llm_pricing import invalidate_pricing_cache
         from src.python.config._llm_settings import invalidate_llm_config_cache
         from src.python.core import circuit_breaker, doctor, http_client
-        from src.python.fetcher import batch, factor_catalog_loader, source_adapter
+        from src.python.fetcher import batch, bond_yield, factor_catalog_loader, source_adapter
         from src.python.llm import observation, pacing
         from src.python.providers import (
             akshare_extras,
@@ -390,6 +390,7 @@ def _auto_reset_module_state():
         http_client.reset_transport_factory()
         batch.clear_rate_limiter_cache()
         factor_catalog_loader.invalidate_catalog_cache()
+        bond_yield.reset_bond_yield_api_cache()
         source_adapter.reset_adapter_registry()
         observation.clear_llm_observation()
         pacing.reset_policies()

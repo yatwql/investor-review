@@ -154,7 +154,7 @@
 | 字段 | 说明 |
 |------|------|
 | **名称** | akshare 数据封装层 |
-| **用途** | 机构盈利预测（`stock_profit_forecast_em`）、行业资金流向（主 `stock_sector_fund_flow_rank` / 备 `stock_fund_flow_industry`）、历史分红（`stock_history_dividend`）、无风险利率（`bond_zh_us_rate`）、指数 PE/PB 估值历史（`stock_index_pe_lg`/`stock_index_pb_lg`，乐咕） |
+| **用途** | 机构盈利预测（`stock_profit_forecast_em`）、行业资金流向（主 `stock_sector_fund_flow_rank` / 备 `stock_fund_flow_industry`）、历史分红（`stock_history_dividend`）、无风险利率（符号 `bond_zh_us_rate` 或 `bond_zh_us_yield_em`，按可用性探测）、指数 PE/PB 估值历史（`stock_index_pe_lg`/`stock_index_pb_lg`，乐咕） |
 | **接口类型** | Python 库调用（通过 `ThreadPoolExecutor` 超时保护） |
 | **数据频率** | 盈利预测不定期，资金流向交易日实时，分红年度更新，利率每日 |
 | **可靠度** | ★★★☆☆——依赖 akshare 第三方库，接口变更频繁 |

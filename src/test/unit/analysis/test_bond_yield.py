@@ -62,7 +62,7 @@ class TestBondYieldFetcher:
 
     @patch("src.python.fetcher.bond_yield.cache_get")
     @patch("src.python.fetcher.bond_yield.get_config")
-    @patch("akshare.bond_zh_us_rate")
+    @patch("src.python.fetcher.bond_yield._bond_yield_frame")
     def test_normal_fetch(
         self,
         mock_bond_rate: MagicMock,
@@ -84,7 +84,7 @@ class TestBondYieldFetcher:
 
     @patch("src.python.fetcher.bond_yield.cache_get")
     @patch("src.python.fetcher.bond_yield.get_config")
-    @patch("akshare.bond_zh_us_rate")
+    @patch("src.python.fetcher.bond_yield._bond_yield_frame")
     def test_akshare_fallback_to_config(
         self,
         mock_bond_rate: MagicMock,
@@ -152,7 +152,7 @@ class TestBondYieldFetcher:
 
     @patch("src.python.fetcher.bond_yield.cache_get")
     @patch("src.python.fetcher.bond_yield.get_config")
-    @patch("akshare.bond_zh_us_rate")
+    @patch("src.python.fetcher.bond_yield._bond_yield_frame")
     def test_all_sources_unavailable(
         self,
         mock_bond_rate: MagicMock,
@@ -173,7 +173,7 @@ class TestBondYieldFetcher:
 
     @patch("src.python.fetcher.bond_yield.cache_get")
     @patch("src.python.fetcher.bond_yield.get_config")
-    @patch("akshare.bond_zh_us_rate")
+    @patch("src.python.fetcher.bond_yield._bond_yield_frame")
     def test_empty_dataframe(
         self,
         mock_bond_rate: MagicMock,
@@ -194,7 +194,7 @@ class TestBondYieldFetcher:
 
     @patch("src.python.fetcher.bond_yield.cache_get")
     @patch("src.python.fetcher.bond_yield.get_config")
-    @patch("akshare.bond_zh_us_rate")
+    @patch("src.python.fetcher.bond_yield._bond_yield_frame")
     def test_nan_value(
         self,
         mock_bond_rate: MagicMock,
@@ -230,7 +230,7 @@ class TestRiskFreeRateHistory:
 
     @patch("src.python.fetcher.bond_yield.cache_set")
     @patch("src.python.fetcher.bond_yield.cache_get", return_value=None)
-    @patch("akshare.bond_zh_us_rate")
+    @patch("src.python.fetcher.bond_yield._bond_yield_frame")
     def test_history_normal(self, mock_ak, _cg, _cs):
         """正常返回 → rate 转小数、NaN 行剔除。"""
         mock_ak.return_value = self._make_history_df()
@@ -242,7 +242,7 @@ class TestRiskFreeRateHistory:
 
     @patch("src.python.fetcher.bond_yield.cache_set")
     @patch("src.python.fetcher.bond_yield.cache_get", return_value=None)
-    @patch("akshare.bond_zh_us_rate")
+    @patch("src.python.fetcher.bond_yield._bond_yield_frame")
     def test_history_cache_hit(self, mock_ak, mock_cg, _cs):
         """缓存命中 → 不触达 akshare。"""
         cached = [{"date": "2026-01-01", "rate": 0.02}]
@@ -255,7 +255,7 @@ class TestRiskFreeRateHistory:
 
     @patch("src.python.fetcher.bond_yield.cache_set")
     @patch("src.python.fetcher.bond_yield.cache_get")
-    @patch("akshare.bond_zh_us_rate")
+    @patch("src.python.fetcher.bond_yield._bond_yield_frame")
     def test_history_empty_no_breaker_pollution(self, mock_ak, mock_cg, _cs):
         """空数据属代码级结果 → 返回兜底/None，不向共享熔断键记失败。"""
         mock_ak.return_value = pd.DataFrame()
@@ -270,7 +270,7 @@ class TestRiskFreeRateHistory:
 
     @patch("src.python.fetcher.bond_yield.cache_set")
     @patch("src.python.fetcher.bond_yield.cache_get")
-    @patch("akshare.bond_zh_us_rate")
+    @patch("src.python.fetcher.bond_yield._bond_yield_frame")
     def test_history_column_missing_no_breaker(self, mock_ak, mock_cg, _cs):
         """列缺失（接口改版）属代码级 → 不计熔断失败。"""
         mock_ak.return_value = pd.DataFrame({"日期": ["2026-07-17"], "其他列": [1.0]})
@@ -285,7 +285,7 @@ class TestRiskFreeRateHistory:
 
     @patch("src.python.fetcher.bond_yield.cache_set")
     @patch("src.python.fetcher.bond_yield.cache_get", return_value=None)
-    @patch("akshare.bond_zh_us_rate")
+    @patch("src.python.fetcher.bond_yield._bond_yield_frame")
     def test_history_exception_records_transport(self, mock_ak, _cg, _cs):
         """调用异常（传输级）→ 计入共享 akshare 熔断（与单值版同键同故障域）。"""
         mock_ak.side_effect = TimeoutError("boom")
@@ -299,7 +299,7 @@ class TestRiskFreeRateHistory:
 
     @patch("src.python.fetcher.bond_yield.cache_set")
     @patch("src.python.fetcher.bond_yield.cache_get")
-    @patch("akshare.bond_zh_us_rate")
+    @patch("src.python.fetcher.bond_yield._bond_yield_frame")
     def test_history_stale_fallback(self, mock_ak, mock_cg, _cs):
         """实时获取失败 → 7 天内旧缓存兜底（rf 日变动仅数 bp）。"""
         from src.python.core.constants import CACHE_WEEKLY

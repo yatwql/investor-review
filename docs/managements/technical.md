@@ -739,7 +739,7 @@ Provider Chain 采用**职责链（Chain of Responsibility）模式**：每个�
  │  industry:       东方财富 push2          →  行情页 quotedata      │
  │  fund_rank:      天天基金（直达）                                   │
  │  fund_hold:      天天基金 → 同花顺官方（需 key）                   │
- │  bond_yield:     akshare bond_zh_us_rate（国债收益率，无风险利率）│
+ │  bond_yield:     akshare bond_zh_us_rate / bond_zh_us_yield_em（无风险利率）│
  └──────────────────────────────────────────────────────────────────┘
 ```
 

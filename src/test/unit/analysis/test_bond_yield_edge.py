@@ -48,7 +48,7 @@ class TestBondYieldEdge:
 
     @patch("src.python.fetcher.bond_yield.cache_get")
     @patch("src.python.fetcher.bond_yield.get_config")
-    @patch("akshare.bond_zh_us_rate")
+    @patch("src.python.fetcher.bond_yield._bond_yield_frame")
     def test_config_negative_skipped(
         self,
         mock_bond: MagicMock,
@@ -69,7 +69,7 @@ class TestBondYieldEdge:
 
     @patch("src.python.fetcher.bond_yield.cache_get")
     @patch("src.python.fetcher.bond_yield.get_config")
-    @patch("akshare.bond_zh_us_rate")
+    @patch("src.python.fetcher.bond_yield._bond_yield_frame")
     def test_config_zero_skipped(
         self,
         mock_bond: MagicMock,
@@ -89,7 +89,7 @@ class TestBondYieldEdge:
 
     @patch("src.python.fetcher.bond_yield.cache_get")
     @patch("src.python.fetcher.bond_yield.get_config")
-    @patch("akshare.bond_zh_us_rate")
+    @patch("src.python.fetcher.bond_yield._bond_yield_frame")
     def test_config_non_numeric_skipped(
         self,
         mock_bond: MagicMock,
@@ -123,7 +123,7 @@ class TestBondYieldEdge:
 
     @patch("src.python.fetcher.bond_yield.cache_get")
     @patch("src.python.fetcher.bond_yield.get_config")
-    @patch("akshare.bond_zh_us_rate")
+    @patch("src.python.fetcher.bond_yield._bond_yield_frame")
     def test_get_config_raises_type_error(
         self,
         mock_bond: MagicMock,
@@ -143,7 +143,7 @@ class TestBondYieldEdge:
 
     @patch("src.python.fetcher.bond_yield.cache_get")
     @patch("src.python.fetcher.bond_yield.get_config")
-    @patch("akshare.bond_zh_us_rate")
+    @patch("src.python.fetcher.bond_yield._bond_yield_frame")
     def test_config_missing_key(
         self,
         mock_bond: MagicMock,
@@ -165,7 +165,7 @@ class TestBondYieldEdge:
 
     @patch("src.python.fetcher.bond_yield.cache_get")
     @patch("src.python.fetcher.bond_yield.get_config")
-    @patch("akshare.bond_zh_us_rate")
+    @patch("src.python.fetcher.bond_yield._bond_yield_frame")
     def test_cache_returns_dict(
         self,
         mock_bond: MagicMock,
@@ -212,7 +212,7 @@ class TestBondYieldEdge:
         mock_config.return_value = {"risk_free_rate": None}
 
         # 需要 mock akshare 避免真实调用
-        with patch("akshare.bond_zh_us_rate", return_value=None):
+        with patch("src.python.fetcher.bond_yield._bond_yield_frame", return_value=None):
             from src.python.fetcher.bond_yield import get_risk_free_rate
 
             rf = get_risk_free_rate(cache_ok=True)
@@ -247,7 +247,7 @@ class TestBondYieldEdge:
 
     @patch("src.python.fetcher.bond_yield.cache_get")
     @patch("src.python.fetcher.bond_yield.get_config")
-    @patch("akshare.bond_zh_us_rate")
+    @patch("src.python.fetcher.bond_yield._bond_yield_frame")
     def test_akshare_returns_none(
         self,
         mock_bond: MagicMock,
@@ -266,7 +266,7 @@ class TestBondYieldEdge:
 
     @patch("src.python.fetcher.bond_yield.cache_get")
     @patch("src.python.fetcher.bond_yield.get_config")
-    @patch("akshare.bond_zh_us_rate")
+    @patch("src.python.fetcher.bond_yield._bond_yield_frame")
     def test_akshare_general_exception(
         self,
         mock_bond: MagicMock,
@@ -287,7 +287,7 @@ class TestBondYieldEdge:
 
     @patch("src.python.fetcher.bond_yield.cache_get")
     @patch("src.python.fetcher.bond_yield.get_config")
-    @patch("akshare.bond_zh_us_rate")
+    @patch("src.python.fetcher.bond_yield._bond_yield_frame")
     def test_dataframe_too_few_columns(
         self,
         mock_bond: MagicMock,
@@ -307,7 +307,7 @@ class TestBondYieldEdge:
 
     @patch("src.python.fetcher.bond_yield.cache_get")
     @patch("src.python.fetcher.bond_yield.get_config")
-    @patch("akshare.bond_zh_us_rate")
+    @patch("src.python.fetcher.bond_yield._bond_yield_frame")
     def test_dataframe_empty_index(
         self,
         mock_bond: MagicMock,
@@ -327,7 +327,7 @@ class TestBondYieldEdge:
 
     @patch("src.python.fetcher.bond_yield.cache_get")
     @patch("src.python.fetcher.bond_yield.get_config")
-    @patch("akshare.bond_zh_us_rate")
+    @patch("src.python.fetcher.bond_yield._bond_yield_frame")
     def test_risk_free_rate_out_of_range(
         self,
         mock_bond: MagicMock,
@@ -357,8 +357,88 @@ class TestBondYieldEdge:
         mock_cache.return_value = None
         mock_config.return_value = {"risk_free_rate": None}
 
-        with patch("akshare.bond_zh_us_rate", side_effect=RuntimeError("API down")):
+        with patch("src.python.fetcher.bond_yield._bond_yield_frame", side_effect=RuntimeError("API down")):
             from src.python.fetcher.bond_yield import get_risk_free_rate
 
             rf = get_risk_free_rate(cache_ok=True)
             assert rf is None
+
+
+class TestAkshareApiRenameProbe:
+    """akshare 国债收益率 API 改名的能力探测（1.19+ 把 bond_zh_us_rate 改名）。
+
+    回归背景：CI 装到 akshare 1.20.42 后该旧名不存在——测试在 `@patch("akshare.bond_zh_us_rate")`
+    处 AttributeError 直接失败（11 条），生产侧则把「属性不存在」当调用异常、白记一次 akshare
+    熔断失败。修法是按版本探测 API 名（旧名 → 新名），都不可用时只降级、不记故障。
+    """
+
+    @pytest.fixture(autouse=True)
+    def _reset_probe(self):
+        from src.python.fetcher import bond_yield as by
+
+        by.reset_bond_yield_api_cache()
+        yield
+        by.reset_bond_yield_api_cache()
+
+    @staticmethod
+    def _fake_akshare(**attrs):
+        import types
+
+        return types.SimpleNamespace(**attrs)
+
+    def test_prefers_legacy_name(self):
+        from src.python.fetcher import bond_yield as by
+
+        calls = []
+        ak = self._fake_akshare(
+            bond_zh_us_rate=lambda: calls.append("legacy") or "df-legacy",
+            bond_zh_us_yield_em=lambda: calls.append("new") or "df-new",
+        )
+        assert by._resolve_bond_yield_api(ak) == "bond_zh_us_rate"
+        with (
+            patch("akshare.bond_zh_us_rate", ak.bond_zh_us_rate, create=True),
+            patch("akshare.bond_zh_us_yield_em", ak.bond_zh_us_yield_em, create=True),
+        ):
+            assert by._bond_yield_frame() == "df-legacy"
+        assert calls == ["legacy"]
+
+    def test_falls_back_to_renamed_api(self):
+        from src.python.fetcher import bond_yield as by
+
+        calls = []
+        ak = self._fake_akshare(bond_zh_us_yield_em=lambda: calls.append("new") or "df-new")
+        assert by._resolve_bond_yield_api(ak) == "bond_zh_us_yield_em"
+        with patch("akshare.bond_zh_us_yield_em", ak.bond_zh_us_yield_em, create=True):
+            assert by._bond_yield_frame() == "df-new"
+        assert calls == ["new"]
+
+    def test_missing_api_degrades_without_recording_failure(self):
+        """两代 API 都不存在：取数返回 None 且**不**记 akshare 传输级失败。"""
+        from src.python.fetcher import bond_yield as by
+
+        assert by._resolve_bond_yield_api(self._fake_akshare()) is None
+        with (
+            patch("src.python.fetcher.bond_yield.find_spec", return_value=object()),
+            patch("src.python.fetcher.bond_yield._bond_yield_frame", return_value=None),
+            patch("src.python.fetcher.bond_yield.get_config", return_value={"risk_free_rate": None}),
+            patch("src.python.fetcher.bond_yield.cache_get", return_value=None),
+            patch("src.python.core.provider_registry.get_registry") as reg,
+        ):
+            reg.return_value.is_circuit_broken.return_value = False
+            assert by.get_risk_free_rate() is None
+        reg.return_value.record_failure.assert_not_called()
+
+    def test_renamed_api_call_exception_still_records_failure(self):
+        """命名修好后真实调用抛错仍算数据源故障（不因探测逻辑放过真实异常）。"""
+        from src.python.fetcher import bond_yield as by
+
+        with (
+            patch("src.python.fetcher.bond_yield.find_spec", return_value=object()),
+            patch("src.python.fetcher.bond_yield._bond_yield_frame", side_effect=RuntimeError("boom")),
+            patch("src.python.fetcher.bond_yield.get_config", return_value={"risk_free_rate": None}),
+            patch("src.python.fetcher.bond_yield.cache_get", return_value=None),
+            patch("src.python.core.provider_registry.get_registry") as reg,
+        ):
+            reg.return_value.is_circuit_broken.return_value = False
+            assert by.get_risk_free_rate() is None
+        reg.return_value.record_failure.assert_called()

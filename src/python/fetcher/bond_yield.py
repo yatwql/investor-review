@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import logging
+from importlib.util import find_spec
 
 from src.python.cache import get as cache_get
 from src.python.cache import get_ttl
@@ -24,6 +25,53 @@ logger = logging.getLogger("invest")
 
 _CACHE_KEY_RF = "bond_yield_rf"
 _CACHE_KEY_HISTORY = "bond_yield_history"
+
+#: akshare 中美国债收益率 API 的可用名（按顺序探测，取第一个可调用的）。
+#: 该数据在同一版本线里出现过两个符号：`bond_zh_us_rate` 与 `bond_zh_us_yield_em`，
+#: 数据集与中文列名一致。固定只认其中一个，遇到不导出该符号的环境时会「取数抛
+#: AttributeError → 计一次 akshare 熔断失败」，把握手失败误报成数据源故障。
+_BOND_YIELD_APIS: tuple[str, ...] = ("bond_zh_us_rate", "bond_zh_us_yield_em")
+#: 本进程内的探测记忆：None = 尚未探测；"" = 两代 API 都不存在
+_bond_yield_api_name: str | None = None
+
+
+def _resolve_bond_yield_api(akshare_module: object) -> str | None:
+    """解析当前 akshare 版本可用的国债收益率 API 名（旧名优先），都不存在返回 None。"""
+    global _bond_yield_api_name
+    if _bond_yield_api_name is None:
+        for name in _BOND_YIELD_APIS:
+            if callable(getattr(akshare_module, name, None)):
+                _bond_yield_api_name = name
+                break
+        else:
+            _bond_yield_api_name = ""
+            logger.warning(
+                "无风险利率: 当前 akshare 未提供国债收益率 API（尝试过 %s），改走配置/缓存兜底",
+                "、".join(_BOND_YIELD_APIS),
+            )
+    return _bond_yield_api_name or None
+
+
+def reset_bond_yield_api_cache() -> None:
+    """丢弃 API 探测记忆（测试隔离；akshare 热升级后重新探测）。"""
+    global _bond_yield_api_name
+    _bond_yield_api_name = None
+
+
+def _bond_yield_frame():
+    """取 akshare 国债收益率原始 DataFrame（API 名按版本能力探测；不可用返回 None）。
+
+    返回值语义与 incl. 异常：API 不存在 → ``None``（**不算**数据源故障，不记熔断）；
+    API 存在但调用抛错 → 异常上抛，由调用方计入 akshare 传输级失败。
+    """
+    import akshare as ak
+
+    name = _resolve_bond_yield_api(ak)
+    if name is None:
+        return None
+    return getattr(ak, name)()
+
+
 # TTL 不在本模块声明：直读缓存注册表（bond_yield），避免与默认值双份维护
 _CACHE_TTL_RF = get_ttl("bond_yield")
 _CACHE_TTL_HISTORY = get_ttl("bond_yield")
@@ -95,16 +143,20 @@ def _fetch_from_akshare() -> float | None:
     """
     try:
         import pandas as pd
-
-        import akshare as ak
     except ImportError:
+        logger.warning("无风险利率: pandas 未安装，无法解析返回值")
+        return None
+    if find_spec("akshare") is None:
         logger.warning("无风险利率: akshare 未安装，无法获取")
         return None
 
     try:
-        df = ak.bond_zh_us_rate()
-        if df is None or df.empty:
-            logger.warning("无风险利率: bond_zh_us_rate 返回空数据")
+        df = _bond_yield_frame()
+        if df is None:
+            # API 缺失（akshare 改名/裁剪）：配置/缓存兜底，不记熔断失败
+            return None
+        if df.empty:
+            logger.warning("无风险利率: 国债收益率接口返回空数据")
             return None
 
         # 取最后一行（最新日期）的中国国债收益率 10 年
@@ -200,14 +252,12 @@ def _fetch_history_from_akshare() -> list[dict]:
     Returns:
         [{"date": "YYYY-MM-DD", "rate": float}, ...] 升序；失败返回 []。
     """
-    try:
-        import akshare as ak
-    except ImportError:
+    if find_spec("akshare") is None:
         logger.warning("无风险利率历史: akshare 未安装，无法获取")
         return []
 
     try:
-        df = ak.bond_zh_us_rate()
+        df = _bond_yield_frame()
     except Exception as e:
         # 调用异常（超时/断连/接口失效）：计入共享 akshare 熔断（与
         # get_risk_free_rate 同键同故障域——同一端点）
@@ -218,8 +268,10 @@ def _fetch_history_from_akshare() -> list[dict]:
         return []
 
     try:
-        if df is None or df.empty:
-            logger.warning("无风险利率历史: bond_zh_us_rate 返回空数据")
+        if df is None:
+            return []  # API 缺失：不记熔断失败（非数据源故障）
+        if df.empty:
+            logger.warning("无风险利率历史: 国债收益率接口返回空数据")
             return []
 
         china_10y_cols = [c for c in df.columns if "10" in str(c) and "中国" in str(c)]

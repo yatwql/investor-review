@@ -212,7 +212,7 @@
 | 行业资金流向 | akshare（东财 push2 主通道 / 同花顺行业资金流备用通道） | 同花顺（主通道被限流时自动切换） |
 | 股票历史分红 | akshare | — |
 | 基金经理数据 | 天天基金 | 档案页回退 |
-| 无风险利率（Rf） | akshare `bond_zh_us_rate`（Sina 国债收益率） | 手动配置兜底（config.json risk_free_rate） |
+| 无风险利率（Rf） | akshare `bond_zh_us_rate`（符号 `bond_zh_us_rate` 或 `bond_zh_us_yield_em`，代码按可用性探测）（中美国债收益率，取中国 10Y 列） | 手动配置兜底（config.json risk_free_rate） |
 | 个股/ETF 历史 K 线 | 腾讯财经 | 新浪财经 |
 | 场外基金历史净值 | 天天基金 | 东方财富 |
 | 指数历史 K 线（A 股指数） | 腾讯财经 | 新浪财经 |

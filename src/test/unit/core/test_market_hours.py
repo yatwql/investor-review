@@ -664,6 +664,7 @@ class TestIsIntradayTimestamp:
         assert is_intraday_timestamp(None) is False
         assert is_intraday_timestamp("not-a-ts") is False
 
+
 class TestOtcNavDisclosed:
     """场外净值披露时点判定（价格缓存新鲜度分档的依据）。
 

@@ -738,7 +738,6 @@ class TestGetPrevTradingDay(unittest.TestCase):
             self.assertEqual(result, "2026-06-25")
 
 
-
 class TestTodayProfitReference(unittest.TestCase):
     """本日盈亏「参考」口径：滞后净值照实呈现，但不计入组合合计。
 
@@ -773,6 +772,7 @@ class TestTodayProfitReference(unittest.TestCase):
     def test_count_matches_rows(self):
         rows = [self._row(1.0, True), self._row(2.0, False), self._row(3.0, True)]
         self.assertEqual(mv.count_today_profit_reference(rows), 2)
+
 
 class TestTradingCalendarConcurrency(unittest.TestCase):
     """回归测试：并发调用交易日历会串行化 akshare(V8) 调用。

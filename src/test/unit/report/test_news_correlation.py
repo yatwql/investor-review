@@ -901,6 +901,7 @@ class TestNewsTableMobileLayout(unittest.TestCase):
         assert ".news-table td.news-title::before { display: none; }" in self.html
         assert ".news-table td.news-seq::before { display: none; }" in self.html
 
+
 class TestEtfNameExpansion(unittest.TestCase):
     """ETF 名称扩展走 code_utils 单源（大小写不敏感）。
 

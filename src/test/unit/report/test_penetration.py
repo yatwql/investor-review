@@ -557,6 +557,7 @@ class TestPenetrationRatioNormalization(unittest.TestCase):
         for item in top10:
             self.assertGreaterEqual(item.get("ratio_pct", -1), 0, f"{item.get('name')} 占比为负")
 
+
 class TestRunScopedMemo(unittest.TestCase):
     """单轮复用：同一次报告里穿透只算一次（HTML 端与 Excel 端各调一遍的重复取数）。
 
@@ -593,6 +594,7 @@ class TestRunScopedMemo(unittest.TestCase):
             pene.compute_penetration_top10(holdings, details)
             pene.compute_penetration_top10(holdings, details_changed)
         self.assertEqual(calls["n"], 2)
+
 
 class TestRunMemoConcurrency(unittest.TestCase):
     """单轮复用并发安全：同 key 并发只算一次，不同 key 互不阻塞。
