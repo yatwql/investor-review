@@ -17,7 +17,14 @@ from src.python.core.cancel import CancelToken, StageCancelled
 from src.python.core.perf import PerfCollector
 from src.python.report.progress import SilentProgressReporter
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
+pytestmark = [
+    pytest.mark.unit,
+    pytest.mark.unit_report,
+    # 报告生成会顺带起数据源健康检查线程（真实网络 + akshare V8 初始化）：
+    # 单测必须走离线桩，否则探针真的发包（慢）且 py_mini_racer 的 V8 并发初始化
+    # 会段错误崩掉 xdist worker。
+    pytest.mark.usefixtures("offline_external_sources"),
+]
 
 
 class TestCancelToken:
