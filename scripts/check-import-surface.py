@@ -8,6 +8,7 @@
   private-all 公共 __all__  包 `__init__.py` 的 `__all__` 含 `_` 私有名
   cross-private 跨包私有导入  跨包 `from src.python.<pkg>._x import ...`（同包与测试私有导入除外）
   dynamic-target 动态导入字面量 `importlib.import_module("...")` 的直接字符串目标不可解析
+  layer-inversion 分层越界      analysis 层（纯计算）import `report/` 或 `llm/`（须改由 `core/` 提供共用面）
   exception-table 例外表自审   每条例外须齐 owner/reason/expiry/replacement；`expiry` 到期即
                             finding（续期须显式改日期并复核理由），且登记项须仍命中违规
                             （规则已修复却留着例外 → 腐化成永久豁免，须清理）
@@ -213,6 +214,43 @@ def scan_dynamic(root: Path = PY_ROOT, exceptions=None) -> list[str]:
     return findings
 
 
+def scan_layer_inversion(root: Path = PY_ROOT, exceptions=None) -> list[str]:
+    """layer-inversion：analysis 层（纯计算）不得 import `report/` 或 `llm/`。
+
+    分层纪律：analysis 位于 core 之上、fetcher/report/llm 之下（上层单向依赖下层）。
+    两侧共用的业务约束应下沉 `core/`（例：`core/recommendation_policy.py`）。
+    存量越界走例外表（`path` = 违规文件，`name` = 被导入的目标模块），到期须收敛。
+    """
+    exceptions = exceptions or {}
+    findings: list[str] = []
+    analysis_root = root / "analysis"
+    if not analysis_root.exists():
+        return findings
+    forbidden = ("report", "llm")
+    for path in sorted(analysis_root.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            targets: list[str] = []
+            lineno = 0
+            if isinstance(node, ast.ImportFrom) and node.module:
+                # 只判模块依赖面（`from a.b import c` 的目标是 `a.b`）：符号级展开会把
+                # 例外表逼成逐符号登记，且分层纪律看的是模块依赖方向
+                targets = [node.module]
+                lineno = node.lineno
+            elif isinstance(node, ast.Import):
+                targets = [a.name for a in node.names]
+                lineno = node.lineno
+            for target in targets:
+                parts = target.split(".")
+                if len(parts) < 3 or parts[0] != "src" or parts[1] != "python" or parts[2] not in forbidden:
+                    continue
+                if _excepted(exceptions, "layer-inversion", path, target):
+                    continue
+                findings.append(f"[layer-inversion] {rel(path)}:{lineno} analysis 不得依赖 {target}")
+                break
+    return findings
+
+
 def collect(root: Path = PY_ROOT) -> tuple[list[str], dict[str, int]]:
     exceptions = _load_exceptions()
     if exceptions.load_error:
@@ -224,6 +262,7 @@ def collect(root: Path = PY_ROOT) -> tuple[list[str], dict[str, int]]:
         "private-all": scan_private_all(root, exceptions),
         "cross-private": scan_cross_private(root, exceptions),
         "dynamic-target": scan_dynamic(root, exceptions),
+        "layer-inversion": scan_layer_inversion(root, exceptions),
     }
     # 例外表自审放在扫描之后：`used` 已由上述四条规则填满，才能判出失效例外
     groups["exception-table"] = audit_exceptions(exceptions)

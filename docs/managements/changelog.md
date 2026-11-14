@@ -24,6 +24,8 @@
 
 ### 新增
 
+- **分层越界防新增（架构约束：analysis 单向依赖）**：`check-import-surface` 新增 `layer-inversion` 规则——analysis 层 import `report/` 或 `llm/` 即报 finding；6 处存量经例外表登记（含到期日与收敛方向，`technical.md` 同步「存量分层例外」表），到期未下沉即门禁红，存量不再被当先例。
+
 - **不动作命中率进自检输入（plan-252 P3）**：`decision_ledger.inaction_summary_line()` 作为文案单源（样本不足只给命中/总数），经 `run_self_review` → `generate_self_review` → 自检提示词「不动作建议命中率」段注入；同时并入自检指纹（`self_review_fingerprint_parts["inaction"]`，空串与不传逐字节等价），因此账本演进会让自检重算而缓存不会错配。仅作提示，不改权重、不参与裁决。
 
 - **决策书渲染（plan-253 P3 后半）**：新增 `report/decision_book.py`——把各模块结构化契约汇总成行动建议章可读块「决策书（主张与证据）」（判决 + 主张/证据/失效条件），HTML 用折叠块、Excel 同页签小节，契约键 `decision_basis_data.decision_book`；开关关闭 / 无契约 / 匿名化模式非 off 时键缺席（产物逐字节不变，证据 id 内代码脱敏记为 Known Gap）。补证循环按条件暂缓：开关实际运行 ≥2 周后若 `evidence_needed` 占模块次 ≥20% 再做。决策书改为**渲染期幂等补挂（rf-1141）**（判断依据块装配早于 LLM 契约，原有挂载点恒为空）；已用 `--feature llm_research_contract=true` 真机跑通全量报告：HTML/Excel 均出现决策书块（判决=证据齐备，主张带证据 id 与失效条件），另补「旧 payload 无 claims 兼容」与「证据索引 ≤ 输入块 15%」两条验收用例。

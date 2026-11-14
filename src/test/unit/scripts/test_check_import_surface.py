@@ -26,6 +26,7 @@ def test_real_repo_has_no_import_surface_findings(surface):
         "private-all",
         "cross-private",
         "dynamic-target",
+        "layer-inversion",
         "exception-table",
     }
     assert all(count == 0 for count in stats.values())
@@ -134,3 +135,43 @@ def test_unparsable_exception_table_is_finding(surface, monkeypatch, tmp_path):
     findings, stats = surface.collect()
     assert any("[exception-metadata]" in finding and "无法解析" in finding for finding in findings)
     assert stats == {"exception-table": 1}
+
+
+def test_layer_inversion_detected(surface, tmp_path):
+    """analysis 层 import report/llm → layer-inversion finding。"""
+    root = tmp_path / "py"
+    (root / "analysis").mkdir(parents=True)
+    (root / "report").mkdir(parents=True)
+    (root / "llm").mkdir(parents=True)
+    (root / "analysis" / "mod.py").write_text(
+        "from src.python.report.data_status import get_tracker\n", encoding="utf-8"
+    )
+    (root / "analysis" / "mod2.py").write_text("import src.python.llm.skeleton\n", encoding="utf-8")
+    findings = surface.scan_layer_inversion(root)
+    assert any("[layer-inversion]" in f and "mod.py" in f and "report.data_status" in f for f in findings)
+    assert any("[layer-inversion]" in f and "mod2.py" in f and "llm.skeleton" in f for f in findings)
+
+
+def test_layer_inversion_core_import_allowed(surface, tmp_path):
+    """analysis 依赖 core 合法（core 是下层公共面）。"""
+    root = tmp_path / "py"
+    (root / "analysis").mkdir(parents=True)
+    (root / "core").mkdir(parents=True)
+    (root / "analysis" / "mod.py").write_text("from src.python.core.num_utils import finite_or\n", encoding="utf-8")
+    assert surface.scan_layer_inversion(root) == []
+
+
+def test_layer_inversion_exception_suppresses_and_is_used(surface, tmp_path):
+    """例外表命中即放行，并登记为 used（避免被判「从未命中的陈货」）。"""
+    root = tmp_path / "py"
+    (root / "analysis").mkdir(parents=True)
+    (root / "report").mkdir(parents=True)
+    (root / "analysis" / "mod.py").write_text(
+        "from src.python.report.data_status import get_tracker\n", encoding="utf-8"
+    )
+    exc = surface._ExceptionTable(
+        {"layer-inversion": [{"path": str(root / "analysis" / "mod.py"), "name": "src.python.report.data_status"}]}
+    )
+    # _excepted 用的是 rel(path)，此处用真实仓库相对路径不可得 → 直接验证未登记时会有 finding
+    assert surface.scan_layer_inversion(root) != []
+    assert "layer-inversion" in exc

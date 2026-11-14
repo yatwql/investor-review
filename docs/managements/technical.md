@@ -3939,6 +3939,21 @@ web/ (Web 服务层，薄入口)
 | LLM 响应解析 | `llm/_api_responses.py` | `llm/api_base.py` 公共 API | llm / report | 公共常量/函数保留；内部 helper 直接导入 owner |
 | Web 生成 / 健康路由 | `web/run_generation.py`、`web/handlers_health.py` | `web/handlers.py` 仅路由聚合 | web / tests | 测试 patch 指向 owner；门面不再转出私有实现 |
 
+**存量分层例外（analysis → report/llm，冻结不新增）**：`check-import-surface` 的 `layer-inversion` 规则拦截**新增**越界；
+下列存量经例外表登记（`scripts/_import_surface_exceptions.json`，含到期日与收敛方向），到期须下沉或续期并复核理由：
+
+| 违规文件 | 被依赖的 report 模块 | 暂不下沉的理由 | 收敛方向 |
+|:---|:---|:---|:---|
+| `analysis/circuit_breaker_wrapper.py` | `report.data_status` | 指标熔断需把降级事件登记进 DegradationTracker，该类现居 report 层 | tracker 登记面（`begin_report`/`mark_*`）下沉 `core/degradation.py`，report 只留报告侧装配 |
+| `analysis/holding_change_events.py` | `report.history_snapshot` | 快照读取/去重原语在 report 侧，事件推断需按同一口径读盘 | 抽 core 级快照读取原语，report 只保留区块装配 |
+| `analysis/portfolio_evolution.py` | `report.history_snapshot` | 同上（演进趋势聚合同口径读快照） | 同上 |
+| `analysis/snapshot_diff.py` | `report.history_snapshot` | 同上（差异计算同口径取数） | 同上 |
+| `analysis/prosperity_framework.py` | `report.penetration` | 景气度评分复用穿透分类（基金→底层资产映射） | 穿透纯分类计算下沉 `analysis`，report 改为消费 |
+| `analysis/prosperity_inputs.py` | `report.penetration` | 同上（输入装配复用分类结果） | 同上 |
+
+> 另：`core/check_sources.py` 直连 `providers/`/`fetcher/` 属**探针模块职责**（连通性检查必须在链外直呼各源），
+> 不入本规则例外表，理由记在模块 docstring；新增探针源时保持同一形态。
+
 **登记例外**（保留理由见代码注释与 `check-import-surface` 的例外登记口径）：
 
 - `analysis/__init__.py`、`core/registry.py`、`llm/__init__.py`、`llm/fact_checker/__init__.py`：包级公共聚合面，`__all__` 只列公共 API；其中 `noqa: F401` 为门面再导出。
