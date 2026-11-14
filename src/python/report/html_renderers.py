@@ -562,6 +562,27 @@ def _render_news_section(
         return [], _default_meta
 
 
+def _with_contract_blocks(gm: str | None, er: str | None, hc: str | None, pd: str | None):
+    """四模块正文剥离机器可读契约行，并在各自末尾追加「主张与证据」折叠块。
+
+    开关关闭时运行作用域无契约载体 → 折叠块为空串，正文与既有产物一致。
+    """
+    from src.python.report.llm_contract_block import contract_html, strip_contract_line
+
+    pairs = zip(
+        ("global_macro", "expert_review", "health_check", "penetration_deep"),
+        (gm, er, hc, pd),
+    )
+    out = []
+    for module_key, content in pairs:
+        if not content:
+            out.append(content)
+            continue
+        body = strip_contract_line(content) or ""
+        out.append(body + contract_html(module_key))
+    return tuple(out)
+
+
 def _render_llm_content_section(
     enable_llm: bool,
     llm_content: tuple | None,
@@ -577,6 +598,7 @@ def _render_llm_content_section(
     """
     if llm_content is not None:
         gm, er, hc, pd = llm_content
+        gm, er, hc, pd = _with_contract_blocks(gm, er, hc, pd)
         return (bool(gm or er or hc or pd), gm, er, hc, pd)
 
     if not enable_llm:

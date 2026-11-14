@@ -369,7 +369,7 @@ def _auto_reset_module_state():
         from src.python.config._llm_settings import invalidate_llm_config_cache
         from src.python.core import circuit_breaker, doctor, http_client
         from src.python.fetcher import batch, bond_yield, factor_catalog_loader, source_adapter
-        from src.python.llm import observation, pacing
+        from src.python.llm import observation, pacing, research_contract
         from src.python.providers import (
             akshare_extras,
             cninfo,
@@ -393,6 +393,7 @@ def _auto_reset_module_state():
         bond_yield.reset_bond_yield_api_cache()
         source_adapter.reset_adapter_registry()
         observation.clear_llm_observation()
+        research_contract.reset_contract_state()
         pacing.reset_policies()
         akshare_extras.reset_failure_state()
         cninfo.reset_cninfo_limiter()

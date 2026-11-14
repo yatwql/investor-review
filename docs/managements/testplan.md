@@ -552,6 +552,7 @@
 | R-DIFF-03 | `src/test/unit/analysis/test_snapshot_diff.py` + `src/test/unit/analysis/test_snapshot_diff_edge.py` | 批 4 |
 | R-DIFF-04 | `src/test/unit/report/test_evolution_sheet.py` + `src/test/unit/report/test_evolution_html.py` | 批 4 |
 | R-LLM-01 | `src/test/unit/ui/test_tui_menu.py` | 批 5 |
+| R-LLM-16 | `src/test/unit/llm/test_research_contract.py` | 批 6 |
 | R-LLM-02 | `src/test/unit/config/test_features.py` + `src/test/unit/llm/test_generate_all_llm.py` | 批 5 |
 | R-LLM-03 | `src/test/unit/llm/test_llm_api_multi.py` + `src/test/unit/llm/test_llm_utils.py` | 批 5 |
 | R-LLM-04 | `src/test/unit/llm/test_llm_fallback.py` | 批 5 |

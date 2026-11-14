@@ -210,6 +210,23 @@ def scenario_mandate_cache_suffix() -> str:
     return "" if is_feature_enabled("decision_basis") else "_ms"
 
 
+def _append_research_contract(parts: list[str], *, holdings_details, penetrated_assets, metrics=None) -> None:
+    """开关开启时追加「主张+证据+判决」契约段与证据索引（关闭时零行为，逐字节不变）。"""
+    from src.python.llm.research_contract import build_instruction, is_enabled, record_evidence_index
+
+    if not is_enabled():
+        return
+    from src.python.llm.evidence_index import build_evidence_index
+
+    index = build_evidence_index(
+        holdings_details=holdings_details,
+        penetrated_assets=penetrated_assets,
+        metrics=metrics,
+    )
+    record_evidence_index(index)
+    parts.append(build_instruction(index))
+
+
 def _build_expert_review_prompt(
     total_mv: float,
     total_cost: float,
@@ -369,6 +386,13 @@ def _build_expert_review_prompt(
             parts.append("\n" + scenario_mandate())
 
     # ── 集中度问答引导（辩论流程内建段落，仅辩论路径注入） ──
+
+    _append_research_contract(
+        parts,
+        holdings_details=holdings_details,
+        penetrated_assets=penetrated_assets,
+        metrics=metrics,
+    )
     if include_concentration_qa:
         try:
             from src.python.config import get_llm_config
@@ -477,6 +501,8 @@ def _build_health_check_prompt(
         "4. 持仓排名已通过【持仓TOP3】段明确给出，不得自行推测「最大持仓」或「第一重仓」。",
         f"5. {MONEY_SIGN_NOTE}",
     ]
+    # 结构化契约（默认关）：主张/证据/判决 + 证据索引；关闭时提示词逐字节不变
+    _append_research_contract(parts, holdings_details=holdings_details, penetrated_assets=penetrated_assets)
     return "\n".join(parts)
 
 

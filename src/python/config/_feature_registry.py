@@ -146,6 +146,13 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         False,
         True,
     ),
+    "llm_research_contract": FeatureSwitchDef(
+        "LLM 复盘结构化契约",
+        "要求 LLM 输出「主张 + 证据 + 判决」结构头并按证据索引机检（默认关；关闭时提示词与产物逐字节不变）",
+        GROUP_MECHANISM,
+        False,
+        True,
+    ),
     "decision_reflection": FeatureSwitchDef(
         "决策跨期反思闭环",
         "登记决策 → 真实行情结算命中率 → 教训回灌专家复盘提示词",

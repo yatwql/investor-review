@@ -3599,6 +3599,9 @@ make_http_client(timeout=10.0) → httpx.Client
 | `decision_record` | 确定性卖出建议登记（仅带持仓基线者落账，入账必可结算） | 行动建议 | 监控 | 随 `decision_reflection` |
 | `decision_settlement` | 到期决策结算（幂等：同 decision 只结一次，行情不可得保持 pending） | 行动建议 | 监控 | 随 `decision_reflection` |
 | `decision_llm_capture` | LLM 操作建议表解析登记（结构化优先 → 表格兜底；缺行/缺方向/「不操作」行按原因记 INFO 后跳过，异常不中断报告） | 行动建议 | 监控 | 随 `decision_reflection` |
+| `research_contract` | LLM 复盘结构化契约（主张/证据/判决的解析、校验与运行作用域载体；复用决策头括号扫描，不自建解析器；默认关） | LLM 生成 | LLM 生成 | 开关 `llm_research_contract` |
+| `evidence_index` | 证据索引（由该模块提示词输入块生成 `ev:<kind>:<键|哈希>` + 一行摘要；模型只能引用它看得到的内容） | LLM 生成 | LLM 生成 | 开关 `llm_research_contract` |
+| `llm_contract_block` | 契约的展示层装配（HTML 折叠块 / Excel 小节；正文机器可读行展示前剥离） | 行动建议 | 展示 | 开关 `llm_research_contract` |
 | `decision_eval_policy` | 建议事后评估政策单源（方向阈值 1.5% / 不动作容忍带 2.0% / 样本门槛 20 / 视界单位 + 对外 `EVAL_POLICY` 声明；零依赖，账本单向引用） | 行动建议 | 分析计算 | 随 `decision_reflection` |
 | `classify_flat_hit` | 不动作类（持有/观望/不操作）事后判定（`\|区间涨跌\| < 容忍带` ⇒ 判对；无收益/非数值 ⇒ 不可判） | 行动建议 | 分析计算 | 随 `decision_reflection` |
 | `summarize_inaction` | 不动作类折叠统计（按 `settlement.flat_hit` 汇总 total/hit/hit_rate/样本充足性与载体分项；旧账本无字段不计样本） | 行动建议 | 分析计算 | 随 `decision_reflection` |

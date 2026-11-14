@@ -24,6 +24,8 @@
 
 ### 新增
 
+- **LLM 复盘结论结构化契约（plan-253 P1，开关 `llm_research_contract` 默认关）**：新增 `llm/evidence_index.py`（由该模块提示词输入块生成 `ev:<kind>:<稳定键|8 位哈希>` 证据索引，七类来源、只给摘要）、`llm/research_contract.py`（契约头解析——复用决策头括号扫描；校验证据存在/失效条件必填/主张上限，并给 ready/revise/evidence_needed/reject 判决，模型自证 ready 不被采信）、`report/llm_contract_block.py`（展示层：HTML 折叠块 + Excel 小节，正文机器可读行展示前剥离）；生成后一遍落运行作用域载体，报告边界清空。开关关闭时提示词与产物逐字节不变；提示词文本盐递增 `rate-caliber-6`（一次性换键）。P2（预算受限补证）与 P3（决策书 + 建议硬约束）未实施。
+
 - **建议后验评估：不动作类纳入判定 + 政策单源（plan-252 P1/P2）**：新增 `core/decision_eval_policy.py` 作评估口径唯一事实位（方向阈值 1.5%、不动作容忍带 2.0%、样本门槛 20、视界单位；账本单向引用并保留原名），`direction == 0`（持有/观望/不操作）改为**照常结算**并落 `flat_hit`（此前直接跳过、从不评估），`fold_ledger` 新增 `inaction` 分项与 `by_carrier.inaction_*`（旧账本无字段视为未判、不计样本、不回填）；呈现：判断依据块历史表现表下方一行「不动作建议」（样本不足只给命中/总数、无样本 `—`，双端同源）、历史决策复盘块给「判对 / 判偏 / 未到期」、`doctor` 账本概览并列不动作命中。
 
 ### 修复

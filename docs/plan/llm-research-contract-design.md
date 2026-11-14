@@ -1,6 +1,6 @@
 # LLM 复盘结论结构化契约（claim / evidence / verdict）（plan-253 设计）
 
-> 状态：**设计稿，未实施**。立项见 [`plan.md`](../managements/plan.md) 的 `plan-253`；
+> 状态：**P1 已实施（默认关）；P2 补证循环与 P3 决策书未实施**。立项见 [`plan.md`](../managements/plan.md) 的 `plan-253`；
 > 借鉴来源与取舍见 [`panwatch-borrowing-review.md`](panwatch-borrowing-review.md)。
 
 ## 1. 背景与缺口
@@ -137,9 +137,9 @@
 
 | 阶段 | 交付 | 验收 |
 | :--- | :--- | :--- |
-| P1 | 证据索引 + 主张契约 + 校验（含时点）+ 章节末尾折叠块（开关关=零变化） | 契约矩阵（未知 id/空证据/越界/缺 invalidations）；开关关逐字节回归；证据 id 可回指提示词块；旧缓存无 claims 不报错 |
-| P2 | verdict 枚举 + 一次补证（键盐）+ 统计 | verdict 分布可读；补证后转 ready 比例可读；预算耗尽记 `budget_exhausted`；补证达上限收口「未验证」 |
-| P3 | 决策书（行动建议章 LLM 解读位）+ 建议硬约束 | review/blocked 带数量被拒（单测）；HTML/Excel 同源；`purchase_status` 联动；匿名化掩码一致 |
+| P1 | 证据索引 + 主张契约 + 校验 + 章节末尾折叠块（开关关=零变化）——**已实施** | 契约矩阵（未知 id/空证据/越界/缺 invalidations）；开关关逐字节回归；证据 id 可回指提示词块；旧缓存无 claims 不报错 |
+| P2 | verdict 枚举（已在 P1 派生）+ 一次补证（键盐）+ 统计——**补证循环未实施** | verdict 分布可读；补证后转 ready 比例可读；预算耗尽记 `budget_exhausted`；补证达上限收口「未验证」 |
+| P3 | 决策书（行动建议章 LLM 解读位）+ 建议硬约束——**未实施** | review/blocked 带数量被拒（单测）；HTML/Excel 同源；`purchase_status` 联动；匿名化掩码一致 |
 
 ## 4. 测试方案
 
