@@ -359,3 +359,53 @@ class TestAcceptanceGuards:
         index = {f"ev:hold:{i:06d}": "摘要" for i in range(2000)}
         text = rc.build_instruction(index)
         assert len(text) <= rc.DEFAULT_INDEX_BUDGET + 600
+
+
+class TestContractMetrics:
+    """结构化契约埋点：条数 / 校验错误 / 判决分布 / 索引用量（供用量页签展示）。"""
+
+    def test_metrics_aggregate_and_reset(self):
+        set_feature_enabled(rc.FEATURE_FLAG, True)
+        rc.record_evidence_index({"ev:hold:600900": "长江电力"})
+        rc.record_module_contract(
+            "expert_review",
+            {
+                "claims": [{"id": "c1", "statement": "s", "evidence": ["ev:hold:600900"], "invalidations": ["i"]}],
+                "errors": [],
+                "verdict": rc.VERDICT_READY,
+            },
+        )
+        rc.record_module_contract(
+            "health_check",
+            {"claims": [], "errors": ["evidence_missing:c1"], "verdict": rc.VERDICT_EVIDENCE_NEEDED},
+        )
+        metrics = rc.contract_metrics()
+        assert metrics["modules"] == 2
+        assert metrics["claims"] == 1
+        assert metrics["validation_errors"] == 1
+        assert metrics["verdicts"] == {rc.VERDICT_READY: 1, rc.VERDICT_EVIDENCE_NEEDED: 1}
+        assert metrics["index_ids"] == 1
+        assert metrics["index_chars"] > 0
+        rc.reset_contract_state()
+        empty = rc.contract_metrics()
+        assert empty["modules"] == 0 and empty["index_chars"] == 0
+
+    def test_metrics_line_format(self):
+        line = rc.contract_metrics_line(
+            {
+                "modules": 4,
+                "claims": 6,
+                "validation_errors": 0,
+                "verdicts": {rc.VERDICT_READY: 4},
+                "index_ids": 12,
+                "index_chars": 900,
+            }
+        )
+        assert line.startswith("结构化契约：")
+        assert "4 模块" in line and "主张 6 条" in line
+        assert "证据齐备×4" in line
+        assert "证据索引 12 条（900 字符）" in line
+
+    def test_metrics_line_empty_without_data(self):
+        assert rc.contract_metrics_line({}) == ""
+        assert rc.contract_metrics_line(None) == ""

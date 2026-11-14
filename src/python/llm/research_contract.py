@@ -51,6 +51,8 @@ _MODULE_CONTRACTS: dict[str, dict[str, Any]] = {}
 #: 运行作用域载体：本轮注入提示词的证据索引（校验与渲染复用同一份，避免「提示词里没有、
 #: 校验却放行」的错配）
 _EVIDENCE_INDEX: dict[str, str] = {}
+#: 本轮索引体量（字符数，含 id 与摘要）——用量页签埋点
+_INDEX_CHARS = 0
 
 
 def is_enabled() -> bool:
@@ -62,14 +64,19 @@ def is_enabled() -> bool:
 
 def reset_contract_state() -> None:
     """清空运行作用域载体（报告边界与测试隔离调用）。"""
+    global _INDEX_CHARS
     _MODULE_CONTRACTS.clear()
     _EVIDENCE_INDEX.clear()
+    _INDEX_CHARS = 0
 
 
 def record_evidence_index(index: dict[str, str]) -> None:
-    """登记本轮注入提示词的证据索引（多次调用按并集累积）。"""
+    """登记本轮注入提示词的证据索引（多次调用按并集累积，并记体量供埋点）。"""
+    global _INDEX_CHARS
     for eid, summary in (index or {}).items():
-        _EVIDENCE_INDEX.setdefault(eid, summary)
+        if eid not in _EVIDENCE_INDEX:
+            _EVIDENCE_INDEX[eid] = summary
+            _INDEX_CHARS += len(eid) + len(summary)
 
 
 def get_evidence_index() -> dict[str, str]:
@@ -99,6 +106,52 @@ def _index_budget(input_chars: int | None) -> int:
     if not input_chars or input_chars <= 0:
         return DEFAULT_INDEX_BUDGET
     return max(200, int(input_chars * MAX_INDEX_RATIO))
+
+
+def contract_metrics() -> dict[str, Any]:
+    """本轮结构化契约的埋点指标（无契约时全零）。
+
+    Returns:
+        {modules, claims, validation_errors, verdicts: {verdict: n}, index_ids, index_chars}
+    """
+    modules = len(_MODULE_CONTRACTS)
+    claims = 0
+    errors = 0
+    verdicts: dict[str, int] = {}
+    for payload in _MODULE_CONTRACTS.values():
+        claims += len(payload.get("claims") or [])
+        errors += len(payload.get("errors") or [])
+        verdict = str(payload.get("verdict") or "")
+        if verdict:
+            verdicts[verdict] = verdicts.get(verdict, 0) + 1
+    return {
+        "modules": modules,
+        "claims": claims,
+        "validation_errors": errors,
+        "verdicts": verdicts,
+        "index_ids": len(_EVIDENCE_INDEX),
+        "index_chars": _INDEX_CHARS,
+    }
+
+
+def contract_metrics_line(metrics: dict[str, Any] | None) -> str:
+    """指标的一句话展示（用量页签单源文案；无数据返回空串）。"""
+    data = metrics or {}
+    if not data.get("modules") and not data.get("index_ids"):
+        return ""
+    verdicts = data.get("verdicts") or {}
+    verdict_text = "、".join(
+        f"{VERDICT_LABELS.get(k, k)}×{v}" for k, v in sorted(verdicts.items(), key=lambda kv: -kv[1])
+    )
+    parts = [
+        f"{data.get('modules', 0)} 模块",
+        f"主张 {data.get('claims', 0)} 条",
+        f"校验错误 {data.get('validation_errors', 0)} 处",
+    ]
+    if verdict_text:
+        parts.append(f"判决 {verdict_text}")
+    parts.append(f"证据索引 {data.get('index_ids', 0)} 条（{data.get('index_chars', 0)} 字符）")
+    return "结构化契约：" + " · ".join(parts)
 
 
 def build_instruction(index: dict[str, str], *, input_chars: int | None = None) -> str:
@@ -270,6 +323,8 @@ __all__ = [
     "DEFAULT_INDEX_BUDGET",
     "MAX_INDEX_RATIO",
     "build_instruction",
+    "contract_metrics",
+    "contract_metrics_line",
     "get_module_contracts",
     "is_enabled",
     "parse_contract",

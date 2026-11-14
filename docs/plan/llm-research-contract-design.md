@@ -1,6 +1,6 @@
 # LLM 复盘结论结构化契约（claim / evidence / verdict）（plan-253 设计）
 
-> 状态：**P1、P3（硬约束 + 决策书渲染）已实施（默认关）；P2 补证循环按门槛暂缓**。立项见 [`plan.md`](../managements/plan.md) 的 `plan-253`；
+> 状态：**P1、P2 埋点统计、P3（硬约束 + 决策书渲染）已实施（默认关）；P2 补证循环按门槛暂缓**。立项见 [`plan.md`](../managements/plan.md) 的 `plan-253`；
 > 借鉴来源与取舍见 [`panwatch-borrowing-review.md`](panwatch-borrowing-review.md)。
 
 ## 1. 背景与缺口
@@ -120,7 +120,7 @@
 | 补证调用次数 | 每模块 ≤ 1 次/报告（4 模块 ⇒ 最多 +4 次调用） |
 | 解析耗时 | ≤ 5ms/模块（纯正则 + json） |
 
-埋点：`claims` 条数、`validation_errors` 数、`verdict` 分布、补证次数、索引字节数进 `llm_usage` 明细（只增字段）。
+埋点（**已实施**）：`claims` 条数、`validation_errors` 数、`verdict` 分布、证据索引条数与字符数进用量页签（HTML 与 Excel 同源一行）；补证次数随补证循环上线再补（当前恒 0 不单列）。
 
 ### 3.6 契约与文档触点（每期同步，缺一即视为未完成）
 
@@ -138,7 +138,7 @@
 | 阶段 | 交付 | 验收 |
 | :--- | :--- | :--- |
 | P1 | 证据索引 + 主张契约 + 校验 + 章节末尾折叠块（开关关=零变化）——**已实施** | 契约矩阵（未知 id/空证据/越界/缺 invalidations）；开关关逐字节回归；证据 id 可回指提示词块；旧缓存无 claims 不报错 |
-| P2 | verdict 枚举（已在 P1 派生）+ 一次补证（键盐）+ 统计——**补证循环未实施** | verdict 分布可读；补证后转 ready 比例可读；预算耗尽记 `budget_exhausted`；补证达上限收口「未验证」 |
+| P2 | verdict 枚举（已在 P1 派生）+ 统计（**已实施**：条数/错误/判决分布/索引用量进用量页签）+ 一次补证（键盐）——**补证循环未实施** | verdict 分布可读；补证后转 ready 比例可读；预算耗尽记 `budget_exhausted`；补证达上限收口「未验证」 |
 | P3 | 决策书（行动建议章 LLM 解读位）**已实施**（`report/decision_book.py`，匿名化模式非 off 时不出块）；建议硬约束**已实施** | review/blocked 带数量被拒（单测）；HTML/Excel 同源；`purchase_status` 联动；匿名化掩码一致 |
 
 ## 4. 测试方案

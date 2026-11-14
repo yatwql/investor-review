@@ -24,6 +24,8 @@
 
 ### 新增
 
+- **结构化契约埋点（plan-253 P2 统计）**：`research_contract.contract_metrics()` 聚合模块数 / 主张条数 / 校验错误数 / 判决分布 / 证据索引条数与字符数，经 `format_session_usage()` 在「LLM API 用量」页签出一行「结构化契约：…」（HTML 与 Excel 同源文案）；开关关闭或无契约时不出行（零变化）。
+
 - **分层越界防新增（架构约束：analysis 单向依赖）**：`check-import-surface` 新增 `layer-inversion` 规则——analysis 层 import `report/` 或 `llm/` 即报 finding；6 处存量经例外表登记（含到期日与收敛方向，`technical.md` 同步「存量分层例外」表），到期未下沉即门禁红，存量不再被当先例。
 
 - **不动作命中率进自检输入（plan-252 P3）**：`decision_ledger.inaction_summary_line()` 作为文案单源（样本不足只给命中/总数），经 `run_self_review` → `generate_self_review` → 自检提示词「不动作建议命中率」段注入；同时并入自检指纹（`self_review_fingerprint_parts["inaction"]`，空串与不传逐字节等价），因此账本演进会让自检重算而缓存不会错配。仅作提示，不改权重、不参与裁决。

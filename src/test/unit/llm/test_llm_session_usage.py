@@ -482,3 +482,34 @@ class TestTrackOpenAiCacheHit(unittest.TestCase):
         self.assertEqual(usage["output_tokens"], 20)
         self.assertEqual(usage["cache_hit_tokens"], 40)
         self.assertEqual(usage["call_count"], 1)
+
+
+class TestSessionUsageContractMetrics:
+    """用量页签的结构化契约埋点：有契约才出现，开关关闭时为空串。"""
+
+    def test_contract_fields_present_when_contracts_exist(self):
+        from src.python.config.features import reset_feature_flags, set_feature_enabled
+        from src.python.llm import research_contract as rc
+        from src.python.llm.session import format_session_usage
+
+        rc.reset_contract_state()
+        set_feature_enabled(rc.FEATURE_FLAG, True)
+        try:
+            rc.record_evidence_index({"ev:hold:1": "标的"})
+            rc.record_module_contract(
+                "expert_review", {"claims": [{"id": "c1"}], "errors": [], "verdict": rc.VERDICT_READY}
+            )
+            formatted = format_session_usage({"call_count": 2, "input_tokens": 10, "output_tokens": 5, "costs": {}})
+            assert formatted["contract"]["modules"] == 1
+            assert "结构化契约：" in formatted["contract_display"]
+        finally:
+            rc.reset_contract_state()
+            reset_feature_flags()
+
+    def test_contract_display_empty_without_contracts(self):
+        from src.python.llm import research_contract as rc
+        from src.python.llm.session import format_session_usage
+
+        rc.reset_contract_state()
+        formatted = format_session_usage({"call_count": 1, "input_tokens": 3, "output_tokens": 2, "costs": {}})
+        assert formatted["contract_display"] == ""
