@@ -60,7 +60,7 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 
 **来源**：PanWatch 借鉴分析（[`panwatch-borrowing-review.md`](../plan/panwatch-borrowing-review.md) §2.1），commit `97f1813`。
 **缺口**：账本对 `DIRECTION_FLAT`（持有/观望/不操作）只记平盘不判命中，模型输出里「不操作」占比不低却从不被评估；「什么算命中」的口径散在 `decision_ledger` / `decision_basis_settlement` / `decision_review_block` / `eval-decision-quality` 四处。
-**动作**：新增 `core/decision_eval_policy.py` 作评估口径唯一事实位（方向阈值沿用 1.5%、不动作容忍带 2.0%、样本门槛沿用 20、视界单位声明），结算新增 `flat_judged` 字段（旧账本无字段按未判、不回填），折叠汇总新增 `flat` 分项与 `by_carrier.flat_*`，报告/`doctor` 并列呈现不动作命中率。
+**动作**：新增 `core/decision_eval_policy.py` 作评估口径唯一事实位（方向阈值沿用 1.5%、不动作容忍带 2.0%、样本门槛沿用 20、视界单位声明；**零依赖**，账本单向导入并保留原名导出），判定入口仍只有 `classify_direction_outcome` 一个（不新增第二套判定），结算新增 `flat_hit: bool|None` 字段（旧账本无字段按未判、不回填），折叠汇总新增 `flat` 分项与 `by_carrier.flat_*`，报告/`doctor` 并列呈现不动作命中率；同步附录 H 的 `decision_basis_data` 行与 R-OUT-17 口径。
 **不做**：不改方向性阈值与样本门槛；不做置信度加权；不参与 `plan-70` 转正判据。
 **设计**：[`decision-eval-policy-design.md`](../plan/decision-eval-policy-design.md)（三期：政策与结算 → 呈现 → 自检提示）。
 
@@ -68,7 +68,7 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 
 **来源**：PanWatch 借鉴分析（[`panwatch-borrowing-review.md`](../plan/panwatch-borrowing-review.md) §2.2 与 §2.3）。
 **缺口**：LLM 输出是自由 markdown；`fact_checker` 只校验数值，`decision_llm_capture` 只抽表格；没有「主张→证据→判决」链，也没有「证据时点 ≤ 分析截止」这类可机检约束，建议的 triggers/invalidations 只停留在提示词口头要求。
-**动作**：新增开关 `llm_research_contract`（默认关，关闭逐字节不变）。P1 为既有语料生成内容寻址 `evidence_id` 池并追加结构头 `{claims[{id,statement,evidence[],inference,invalidations}],verdict}`；P2 引入 verdict 枚举（ready/revise/evidence_needed/reject）+ 一次预算受限补证；P3「决策书」**并入判断依据块**（不新增章节/页签）+ 建议硬约束（review/blocked 不得带数量、限购品种自动带执行约束）。
+**动作**：新增开关 `llm_research_contract`（默认关，关闭逐字节不变）。P1 由**该模块提示词输入块**生成内容寻址 `evidence_id` 池（不直接复用 fact_checker 内部语料结构）并追加结构头 `{claims[{id,statement,evidence[],inference,invalidations}],verdict}`；P2 引入 verdict 枚举（ready/revise/evidence_needed/reject）+ 一次预算受限补证（补证轮加缓存键盐，避免命中上一轮正文）；证据时点按报告行情口径 `as_of` 校验、场外滞后净值按披露分档放行；P3「决策书」并入**行动建议章的 LLM 解读位**（紧邻判断依据块；不新增章节/页签，也不写进零 LLM 的判断依据块本体）+ 建议硬约束（review/blocked 不得带数量、限购品种自动带执行约束）。
 **不做**：不做 agent 图与工具调用循环；不引入 Pydantic 契约模型；不自动改写正文。
 **设计**：[`llm-research-contract-design.md`](../plan/llm-research-contract-design.md)（三期与验收、golden 回归方案）。
 
