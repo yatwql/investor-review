@@ -12,17 +12,6 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
-#: 证据种类 → 中文标签（渲染与提示词共用；新增种类只在此登记）
-EVIDENCE_KIND_LABELS: dict[str, str] = {
-    "hold": "持仓",
-    "quote": "行情",
-    "attr": "收益归因",
-    "settle": "结算表现",
-    "metric": "量化指标",
-    "pen": "穿透资产",
-    "news": "新闻",
-}
-
 
 def _hash8(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:8]
@@ -87,11 +76,3 @@ def build_evidence_index(
         index.setdefault(f"ev:news:{_hash8(title + '|' + source)}", f"新闻 {title}（{source or '来源未标注'}）")
 
     return index
-
-
-def render_index_lines(index: dict[str, str], *, limit: int = 80) -> list[str]:
-    """证据索引的提示词行（id + 摘要；超限截断并显式标注剩余条数）。"""
-    lines = [f"- {eid}：{summary}" for eid, summary in list(index.items())[:limit]]
-    if len(index) > limit:
-        lines.append(f"- …（另有 {len(index) - limit} 条证据未列出，仅可用已列 id）")
-    return lines

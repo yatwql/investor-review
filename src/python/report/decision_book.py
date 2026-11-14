@@ -75,11 +75,22 @@ def build_decision_book() -> dict[str, Any] | None:
         )
     if not modules:
         return None
+    # 数据口径日：把校验时记录的 as_of 露在块里，读者能判断证据对应哪一天的口径
+    as_of = ""
+    for payload in contracts.values():
+        candidate = str(payload.get("as_of") or "").strip()
+        if candidate:
+            as_of = candidate
+            break
+    note = "主张与证据来自本次 LLM 复盘；判决为机械校验结果（证据是否齐备、失效条件是否写明），不替代事实校验。"
+    if as_of:
+        note = f"数据口径 {as_of}；" + note
     return {
         "available": True,
         "title": BLOCK_TITLE,
         "modules": modules,
-        "note": "主张与证据来自本次 LLM 复盘；判决为机械校验结果（证据是否齐备、失效条件是否写明），不替代事实校验。",
+        "as_of": as_of,
+        "note": note,
     }
 
 

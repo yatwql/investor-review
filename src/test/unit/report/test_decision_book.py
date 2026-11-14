@@ -133,3 +133,25 @@ class TestRenderTimeAttachment:
         set_feature_enabled(rc.FEATURE_FLAG, True)
         assert book.attach_decision_book({"enabled": True}) == {"enabled": True}
         assert book.attach_decision_book(None) is None
+
+
+class TestAsOfSurfaced:
+    """数据口径日（as_of）随契约露在决策书里，读者能判断证据对应哪一天。"""
+
+    def test_as_of_in_note(self):
+        set_feature_enabled(rc.FEATURE_FLAG, True)
+        payload = _contract()
+        payload["as_of"] = "2026-11-14"
+        rc.record_module_contract("expert_review", payload)
+        result = book.build_decision_book()
+        assert result is not None
+        assert result["as_of"] == "2026-11-14"
+        assert "数据口径 2026-11-14" in result["note"]
+
+    def test_missing_as_of_keeps_plain_note(self):
+        set_feature_enabled(rc.FEATURE_FLAG, True)
+        rc.record_module_contract("expert_review", _contract())
+        result = book.build_decision_book()
+        assert result is not None
+        assert result["as_of"] == ""
+        assert "数据口径" not in result["note"]

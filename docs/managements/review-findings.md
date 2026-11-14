@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.18.1-dev
-> **编号源**：`rf-next = 1142`（新增问题提出后更新为 +1；已用最大 rf-1135，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1143`（新增问题提出后更新为 +1；已用最大 rf-1135，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -60,6 +60,7 @@
 
 | # | 问题 | 修复 |
 | --- | --- | --- |
+| **rf-1142** | 120h 自审发现三处「设计已写、实现未接」的债：①`evidence_index.render_index_lines` 与 `EVIDENCE_KIND_LABELS` 只有定义与测试引用，属投机 API；②建议硬约束 `validate_recommendation()` 仅测试调用，生产零调用（硬约束形同注释）；③契约校验记录的 `as_of` 存进结果却无人消费 | ①删除两个无生产引用的符号与其用例；②在 `rebalance_advisor` 每条建议上显式落 `execution_status`/`review_required` 并调用校验器做不变量守卫（违规行丢弃并告警），补 2 条用例；③决策书前言改为「数据口径 <as_of>；…」，补 2 条用例 |
 | **rf-1141** | 决策书（`decision_book`）在启用态报告里不出现：判断依据块在数据准备阶段装配，而结构化契约要到 LLM 生成后一遍才落载体——`build_decision_basis_data` 里挂的 `decision_book` 恒为空，HTML/Excel 两端整块缺失（单测只直接构造契约，看不出时序问题） | 改为渲染期幂等补挂 `decision_book.attach_decision_book()`（HTML 上下文装配与 Excel 判断依据块写入各补一次），补 3 条挂载用例；并用 `--feature llm_research_contract=true` 真机跑通全量报告，HTML/Excel 均出现「决策书」块、判决=证据齐备、主张均带 evidence id 与失效条件 |
 | **rf-1140** | 报告管线单测未声明离线桩：`generate_report()` 会起数据源健康检查线程（真实网络 + akshare `py_mini_racer` V8 初始化），xdist worker 里并发初始化 V8 会段错误崩溃（CI：3 个 worker crashed，整套 1.5min → 12min，且偶发才出现、难定位） | 三个报告管线测试文件统一声明 `offline_external_sources`（探针即时失败、零退避、不触发 V8）；并新增契约守卫 `test_offline_pipeline_contract.py`（真实调用管线入口却漏声明离线桩即红，防同类复发） |
 | **rf-1139** | akshare 1.19+ 把 `bond_zh_us_rate` 改名为 `bond_zh_us_yield_em`（数据集/中文列名不变），而取数只认旧名：CI 装到 1.20.42 后 11 条无风险利率用例在 `@patch("akshare.bond_zh_us_rate")` 处 AttributeError 直接失败；生产侧还把「属性不存在」当调用异常，白记一次 akshare 熔断失败（新版用户每份报告都误报数据源故障） | 新增 `_resolve_bond_yield_api()` 按版本探测两代 API（旧名优先，探测结果进程内记忆，缺失只降级不记熔断），两处调用点改走 `_bond_yield_frame()`；用例改为 patch 本方 seam（版本无关），新增 4 条探测/降级用例；文档四处口径同步 |

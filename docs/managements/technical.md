@@ -4072,7 +4072,7 @@ web/ (Web 服务层，薄入口)
 | position_status | dict | 是 | prepare_report_data |
 | data_freshness | dict | 是 | prepare_report_data |
 | action_data | dict | 是 | prepare_report_data；basic 路径由 generate_excel_report 就地构建 |
-| decision_basis_data | dict | 是 | 含 `headline`（章首三行摘要，双端逐字同源）与 `settlement.performance`（按视界命中率/均值超额/样本数）；`settlement.inaction`＝不动作类（持有/观望/不操作）判定汇总 {total, hit, hit_rate, sample_sufficient, by_carrier}、`settlement.inaction_label`＝双端同源呈现文案；`decision_book`＝决策书（开关 `llm_research_contract` 开启且有契约时出现：各模块判决 + 主张/证据/失效条件，匿名化模式非 off 时不出块），缺席时产物逐字节不变；prepare_report_data（首次装配）+ full/both 峰值就绪后重装配（风险预算回撤现状依赖历史峰值）；含 `backtest_as_of`＝回测产物最新运行日，由 `decision_basis.backtest_run_date()` 从 `docs/tmp/decision-quality/*.json` 派生 |
+| decision_basis_data | dict | 是 | 含 `headline`（章首三行摘要，双端逐字同源）与 `settlement.performance`（按视界命中率/均值超额/样本数）；`settlement.inaction`＝不动作类（持有/观望/不操作）判定汇总 {total, hit, hit_rate, sample_sufficient, by_carrier}、`settlement.inaction_label`＝双端同源呈现文案；`decision_book`＝决策书（开关 `llm_research_contract` 开启且有契约时出现：各模块判决 + 主张/证据/失效条件（前言带数据口径 `as_of`），匿名化模式非 off 时不出块），缺席时产物逐字节不变；prepare_report_data（首次装配）+ full/both 峰值就绪后重装配（风险预算回撤现状依赖历史峰值）；含 `backtest_as_of`＝回测产物最新运行日，由 `decision_basis.backtest_run_date()` 从 `docs/tmp/decision-quality/*.json` 派生 |
 | crisis_annotation_data | dict | 是 | assemble_history_augmented_data（full/both 双路径同源装配，`report/_snapshot.py`；危机标注关态恒写、回放态加 replay 层；风险调整超额同点按开关注入 risk_adjusted_excess_data） |
 | risk_adjusted_excess_data | dict | 是 | build_risk_adjusted_excess（报告章节与增强开关 risk_adjusted_excess，默认关） |
 | tail_risk_data | dict | 是 | prepare_report_data |

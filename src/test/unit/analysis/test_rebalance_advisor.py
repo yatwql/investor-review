@@ -288,7 +288,9 @@ class TestFeeEstimation:
 
     def test_none_name_does_not_crash(self):
         """名称缺失（None）不抛异常：00 前缀按 A 股处理计收印花税（防御性降级）。"""
-        assert estimate_fee("止损", 10000.0, "000311", None, _FEE_FIXTURE) == pytest.approx(10.0, abs=0.005)
+        assert estimate_fee("止损", 10000.0, "000311", None, _FEE_FIXTURE) == pytest.approx(  # type: ignore[arg-type]  # 故意传 None
+            10.0, abs=0.005
+        )
 
     def test_unknown_operation_raises_value_error(self):
         """未知操作（如买入）拒绝估算，避免静默按卖出口径计费。"""
@@ -456,3 +458,27 @@ class TestMultiAndGuards:
         signals = [_discipline("600000", "浦发银行", "止损/减仓")]
         advice = build_rebalance_advice([], signals, holdings, total_mv=500.0, fee_table=_FEE_FIXTURE)
         assert advice == []
+
+
+class TestExecutionStateGuard:
+    """建议行显式携带执行态；「需复核 / 不可执行却带数量」在装配期即被拒。"""
+
+    @staticmethod
+    def _advice():
+        holdings = [_holding("电池ETF", "561910", 5000, 1.0)]
+        signals = [_discipline("561910", "电池ETF", "止盈")]
+        return build_rebalance_advice([], signals, holdings, total_mv=10000.0, fee_table=_FEE_FIXTURE)
+
+    def test_rows_carry_execution_state(self):
+        advice = self._advice()
+        assert advice, "夹具应产出至少一条建议"
+        for row in advice:
+            assert row["execution_status"] == "conditional"
+            assert row["review_required"] is False
+
+    def test_invariant_violation_drops_row(self, monkeypatch):
+        """守卫生效：一旦判出数量违规，该行不进入清单（而不是带数量下发）。"""
+        import src.python.llm.research_contract as rc
+
+        monkeypatch.setattr(rc, "validate_recommendation", lambda **_kw: ["quantity_forbidden_when_review_required"])
+        assert self._advice() == []

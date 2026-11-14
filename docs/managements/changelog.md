@@ -36,6 +36,8 @@
 
 ### 修复
 
+- **120h 自审整改（rf-1142）**：删除两处投机 API（`evidence_index.render_index_lines` / `EVIDENCE_KIND_LABELS`，仅测试引用）；把建议硬约束真正接进生产——机械建议清单逐行落 `execution_status`/`review_required` 并过 `validate_recommendation()` 不变量守卫（违规行丢弃+告警）；决策书前言消费校验记录的 `as_of`（「数据口径 <日期>；…」）。
+
 - **akshare 国债收益率 API 改名兼容（rf-1139）**：1.19+ 把 `bond_zh_us_rate` 改名 `bond_zh_us_yield_em`（数据集与中文列名不变），旧代码只认旧名——CI 装 1.20.42 后 11 条无风险利率用例直接失败，生产侧还会把「属性不存在」误记成 akshare 熔断失败。现按可用性探测两代 API 符号（`bond_zh_us_rate` / `bond_zh_us_yield_em`，探测结果进程内记忆，缺失只降级不记故障），用例改为 patch 本方取数 seam、版本无关。
 - **报告管线单测补齐离线桩（rf-1140）**：`test_orchestrator_generate_report` / `test_run_integrity` / `test_stage_cancel` 真实调用 `generate_report` 会顺带起数据源健康检查线程（真实网络 + akshare 的 py_mini_racer V8 初始化），单测里 V8 并发初始化会段错误崩掉 xdist worker（CI 表现为 3 个 worker crashed、整套从 1.5min 拖到 12min）。现统一声明 `offline_external_sources`（探针即时失败、零退避），并新增契约守卫 `test_offline_pipeline_contract.py`：真实调用管线入口却漏声明离线桩即红（防同类复发）。
 - **跨模块常量归位单源（rf-1138）：退出码 `_EXIT_*`（CLI / Web worker 各一份）、push2 快照接口 URL、年化交易日数 252（3 处）、最小样本 20 与份额容差 1e-3（各 2 处）改为单源——退出码与 URL 进 `core/constants.py`，统计/容差常量进 `analysis/_math_utils.py`，调用点保留原名别名；新增 7 条单源守卫用例。

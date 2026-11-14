@@ -61,12 +61,6 @@ class TestEvidenceIndex:
     def test_empty_inputs_yield_empty_index(self):
         assert evidence_index.build_evidence_index() == {}
 
-    def test_index_lines_truncate_explicitly(self):
-        index = {f"ev:hold:{i}": f"标的{i}" for i in range(5)}
-        lines = evidence_index.render_index_lines(index, limit=3)
-        assert len(lines) == 4
-        assert "另有 2 条证据未列出" in lines[-1]
-
 
 class TestInstruction:
     """提示词追加段。"""
