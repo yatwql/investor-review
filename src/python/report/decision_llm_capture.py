@@ -95,7 +95,7 @@ def _parse_table_row(line: str) -> dict[str, Any] | None:
     """解析单行表 → 决策行雏形；非数据行（表头/分隔/无操作值）返回 None。
 
     Returns:
-        {code, name, direction, magnitude, detail}；detail 合并理由格（理由可能
+        {code, name, direction, magnitude, detail}；direction 可为首多/看空/不动作（0）；detail 合并理由格（理由可能
         内含竖线，故按剩余列拼接，而非仅取第 4 列）。
     """
     cells = _split_cells(line)
@@ -198,9 +198,31 @@ def extract_llm_decisions(
             if row:
                 _note(_collect_decision(best, row, holdings))
             elif extract_code(line) is not None:
-                # 有品种代码却没解析出方向：区分「不操作/观望」与真正的异常行
-                op_cell = _split_cells(line)[2] if len(_split_cells(line)) >= 4 else ""
-                _note("no_direction" if _is_no_action(op_cell) else "unparsed")
+                # 有品种代码却没解析出方向：区分「不操作/观望」与真正的异常行。
+                # 「不操作」本身是可评估的建议（事后看「不动」对不对），登记为不动作类
+                # （direction=0，强度 low），由结算写 `flat_hit`、折叠进 `inaction` 统计。
+                cells = _split_cells(line)
+                op_cell = cells[2] if len(cells) >= 4 else ""
+                if _is_no_action(op_cell):
+                    code = extract_code(line)
+                    if code is not None:
+                        _note(
+                            _collect_decision(
+                                best,
+                                {
+                                    "code": code,
+                                    "name": _strip_code(cells[1]) if len(cells) >= 4 else "",
+                                    "direction": dl.DIRECTION_FLAT,
+                                    "magnitude": "low",
+                                    "detail": op_cell.strip(),
+                                },
+                                holdings,
+                            )
+                        )
+                    else:
+                        _note("no_direction")
+                else:
+                    _note("unparsed")
     if skipped:
         # 解析兜底：缺行/缺方向（如「不操作」）跳过登记并留痕，不中断报告生成
         logger.info(
@@ -223,8 +245,8 @@ def _collect_decision(
     优先级强度最高一条；name 缺失回填持仓名；detail 缺失回补空串（结构化头
     契约无理由列）；baseline 取持仓 price，无价则 None。
     """
-    if row["direction"] not in (dl.DIRECTION_LONG, dl.DIRECTION_SHORT):
-        return "no_direction"  # 持有/中性/「不操作」剔除（结算无方向语义）
+    if row["direction"] not in (dl.DIRECTION_LONG, dl.DIRECTION_SHORT, dl.DIRECTION_FLAT):
+        return "no_direction"  # 方向值非法（非 ±1/0）才剔除
     holding = holdings.get(row["code"])
     if holding is None:
         return "not_in_holdings"  # 非持仓 code（空上下文/幻觉）不入账

@@ -40,6 +40,8 @@
 
 ### 修复
 
+- **不动作类建议真正入账（plan-252 收口）**：此前 LLM 操作建议表里的「持有/观望/不操作」行被直接跳过登记，导致不动作评估在生产上永不产生样本；现改为登记为 `direction=0`、强度 low 的决策，由结算器按 `|区间涨跌| < 2.0%` 落 `flat_hit`，进 `inaction` 统计与报告行（样本成熟后自然出现数值）。真机验证：一轮报告登记 7 条不动作类、复盘块显示「未到期」、报告行显示 `—`（无已判定样本）；隔离账本端到端验证 `命中 2/3（样本不足）` 与「判对/判偏」取值正确。
+
 - **120h 自审整改（rf-1142）**：删除两处投机 API（`evidence_index.render_index_lines` / `EVIDENCE_KIND_LABELS`，仅测试引用）；把建议硬约束真正接进生产——机械建议清单逐行落 `execution_status`/`review_required` 并过 `validate_recommendation()` 不变量守卫（违规行丢弃+告警）；决策书前言消费校验记录的 `as_of`（「数据口径 <日期>；…」）。
 
 - **akshare 国债收益率 API 改名兼容（rf-1139）**：1.19+ 把 `bond_zh_us_rate` 改名 `bond_zh_us_yield_em`（数据集与中文列名不变），旧代码只认旧名——CI 装 1.20.42 后 11 条无风险利率用例直接失败，生产侧还会把「属性不存在」误记成 akshare 熔断失败。现按可用性探测两代 API 符号（`bond_zh_us_rate` / `bond_zh_us_yield_em`，探测结果进程内记忆，缺失只降级不记故障），用例改为 patch 本方取数 seam、版本无关。

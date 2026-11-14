@@ -62,13 +62,14 @@ def _ids_for(rows):
 class TestParseFallback:
     """解析兜底：缺行/缺方向（含「不操作」）跳过登记并记 INFO，不抛错。"""
 
-    def test_no_action_row_skipped_with_info(self, caplog):
+    def test_no_action_row_registered_as_inaction(self):
+        """「不操作」是可评估建议（事后看「不动」对不对）→ 登记为不动作类，不进方向性统计。"""
         html = _HTML_HEADER + "<p>| 🔴 高 | 600900 长江电力 | 不操作 | 等条件明朗再做决定 |</p>"
-        with caplog.at_level("INFO", logger="invest"):
-            rows = cap.extract_llm_decisions(html, _HOLDINGS)
-        assert rows == []
-        messages = [rec.getMessage() for rec in caplog.records]
-        assert any("解析兜底跳过登记" in msg and "无方向 1 条" in msg for msg in messages)
+        rows = cap.extract_llm_decisions(html, _HOLDINGS)
+        assert _ids_for(rows) == ["600900"]
+        assert rows[0]["direction"] == dl.DIRECTION_FLAT
+        assert rows[0]["magnitude"] == "low"
+        assert "不操作" in rows[0]["detail"]
 
     def test_malformed_row_does_not_raise_and_logs(self, caplog):
         """有品种代码但方向格无法识别 → 跳过并留痕（表头/分隔行不计，避免噪声）。"""
@@ -144,7 +145,11 @@ class TestModuleVerdictHandling:
         lp = str(tmp_path / "ready.jsonl")
         cap.register_llm_decisions(_HTML_TWO_ROWS, _HOLDINGS, report_date=_REPORT_DATE, module_verdict="ready", path=lp)
         decisions = [e for e in self._events(lp) if e.get("event") == "decision"]
-        assert decisions and all(e["magnitude"] != "low" for e in decisions)
+        assert decisions
+        directional = [e for e in decisions if e["direction"] in (dl.DIRECTION_LONG, dl.DIRECTION_SHORT)]
+        inaction = [e for e in decisions if e["direction"] == dl.DIRECTION_FLAT]
+        assert directional and all(e["magnitude"] != "low" for e in directional)
+        assert all(e["magnitude"] == "low" for e in inaction)  # 不动作类恒定低强度
         assert all("未验证" not in e.get("detail", "") for e in decisions)
 
     def test_decision_event_never_carries_quantity(self, tmp_path):
@@ -238,11 +243,14 @@ class TestExtract:
         assert cap.extract_llm_decisions(None, _HOLDINGS) == []
         assert cap.extract_llm_decisions("", _HOLDINGS) == []
 
-    def test_hold_neutral_excluded(self):
+    def test_hold_registered_as_inaction(self):
+        """持有（flat）同样入账为不动作类：结算后按「|区间涨跌| < 2%」判对/判偏。"""
         rows = cap.extract_llm_decisions(_HTML_TWO_ROWS, _HOLDINGS)
-        # 仅 561910 减仓(short) 入；040046 持有(flat) 剔除
-        assert _ids_for(rows) == ["561910"]
-        assert rows[0]["direction"] == dl.DIRECTION_SHORT
+        assert _ids_for(rows) == ["561910", "040046"]
+        by_code = {r["code"]: r for r in rows}
+        assert by_code["561910"]["direction"] == dl.DIRECTION_SHORT
+        assert by_code["040046"]["direction"] == dl.DIRECTION_FLAT
+        assert by_code["040046"]["magnitude"] == "low"
 
     def test_add_long_included(self):
         html = _HTML_HEADER + "<p>| 🟡 中 | 600900 长江电力 | 加仓 | 分红稳定 |</p>"
@@ -385,11 +393,11 @@ class TestRegister:
     def test_register_appends_pending(self, tmp_path):
         lp = str(tmp_path / "ledger.jsonl")
         out = cap.register_llm_decisions(_HTML_TWO_ROWS, _HOLDINGS, report_date=_REPORT_DATE, path=lp)
-        assert out["registered"] == 1
-        assert len(out["ids"]) == 1
+        assert out["registered"] == 2  # 减仓 + 持有（不动作类）
+        assert len(out["ids"]) == 2
         stats = dl.fold_ledger(path=lp)
-        assert stats["pending_count"] == 1
-        d = stats["decisions"][0]
+        assert stats["pending_count"] == 2
+        d = next(x for x in stats["decisions"] if x["direction"] == dl.DIRECTION_SHORT)
         assert d["carrier"] == dl.CARRIER_EXPERT_REVIEW
         assert d["direction"] == dl.DIRECTION_SHORT
         assert d["baseline_close"] == 0.712
