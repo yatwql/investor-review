@@ -22,6 +22,10 @@
 - **渲染期取数前置 + 单轮复用加锁**：基金业绩排名与基金风格取数原本发生在 HTML「区块装配」内（冷缓存实测 4~6s），既让该计时点看起来像渲染慢，也把取数算在渲染阶段；现由 `prepare_report_data` 的「渲染前置取数」段预取，并把 `_build_perf_data` / `_fetch_fund_holdings_with_period` 接入 `_run_scope.run_memo`（补 per-key 锁，同 key 并发只算一次），风格预取的开关判定改走 `is_enable_fund_deep_analysis()` 解析器（缺键默认 True）——直接读原始键会把「配置未写」当关闭，预取白做。`technical.md` 编排器职责链与需求侧 breakdown 清单同步。穿透块的附属取数（盈利预测 2000+ 只、股息率）同批纳入预取——此前在渲染阶段载入约 2.5s，实测 `区块装配` 从 6.8s 降到 2.6s 后剩下的主要部分就是它。
 - **HTML 生成慢段归因纠正 + 穿透单轮复用**：原 `面板视图装配` 计时点覆盖「函数入口 → 该 mark」，把 `html_sections.assemble_sections` 的取数（穿透 / 基金业绩 / 基金风格 / 财务指标）也算进「视图拼装」，实测 1.4s ~ 6.8s 双峰全落在取数冷热上而非渲染。现拆出 `区块装配` 计时点，并把 `compute_penetration_top10` 接入 `_run_scope.run_memo`（同轮同输入只算一次，HTML 与 Excel 两端共用，报告边界清空），`developer-guide.md` 慢段排查表与 `technical.md` 编排器职责链同步。
 
+### 新增
+
+- **建议后验评估：不动作类纳入判定 + 政策单源（plan-252 P1/P2）**：新增 `core/decision_eval_policy.py` 作评估口径唯一事实位（方向阈值 1.5%、不动作容忍带 2.0%、样本门槛 20、视界单位；账本单向引用并保留原名），`direction == 0`（持有/观望/不操作）改为**照常结算**并落 `flat_hit`（此前直接跳过、从不评估），`fold_ledger` 新增 `inaction` 分项与 `by_carrier.inaction_*`（旧账本无字段视为未判、不计样本、不回填）；呈现：判断依据块历史表现表下方一行「不动作建议」（样本不足只给命中/总数、无样本 `—`，双端同源）、历史决策复盘块给「判对 / 判偏 / 未到期」、`doctor` 账本概览并列不动作命中。
+
 ### 修复
 
 - **akshare 国债收益率 API 改名兼容（rf-1139）**：1.19+ 把 `bond_zh_us_rate` 改名 `bond_zh_us_yield_em`（数据集与中文列名不变），旧代码只认旧名——CI 装 1.20.42 后 11 条无风险利率用例直接失败，生产侧还会把「属性不存在」误记成 akshare 熔断失败。现按可用性探测两代 API 符号（`bond_zh_us_rate` / `bond_zh_us_yield_em`，探测结果进程内记忆，缺失只降级不记故障），用例改为 patch 本方取数 seam、版本无关。

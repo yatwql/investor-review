@@ -2956,6 +2956,8 @@ llm/skeleton.py                 # 教训区块注入专家复盘提示词（开�
 
 **账本口径**：结算作为**独立追加事件**写入（决策事件恒为 `pending`），读取时 `fold_ledger` 按 `decision_id` 折叠出当前态——账本层只提供追加原语、无原地改写路径，避免已落盘事件被覆盖。**「入账必可结算」**：只有带基线价的决策才登记，无基线价者不入账，避免产生永远无法结算的悬空 pending；同日重复登记按 `decision_id` 去重。
 
+**不动作类结算口径**：`direction == 0`（持有/观望/不操作）同样结算，判定落结算事件 `flat_hit`（`|区间涨跌| < 2.0%` 判对），不进方向性命中率分母；`fold_ledger` 另出 `inaction` 分项与 `by_carrier.inaction_*`，旧账本无 `flat_hit` 的结算视为未判、不计样本。
+
 **命中率与样本守门**：方向命中与超额 alpha 由真实后续行情对账得出；**命中率在小样本下不出结论**（样本数不足时只列明细、不报百分比），防「1 次命中 = 100%」的假精确。
 
 **缓存指纹同源**：开关影响专家复盘提示词，故教训区块经 `lessons_cache_suffix()`（内容 md5 前若干位）进入 `llm/module_fingerprint.py`（生成参数经 `generation_params_suffix()` 并入指纹；`cache` 等无关项不参与） 中写侧与预检侧**共用的同一个**构建函数，开关与内容判定收敛在函数内部（无教训时返回空后缀）。
@@ -3597,6 +3599,9 @@ make_http_client(timeout=10.0) → httpx.Client
 | `decision_record` | 确定性卖出建议登记（仅带持仓基线者落账，入账必可结算） | 行动建议 | 监控 | 随 `decision_reflection` |
 | `decision_settlement` | 到期决策结算（幂等：同 decision 只结一次，行情不可得保持 pending） | 行动建议 | 监控 | 随 `decision_reflection` |
 | `decision_llm_capture` | LLM 操作建议表解析登记（结构化优先 → 表格兜底；缺行/缺方向/「不操作」行按原因记 INFO 后跳过，异常不中断报告） | 行动建议 | 监控 | 随 `decision_reflection` |
+| `decision_eval_policy` | 建议事后评估政策单源（方向阈值 1.5% / 不动作容忍带 2.0% / 样本门槛 20 / 视界单位 + 对外 `EVAL_POLICY` 声明；零依赖，账本单向引用） | 行动建议 | 分析计算 | 随 `decision_reflection` |
+| `classify_flat_hit` | 不动作类（持有/观望/不操作）事后判定（`\|区间涨跌\| < 容忍带` ⇒ 判对；无收益/非数值 ⇒ 不可判） | 行动建议 | 分析计算 | 随 `decision_reflection` |
+| `summarize_inaction` | 不动作类折叠统计（按 `settlement.flat_hit` 汇总 total/hit/hit_rate/样本充足性与载体分项；旧账本无字段不计样本） | 行动建议 | 分析计算 | 随 `decision_reflection` |
 | `decision_review_block` | 「历史决策复盘」区块数据契约（结构稳定，HTML/Excel 双端消费） | 行动建议 | 监控 | 随 `decision_reflection` |
 | `decision_basis` | 行动建议章内「判断依据」确定性事实块（形态 A：信号清单/信号可信度/风险预算已接入（信号读账本快照，区分度三态 + 回测结论模块常量登记，可信度规则仲裁四枚举；风险预算三行取 `rebalance.threshold` 与 `discipline.drawdown_pct`，行业上限无配置键即「未配置上限」；纪律明细只读复用纪律引擎触发条并补阶段化执行口径；结算摘要按结算交易日聚合最近 5 批 × 5/20/60 视界均值与超额，未到期显式标注），五节齐，零 LLM） | 行动建议（章内嵌块） | 监控 | 开关 `decision_basis`（默认开，机制与质量组（内置默认常开，不占 `[S]` 编号）；原 `[C]` 5.1 章节子项，移组后不再受「父章关闭则子项置灰拒写入」闸门约束，可与 `enable_action` 状态独立切换） |
 | `build_decision_basis_data` | 判断依据块装配入口（纯确定性：只读信号账本快照与编排层已装配持仓，零取数零 LLM；入参仅确定性数据 `holdings_details`/`total_mv`/`portfolio_peak_mv`，全可缺省） | 行动建议（章内嵌块） | 分析计算 | 随 `decision_basis` |
@@ -4063,7 +4068,7 @@ web/ (Web 服务层，薄入口)
 | position_status | dict | 是 | prepare_report_data |
 | data_freshness | dict | 是 | prepare_report_data |
 | action_data | dict | 是 | prepare_report_data；basic 路径由 generate_excel_report 就地构建 |
-| decision_basis_data | dict | 是 | 含 `headline`（章首三行摘要，双端逐字同源）与 `settlement.performance`（按视界命中率/均值超额/样本数）；prepare_report_data（首次装配）+ full/both 峰值就绪后重装配（风险预算回撤现状依赖历史峰值）；含 `backtest_as_of`＝回测产物最新运行日，由 `decision_basis.backtest_run_date()` 从 `docs/tmp/decision-quality/*.json` 派生 |
+| decision_basis_data | dict | 是 | 含 `headline`（章首三行摘要，双端逐字同源）与 `settlement.performance`（按视界命中率/均值超额/样本数）；`settlement.inaction`＝不动作类（持有/观望/不操作）判定汇总 {total, hit, hit_rate, sample_sufficient, by_carrier}、`settlement.inaction_label`＝双端同源呈现文案；prepare_report_data（首次装配）+ full/both 峰值就绪后重装配（风险预算回撤现状依赖历史峰值）；含 `backtest_as_of`＝回测产物最新运行日，由 `decision_basis.backtest_run_date()` 从 `docs/tmp/decision-quality/*.json` 派生 |
 | crisis_annotation_data | dict | 是 | assemble_history_augmented_data（full/both 双路径同源装配，`report/_snapshot.py`；危机标注关态恒写、回放态加 replay 层；风险调整超额同点按开关注入 risk_adjusted_excess_data） |
 | risk_adjusted_excess_data | dict | 是 | build_risk_adjusted_excess（报告章节与增强开关 risk_adjusted_excess，默认关） |
 | tail_risk_data | dict | 是 | prepare_report_data |

@@ -514,6 +514,14 @@ def _check_review_ledger_overview() -> list[dict[str, Any]]:
                 }
                 if _long:
                     _msg += " · " + " · ".join(f"{h} 日视界已结 {n} 条" for h, n in sorted(_long.items()))
+                _inaction = _fold.get("inaction") or {}
+                if _inaction.get("total"):
+                    _ina_text = (
+                        f"命中率 {_inaction['hit_rate']:.0%}（n={_inaction['total']}）"
+                        if _inaction.get("sample_sufficient") and _inaction.get("hit_rate") is not None
+                        else f"命中 {_inaction.get('hit', 0)}/{_inaction['total']}（样本不足）"
+                    )
+                    _msg += f" · 不动作类{_ina_text}"
             items.append(_item(GROUP_FEATURES, "决策复盘账本", True, _msg))
         except Exception as exc:  # noqa: BLE001
             items.append(_item(GROUP_FEATURES, "决策复盘账本", False, f"读取失败: {type(exc).__name__}: {exc}"))

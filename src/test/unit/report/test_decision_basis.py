@@ -964,3 +964,50 @@ class TestBothEndsSameSource:
         write_action_sheet(ws, _action_data(), decision_basis_data=data)
         excel_text = " ".join(str(c.value) for row in ws.iter_rows() for c in row if c.value is not None)
         assert "暂不可判" in excel_text
+
+
+class TestSettlementInactionLine:
+    """结算摘要的「不动作建议」一行（双端同源文案，样本不足只给命中/总数）。"""
+
+    @staticmethod
+    def _flat(decision_id: str, raw_return: float) -> dict:
+        from src.python.core import decision_ledger as _dl
+
+        return {
+            "decision_id": decision_id,
+            "direction": _dl.DIRECTION_FLAT,
+            "carrier": _dl.CARRIER_EXPERT_REVIEW,
+            "settlement": {
+                "outcome": _dl.OUTCOME_FLAT,
+                "raw_return": raw_return,
+                "flat_hit": _dl.classify_flat_hit(raw_return),
+                "settle_date": "2026-11-01",
+                "horizon_bars": 5,
+            },
+            "settlements": {
+                5: {
+                    "outcome": _dl.OUTCOME_FLAT,
+                    "raw_return": raw_return,
+                    "flat_hit": _dl.classify_flat_hit(raw_return),
+                    "settle_date": "2026-11-01",
+                    "horizon_bars": 5,
+                    "target_horizon": 5,
+                }
+            },
+        }
+
+    def test_no_inaction_samples_uses_dash(self):
+        summary = build_settlement_summary([])
+        assert summary["inaction_label"] == "不动作建议：—"
+        assert summary["inaction"]["total"] == 0
+
+    def test_below_sample_limit_reports_hit_over_total(self):
+        summary = build_settlement_summary([self._flat("a", 0.01), self._flat("b", 0.05)])
+        assert summary["inaction_label"] == "不动作建议：命中 1/2（样本不足）"
+        assert summary["inaction"]["sample_sufficient"] is False
+
+    def test_sufficient_samples_report_rate(self):
+        decisions = [self._flat(f"k{idx}", 0.01 if idx % 2 else 0.05) for idx in range(20)]
+        summary = build_settlement_summary(decisions)
+        assert summary["inaction"]["sample_sufficient"] is True
+        assert summary["inaction_label"] == "不动作建议：命中率 50%（n=20）"

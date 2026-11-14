@@ -187,6 +187,8 @@
         </div>
         <div style="font-size: var(--fs-table-sm);opacity:0.85;margin-top:4px;">命中率仅在方向性有效样本 ≥ 20 时给结论值（否则为「命中/方向性」）；平盘与数据缺口不计命中，口径与 settle-decisions 子命令、doctor 账本概览一致。</div>
         {% endif %}
+        {# 不动作建议（持有/观望/不操作）：与方向性表现并列、不进其分母；文案单源在结算摘要契约 #}
+        {% if _st.get("inaction_label") %}<div style="font-size: var(--fs-table-sm);margin-top:4px;">{{ _st.get("inaction_label") }}</div>{% endif %}
         {# 集中度约束（开关 portfolio_constraints；只标注不阻断） #}
         {% set _cons = _db.get("constraints") or {} %}
         {% if _cons.get("enabled") %}
@@ -486,7 +488,8 @@
                     <td class="text-left">{{ s.get("name", "") }}</td>
                     <td class="text-left">{{ s.get("direction", "") }}</td>
                     <td>
-                        {% if s.get("outcome") == "hit" %}兑现
+                        {% if s.get("judgement") %}{{ s.get("judgement") }}
+                        {% elif s.get("outcome") == "hit" %}兑现
                         {% elif s.get("outcome") == "miss" %}未兑现
                         {% elif s.get("outcome") == "flat" %}平盘
                         {% else %}缺数据{% endif %}
@@ -501,7 +504,7 @@
                     <td>{{ p.get("code", "") | anon_code }}</td>
                     <td class="text-left">{{ p.get("name", "") }}</td>
                     <td class="text-left">{{ p.get("direction", "") }}</td>
-                    <td>待结算</td>
+                    <td>{{ p.get("judgement") or "待结算" }}</td>
                     <td>-</td>
                 </tr>
                 {% endfor %}

@@ -178,12 +178,67 @@ class TestSettleOutcomes:
         assert out["settled"] == 0
         assert out["deferred"] == 1
 
-    def test_hold_neutral_skipped(self, tmp_path):
+    def test_hold_neutral_settles_with_flat_hit(self, tmp_path):
+        """不动作类（持有/观望/不操作）会结算，判定落 `flat_hit`（不占方向性命中率）。
+
+        区间涨跌 +10% 远超 2% 容忍带 ⇒ 判偏（flat_hit=False）；方向性命中率分母不变。
+        """
         lp = str(tmp_path / "ledger.jsonl")
         dl.append_decision(
             code="600000",
             name="x",
             direction=dl.DIRECTION_FLAT,
+            carrier=dl.CARRIER_EXPERT_REVIEW,
+            report_date=_d(0),
+            baseline_close=10.0,
+            path=lp,
+        )
+        out = ds.settle_pending_decisions(
+            report_date=_d(8),
+            ledger_path=lp,
+            price_series_fn=_FakePrices(_mature([10.0, 10.2, 10.4, 10.6, 10.8, 11.0])),
+            index_series_fn=_FakeIndex([]),
+        )
+        assert out["settled"] == 1
+        assert out["skipped"] == 0
+        stats = dl.fold_ledger(path=lp)
+        assert stats["inaction"]["total"] == 1
+        assert stats["inaction"]["hit"] == 0  # +10% 越带 ⇒ 判偏
+        assert stats["directional_total"] == 0  # 不动作类不进方向性分母
+
+    def test_hold_neutral_within_band_counts_as_hit(self, tmp_path):
+        """区间涨跌落在容忍带内（<2%）⇒ 不动作判对。"""
+        lp = str(tmp_path / "ledger.jsonl")
+        dl.append_decision(
+            code="600001",
+            name="y",
+            direction=dl.DIRECTION_FLAT,
+            carrier=dl.CARRIER_EXPERT_REVIEW,
+            report_date=_d(0),
+            baseline_close=10.0,
+            path=lp,
+        )
+        out = ds.settle_pending_decisions(
+            report_date=_d(8),
+            ledger_path=lp,
+            price_series_fn=_FakePrices(_mature([10.0, 10.05, 10.1, 10.05, 10.08, 10.1])),
+            index_series_fn=_FakeIndex([]),
+        )
+        assert out["settled"] == 1
+        stats = dl.fold_ledger(path=lp)
+        inaction = stats["inaction"]
+        assert inaction["total"] == 1
+        assert inaction["hit"] == 1
+        assert inaction["hit_rate"] == pytest.approx(1.0)
+        assert inaction["sample_sufficient"] is False
+
+    def test_illegal_direction_skipped(self, tmp_path):
+        """方向值非法（非 ±1/0）仍跳过，不计结算。"""
+        lp = str(tmp_path / "ledger.jsonl")
+        dl.append_decision(
+            code="600002",
+            name="z",
+            direction=7,
             carrier=dl.CARRIER_EXPERT_REVIEW,
             report_date=_d(0),
             baseline_close=10.0,

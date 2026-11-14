@@ -261,10 +261,23 @@ def build_settlement_summary(
                 }
             )
         batches.append({"date": date, "n": batch_n, "cells": cells})
+    from src.python.core import decision_ledger as _dl
+
+    inaction = _dl.summarize_inaction(ledger_decisions)
+    if inaction["total"] == 0:
+        inaction_label = "不动作建议：—"
+    elif not inaction["sample_sufficient"]:
+        inaction_label = f"不动作建议：命中 {inaction['hit']}/{inaction['total']}（样本不足）"
+    else:
+        inaction_label = f"不动作建议：命中率 {inaction['hit_rate']:.0%}（n={inaction['total']}）"
+
     return {
         "available": True,
         "reason": "",
         "horizons": list(SETTLEMENT_HORIZONS),
+        # 不动作类（持有/观望/不操作）事后判定：与方向性表现并列，不进其分母
+        "inaction": inaction,
+        "inaction_label": inaction_label,
         "batches": batches,
         # 「我的建议历史表现」按视界聚合：只读账本、不依赖 decision_reflection 开关
         "performance_title": PERFORMANCE_TITLE,

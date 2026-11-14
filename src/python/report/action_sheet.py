@@ -308,6 +308,14 @@ def _write_decision_basis_block(
             ]
             + [""] * (ncols - 1),
         )
+    # 不动作建议（持有/观望/不操作）事后判定：与方向性表现并列，不进其分母；
+    # 文案单源在结算摘要契约（HTML 端读同一字段，双端同源）
+    if settlement.get("inaction_label"):
+        row = write_data_row(
+            ws,
+            row,
+            [str(settlement.get("inaction_label"))] + [""] * (ncols - 1),
+        )
     # 集中度约束（开关 portfolio_constraints；只标注不阻断）
     constraints = data.get("constraints") or {}
     if constraints.get("enabled"):
@@ -535,7 +543,7 @@ def _write_review_block(
                 s.get("code", ""),
                 s.get("name", ""),
                 s.get("direction", ""),
-                _outcome_label.get(s.get("outcome"), s.get("outcome", "")),
+                s.get("judgement") or _outcome_label.get(s.get("outcome"), s.get("outcome", "")),
                 ret_text,
             ],
         )
@@ -543,7 +551,7 @@ def _write_review_block(
         row = write_data_row(
             ws,
             row,
-            [p.get("code", ""), p.get("name", ""), p.get("direction", ""), "待结算", ""],
+            [p.get("code", ""), p.get("name", ""), p.get("direction", ""), p.get("judgement") or "待结算", ""],
         )
     if review_data.get("settled_count", 0) > 0:
         if review_data.get("sample_sufficient"):

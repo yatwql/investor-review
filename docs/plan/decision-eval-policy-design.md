@@ -1,6 +1,6 @@
 # 建议后验评估政策单源化 + 不动作类命中评估（plan-252 设计）
 
-> 状态：**设计稿，未实施**。立项见 [`plan.md`](../managements/plan.md) 的 `plan-252`；
+> 状态：**P1/P2 已实施；P3（自检提示）未实施**。立项见 [`plan.md`](../managements/plan.md) 的 `plan-252`；
 > 借鉴来源与取舍见 [`panwatch-borrowing-review.md`](panwatch-borrowing-review.md)。
 
 ## 1. 背景与缺口
@@ -83,9 +83,9 @@ EVAL_POLICY: dict[str, object] = {
 
 ### 3.4 折叠与汇总（只增不改）
 
-- 顶层新增 `flat`：`{total, hit, hit_rate, sample_sufficient}`；`hit_rate` 在 `total < MEANINGFUL_SAMPLE` 时为 None，
+- 顶层新增 `inaction`：`{total, hit, hit_rate, sample_sufficient}`；`hit_rate` 在 `total < MEANINGFUL_SAMPLE` 时为 None，
   消费方统一按「命中/总数（样本不足）」呈现；
-- `by_carrier` 每项新增 `flat_total` / `flat_hit`；
+- `by_carrier` 每项新增 `inaction_total` / `inaction_hit`（避开既有 `flat`（平盘带宽）键义）；
 - **既有键语义不变**（`directional_total`、`accuracy`、`alpha_mean` 等），消费点逐个核对一遍：`decision_review_block`
   句文案、`doctor._check_review_ledger_overview()`、`decision_basis_settlement.build_performance()`。
 
@@ -117,8 +117,8 @@ EVAL_POLICY: dict[str, object] = {
 
 | 阶段 | 内容 | 验收 |
 | :--- | :--- | :--- |
-| P1 | policy 模块（阈值单源 + 政策声明）+ `flat_hit` 写入 + fold 汇总 + 契约文档 | 判定矩阵；单源守卫；旧账本兼容；附录 H 与需求同步 |
-| P2 | 报告一行 + 复盘块取值 + `doctor` 一行 | 双端同源用例；样本不足文案；无样本 `—` |
+| P1 | policy 模块（阈值单源 + 政策声明）+ `flat_hit` 写入 + fold 汇总 + 契约文档（已实施） | 判定矩阵；单源守卫；旧账本兼容；附录 H 与需求同步 |
+| P2 | 报告一行 + 复盘块取值 + `doctor` 一行（已实施） | 双端同源用例；样本不足文案；无样本 `—` |
 | P3 | 结果进 `self_review` 输入（仅提示，不改权重） | 指纹换键验证；再生成本可接受 |
 
 P3 明确**只呈现不调权**：样本不足时按命中率调提示词权重会引入过拟合。
