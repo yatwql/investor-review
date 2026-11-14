@@ -57,7 +57,7 @@ def contract_html(module_key: str) -> str:
             + "</li>"
         )
     return (
-        f'<details class="contract-block"><summary>{BLOCK_TITLE}（判决：{_html.escape(verdict_label)}）</summary>'
+        f"<details><summary>{BLOCK_TITLE}（判决：{_html.escape(verdict_label)}）</summary>"
         f"<ul>{''.join(rows)}</ul></details>"
     )
 

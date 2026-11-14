@@ -192,7 +192,7 @@
         {# 决策书（主张/证据/判决；开关 llm_research_contract，默认关 → 契约键缺席 #}
         {% set _book = _db.get("decision_book") or {} %}
         {% if _book.get("available") %}
-        <details class="contract-block" style="margin-top:8px;">
+        <details style="margin-top:8px;">
             <summary style="font-weight:bold;font-size:var(--fs-body);">{{ _book.get("title") }}</summary>
             {% for _m in _book.get("modules") or [] %}
             <div style="margin:8px 0 2px;font-weight:600;">{{ _m.get("label") }}（判决：{{ _m.get("verdict_label") }}）</div>

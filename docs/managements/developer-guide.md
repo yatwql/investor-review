@@ -207,7 +207,7 @@ ln -sf "$PWD/.pi/models.json" ~/.pi/agent/models.json
 
 **归档区冻结**：`docs/` 下为历史快照（含各版本归档里的脚本副本），**不得被 lint/format 重排**。配置已声明 `extend-exclude` + `force-exclude = true`——后者是关键：ruff 的 `exclude` 只在整树扫描时生效，命令行显式给目录（`ruff format docs`）会绕过它、把归档脚本一并重排（实测曾误改 7 个文件）。因此需要格式化的只能是 `src/` / `scripts/` 等活代码路径；契约由 `src/test/unit/test_ruff_exclude_contract.py` 锁定。
 
-**CI 同步执行（`.github/workflows/ci.yml`）**：三档测试按分支/标签分流——`dev` 推送跑 P0（`dev-verify`）、`master` 推送或 PR 跑 P1（`verify`）、打 `v*` tag 跑 P2（`regression`），矩阵覆盖 Python 3.11/3.12/3.13；另有三个独立 job：`guards`（**阻塞**，13 个 `--ci` 守护脚本即上方 P0/P2 清单全量（含 `check-types.py`，job 内另装 pyright 作解析器）——job 内按 pre-commit 同款后台并行回放，任一守护非零退出折叠为 FAIL 分组并使 job 红；守护经 src.python 链依赖项目运行时包（如 check-doc-drift → httpx），故 editable 安装保留）、`portability`（**阻塞**，非 UTF-8 locale + 隐式编码双探针，见下方「编码/locale 自检」）与 `format`（非阻塞，`ruff format --check src/python/ src/test/ scripts/` + `ruff check`；三条路径必须与本地整树基线同口径——只查 `src/python`+`scripts` 会放行测试文件的格式漂移）。
+**CI 同步执行（`.github/workflows/ci.yml`）**：类型检查器的版本在 CI 侧**锁死**（`pyright==1.1.414`，与本地基线同版本）——类型口径随版本演进，不锁会出现「同一份代码本地绿、CI 先报新 finding」；升级须同时改 CI 版本行与本地环境后再动代码。三档测试按分支/标签分流——`dev` 推送跑 P0（`dev-verify`）、`master` 推送或 PR 跑 P1（`verify`）、打 `v*` tag 跑 P2（`regression`），矩阵覆盖 Python 3.11/3.12/3.13；另有三个独立 job：`guards`（**阻塞**，13 个 `--ci` 守护脚本即上方 P0/P2 清单全量（含 `check-types.py`，job 内另装 pyright 作解析器）——job 内按 pre-commit 同款后台并行回放，任一守护非零退出折叠为 FAIL 分组并使 job 红；守护经 src.python 链依赖项目运行时包（如 check-doc-drift → httpx），故 editable 安装保留）、`portability`（**阻塞**，非 UTF-8 locale + 隐式编码双探针，见下方「编码/locale 自检」）与 `format`（非阻塞，`ruff format --check src/python/ src/test/ scripts/` + `ruff check`；三条路径必须与本地整树基线同口径——只查 `src/python`+`scripts` 会放行测试文件的格式漂移）。
 
 ### 编码/locale 自检（旧 pip 回退解码 / 隐式编码）
 

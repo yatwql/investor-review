@@ -522,7 +522,7 @@ Web 模式（浏览器界面）提供「配置编辑」面板，可修改的配�
 | 市场与估值 | `valuation_percentile`（默认关）/ `market_temperature` / `crisis_replay`（默认关）/ `prosperity_framework` | `[S]` 6-9 |
 | 基金与风格 | `factor_catalog` / `industry_beta` / `candidate_compare`（默认开；自动项：配置候选池即生效，不占编号） | `[S]` 10-11 |
 | 事件与摘要 | `event_window_impact`（默认关）/ `market_sentiment`（默认关）/ `summary_highlights`（默认开） | `[S]` 12-14 |
-| 机制与质量 | `portfolio_constraints`（默认关）/ `decision_reflection`（默认关）/ `report_qa`（默认关、实验）/ `deterministic_signal`；`decision_basis`（默认开，行动建议章内「判断依据」块）与 `module_quality_gate`（默认开，LLM 输出评级）属内置常开，不占编号 | `[S]` 15-18 |
+| 机制与质量 | `llm_research_contract`（默认关）/ `portfolio_constraints`（默认关）/ `decision_reflection`（默认关）/ `report_qa`（默认关、实验）/ `deterministic_signal`；`decision_basis`（默认开，行动建议章内「判断依据」块）与 `module_quality_gate`（默认开，LLM 输出评级）属内置常开，不占编号 | `[S]` 15-18 |
 | 独立章节与回放 | `rebalance_schedule_replay`（默认关）/ `holding_change_review`（默认关）/ `stock_fundamentals`（默认关）；`whatif_trade_cost`（默认关）已归持仓与交易组 | `[C]` 整章块（`whatif_trade_cost` 在 `[S]` 5） |
 | 章节内选项 | `llm_debate_procon`（默认关）/ `llm_debate_conditional` | `[C]` 7.1 / 7.2（智囊团复盘子项） |
 | 持仓匿名化 | `anonymization.mode`（off / code_display / full_anonymous / summary） | `[G]` → `A` |
