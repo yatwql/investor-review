@@ -82,6 +82,13 @@ from src.python.report.html_sections import (  # noqa: E402
 # ── 辅助函数 ──────────────────────────────────────────────
 
 
+def _with_decision_book(basis: dict | None) -> dict | None:
+    """判断依据块契约的渲染期补挂：决策书在 LLM 生成后才可用（幂等，开关关时无变化）。"""
+    from src.python.report.decision_book import attach_decision_book
+
+    return attach_decision_book(basis)
+
+
 def _render_template(
     *,
     now_str: str,
@@ -272,7 +279,7 @@ def _render_template(
         position_status=position_status,
         data_freshness=data_freshness,
         action_data=action_data,
-        decision_basis_data=decision_basis_data,
+        decision_basis_data=_with_decision_book(decision_basis_data),
         prosperity_framework_data=prosperity_framework_data,
         market_sentiment_data=market_sentiment_data,
         crisis_annotation_data=crisis_annotation_data,
@@ -701,7 +708,7 @@ def write_html_report(
         position_status=position_status,
         data_freshness=data_freshness,
         action_data=action_data,
-        decision_basis_data=decision_basis_data,
+        decision_basis_data=_with_decision_book(decision_basis_data),
         prosperity_framework_data=prosperity_framework_data,
         market_sentiment_data=market_sentiment_data,
         crisis_annotation_data=crisis_annotation_data,

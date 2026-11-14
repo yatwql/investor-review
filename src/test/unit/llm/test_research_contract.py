@@ -336,3 +336,32 @@ class TestRecommendationHardConstraint:
         errors = rc.validate_recommendation(execution_status="weird", quantity=0)
         assert "execution_status_invalid:weird" in errors
         assert "quantity_not_positive" in errors
+
+
+class TestAcceptanceGuards:
+    """P1 验收缺项：旧缓存 payload 兼容 + 证据索引体积上限。"""
+
+    def test_legacy_payload_without_claims_renders_nothing(self):
+        """旧缓存正文无契约头 → 解析 None、载体空、渲染无块且不抛错（向后兼容）。"""
+        from src.python.report.llm_contract_block import contract_html, contract_rows
+
+        legacy_text = "<p>旧版正文：没有结构化契约</p>"
+        assert rc.parse_contract(legacy_text) is None
+        rc.record_module_contract("expert_review", rc.validate_contract(None, {}))
+        assert rc.get_module_contracts() == {}
+        assert contract_html("expert_review") == ""
+        assert contract_rows("expert_review") == []
+
+    def test_index_budget_capped_to_ratio(self):
+        """索引体积按输入块的 15% 截断（超出时给「其余 N 条未列出」说明）。"""
+        index = {f"ev:hold:{i:06d}": f"标的{i}持仓收益率 +{i % 90}.00%" for i in range(200)}
+        input_chars = 2000
+        text = rc.build_instruction(index, input_chars=input_chars)
+        index_part = text.split("【证据索引】", 1)[1]
+        assert len(index_part) <= int(input_chars * rc.MAX_INDEX_RATIO) + 200
+        assert "因体积上限未列出" in index_part
+
+    def test_index_budget_default_when_input_unknown(self):
+        index = {f"ev:hold:{i:06d}": "摘要" for i in range(2000)}
+        text = rc.build_instruction(index)
+        assert len(text) <= rc.DEFAULT_INDEX_BUDGET + 600

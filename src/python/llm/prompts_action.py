@@ -224,7 +224,8 @@ def _append_research_contract(parts: list[str], *, holdings_details, penetrated_
         metrics=metrics,
     )
     record_evidence_index(index)
-    parts.append(build_instruction(index))
+    # 输入块体量按当前已装配的提示词字符数计，索引控制在 15% 以内（防提示词膨胀）
+    parts.append(build_instruction(index, input_chars=len("\n".join(parts))))
 
 
 def _build_expert_review_prompt(

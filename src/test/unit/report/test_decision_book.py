@@ -108,3 +108,28 @@ class TestDualChannelWiring:
         assert 'data.get("decision_book")' in source
         for field in ("verdict_label", "statement", "evidence", "invalidations"):
             assert field in source
+
+
+class TestRenderTimeAttachment:
+    """渲染期补挂：判断依据块装配早于 LLM 契约，故渲染入口幂等补一次。"""
+
+    def test_attach_injects_when_contract_present(self):
+        set_feature_enabled(rc.FEATURE_FLAG, True)
+        rc.record_module_contract("expert_review", _contract())
+        basis = {"enabled": True, "settlement": {}}
+        result = book.attach_decision_book(basis)
+        assert result is not None
+        assert result["decision_book"]["modules"][0]["key"] == "expert_review"
+
+    def test_attach_idempotent(self):
+        set_feature_enabled(rc.FEATURE_FLAG, True)
+        rc.record_module_contract("expert_review", _contract())
+        once = book.attach_decision_book({"enabled": True})
+        twice = book.attach_decision_book(once)
+        assert twice == once
+
+    def test_attach_noop_without_contract_or_flag(self):
+        assert book.attach_decision_book({"enabled": True}) == {"enabled": True}
+        set_feature_enabled(rc.FEATURE_FLAG, True)
+        assert book.attach_decision_book({"enabled": True}) == {"enabled": True}
+        assert book.attach_decision_book(None) is None

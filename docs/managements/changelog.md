@@ -24,7 +24,7 @@
 
 ### 新增
 
-- **决策书渲染（plan-253 P3 后半）**：新增 `report/decision_book.py`——把各模块结构化契约汇总成行动建议章可读块「决策书（主张与证据）」（判决 + 主张/证据/失效条件），HTML 用折叠块、Excel 同页签小节，契约键 `decision_basis_data.decision_book`；开关关闭 / 无契约 / 匿名化模式非 off 时键缺席（产物逐字节不变，证据 id 内代码脱敏记为 Known Gap）。补证循环按条件暂缓：开关实际运行 ≥2 周后若 `evidence_needed` 占模块次 ≥20% 再做。
+- **决策书渲染（plan-253 P3 后半）**：新增 `report/decision_book.py`——把各模块结构化契约汇总成行动建议章可读块「决策书（主张与证据）」（判决 + 主张/证据/失效条件），HTML 用折叠块、Excel 同页签小节，契约键 `decision_basis_data.decision_book`；开关关闭 / 无契约 / 匿名化模式非 off 时键缺席（产物逐字节不变，证据 id 内代码脱敏记为 Known Gap）。补证循环按条件暂缓：开关实际运行 ≥2 周后若 `evidence_needed` 占模块次 ≥20% 再做。决策书改为**渲染期幂等补挂（rf-1141）**（判断依据块装配早于 LLM 契约，原有挂载点恒为空）；已用 `--feature llm_research_contract=true` 真机跑通全量报告：HTML/Excel 均出现决策书块（判决=证据齐备，主张带证据 id 与失效条件），另补「旧 payload 无 claims 兼容」与「证据索引 ≤ 输入块 15%」两条验收用例。
 
 - **建议级硬约束 + 判决入账口径（plan-253 P3 前半）**：`research_contract.validate_recommendation()` 在校验期拒绝「待复核 / 不可执行（blocked/not_applicable）却带可执行数量」的建议（不依赖提示词自律）；决策登记按模块判决分流——`reject`（主张与证据矛盾）不入账以免污染命中率，`evidence_needed`/`revise` 照常入账但降为低优先并标注「未验证：证据不足，仅参考」。
 

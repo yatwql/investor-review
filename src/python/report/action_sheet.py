@@ -247,6 +247,10 @@ def _write_decision_basis_block(
             + [""] * (ncols - 1),
         )
     # 结算摘要（最近 5 批 × 多视界；未到期显式标注，收益与超额同为百分数）
+    # 决策书在渲染期补挂（判断依据块装配早于 LLM 契约落载体）
+    from src.python.report.decision_book import attach_decision_book
+
+    data = attach_decision_book(data) or data
     settlement = data.get("settlement") or {}
     row += 1
     ws.cell(row=row, column=1, value="结算摘要").font = _FONT_SUB_BLOCK

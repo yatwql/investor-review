@@ -15,7 +15,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.python.llm.evidence_index import render_index_lines
 
 #: 功能开关名（注册见 `config/_feature_registry.py`）
 FEATURE_FLAG = "llm_research_contract"
@@ -81,11 +80,26 @@ def get_module_contracts() -> dict[str, dict[str, Any]]:
     return dict(_MODULE_CONTRACTS)
 
 
-def build_instruction(index: dict[str, str]) -> str:
+#: 证据索引占输入块的预算比例（超出即截断，防提示词膨胀）
+MAX_INDEX_RATIO = 0.15
+#: 未知输入块体量时的索引预算（字符）
+DEFAULT_INDEX_BUDGET = 4000
+
+
+def _index_budget(input_chars: int | None) -> int:
+    """索引预算：输入块的 15%，未知时用固定上限（下限 200 字符保底）。"""
+    if not input_chars or input_chars <= 0:
+        return DEFAULT_INDEX_BUDGET
+    return max(200, int(input_chars * MAX_INDEX_RATIO))
+
+
+def build_instruction(index: dict[str, str], *, input_chars: int | None = None) -> str:
     """提示词追加段：契约头格式 + 证据索引（索引为空时只给格式，不给空清单）。
 
     Args:
         index: `evidence_index.build_evidence_index()` 的产物。
+        input_chars: 本模块输入块的字符数（用于把索引控制在 15% 以内）；
+            未知时按 `DEFAULT_INDEX_BUDGET` 截断。
 
     Returns:
         追加到提示词末尾的文本块；关闭开关时调用方不应调用本函数。
@@ -100,8 +114,18 @@ def build_instruction(index: dict[str, str]) -> str:
         "verdict 仅可取值 ready / revise / evidence_needed / reject。",
     ]
     if index:
+        budget = _index_budget(input_chars)
+        picked: list[str] = []
+        used = 0
+        for eid, summary in index.items():
+            line = f"- {eid}：{summary}"
+            if used + len(line) > budget:
+                picked.append(f"- …（其余 {len(index) - len(picked)} 条证据因体积上限未列出，仅可用已列 id）")
+                break
+            picked.append(line)
+            used += len(line)
         lines.append("【证据索引】")
-        lines.extend(render_index_lines(index))
+        lines.extend(picked)
     return "\n".join(lines)
 
 
@@ -273,6 +297,8 @@ __all__ = [
     "VERDICT_READY",
     "VERDICT_REJECT",
     "VERDICT_REVISE",
+    "DEFAULT_INDEX_BUDGET",
+    "MAX_INDEX_RATIO",
     "build_instruction",
     "get_module_contracts",
     "is_enabled",

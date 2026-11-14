@@ -188,7 +188,16 @@
 | 补证 | `supplement` | 仅针对证据缺口的一次窄重问（上限 1 次） |
 | 未验证 | — | 校验未通过但报告照常产出时的标注（非错误） |
 
-## 9. 事实位索引
+## 9. 实施验证（真机）
+
+启用态全量报告（`--feature llm_research_contract=true report --type full`）验证结论：
+
+- HTML：各模块正文后出现「主张与证据」折叠块（判决 + 证据 id + 失效条件）；行动建议章内出现「决策书（主张与证据）」块；
+- Excel：「行动建议」页签落决策书小节，各 LLM 模块页签落「主张与证据」小节（同一契约字段）；
+- 判决分布：本次四模块均为「证据齐备」（`evidence_needed` 占比 0，尚未触发补证门槛）；
+- 成本：本轮 8 次 LLM 调用、¥0.1005（含契约段后的提示词增量）。
+
+## 10. 事实位索引
 
 - 开关：`config/_feature_registry.py`（`llm_research_contract`，默认关）
 - 证据池：`llm/evidence_index.py::build_evidence_index`

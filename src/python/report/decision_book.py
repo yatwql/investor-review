@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any
 
-__all__ = ["BLOCK_TITLE", "build_decision_book"]
+__all__ = ["BLOCK_TITLE", "attach_decision_book", "build_decision_book"]
 
 #: 块标题（HTML 与 Excel 同源）
 BLOCK_TITLE = "决策书（主张与证据）"
@@ -81,3 +81,23 @@ def build_decision_book() -> dict[str, Any] | None:
         "modules": modules,
         "note": "主张与证据来自本次 LLM 复盘；判决为机械校验结果（证据是否齐备、失效条件是否写明），不替代事实校验。",
     }
+
+
+def attach_decision_book(basis: dict[str, Any] | None) -> dict[str, Any] | None:
+    """把决策书补挂到判断依据块契约（幂等；渲染期调用，规避装配早于 LLM 的时序）。
+
+    判断依据块在数据准备阶段装配，而结构化契约在 LLM 生成后一遍才落载体——
+    因此在渲染入口补一次：已有 `decision_book` 则不动，否则按当前载体尝试装配。
+
+    Args:
+        basis: `decision_basis_data` 契约（可为 None）。
+
+    Returns:
+        原契约（可能新增 `decision_book` 键）；None 原样返回。
+    """
+    if not isinstance(basis, dict) or basis.get("decision_book"):
+        return basis
+    book = build_decision_book()
+    if book:
+        basis = {**basis, "decision_book": book}
+    return basis
