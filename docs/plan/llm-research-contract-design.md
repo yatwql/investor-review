@@ -70,9 +70,12 @@
   - 记账：`llm_research_contract` 统计每模块 `verdict` 分布、补证次数、补证后转 ready 比例（进 `perf_history`/`llm_usage`，不新增账本文件）。
 - 与既有闸门的关系：不替代 `fact_checker`，而是**并列**；两处结论冲突时以数值校验为准（数值是硬事实）。
 
-### 3.4 P3：决策书区块 + 建议硬约束
+### 3.4 P3：决策书（并入判断依据块）+ 建议硬约束
 
-- 报告新增（或并入判断依据块）「决策书」：主张 → 证据（可展开摘要）→ 判决 → 建议（triggers / invalidations / risks），HTML 与 Excel 同源；
+- 「决策书」**并入既有「判断依据」块**，不新增章节/页签：块内呈现 主张 → 证据（可展开摘要）→ 判决 → 建议
+  （triggers / invalidations / risks），HTML 与 Excel 同源。理由：决策书读的就是判断依据块与建议清单的同一批事实，
+  独立成章要牵动章号、页签数、可见性矩阵与需求条目（R-OUT），收益不抵成本；
+
 - 建议硬约束下沉到 `analysis/rebalance_advisor.py` 与 `decision_llm_capture`：
   - `execution_status ∈ {conditional, blocked, not_applicable}`；
   - `review_required` 或 `blocked` 的建议**不得带 quantity**（校验期拒绝，等价于对方 `review_is_not_a_trade`）；
@@ -103,11 +106,12 @@
 | 模型不遵从 JSON 头 | 与既有决策头同机制（`_match_json_end` 括号配对解析 + 失败降级为「无契约」），不引入新解析器 |
 | 契约与既有 `fact_checker` 重复 | 分工写死：数值真伪归 `fact_checker`，证据归属/时点归本契约；冲突以数值为准 |
 | 缓存键失效 | 提示词文本变更 ⇒ 递增 `PROMPT_SCHEMA_VERSION`（既有纪律） |
-| 报告信息膨胀 | P1 折叠块默认收起；P3 区块仅在开关开且 verdict ≠ reject 时渲染 |
+| 报告信息膨胀 | P1 折叠块默认收起；P3 决策书并入判断依据块（不新增章节），且仅在开关开且 verdict ≠ reject 时渲染 |
 
 ## 6. 不做
 
 - 不做多 agent 辩论图/工具调用循环（本方已有辩论，且离线报告无工具回环需求）；
 - 不把契约落成 Pydantic/数据库模型（本仓契约以 dict + 校验函数为事实位）；
 - 不做「按 verdict 自动改写正文」（改写仍归 `fact_checker` 的护栏链路）；
-- 不做证据置信度加权与自动权重回灌（缺校准数据，等 plan-252 的评估链路稳定后再议）。
+- 不做证据置信度加权与自动权重回灌（缺校准数据，等 plan-252 的评估链路稳定后再议）；
+- 不新增独立「决策书」章节/页签：一律并入判断依据块（避免章号、页签数、可见性矩阵与 R-OUT 条目扩散）。

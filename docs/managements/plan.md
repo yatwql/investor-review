@@ -68,7 +68,7 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 
 **来源**：PanWatch 借鉴分析（[`panwatch-borrowing-review.md`](../plan/panwatch-borrowing-review.md) §2.2 与 §2.3）。
 **缺口**：LLM 输出是自由 markdown；`fact_checker` 只校验数值，`decision_llm_capture` 只抽表格；没有「主张→证据→判决」链，也没有「证据时点 ≤ 分析截止」这类可机检约束，建议的 triggers/invalidations 只停留在提示词口头要求。
-**动作**：新增开关 `llm_research_contract`（默认关，关闭逐字节不变）。P1 为既有语料生成内容寻址 `evidence_id` 池并追加结构头 `{claims[{id,statement,evidence[],inference,invalidations}],verdict}`；P2 引入 verdict 枚举（ready/revise/evidence_needed/reject）+ 一次预算受限补证；P3 报告「决策书」区块 + 建议硬约束（review/blocked 不得带数量、限购品种自动带执行约束）。
+**动作**：新增开关 `llm_research_contract`（默认关，关闭逐字节不变）。P1 为既有语料生成内容寻址 `evidence_id` 池并追加结构头 `{claims[{id,statement,evidence[],inference,invalidations}],verdict}`；P2 引入 verdict 枚举（ready/revise/evidence_needed/reject）+ 一次预算受限补证；P3「决策书」**并入判断依据块**（不新增章节/页签）+ 建议硬约束（review/blocked 不得带数量、限购品种自动带执行约束）。
 **不做**：不做 agent 图与工具调用循环；不引入 Pydantic 契约模型；不自动改写正文。
 **设计**：[`llm-research-contract-design.md`](../plan/llm-research-contract-design.md)（三期与验收、golden 回归方案）。
 
