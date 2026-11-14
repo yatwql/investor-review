@@ -505,6 +505,7 @@ def self_review_fingerprint(
     penetrated_assets: list[dict] | None = None,
     purchase_block: str = "",
     holding_change_block: str = "",
+    inaction_line: str = "",
 ) -> str:
     """生成后自检：**内容寻址**指纹——各模块产出文本 + 数据摘要。
 
@@ -529,6 +530,8 @@ def self_review_fingerprint(
             块空 → 逐字节沿用不带该段的原形态，键与引入前一致）。
         holding_change_block: 持仓变动复盘提示词块（非空 → 提示词附录含块，
             故进键；块空 → 键与引入前一致）。
+        inaction_line: 不动作类命中率口径行（非空 → 提示词含该段，故进键；
+            空串 → 键与引入前一致）。
     """
     _parts = self_review_fingerprint_parts(
         module_outputs,
@@ -536,6 +539,7 @@ def self_review_fingerprint(
         penetrated_assets,
         purchase_block=purchase_block,
         holding_change_block=holding_change_block,
+        inaction_line=inaction_line,
     )
     return compute_fingerprint(*_parts.values()) + generation_params_suffix("self_review")
 
@@ -546,6 +550,7 @@ def self_review_fingerprint_parts(
     penetrated_assets: list[dict] | None = None,
     purchase_block: str = "",
     holding_change_block: str = "",
+    inaction_line: str = "",
 ) -> dict[str, object]:
     """自检指纹的**分段构成**（有序）：同一事实源供指纹与「哪一段变了」诊断共用。
 
@@ -572,6 +577,9 @@ def self_review_fingerprint_parts(
         parts["purchase"] = purchase_block
     if holding_change_block:
         parts["holding_change"] = holding_change_block
+    if inaction_line:
+        # 不动作命中率随账本演进：进键才能让「账本变了 → 自检重算」
+        parts["inaction"] = inaction_line
     return parts
 
 

@@ -526,6 +526,27 @@ def fold_ledger(
     }
 
 
+def inaction_summary_line(fold: dict[str, Any] | None = None) -> str:
+    """不动作类（持有/观望/不操作）命中率的一句话口径（无样本返回空串）。
+
+    作为唯一文案源，供自检输入与报告口径共用；样本不足时只给「命中/总数」。
+
+    Args:
+        fold: `fold_ledger()` 结果；None 时现读当前账本。
+
+    Returns:
+        如 ``不动作建议：命中率 67%（n=20）``；无已判定样本时返回 ``""``。
+    """
+    stats = fold if fold is not None else fold_ledger()
+    inaction = stats.get("inaction") or {}
+    total = int(inaction.get("total") or 0)
+    if total <= 0:
+        return ""
+    if inaction.get("sample_sufficient") and inaction.get("hit_rate") is not None:
+        return f"不动作建议：命中率 {inaction['hit_rate']:.0%}（n={total}）"
+    return f"不动作建议：命中 {int(inaction.get('hit') or 0)}/{total}（样本不足）"
+
+
 # ── 方向/结论措辞（教训文本用）──
 
 

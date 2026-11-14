@@ -413,6 +413,7 @@ def generate_self_review(
     holding_change_block: str = "",
     event_impact_block: str = "",
     schedule_replay_block: str = "",
+    inaction_line: str = "",
 ) -> tuple[str | None, bool]:
     """生成后自检：对本次各分析模块产出做一次模型层复核。
 
@@ -430,10 +431,13 @@ def generate_self_review(
             penetrated_assets,
             purchase_block=purchase_constraint_block or "",
             holding_change_block=holding_change_block or "",
+            inaction_line=inaction_line or "",
         )
 
     def _prompt():
-        return _build_self_review_prompt(module_outputs, holdings_details, penetrated_assets)
+        return _build_self_review_prompt(
+            module_outputs, holdings_details, penetrated_assets, inaction_line=inaction_line or ""
+        )
 
     _result = generate_llm_module(
         llm_config,

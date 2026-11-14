@@ -465,3 +465,45 @@ def test_shipped_default_is_disabled():
     enabled = get_llm_setting_default("enabled_llm")
     assert isinstance(enabled, dict)
     assert enabled[SELF_REVIEW_MODULE_KEY] is False
+
+
+class TestInactionSummaryInSelfReview:
+    """不动作命中率进自检：只作提示，不参与任何裁决；该行并入自检指纹。"""
+
+    def test_summary_line_format(self):
+        from src.python.core.decision_ledger import inaction_summary_line
+
+        fold = {"inaction": {"total": 3, "hit": 2, "hit_rate": 2 / 3, "sample_sufficient": False}}
+        assert inaction_summary_line(fold) == "不动作建议：命中 2/3（样本不足）"
+        fold_sufficient = {"inaction": {"total": 20, "hit": 13, "hit_rate": 0.65, "sample_sufficient": True}}
+        assert inaction_summary_line(fold_sufficient) == "不动作建议：命中率 65%（n=20）"
+
+    def test_summary_line_empty_without_samples(self):
+        from src.python.core.decision_ledger import inaction_summary_line
+
+        assert inaction_summary_line({"inaction": {"total": 0}}) == ""
+
+    def test_prompt_contains_inaction_section(self):
+        from src.python.llm.prompts_review import _build_self_review_prompt
+
+        prompt = _build_self_review_prompt(
+            {"expert_review": "<p>正文</p>"},
+            [],
+            [],
+            inaction_line="不动作建议：命中 2/3（样本不足）",
+        )
+        assert "### 不动作建议命中率" in prompt
+        assert "命中 2/3（样本不足）" in prompt
+
+    def test_prompt_without_line_has_no_section(self):
+        from src.python.llm.prompts_review import _build_self_review_prompt
+
+        prompt = _build_self_review_prompt({"expert_review": "<p>正文</p>"}, [], [])
+        assert "不动作建议命中率" not in prompt
+
+    def test_fingerprint_changes_with_inaction_line(self):
+        a = self_review_fingerprint(_OUTPUTS, [], [], inaction_line="")
+        b = self_review_fingerprint(_OUTPUTS, [], [], inaction_line="不动作建议：命中 2/3（样本不足）")
+        assert a != b
+        # 空串与不传等价（逐字节回退）
+        assert a == self_review_fingerprint(_OUTPUTS, [], [])

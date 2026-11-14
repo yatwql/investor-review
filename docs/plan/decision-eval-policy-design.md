@@ -1,6 +1,6 @@
 # 建议后验评估政策单源化 + 不动作类命中评估（plan-252 设计）
 
-> 状态：**P1/P2 已实施；P3（自检提示）未实施**。立项见 [`plan.md`](../managements/plan.md) 的 `plan-252`；
+> 状态：**P1/P2/P3 已实施**。立项见 [`plan.md`](../managements/plan.md) 的 `plan-252`；
 > 借鉴来源与取舍见 [`panwatch-borrowing-review.md`](panwatch-borrowing-review.md)。
 
 ## 1. 背景与缺口
@@ -119,7 +119,7 @@ EVAL_POLICY: dict[str, object] = {
 | :--- | :--- | :--- |
 | P1 | policy 模块（阈值单源 + 政策声明）+ `flat_hit` 写入 + fold 汇总 + 契约文档（已实施） | 判定矩阵；单源守卫；旧账本兼容；附录 H 与需求同步 |
 | P2 | 报告一行 + 复盘块取值 + `doctor` 一行（已实施） | 双端同源用例；样本不足文案；无样本 `—` |
-| P3 | 结果进 `self_review` 输入（仅提示，不改权重） | 指纹换键验证；再生成本可接受 |
+| P3 | 结果进 `self_review` 输入（仅提示，不改权重）——**已实施** | 指纹换键验证；再生成本可接受 |
 
 P3 明确**只呈现不调权**：样本不足时按命中率调提示词权重会引入过拟合。
 
