@@ -380,6 +380,7 @@ class TestInactionRendering(_ExcelSheetAssertHelpers, unittest.TestCase):
         assert 's.get("judgement")' in html
         assert 'p.get("judgement")' in html
 
+
 class TestDecisionBookRendering(_ExcelSheetAssertHelpers, unittest.TestCase):
     """决策书（主张/证据/判决）：开关关闭无块，开启时双端同源呈现。"""
 
@@ -393,7 +394,13 @@ class TestDecisionBookRendering(_ExcelSheetAssertHelpers, unittest.TestCase):
             "headline": ["信号：暂无信号记录"],
             "summary": "判断依据：暂无信号记录",
             "signals": [],
-            "confidence": {"level": "unknown", "level_label": "暂不可判", "level_class": "", "reason": "", "detail": ""},
+            "confidence": {
+                "level": "unknown",
+                "level_label": "暂不可判",
+                "level_class": "",
+                "reason": "",
+                "detail": "",
+            },
         }
         if book is not None:
             data["decision_book"] = book
