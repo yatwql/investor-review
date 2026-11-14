@@ -146,6 +146,8 @@ def _fetch_from_akshare() -> float | None:
     except ImportError:
         logger.warning("无风险利率: pandas 未安装，无法解析返回值")
         return None
+    # 用 find_spec 而非 try-import 探活：仅判断「装没装」不该把 akshare（含
+    # py_mini_racer/V8）拉进进程——本模块的取数走 `_bond_yield_frame` 里的惰性导入。
     if find_spec("akshare") is None:
         logger.warning("无风险利率: akshare 未安装，无法获取")
         return None

@@ -25,7 +25,7 @@
 ### 修复
 
 - **akshare 国债收益率 API 改名兼容（rf-1139）**：1.19+ 把 `bond_zh_us_rate` 改名 `bond_zh_us_yield_em`（数据集与中文列名不变），旧代码只认旧名——CI 装 1.20.42 后 11 条无风险利率用例直接失败，生产侧还会把「属性不存在」误记成 akshare 熔断失败。现按可用性探测两代 API 符号（`bond_zh_us_rate` / `bond_zh_us_yield_em`，探测结果进程内记忆，缺失只降级不记故障），用例改为 patch 本方取数 seam、版本无关。
-- **报告管线单测补齐离线桩（rf-1140）**：`test_orchestrator_generate_report` / `test_run_integrity` / `test_stage_cancel` 真实调用 `generate_report` 会顺带起数据源健康检查线程（真实网络 + akshare 的 py_mini_racer V8 初始化），单测里 V8 并发初始化会段错误崩掉 xdist worker（CI 表现为 3 个 worker crashed、整套从 1.5min 拖到 12min）。现统一声明 `offline_external_sources`（探针即时失败、零退避）。
+- **报告管线单测补齐离线桩（rf-1140）**：`test_orchestrator_generate_report` / `test_run_integrity` / `test_stage_cancel` 真实调用 `generate_report` 会顺带起数据源健康检查线程（真实网络 + akshare 的 py_mini_racer V8 初始化），单测里 V8 并发初始化会段错误崩掉 xdist worker（CI 表现为 3 个 worker crashed、整套从 1.5min 拖到 12min）。现统一声明 `offline_external_sources`（探针即时失败、零退避），并新增契约守卫 `test_offline_pipeline_contract.py`：真实调用管线入口却漏声明离线桩即红（防同类复发）。
 - **跨模块常量归位单源（rf-1138）：退出码 `_EXIT_*`（CLI / Web worker 各一份）、push2 快照接口 URL、年化交易日数 252（3 处）、最小样本 20 与份额容差 1e-3（各 2 处）改为单源——退出码与 URL 进 `core/constants.py`，统计/容差常量进 `analysis/_math_utils.py`，调用点保留原名别名；新增 7 条单源守卫用例。
 - **ETF 名称判定回归 code_utils 单源（代码类型判定集中化，rf-1136）**：`report/news_correlation._index_holdings` 自建 `"ETF" in name` 判定，小写 `etf` 的品种既不进 ETF 关键词扩展、剥离也失效（`replace("ETF","")` 大小写敏感），关键词召回与资产类型口径分叉；现改用 `is_etf_by_name()` + 大小写不敏感剥离，补 3 条回归用例。
 - **行业接口节流单源化 + 并发下调**：`providers/eastmoney_industry.py` 只用模块常量喂限速器，配置 `batch_rate_limit.eastmoney_industry` 从未被读取（改配置不生效）；现由 `_push2_interval()` 读该配置、缺失才回落内置 100ms，`batch.industry_workers` 默认 8 → 4（push2 逐只调用，并发过高易被对端主动断连 → 连续失败 6 次熔断、行业数据整段降级）。用户手册两处配置表同步。
