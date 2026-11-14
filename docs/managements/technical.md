@@ -3601,6 +3601,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `decision_llm_capture` | LLM 操作建议表解析登记（结构化优先 → 表格兜底；缺行/缺方向/「不操作」行按原因记 INFO 后跳过，异常不中断报告） | 行动建议 | 监控 | 随 `decision_reflection` |
 | `research_contract` | LLM 复盘结构化契约（主张/证据/判决的解析、校验与运行作用域载体；复用决策头括号扫描，不自建解析器；默认关） | LLM 生成 | LLM 生成 | 开关 `llm_research_contract` |
 | `evidence_index` | 证据索引（由该模块提示词输入块生成 `ev:<kind>:<键|哈希>` + 一行摘要；模型只能引用它看得到的内容） | LLM 生成 | LLM 生成 | 开关 `llm_research_contract` |
+| `decision_book` | 决策书装配（把各模块结构化契约汇总成行动建议章可读块：判决 + 主张/证据/失效条件；开关关闭、无契约或匿名化模式非 off 时返回 None） | 行动建议 | 展示 | 开关 `llm_research_contract` |
 | `llm_contract_block` | 契约的展示层装配（HTML 折叠块 / Excel 小节；正文机器可读行展示前剥离） | 行动建议 | 展示 | 开关 `llm_research_contract` |
 | `decision_eval_policy` | 建议事后评估政策单源（方向阈值 1.5% / 不动作容忍带 2.0% / 样本门槛 20 / 视界单位 + 对外 `EVAL_POLICY` 声明；零依赖，账本单向引用） | 行动建议 | 分析计算 | 随 `decision_reflection` |
 | `classify_flat_hit` | 不动作类（持有/观望/不操作）事后判定（`\|区间涨跌\| < 容忍带` ⇒ 判对；无收益/非数值 ⇒ 不可判） | 行动建议 | 分析计算 | 随 `decision_reflection` |
@@ -4071,7 +4072,7 @@ web/ (Web 服务层，薄入口)
 | position_status | dict | 是 | prepare_report_data |
 | data_freshness | dict | 是 | prepare_report_data |
 | action_data | dict | 是 | prepare_report_data；basic 路径由 generate_excel_report 就地构建 |
-| decision_basis_data | dict | 是 | 含 `headline`（章首三行摘要，双端逐字同源）与 `settlement.performance`（按视界命中率/均值超额/样本数）；`settlement.inaction`＝不动作类（持有/观望/不操作）判定汇总 {total, hit, hit_rate, sample_sufficient, by_carrier}、`settlement.inaction_label`＝双端同源呈现文案；prepare_report_data（首次装配）+ full/both 峰值就绪后重装配（风险预算回撤现状依赖历史峰值）；含 `backtest_as_of`＝回测产物最新运行日，由 `decision_basis.backtest_run_date()` 从 `docs/tmp/decision-quality/*.json` 派生 |
+| decision_basis_data | dict | 是 | 含 `headline`（章首三行摘要，双端逐字同源）与 `settlement.performance`（按视界命中率/均值超额/样本数）；`settlement.inaction`＝不动作类（持有/观望/不操作）判定汇总 {total, hit, hit_rate, sample_sufficient, by_carrier}、`settlement.inaction_label`＝双端同源呈现文案；`decision_book`＝决策书（开关 `llm_research_contract` 开启且有契约时出现：各模块判决 + 主张/证据/失效条件，匿名化模式非 off 时不出块），缺席时产物逐字节不变；prepare_report_data（首次装配）+ full/both 峰值就绪后重装配（风险预算回撤现状依赖历史峰值）；含 `backtest_as_of`＝回测产物最新运行日，由 `decision_basis.backtest_run_date()` 从 `docs/tmp/decision-quality/*.json` 派生 |
 | crisis_annotation_data | dict | 是 | assemble_history_augmented_data（full/both 双路径同源装配，`report/_snapshot.py`；危机标注关态恒写、回放态加 replay 层；风险调整超额同点按开关注入 risk_adjusted_excess_data） |
 | risk_adjusted_excess_data | dict | 是 | build_risk_adjusted_excess（报告章节与增强开关 risk_adjusted_excess，默认关） |
 | tail_risk_data | dict | 是 | prepare_report_data |

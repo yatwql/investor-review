@@ -189,6 +189,25 @@
         {% endif %}
         {# 不动作建议（持有/观望/不操作）：与方向性表现并列、不进其分母；文案单源在结算摘要契约 #}
         {% if _st.get("inaction_label") %}<div style="font-size: var(--fs-table-sm);margin-top:4px;">{{ _st.get("inaction_label") }}</div>{% endif %}
+        {# 决策书（主张/证据/判决；开关 llm_research_contract，默认关 → 契约键缺席 #}
+        {% set _book = _db.get("decision_book") or {} %}
+        {% if _book.get("available") %}
+        <details class="contract-block" style="margin-top:8px;">
+            <summary style="font-weight:bold;font-size:var(--fs-body);">{{ _book.get("title") }}</summary>
+            {% for _m in _book.get("modules") or [] %}
+            <div style="margin:8px 0 2px;font-weight:600;">{{ _m.get("label") }}（判决：{{ _m.get("verdict_label") }}）</div>
+            <ul style="margin:2px 0 6px;">
+                {% for _c in _m.get("claims") or [] %}
+                <li>{{ _c.get("statement") }}
+                    {% if _c.get("evidence") %}<div class="text-muted" style="font-size:var(--fs-table-sm);">证据 {{ _c.get("evidence") | join("、") }}</div>{% endif %}
+                    {% if _c.get("invalidations") %}<div class="text-muted" style="font-size:var(--fs-table-sm);">失效条件 {{ _c.get("invalidations") | join("；") }}</div>{% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+            {% endfor %}
+            <div class="text-muted" style="font-size:var(--fs-table-sm);">{{ _book.get("note") }}</div>
+        </details>
+        {% endif %}
         {# 集中度约束（开关 portfolio_constraints；只标注不阻断） #}
         {% set _cons = _db.get("constraints") or {} %}
         {% if _cons.get("enabled") %}

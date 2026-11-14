@@ -379,3 +379,57 @@ class TestInactionRendering(_ExcelSheetAssertHelpers, unittest.TestCase):
         assert "inaction_label" in html
         assert 's.get("judgement")' in html
         assert 'p.get("judgement")' in html
+
+class TestDecisionBookRendering(_ExcelSheetAssertHelpers, unittest.TestCase):
+    """决策书（主张/证据/判决）：开关关闭无块，开启时双端同源呈现。"""
+
+    @staticmethod
+    def _basis(book: dict | None) -> dict:
+        data = {
+            "enabled": True,
+            "available": True,
+            "reason": "",
+            "title": "判断依据",
+            "headline": ["信号：暂无信号记录"],
+            "summary": "判断依据：暂无信号记录",
+            "signals": [],
+            "confidence": {"level": "unknown", "level_label": "暂不可判", "level_class": "", "reason": "", "detail": ""},
+        }
+        if book is not None:
+            data["decision_book"] = book
+        return data
+
+    @staticmethod
+    def _book() -> dict:
+        return {
+            "available": True,
+            "title": "决策书（主张与证据）",
+            "modules": [
+                {
+                    "key": "expert_review",
+                    "label": "智囊团深度复盘",
+                    "verdict": "ready",
+                    "verdict_label": "证据齐备",
+                    "claims": [
+                        {
+                            "statement": "长江电力现金流稳健",
+                            "evidence": ["ev:hold:600900"],
+                            "invalidations": ["净利同比转负"],
+                        }
+                    ],
+                }
+            ],
+            "note": "判决为机械校验结果",
+        }
+
+    def test_block_rendered_when_present(self):
+        text = " ".join(self._flat(self._write(_action_data(), decision_basis_data=self._basis(self._book()))))
+        assert "决策书（主张与证据）" in text
+        assert "智囊团深度复盘（判决：证据齐备）" in text
+        assert "长江电力现金流稳健" in text
+        assert "ev:hold:600900" in text
+        assert "失效条件 净利同比转负" in text
+
+    def test_no_block_when_absent(self):
+        text = " ".join(self._flat(self._write(_action_data(), decision_basis_data=self._basis(None))))
+        assert "决策书" not in text

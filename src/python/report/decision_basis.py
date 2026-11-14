@@ -518,6 +518,12 @@ def build_decision_basis_data(
         "discipline": discipline_detail,
         "settlement": settlement_summary,
     }
+    # 决策书（主张/证据/判决）：开关关闭、无契约或匿名化模式下键缺席，产物逐字节不变
+    from src.python.report.decision_book import build_decision_book
+
+    _decision_book = build_decision_book()
+    if _decision_book:
+        data["decision_book"] = _decision_book
     if constraints.get("enabled"):
         # 仅开关开启时出现该键：关闭时输出与未接线逐字节一致（回滚通道）
         data["constraints"] = constraints

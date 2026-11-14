@@ -24,6 +24,8 @@
 
 ### 新增
 
+- **决策书渲染（plan-253 P3 后半）**：新增 `report/decision_book.py`——把各模块结构化契约汇总成行动建议章可读块「决策书（主张与证据）」（判决 + 主张/证据/失效条件），HTML 用折叠块、Excel 同页签小节，契约键 `decision_basis_data.decision_book`；开关关闭 / 无契约 / 匿名化模式非 off 时键缺席（产物逐字节不变，证据 id 内代码脱敏记为 Known Gap）。补证循环按条件暂缓：开关实际运行 ≥2 周后若 `evidence_needed` 占模块次 ≥20% 再做。
+
 - **建议级硬约束 + 判决入账口径（plan-253 P3 前半）**：`research_contract.validate_recommendation()` 在校验期拒绝「待复核 / 不可执行（blocked/not_applicable）却带可执行数量」的建议（不依赖提示词自律）；决策登记按模块判决分流——`reject`（主张与证据矛盾）不入账以免污染命中率，`evidence_needed`/`revise` 照常入账但降为低优先并标注「未验证：证据不足，仅参考」。
 
 - **LLM 复盘结论结构化契约（plan-253 P1，开关 `llm_research_contract` 默认关）**：新增 `llm/evidence_index.py`（由该模块提示词输入块生成 `ev:<kind>:<稳定键|8 位哈希>` 证据索引，七类来源、只给摘要）、`llm/research_contract.py`（契约头解析——复用决策头括号扫描；校验证据存在/失效条件必填/主张上限，并给 ready/revise/evidence_needed/reject 判决，模型自证 ready 不被采信）、`report/llm_contract_block.py`（展示层：HTML 折叠块 + Excel 小节，正文机器可读行展示前剥离）；生成后一遍落运行作用域载体，报告边界清空。开关关闭时提示词与产物逐字节不变；提示词文本盐递增 `rate-caliber-6`（一次性换键）。P2（预算受限补证）与 P3（决策书 + 建议硬约束）未实施。
