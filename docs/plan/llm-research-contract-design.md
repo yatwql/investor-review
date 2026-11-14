@@ -1,6 +1,6 @@
 # LLM 复盘结论结构化契约（claim / evidence / verdict）（plan-253 设计）
 
-> 状态：**P1 已实施（默认关）；P2 补证循环与 P3 决策书未实施**。立项见 [`plan.md`](../managements/plan.md) 的 `plan-253`；
+> 状态：**P1 与 P3 的建议硬约束已实施（默认关）；P2 补证循环、P3 决策书渲染未实施**。立项见 [`plan.md`](../managements/plan.md) 的 `plan-253`；
 > 借鉴来源与取舍见 [`panwatch-borrowing-review.md`](panwatch-borrowing-review.md)。
 
 ## 1. 背景与缺口
@@ -105,7 +105,7 @@
 
 - 呈现：主张 → 证据（可展开摘要）→ 判决 → 建议（triggers / invalidations / risks）；HTML 用既有折叠块样式，
   Excel 在同一页签内以「块标题 + 若干行」呈现（复用 `write_block_title`/`write_data_row`，不改列数）；
-- 建议硬约束下沉到 `analysis/rebalance_advisor.py` 与 `decision_llm_capture`：
+- 建议硬约束下沉到 `analysis/rebalance_advisor.py` 与 `decision_llm_capture`（**已部分实施**：`validate_recommendation()` 校验期拒绝 review/blocked 带数量；判决 `reject` 不入账、未验证降级标注）：
   - `execution_status ∈ {conditional, blocked, not_applicable}`；
   - `review_required` 或 `blocked` 的建议**不得带 quantity**（校验期拒绝，等价于对方 `review_is_not_a_trade`）；
   - 已暂停申购/限购品种：建议自动带 `execution_constraints`（复用 `purchase_status_data`）。
@@ -139,7 +139,7 @@
 | :--- | :--- | :--- |
 | P1 | 证据索引 + 主张契约 + 校验 + 章节末尾折叠块（开关关=零变化）——**已实施** | 契约矩阵（未知 id/空证据/越界/缺 invalidations）；开关关逐字节回归；证据 id 可回指提示词块；旧缓存无 claims 不报错 |
 | P2 | verdict 枚举（已在 P1 派生）+ 一次补证（键盐）+ 统计——**补证循环未实施** | verdict 分布可读；补证后转 ready 比例可读；预算耗尽记 `budget_exhausted`；补证达上限收口「未验证」 |
-| P3 | 决策书（行动建议章 LLM 解读位）+ 建议硬约束——**未实施** | review/blocked 带数量被拒（单测）；HTML/Excel 同源；`purchase_status` 联动；匿名化掩码一致 |
+| P3 | 决策书（行动建议章 LLM 解读位）**未实施**；建议硬约束**已实施**（校验期拒绝 + 判决入账口径） | review/blocked 带数量被拒（单测）；HTML/Excel 同源；`purchase_status` 联动；匿名化掩码一致 |
 
 ## 4. 测试方案
 

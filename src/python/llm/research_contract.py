@@ -31,7 +31,7 @@ VERDICT_REJECT = "reject"
 
 VERDICT_LABELS: dict[str, str] = {
     VERDICT_READY: "证据齐备",
-    VERDICT_REVISE: "待复核",
+    VERDICT_REVISE: "需复核",
     VERDICT_EVIDENCE_NEEDED: "证据不足",
     VERDICT_REJECT: "与证据矛盾",
 }
@@ -214,6 +214,44 @@ def strip_contract_line(text: str | None) -> str | None:
     return "\n".join(kept)
 
 
+#: 建议执行态枚举（与设计稿一致）
+EXECUTION_CONDITIONAL = "conditional"
+EXECUTION_BLOCKED = "blocked"
+EXECUTION_NOT_APPLICABLE = "not_applicable"
+
+
+def validate_recommendation(
+    *,
+    review_required: bool = False,
+    execution_status: str = EXECUTION_CONDITIONAL,
+    quantity: int | None = None,
+) -> list[str]:
+    """建议级硬约束：需复核 / 不可执行的建议**不得带可执行数量**。
+
+    与「集中度只标注不阻断」的口径并列：这条是**校验期拒绝**，不依赖提示词自律——
+    复核态或不可执行态一旦给出数量，读者会当成可下单的确定动作。
+
+    Args:
+        review_required: 是否需复核（证据不足 / 判决非 ready）。
+        execution_status: 执行态（conditional / blocked / not_applicable）。
+        quantity: 建议执行数量；None 表示未给出数量。
+
+    Returns:
+        违规项列表（空表示通过）。
+    """
+    errors: list[str] = []
+    if execution_status not in (EXECUTION_CONDITIONAL, EXECUTION_BLOCKED, EXECUTION_NOT_APPLICABLE):
+        errors.append(f"execution_status_invalid:{execution_status}")
+    if quantity is not None:
+        if quantity <= 0:
+            errors.append("quantity_not_positive")
+        if review_required:
+            errors.append("quantity_forbidden_when_review_required")
+        if execution_status in (EXECUTION_BLOCKED, EXECUTION_NOT_APPLICABLE):
+            errors.append("quantity_forbidden_when_not_executable")
+    return errors
+
+
 def _derive_verdict(errors: list[str], declared: str) -> str:
     """按校验错误推模块级判决（模型的 declared 只作参考，不能自证 ready）。"""
     if any(err.startswith(("evidence_unknown", "claim_not_object")) for err in errors):
@@ -244,5 +282,9 @@ __all__ = [
     "record_module_contract",
     "get_evidence_index",
     "reset_contract_state",
+    "EXECUTION_BLOCKED",
+    "EXECUTION_CONDITIONAL",
+    "EXECUTION_NOT_APPLICABLE",
     "validate_contract",
+    "validate_recommendation",
 ]

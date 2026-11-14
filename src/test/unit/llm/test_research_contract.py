@@ -313,3 +313,26 @@ class TestRenderingAndPostPass:
         text = rc.STRUCTURED_CLAIMS_MARKER + '{"claims":[]}'
         _llm_post_pass._record_research_contracts({"expert_review": text})
         assert rc.get_module_contracts() == {}
+
+
+class TestRecommendationHardConstraint:
+    """建议级硬约束：需复核 / 不可执行不得携带可执行数量（校验期拒绝）。"""
+
+    def test_review_required_forbids_quantity(self):
+        errors = rc.validate_recommendation(review_required=True, quantity=100)
+        assert "quantity_forbidden_when_review_required" in errors
+
+    def test_blocked_forbids_quantity(self):
+        errors = rc.validate_recommendation(execution_status=rc.EXECUTION_BLOCKED, quantity=100)
+        assert "quantity_forbidden_when_not_executable" in errors
+
+    def test_conditional_with_quantity_passes(self):
+        assert rc.validate_recommendation(execution_status=rc.EXECUTION_CONDITIONAL, quantity=100) == []
+
+    def test_no_quantity_always_passes(self):
+        assert rc.validate_recommendation(review_required=True, quantity=None) == []
+
+    def test_invalid_status_and_non_positive_quantity(self):
+        errors = rc.validate_recommendation(execution_status="weird", quantity=0)
+        assert "execution_status_invalid:weird" in errors
+        assert "quantity_not_positive" in errors

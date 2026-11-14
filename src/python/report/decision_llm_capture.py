@@ -253,6 +253,7 @@ def register_llm_decisions(
     *,
     report_date: str | None = None,
     constrained_codes: set[str] | None = None,
+    module_verdict: str = "",
     path: str | None = None,
 ) -> dict[str, Any]:
     """登记 expert_review 操作建议表中的方向决策为 pending（开关关闭时无感）。
@@ -260,12 +261,19 @@ def register_llm_decisions(
     Args:
         constrained_codes: 触及集中度/相关性约束的品种代码集合（只标注不阻断；
             None/空集 = 不标注）。
+        module_verdict: 该模块的结构化契约判决（`llm_research_contract` 开启时才有值）：
+            `reject`（主张与证据矛盾）→ 本批建议**不登记**；`evidence_needed` / `revise`
+            （未验证）→ 照常登记但在 detail 标注「未验证」并降为低优先（仍可事后对账）。
 
 
     Returns:
         {"registered": int, "ids": [decision_id, ...]}
     """
     if not is_active():
+        return {"registered": 0, "ids": []}
+    if module_verdict == "reject":
+        # 结论与证据矛盾：不入账，避免污染命中率统计
+        logger.info("[decision_llm_capture] 契约判决 reject：本次建议不登记")
         return {"registered": 0, "ids": []}
     try:
         rows = extract_llm_decisions(expert_review_html, holdings_details)
@@ -293,13 +301,15 @@ def register_llm_decisions(
         ):
             skipped_dup += 1
             continue
+        _unverified = module_verdict in ("evidence_needed", "revise")
         did = dl.append_decision(
             code=row["code"],
             name=row["name"],
             direction=row["direction"],
             carrier=dl.CARRIER_EXPERT_REVIEW,
-            magnitude=row["magnitude"],
-            detail=row["detail"],
+            # 未验证（证据不足/需复核）：降为低优先并标注，仍可事后对账但不当作定论
+            magnitude="low" if _unverified else row["magnitude"],
+            detail=(row["detail"] + "（未验证：证据不足，仅参考）") if _unverified else row["detail"],
             report_date=report_date,
             baseline_close=baseline,
             constrained=bool(constrained_codes and row["code"] in constrained_codes),

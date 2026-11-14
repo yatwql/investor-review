@@ -115,6 +115,47 @@ class TestConstrainedFlag:
         assert all("constrained" not in e for e in events if e.get("event") == "decision")
 
 
+class TestModuleVerdictHandling:
+    """结构化契约判决对登记的影响（开关 `llm_research_contract` 开启时才有判决）。"""
+
+    def _events(self, lp: str) -> list[dict]:
+        return [json.loads(line) for line in Path(lp).read_text(encoding="utf-8").splitlines() if line.strip()]
+
+    def test_reject_verdict_registers_nothing(self, tmp_path):
+        lp = str(tmp_path / "reject.jsonl")
+        out = cap.register_llm_decisions(
+            _HTML_TWO_ROWS, _HOLDINGS, report_date=_REPORT_DATE, module_verdict="reject", path=lp
+        )
+        assert out["registered"] == 0
+        # reject 时根本不写账本文件（而非写空文件）
+        assert not Path(lp).exists()
+
+    def test_unverified_verdict_marks_and_downgrades(self, tmp_path):
+        lp = str(tmp_path / "unverified.jsonl")
+        out = cap.register_llm_decisions(
+            _HTML_TWO_ROWS, _HOLDINGS, report_date=_REPORT_DATE, module_verdict="evidence_needed", path=lp
+        )
+        assert out["registered"] >= 1
+        decisions = [e for e in self._events(lp) if e.get("event") == "decision"]
+        assert all(e["magnitude"] == "low" for e in decisions)
+        assert all("未验证" in e.get("detail", "") for e in decisions)
+
+    def test_ready_verdict_keeps_original_magnitude(self, tmp_path):
+        lp = str(tmp_path / "ready.jsonl")
+        cap.register_llm_decisions(_HTML_TWO_ROWS, _HOLDINGS, report_date=_REPORT_DATE, module_verdict="ready", path=lp)
+        decisions = [e for e in self._events(lp) if e.get("event") == "decision"]
+        assert decisions and all(e["magnitude"] != "low" for e in decisions)
+        assert all("未验证" not in e.get("detail", "") for e in decisions)
+
+    def test_decision_event_never_carries_quantity(self, tmp_path):
+        """账本事件不含可执行数量字段（数量硬约束的实现前提）。"""
+        lp = str(tmp_path / "noqty.jsonl")
+        cap.register_llm_decisions(_HTML_TWO_ROWS, _HOLDINGS, report_date=_REPORT_DATE, path=lp)
+        decisions = [e for e in self._events(lp) if e.get("event") == "decision"]
+        for event in decisions:
+            assert "quantity" not in event and "shares" not in event and "amount" not in event
+
+
 class TestIterAndParseRows:
     """表行定位与单元格解析。"""
 
