@@ -2688,7 +2688,7 @@ report/ 渲染                      # Excel 页签 + HTML 章节（模板 contex
 
 **变动类型**（复用 `schemas/history.py _DiffAction` 语义）：新增 / 清仓 / 加仓 / 减仓 / 不变。
 
-**模块分层（C14 依赖 + analysis 单向依赖纪律）**：
+**模块分层（C14 依赖 + analysis 单向依赖纪律）**：analysis 层属于下方纯计算层，**不得 import `llm/` 或 `report/`**；两侧共用的业务约束（如建议执行态校验）一律下沉 `core/`（例：`core/recommendation_policy.py`）。以下为既有分层说明：
 
 ```
 analysis/whatif.py               # 纯计算：_merge_holdings(按 code 合并多账户) → 成本权重/HHI → 变动分类
@@ -3599,6 +3599,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `decision_record` | 确定性卖出建议登记（仅带持仓基线者落账，入账必可结算） | 行动建议 | 监控 | 随 `decision_reflection` |
 | `decision_settlement` | 到期决策结算（幂等：同 decision 只结一次，行情不可得保持 pending） | 行动建议 | 监控 | 随 `decision_reflection` |
 | `decision_llm_capture` | LLM 操作建议表解析登记（结构化优先 → 表格兜底；缺行/缺方向/「不操作」行按原因记 INFO 后跳过，异常不中断报告） | 行动建议 | 监控 | 随 `decision_reflection` |
+| `recommendation_policy` | 建议执行态与校验的唯一事实位（conditional / blocked / not_applicable + 「需复核/不可执行不得带数量」校验）；analysis 与 llm 两侧单向引用，避免 analysis 反向依赖 llm | 行动建议 | 分析计算 | 无 |
 | `research_contract` | LLM 复盘结构化契约（主张/证据/判决的解析、校验与运行作用域载体；复用决策头括号扫描，不自建解析器；默认关） | LLM 生成 | LLM 生成 | 开关 `llm_research_contract` |
 | `evidence_index` | 证据索引（由该模块提示词输入块生成 `ev:<kind>:<键|哈希>` + 一行摘要；模型只能引用它看得到的内容） | LLM 生成 | LLM 生成 | 开关 `llm_research_contract` |
 | `decision_book` | 决策书装配（把各模块结构化契约汇总成行动建议章可读块：判决 + 主张/证据/失效条件；开关关闭、无契约或匿名化模式非 off 时返回 None） | 行动建议 | 展示 | 开关 `llm_research_contract` |

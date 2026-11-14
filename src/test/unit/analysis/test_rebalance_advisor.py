@@ -478,7 +478,9 @@ class TestExecutionStateGuard:
 
     def test_invariant_violation_drops_row(self, monkeypatch):
         """守卫生效：一旦判出数量违规，该行不进入清单（而不是带数量下发）。"""
-        import src.python.llm.research_contract as rc
+        import src.python.core.recommendation_policy as policy
 
-        monkeypatch.setattr(rc, "validate_recommendation", lambda **_kw: ["quantity_forbidden_when_review_required"])
+        monkeypatch.setattr(
+            policy, "validate_recommendation", lambda **_kw: ["quantity_forbidden_when_review_required"]
+        )
         assert self._advice() == []

@@ -16,6 +16,14 @@ from __future__ import annotations
 from typing import Any
 
 
+# 建议执行态与校验器：单源在 core（analysis 与 llm 两侧共用，避免跨层反向依赖）
+from src.python.core.recommendation_policy import (  # noqa: F401  (转出给既有导入面)
+    EXECUTION_BLOCKED,
+    EXECUTION_CONDITIONAL,
+    EXECUTION_NOT_APPLICABLE,
+    validate_recommendation,
+)
+
 #: 功能开关名（注册见 `config/_feature_registry.py`）
 FEATURE_FLAG = "llm_research_contract"
 
@@ -236,44 +244,6 @@ def strip_contract_line(text: str | None) -> str | None:
         return text
     kept = [line for line in text.splitlines() if STRUCTURED_CLAIMS_MARKER not in line]
     return "\n".join(kept)
-
-
-#: 建议执行态枚举（与设计稿一致）
-EXECUTION_CONDITIONAL = "conditional"
-EXECUTION_BLOCKED = "blocked"
-EXECUTION_NOT_APPLICABLE = "not_applicable"
-
-
-def validate_recommendation(
-    *,
-    review_required: bool = False,
-    execution_status: str = EXECUTION_CONDITIONAL,
-    quantity: int | None = None,
-) -> list[str]:
-    """建议级硬约束：需复核 / 不可执行的建议**不得带可执行数量**。
-
-    与「集中度只标注不阻断」的口径并列：这条是**校验期拒绝**，不依赖提示词自律——
-    复核态或不可执行态一旦给出数量，读者会当成可下单的确定动作。
-
-    Args:
-        review_required: 是否需复核（证据不足 / 判决非 ready）。
-        execution_status: 执行态（conditional / blocked / not_applicable）。
-        quantity: 建议执行数量；None 表示未给出数量。
-
-    Returns:
-        违规项列表（空表示通过）。
-    """
-    errors: list[str] = []
-    if execution_status not in (EXECUTION_CONDITIONAL, EXECUTION_BLOCKED, EXECUTION_NOT_APPLICABLE):
-        errors.append(f"execution_status_invalid:{execution_status}")
-    if quantity is not None:
-        if quantity <= 0:
-            errors.append("quantity_not_positive")
-        if review_required:
-            errors.append("quantity_forbidden_when_review_required")
-        if execution_status in (EXECUTION_BLOCKED, EXECUTION_NOT_APPLICABLE):
-            errors.append("quantity_forbidden_when_not_executable")
-    return errors
 
 
 def _derive_verdict(errors: list[str], declared: str) -> str:

@@ -311,7 +311,7 @@ def build_rebalance_advice(
             "review_required": False,
         }
         # 不变量守卫：需复核 / 不可执行的建议不得携带可执行数量（校验期拒绝，不依赖提示词自律）
-        from src.python.llm.research_contract import validate_recommendation
+        from src.python.core.recommendation_policy import validate_recommendation
 
         _violations = validate_recommendation(
             review_required=bool(row["review_required"]),
