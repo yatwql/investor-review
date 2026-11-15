@@ -139,3 +139,86 @@ class TestReviewBlock:
         assert block is not None, "装配结果应可读"
         assert block["pending_count"] == 8
         assert len(block["recent_pending"]) == 5
+
+
+class TestInactionJudgement:
+    """不动作类（持有/观望/不操作）：待结算标「未到期」，已结算按容差带给判对/判偏。"""
+
+    def _seed(self, lp: str, *, direction: int, raw: float | None = None, settle: bool = False) -> str:
+        did = dl.append_decision(
+            code="561910",
+            name="电池ETF",
+            direction=direction,
+            carrier=dl.CARRIER_EXPERT_REVIEW,
+            report_date=_d(-12),
+            baseline_close=1.0,
+            path=lp,
+        )
+        if settle and raw is not None:
+            dl.append_settlement(
+                decision_id=did,
+                raw_return=raw,
+                outcome=dl.OUTCOME_FLAT,
+                settle_date=_d(-5),
+                horizon_bars=5,
+                flat_hit=dl.classify_flat_hit(raw),
+                path=lp,
+            )
+        return did
+
+    def test_pending_inaction_labelled_not_due(self, tmp_path):
+        lp = str(tmp_path / "ledger.jsonl")
+        self._seed(lp, direction=dl.DIRECTION_FLAT)
+        block = rb.build_review_block(ledger_path=lp)
+        assert block is not None
+        assert block["recent_pending"][0]["judgement"] == "未到期"
+
+    def test_settled_inaction_hit_and_miss(self, tmp_path):
+        lp = str(tmp_path / "ledger.jsonl")
+        self._seed(lp, direction=dl.DIRECTION_FLAT, raw=0.01, settle=True)  # 带内
+        self._seed(lp, direction=dl.DIRECTION_FLAT, raw=0.05, settle=True)  # 越带
+        block = rb.build_review_block(ledger_path=lp)
+        assert block is not None
+        labels = {row["judgement"] for row in block["recent_settled"]}
+        assert labels == {"判对", "判偏"}
+
+    def test_legacy_settlement_without_flat_hit_shows_band(self, tmp_path):
+        """旧账本结算无 `flat_hit` ⇒ 按平盘呈现（不臆造判对/判偏）。"""
+        lp = str(tmp_path / "ledger.jsonl")
+        did = dl.append_decision(
+            code="600000",
+            name="浦发银行",
+            direction=dl.DIRECTION_FLAT,
+            carrier=dl.CARRIER_EXPERT_REVIEW,
+            report_date=_d(-12),
+            baseline_close=10.0,
+            path=lp,
+        )
+        dl.append_settlement(
+            decision_id=did,
+            raw_return=0.01,
+            outcome=dl.OUTCOME_FLAT,
+            settle_date=_d(-5),
+            horizon_bars=5,
+            path=lp,
+        )
+        block = rb.build_review_block(ledger_path=lp)
+        assert block is not None
+        assert block["recent_settled"][0]["judgement"] == "平盘"
+        assert block["inaction"]["total"] == 0  # 未判不计样本
+
+    def test_directional_rows_have_no_judgement_label(self, tmp_path):
+        lp = str(tmp_path / "ledger.jsonl")
+        did = self._seed(lp, direction=dl.DIRECTION_LONG)
+        dl.append_settlement(
+            decision_id=did,
+            raw_return=0.05,
+            outcome=dl.OUTCOME_HIT,
+            direction_hit=True,
+            settle_date=_d(-5),
+            horizon_bars=5,
+            path=lp,
+        )
+        block = rb.build_review_block(ledger_path=lp)
+        assert block is not None
+        assert block["recent_settled"][0]["judgement"] == ""

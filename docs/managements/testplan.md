@@ -1,5 +1,5 @@
 # 投资复盘助手 — 质量控制与测试标准
-> 文档版本：0.18.0
+> 文档版本：0.18.1
 
 ---
 
@@ -265,7 +265,7 @@
 
 | 场景 | 前置条件 | 操作 | 预期结果 |
 |------|----------|------|----------|
-| **T7: 国内场外基金** | 含多只国内场外基金 | 菜单 L | 净值日期标记 T 日（15:00 后）或 T-1（15:00 前）；本日盈亏仅当净值日期=T 时计算 |
+| **T7: 国内场外基金** | 含多只国内场外基金 | 菜单 L | 净值日期标记 T 日（15:00 后）或 T-1（15:00 前）；本日盈亏按各自净值日计算，净值日≠当日时标「参考」且不计入合计 |
 | **T8: QDII 场外基金** | 含 QDII 基金（美股/港股方向） | 菜单 L | 净值日期通常 T-2（跨境延迟）；估值净值与官方净值差异字段标记正确；市值按数据源返回的净值（已为人民币计值）× 份额直接计算，不做汇率折算 |
 | **T9: 场内 ETF/LOF** | 含 ETF/LOF 持仓 | 菜单 E | 盘中实时价更新；盘后收盘价固化；IOPV/溢价率计算；振幅/换手率字段正确 |
 | **T10: 股票持仓** | 含 A 股股票 | 菜单 E | 实时价（盘中）/ 昨收（盘前盘后）；PE/PB/总市值等基本面字段盘后才更新 |
@@ -287,8 +287,11 @@
 |------|----------|------|----------|
 | **T17: 跨月/跨年报告** | 12 月 31 日和 1 月 2 日分别生成 | `get_last_trading_day` 调用 | 跨年行情数据连续性正确，get_last_trading_day 返回正确日期 |
 | **T18: 季末/年末效应** | 基金季末调仓日前后净值跳变 | 菜单 E | 大额净值变动时 today_profit 计算正确、profit_rate 无除零异常 |
-| **T19: 场外品种净值日期非 T 日** | QDII/场外基金净值为 T-1 或 T-2（跨境延迟、非交易日运行等） | 菜单 L（含 QDII 持仓） | 本日盈亏为 0（仅净值日期 = 最近交易日才计当日盈亏）、市值照常核算、不崩溃 |
+| **T19: 场外品种净值日期非 T 日** | QDII/场外基金净值为 T-1 或 T-2（跨境延迟、非交易日运行等） | 菜单 L（含 QDII 持仓） | 本日盈亏显示该净值日涨跌并标「参考」（不计入合计）、合计只含当日已更新品种、市值照常核算、不崩溃 |
 | **T20: 节假日调休** | 调休工作日（周日上班）vs 调休放假（周六休息） | _is_trading_day 判断 | 交易日历包含调休规则时 is_trading_day 正确识别工作日/休息日 |
+| **T24: 东财 push2 限流告警** | 运行期间东财 push2 断连/限流（akshare 内建请求或行业直连命中） | 菜单 L（任意含行业取数的路径） | 数据源可用性矩阵出现一行「东财 push2 限流：本轮 N 次断连（…已走备用通道）」（降级态）；无命中时该行不出现；行业资金流向自动回落备用通道且报告其余部分不受影响 |
+| **T22: 不动作建议评估** | 账本里有持有/观望类决策（含已结算与待结算） | 菜单 L（`decision_reflection` 开） | 判断依据块历史表现表下方出现「不动作建议」一行（样本不足只给命中/总数、无样本 `—`）；历史决策复盘块状态为「判对 / 判偏 / 未到期」；`doctor` 账本概览并列该口径；不动作不进方向性命中率分母 |
+| **T23: 决策书呈现（实验项）** | 启用 `llm_research_contract` 跑菜单 L | 输出各 LLM 章节末尾「主张与证据」折叠块 + 行动建议章「决策书」块（判决/证据编号/失效条件）；关闭开关时两者均消失且产物不变 |
 | **T21: 港股通假期差异** | A 股开市但港股通因香港假期关闭 | 菜单 E（含港股通持仓） | QDII 净值延迟 T-1，price_type 正确标记，today_profit=0 |
 
 > **pytest marker 对照：** §1.3 场景 → `scenario_basic`/`scenario_resilience`/`scenario_llm`；
@@ -326,7 +329,7 @@
 | 本日盈亏计算 | 给定时价、昨收、份额 | ✅ |
 | 收益率 = 盈亏 / 成本（成本 > 0） | 验证边界值 cost=0 | ✅ |
 | 溢价率 = (市价 - 净值) / 净值 | QDII ETF 验证，仅 QDII 基金显示 | ✅ `test_data_integrity.py` `_compute_premium()` |
-| 本日盈亏 — 场外非 T 日更新 | 场外基金 nav_date ≠ T → today_profit = 0 | ✅ `test_data_integrity.py` `TestTodayProfitOffsiteNavDate` |
+| 本日盈亏 — 场外非 T 日更新 | 场外基金 nav_date ≠ T → 显示该净值日涨跌、`today_profit_reference=True`、`sum_today_profit` 不计入 | ✅ `test_data_integrity.py` `TestTodayProfitOffsiteNavDate` / `test_market_value.py` `TestTodayProfitReference` |
 | 穿透市值占比归一化 | TOP10 占比总和 ≤ 100% | ✅ `test_data_integrity.py` `TestPenetrationTop10RatioNormalization` |
 | **三维度分类聚合一致**：资产属性/投资分类/账户的小计各自 = 总计 | 三类分类各自独立聚合，交叉验证无遗漏/无重复 | ✅ `test_data_integrity.py` |
 | **穿透行业占比归一化**：各行业占比之和 ≤ 100% | 穿透行业分布验证 | ✅ `test_data_integrity.py` |
@@ -552,6 +555,7 @@
 | R-DIFF-03 | `src/test/unit/analysis/test_snapshot_diff.py` + `src/test/unit/analysis/test_snapshot_diff_edge.py` | 批 4 |
 | R-DIFF-04 | `src/test/unit/report/test_evolution_sheet.py` + `src/test/unit/report/test_evolution_html.py` | 批 4 |
 | R-LLM-01 | `src/test/unit/ui/test_tui_menu.py` | 批 5 |
+| R-LLM-16 | `src/test/unit/llm/test_research_contract.py` | 批 6 |
 | R-LLM-02 | `src/test/unit/config/test_features.py` + `src/test/unit/llm/test_generate_all_llm.py` | 批 5 |
 | R-LLM-03 | `src/test/unit/llm/test_llm_api_multi.py` + `src/test/unit/llm/test_llm_utils.py` | 批 5 |
 | R-LLM-04 | `src/test/unit/llm/test_llm_fallback.py` | 批 5 |

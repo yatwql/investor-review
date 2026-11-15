@@ -551,3 +551,39 @@ class TestFundFlowStatusVisibility:
         assert "fund_flow" in rows
         assert rows["fund_flow"]["status"] in {"failed", "degraded"}
         reset_tracker()
+
+
+class TestPush2LimitedRow:
+    """东财 push2 限流观测行：有命中即出一行可读提示，无命中不出现。"""
+
+    def test_row_appears_when_limited(self, monkeypatch):
+        from src.python.core import rate_limit_state as rs
+        from src.python.report import data_source_matrix as dsm
+
+        monkeypatch.setattr(dsm, "get_tracker", lambda: _EmptyTracker())
+        monkeypatch.setattr(dsm, "get_provider_usage", lambda: {})
+        rs.reset_push2_limit_state()
+        rs.note_failure("push2 行情服务器断开了连接（RemoteProtocolError）")
+        matrix = dsm.build_data_source_matrix()
+        rows = [r for r in matrix if r["key"] == "_push2_limited"]
+        assert rows, matrix
+        row = rows[0]
+        assert row["status"] == "degraded"
+        assert "东财 push2 限流：本轮 1 次断连" in row["detail"]
+        assert row["degraded"] == 1
+
+    def test_no_row_without_limited(self, monkeypatch):
+        from src.python.core import rate_limit_state as rs
+        from src.python.report import data_source_matrix as dsm
+
+        monkeypatch.setattr(dsm, "get_tracker", lambda: _EmptyTracker())
+        monkeypatch.setattr(dsm, "get_provider_usage", lambda: {})
+        rs.reset_push2_limit_state()
+        assert all(r["key"] != "_push2_limited" for r in dsm.build_data_source_matrix())
+
+
+class _EmptyTracker:
+    """空降级事件日志（矩阵只由限流观测行构成）。"""
+
+    def get_log(self):
+        return []

@@ -14,15 +14,17 @@ import os
 import sys
 
 from src.python.config import resolve_output_dir
+from src.python.core.constants import EXIT_PARTIAL, EXIT_SEVERE, EXIT_SUCCESS
 from src.python.core.num_utils import format_size
 
 logger = logging.getLogger("invest")
 
 # ── 退出码 ───────────────────────────────────────────────
 
-_EXIT_SUCCESS = 0
-_EXIT_PARTIAL = 1
-_EXIT_SEVERE = 2
+# 退出码单源在 core/constants.py（Web worker 共用同一套协议）
+_EXIT_SUCCESS = EXIT_SUCCESS
+_EXIT_PARTIAL = EXIT_PARTIAL
+_EXIT_SEVERE = EXIT_SEVERE
 
 
 # ── 子命令处理器 ───────────────────────────────────────

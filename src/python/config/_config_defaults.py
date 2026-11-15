@@ -230,7 +230,7 @@ _DEFAULT_CONFIG = {
         "max_total_workers": 15,
         "profile": "high",  # 并发档位：high=100% / medium=50% / low=25%（按核数缩各池申请值）
         "fund_workers": 3,  # 基金排名/持仓批量并发数
-        "industry_workers": 8,  # 行业分类批量并发数
+        "industry_workers": 4,  # 行业分类批量并发数（push2 反爬：并发过高易被对端断连）
         "datasink_workers": 3,  # 财报取数并发数（免费档 3 请求/秒，≥3 才吃满；2 时 6 标的要 3 波）
         "akshare_workers": 2,  # akshare 财务指标取数并发数（财务指标章 + 基金重仓 ROE 推演）
         "index_workers": 5,  # 指数历史批量并发数（基准/风格指数个数）
@@ -243,7 +243,7 @@ _DEFAULT_CONFIG = {
         "sina": 0.0,
         "eastmoney": 0.1,
         "tiantian": 0.5,
-        "eastmoney_industry": 0.05,
+        "eastmoney_industry": 0.1,
     },
     # ── N. 任务完成通知（无人值守；缺省全关 = 静默跳过，符合「配置文件不必须存在」）──
     "notify": {
@@ -411,7 +411,7 @@ def _build_template_from_defaults() -> str:
         f'    "max_total_workers": {d["batch"]["max_total_workers"]},  // 进程级并发预算（与核数取小）',
         f'    "profile": "{d["batch"]["profile"]}",  // 并发档位：high/medium/low（按核数系数缩各池申请值）',
         f'    "fund_workers": {d["batch"]["fund_workers"]},  // 基金排名/持仓批量并发数',
-        f'    "industry_workers": {d["batch"]["industry_workers"]},  // 行业分类批量并发数',
+        f'    "industry_workers": {d["batch"]["industry_workers"]},  // 行业分类批量并发数（push2 反爬：过高易断连）',
         f'    "datasink_workers": {d["batch"]["datasink_workers"]},  // 财报取数并发数（免费档批量上限 ≤3）',
         f'    "akshare_workers": {d["batch"]["akshare_workers"]},  // akshare 财务指标取数并发数（财务指标章 + 基金重仓 ROE 推演）',
         f'    "index_workers": {d["batch"]["index_workers"]},  // 指数历史批量并发数',
@@ -424,7 +424,7 @@ def _build_template_from_defaults() -> str:
         f'    "sina": {d["batch_rate_limit"]["sina"]},  // 新浪行情（不限速）',
         f'    "eastmoney": {d["batch_rate_limit"]["eastmoney"]},  // 东方财富行情（100ms）',
         f'    "tiantian": {d["batch_rate_limit"]["tiantian"]},  // 天天基金（500ms）',
-        f'    "eastmoney_industry": {d["batch_rate_limit"]["eastmoney_industry"]}  // 东方财富行业（50ms）',
+        f'    "eastmoney_industry": {d["batch_rate_limit"]["eastmoney_industry"]}  // 东方财富行业（100ms，push2 逐只调用）',
         "  },",
         "",
         # ── N ──

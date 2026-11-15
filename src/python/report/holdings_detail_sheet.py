@@ -42,7 +42,7 @@ from src.python.report.excel_writer import (
     freeze_header,
     write_title_row,
 )
-from src.python.report.market_value import DetailRow
+from src.python.report.market_value import DetailRow, today_profit_reference_note
 
 from ._holdings_detail_blocks import (
     _COST_POS_NCOLS,
@@ -133,6 +133,9 @@ def write_holdings_detail_sheet(
         foot_parts.append(purchase_status_footnote(purchase_status_data))
     if show_cost_pos:
         foot_parts.append(cost_position_footnote(cost_position_data))
+    reference_note = today_profit_reference_note(_details)
+    if reference_note:
+        foot_parts.append(reference_note)
     if foot_parts:
         foot = ws.cell(row=next_row, column=1, value=" ｜ ".join(foot_parts))
         foot.font = Font(size=9, color="999999")

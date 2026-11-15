@@ -171,7 +171,14 @@ def build_data_source_matrix() -> list[dict[str, Any]]:
     """
     events = get_tracker().get_log()
     provider_usage = get_provider_usage()
-    if not events and not provider_usage:
+    # 限流观测行独立于降级事件与 provider 归属：只有它命中时矩阵也要有内容
+    try:
+        from src.python.core.rate_limit_state import push2_limited
+
+        _push2_count = int(push2_limited().get("count") or 0)
+    except Exception:  # 观测读取失败按无命中处理
+        _push2_count = 0
+    if not events and not provider_usage and _push2_count == 0:
         return []
 
     # 1) 按 source_key 取最新事件
@@ -258,6 +265,32 @@ def build_data_source_matrix() -> list[dict[str, Any]]:
             "degraded_list": cd["degraded_list"],
         }
         matrix.append(row)
+
+    # 4b) 东财 push2 限流观测：两条链路（akshare 内建请求 / 本仓直连）共享同一计数，
+    #     命中时追加一行可读提示——否则读者只看到「行业降级」而不知是限流所致。
+    try:
+        from src.python.core.rate_limit_state import notice_line, push2_limited
+
+        _limited = push2_limited()
+        if _push2_count > 0:
+            matrix.append(
+                {
+                    "key": "_push2_limited",
+                    "name": "东财 push2 限流",
+                    "status": "degraded",
+                    "detail": notice_line(),
+                    "providers": {},
+                    "providers_text": "—",
+                    "total": int(_limited.get("count") or 0),
+                    "ok": 0,
+                    "degraded": int(_limited.get("count") or 0),
+                    "failed": 0,
+                    "sample_failures": [],
+                    "degraded_list": [{"source_key": "eastmoney_push2", "reason": str(_limited.get("first") or "")}],
+                }
+            )
+    except Exception:  # 观测行失败不影响矩阵
+        logger.debug("[data_source_matrix] push2 限流行装配失败，已忽略", exc_info=True)
 
     # 5) 追加未归类项（如有）
     if unmatched:

@@ -29,6 +29,7 @@ from src.python.report.market_value import (
     _generate_details,
     classify_holdings,
     price_update_status,
+    sum_today_profit,
 )
 from src.python.report.penetration import compute_penetration_top10
 from src.python.report.progress import ProgressReporter
@@ -66,7 +67,7 @@ def _render_market_value_section(
     total_mv = sum(d.market_value for d in details)
     total_cost = sum(d.cost for d in details)
     total_profit = sum(d.profit for d in details)
-    total_today_profit = sum(d.today_profit for d in details)
+    total_today_profit = sum_today_profit(details)
     total_profit_rate = total_profit / total_cost if total_cost > 0 else 0.0
     today_denom = total_cost + total_profit - total_today_profit
     today_profit_rate = total_today_profit / today_denom if today_denom > 0 else 0.0
@@ -109,7 +110,7 @@ def _render_account_grouping(
         acc_mv = sum(d.market_value for d in acc_details)
         acc_cost = sum(d.cost for d in acc_details)
         acc_profit = sum(d.profit for d in acc_details)
-        acc_today = sum(d.today_profit for d in acc_details)
+        acc_today = sum_today_profit(acc_details)
         acc_rate = acc_profit / acc_cost if acc_cost > 0 else 0.0
         account_totals[acc_name] = {
             "market_value": acc_mv,
@@ -206,6 +207,44 @@ def _render_category_table(
     return cat_data, dividend_success
 
 
+def _profit_forecast_for_run() -> dict[str, dict]:
+    """机构盈利预测（全量 2000+ 只）：同一轮内只载入一次（见 `_run_scope.run_memo`）。
+
+    载入本身是缓存读 + 大字典构建，实测约 2.5s——落在渲染阶段会把「区块装配」
+    顶成渲染慢；预取阶段先载一次后，渲染阶段直接命中。
+    """
+    from src.python.report._run_scope import run_memo
+
+    return run_memo(("profit_forecast",), get_profit_forecast)
+
+
+def _dividend_data_for_run(a_codes: list[str]) -> dict[str, dict]:
+    """股息率数据（按 A 股代码集）：同一轮内同代码集只取一次。"""
+    from src.python.report._run_scope import run_memo
+
+    codes = tuple(sorted(a_codes))
+    return run_memo(("dividend_data", codes), lambda: get_dividend_data(list(codes)))
+
+
+def prefetch_penetration_side_data(holdings: list[Holding], details: list) -> None:
+    """预取穿透块的附属取数（盈利预测 / 股息率），供「渲染前置取数」阶段调用。
+
+    穿透本体由 `compute_penetration_top10` 自身单轮复用；这里只补齐它的两个附属
+    取数，使 HTML 区块装配阶段只剩字符串拼装。
+    """
+    from src.python.report.penetration import compute_penetration_top10
+
+    pen_result = compute_penetration_top10(holdings, details) or {}
+    top10 = pen_result.get("top10") or []
+    if not top10:
+        return
+    _profit_forecast_for_run()
+    all_codes = list(set().union(*(set(e.get("codes") or []) for e in top10)))
+    a_codes = [c for c in all_codes if is_a_share_code(c)]
+    if a_codes:
+        _dividend_data_for_run(a_codes)
+
+
 def _render_penetration_section(
     holdings: list[Holding],
     details: list,
@@ -225,7 +264,7 @@ def _render_penetration_section(
     profit_success = True
     profit_forecast: dict[str, dict] = {}
     try:
-        profit_forecast = get_profit_forecast()
+        profit_forecast = _profit_forecast_for_run()
         if not profit_forecast:
             profit_success = False
             logger.warning("[penetration] 盈利预测数据为空（API 返回空结果），EPS 列将显示 --")
@@ -239,7 +278,7 @@ def _render_penetration_section(
     try:
         all_codes = list(set().union(*(e.get("codes", []) for e in pen_result["top10"])))
         a_codes = [c for c in all_codes if is_a_share_code(c)]
-        dividend_data = get_dividend_data(a_codes) if a_codes else {}
+        dividend_data = _dividend_data_for_run(a_codes) if a_codes else {}
         if not dividend_data and a_codes:
             dividend_success = False
             logger.warning("[penetration] 股息率数据为空（API 返回空结果）")
@@ -318,6 +357,19 @@ def _render_manager_analysis(
 
 
 def _fetch_fund_holdings_with_period(fund_codes: list[str]) -> dict[str, dict]:
+    """按基金代码取回持仓明细（同一轮内同代码集只取一次，见 `_run_scope.run_memo`）。
+
+    报告期时效判定随持仓一并产出，预取阶段与 HTML 区块装配共用同一份结果。
+    """
+    from src.python.report._run_scope import run_memo
+
+    codes = tuple(sorted(str(c) for c in fund_codes or []))
+    return run_memo(
+        ("fund_holdings_with_period", codes), lambda: _fetch_fund_holdings_with_period_uncached(list(codes))
+    )
+
+
+def _fetch_fund_holdings_with_period_uncached(fund_codes: list[str]) -> dict[str, dict]:
     """按基金代码取回持仓明细，并附报告期时效判定（HTML 侧深度分析共用）。
 
     报告期须随持仓一并透出：持仓是定期报告的静态快照，接口可能回退到数年前
@@ -510,6 +562,27 @@ def _render_news_section(
         return [], _default_meta
 
 
+def _with_contract_blocks(gm: str | None, er: str | None, hc: str | None, pd: str | None):
+    """四模块正文剥离机器可读契约行，并在各自末尾追加「主张与证据」折叠块。
+
+    开关关闭时运行作用域无契约载体 → 折叠块为空串，正文与既有产物一致。
+    """
+    from src.python.report.llm_contract_block import contract_html, strip_contract_line
+
+    pairs = zip(
+        ("global_macro", "expert_review", "health_check", "penetration_deep"),
+        (gm, er, hc, pd),
+    )
+    out = []
+    for module_key, content in pairs:
+        if not content:
+            out.append(content)
+            continue
+        body = strip_contract_line(content) or ""
+        out.append(body + contract_html(module_key))
+    return tuple(out)
+
+
 def _render_llm_content_section(
     enable_llm: bool,
     llm_content: tuple | None,
@@ -525,6 +598,7 @@ def _render_llm_content_section(
     """
     if llm_content is not None:
         gm, er, hc, pd = llm_content
+        gm, er, hc, pd = _with_contract_blocks(gm, er, hc, pd)
         return (bool(gm or er or hc or pd), gm, er, hc, pd)
 
     if not enable_llm:

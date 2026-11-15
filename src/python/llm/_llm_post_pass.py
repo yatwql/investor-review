@@ -138,6 +138,8 @@ def apply_generation_post_pass(
     自检的输入是四模块产出的纯分析正文；跨模块核对是纯算术判定、零 token，检出时并入
     复核区块**最前**（事实先于观点）。
     """
+    _record_research_contracts(contents)
+
     from src.python.llm.self_review import run_self_review
 
     run_self_review(
@@ -168,6 +170,34 @@ def apply_generation_post_pass(
     if cross_issues:
         prepend_review_block(build_cross_module_block(cross_issues))
         logger.info("[cross_module] 检出 %d 处跨模块收益率口径冲突", len(cross_issues))
+
+
+def _record_research_contracts(contents: dict[str, str | None]) -> None:
+    """解析各模块的结构化契约头并校验（开关关闭时零行为）。
+
+    证据索引由提示词构建侧登记（`record_evidence_index`），此处按同一份索引校验——
+    模型只能引用它真正看到的证据；校验失败只标注「未验证」，不阻断报告。
+    """
+    from src.python.llm.research_contract import (
+        get_evidence_index,
+        is_enabled,
+        parse_contract,
+        record_module_contract,
+        validate_contract,
+    )
+
+    if not is_enabled():
+        return
+    index = get_evidence_index()
+    try:
+        from src.python.core.market_hours import market_snapshot_bucket
+
+        as_of = market_snapshot_bucket().as_of
+    except Exception:  # 口径桶不可用不阻断：as_of 仅记录用途
+        as_of = ""
+    for module_key in BASE_MODULES:
+        payload = parse_contract(contents.get(module_key))
+        record_module_contract(module_key, validate_contract(payload, index, as_of=as_of))
 
 
 def contents_from_results(

@@ -27,6 +27,10 @@ _CHANGELOG_HEADER = re.compile(r"^## \[([^\]]+)\]", re.M)
 
 _RF_ROW_ID = re.compile(r"^\|\s*\*\*(rf-\d+)\*\*", re.M)
 
+#: 未加粗的台账行（`| rf-N |`）：归档侧只搬 `| **rf-N** |` 形态，未加粗时
+#: 既不计入已解决集合、也不会被搬走——发布时按「本版无待迁档」静默放行（已实际发生一次）。
+_RF_ROW_UNBOLD = re.compile(r"^\|\s*(rf-\d+)\s*\|", re.M)
+
 
 _MIGRATION_PLACEHOLDER = re.compile(r"已随\s*v(\d+\.\d+\.\d+)\s*发布迁入")
 
@@ -148,6 +152,13 @@ def audit_management_partitions(
         )
     pending_ids = set(_RF_ROW_ID.findall(pending))
     resolved_ids = set(_RF_ROW_ID.findall(resolved))
+    unbold = sorted(set(_RF_ROW_UNBOLD.findall(resolved)) - resolved_ids)
+    if unbold:
+        findings.append(
+            f"{rel(_REVIEW_FINDINGS_MD)}: 已解决区有 {len(unbold)} 条台账行未加粗"
+            f"（{'、'.join(unbold[:3])}…）——须写 `| **rf-N** | 形态，否则发布归档按"
+            "「本版无待迁档」静默漏搬（归档侧只识别加粗行）"
+        )
     for rid in sorted(pending_ids & resolved_ids):
         findings.append(f"{rel(_REVIEW_FINDINGS_MD)}: `{rid}` 同时列在「待处理」与「已解决」分区（分区互斥）")
     changelog_all = changelog + "".join(archived_changelogs or [])

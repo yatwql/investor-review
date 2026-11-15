@@ -247,6 +247,10 @@ def _write_decision_basis_block(
             + [""] * (ncols - 1),
         )
     # 结算摘要（最近 5 批 × 多视界；未到期显式标注，收益与超额同为百分数）
+    # 决策书在渲染期补挂（判断依据块装配早于 LLM 契约落载体）
+    from src.python.report.decision_book import attach_decision_book
+
+    data = attach_decision_book(data) or data
     settlement = data.get("settlement") or {}
     row += 1
     ws.cell(row=row, column=1, value="结算摘要").font = _FONT_SUB_BLOCK
@@ -308,6 +312,41 @@ def _write_decision_basis_block(
             ]
             + [""] * (ncols - 1),
         )
+    # 不动作建议（持有/观望/不操作）事后判定：与方向性表现并列，不进其分母；
+    # 文案单源在结算摘要契约（HTML 端读同一字段，双端同源）
+    if settlement.get("inaction_label"):
+        row = write_data_row(
+            ws,
+            row,
+            [str(settlement.get("inaction_label"))] + [""] * (ncols - 1),
+        )
+    # 决策书（主张/证据/判决；开关 llm_research_contract，默认关 → 契约键缺席）
+    _book = data.get("decision_book") or {}
+    if _book.get("available"):
+        row += 1
+        ws.cell(row=row, column=1, value=str(_book.get("title") or "决策书（主张与证据）")).font = _FONT_SUB_BLOCK
+        row += 1
+        for _m in _book.get("modules") or []:
+            ws.cell(
+                row=row, column=1, value=f"{_m.get('label')}（判决：{_m.get('verdict_label')}）"
+            ).font = _FONT_SUMMARY_LINE
+            row += 1
+            for _c in _m.get("claims") or []:
+                ws.cell(row=row, column=1, value=f"· {_c.get('statement')}").font = _FONT_SUMMARY_LINE
+                row += 1
+                _detail = []
+                if _c.get("evidence"):
+                    _detail.append("证据 " + "、".join(_c["evidence"]))
+                if _c.get("invalidations"):
+                    _detail.append("失效条件 " + "；".join(_c["invalidations"]))
+                if _detail:
+                    cell = ws.cell(row=row, column=1, value="  ".join(_detail))
+                    cell.font = Font(size=9, color="999999")
+                    row += 1
+        if _book.get("note"):
+            cell = ws.cell(row=row, column=1, value=str(_book["note"]))
+            cell.font = Font(size=9, color="999999")
+            row += 1
     # 集中度约束（开关 portfolio_constraints；只标注不阻断）
     constraints = data.get("constraints") or {}
     if constraints.get("enabled"):
@@ -535,7 +574,7 @@ def _write_review_block(
                 s.get("code", ""),
                 s.get("name", ""),
                 s.get("direction", ""),
-                _outcome_label.get(s.get("outcome"), s.get("outcome", "")),
+                s.get("judgement") or _outcome_label.get(s.get("outcome"), s.get("outcome", "")),
                 ret_text,
             ],
         )
@@ -543,7 +582,7 @@ def _write_review_block(
         row = write_data_row(
             ws,
             row,
-            [p.get("code", ""), p.get("name", ""), p.get("direction", ""), "待结算", ""],
+            [p.get("code", ""), p.get("name", ""), p.get("direction", ""), p.get("judgement") or "待结算", ""],
         )
     if review_data.get("settled_count", 0) > 0:
         if review_data.get("sample_sufficient"):

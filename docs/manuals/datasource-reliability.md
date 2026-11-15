@@ -154,7 +154,7 @@
 | 字段 | 说明 |
 |------|------|
 | **名称** | akshare 数据封装层 |
-| **用途** | 机构盈利预测（`stock_profit_forecast_em`）、行业资金流向（主 `stock_sector_fund_flow_rank` / 备 `stock_fund_flow_industry`）、历史分红（`stock_history_dividend`）、无风险利率（`bond_zh_us_rate`）、指数 PE/PB 估值历史（`stock_index_pe_lg`/`stock_index_pb_lg`，乐咕） |
+| **用途** | 机构盈利预测（`stock_profit_forecast_em`）、行业资金流向（主 `stock_sector_fund_flow_rank` / 备 `stock_fund_flow_industry`）、历史分红（`stock_history_dividend`）、无风险利率（符号 `bond_zh_us_rate` 或 `bond_zh_us_yield_em`，按可用性探测）、指数 PE/PB 估值历史（`stock_index_pe_lg`/`stock_index_pb_lg`，乐咕） |
 | **接口类型** | Python 库调用（通过 `ThreadPoolExecutor` 超时保护） |
 | **数据频率** | 盈利预测不定期，资金流向交易日实时，分红年度更新，利率每日 |
 | **可靠度** | ★★★☆☆——依赖 akshare 第三方库，接口变更频繁 |
@@ -310,7 +310,9 @@
 
 > 详细降级治理体系见 `../managements/technical.md` §1.4.5。
 
-> **场外/QDII 净值的新鲜度口径**：官方净值天然滞后一日（T-1，海外市场时差与披露节奏），故收市后的新鲜度校验按**前一交易日**判定（`fetcher/price.py::_price_cache_fresh` 按路由分域）；场内行情仍要求等于最近交易日。否则正常 T-1 净值会被判为「跨日残留」而反复清缓存重取。
+> **东财 push2 限流提示**：东财 push2 行情接口对同一 IP 有临时限流（表现为连接被断开）。akshare 内建请求与本仓直连（行业分类/资金流向）两侧命中都会计入本轮观测，报告「数据源可用性」矩阵会多出一行「东财 push2 限流」：`东财 push2 限流：本轮 N 次断连（行业/估值等少数取数已走备用通道）`。这属数据源侧的限流，不是配置或版本问题；通常数分钟自行恢复，期间行业资金流向等会自动回落备用通道，报告其余部分不受影响。
+
+> **场外/QDII 净值的新鲜度口径（按披露时点分档）**：官方净值天然滞后——国内场外 T 日当晚才披露，QDII 因海外收盘与换算再滞一天。故新鲜度校验按当日是否已过披露时点（默认 20:00）分档（`fetcher/price.py::_price_cache_fresh` 按路由分域）：**披露前**只要求「最近可得的一档」（国内场外 T-1、QDII T-2），**披露后**收紧回国内场外 T、QDII T-1；场内行情仍要求等于最近交易日。若不分档而一律要求当日，白天每次运行都会判定场外缓存过期并全量重取，重取回来仍是同一份滞后净值，白白多花一趟网络。
 
 > **分红数据状态**：分红刷新在取到数据时打类别级「本次使用」标记、源不可达时登记失败原因（`report/category.py`），与行业分类/盈利预测同口径，可在可用性矩阵与说明表中查看。
 

@@ -37,29 +37,43 @@ def _direction_label(direction: int) -> str:
 
 
 def _pending_row(decision: dict[str, Any]) -> dict[str, Any]:
-    """pending 决策 → 展示行（新登记待后续行情结算）。"""
+    """pending 决策 → 展示行（新登记待后续行情结算）。
+
+    不动作类（持有/观望/不操作）显式标「未到期」，避免与方向性待结算混看。
+    """
+    direction = int(decision.get("direction") or 0)
     return {
         "code": decision.get("code"),
         "name": decision.get("name"),
-        "direction": _direction_label(int(decision.get("direction") or 0)),
+        "direction": _direction_label(direction),
         "magnitude": decision.get("magnitude") or "",
         "detail": decision.get("detail") or "",
         "report_date": decision.get("report_date") or "",
+        "judgement": "未到期" if direction == 0 else "",
     }
 
 
 def _settled_row(decision: dict[str, Any]) -> dict[str, Any]:
-    """settled 决策 → 展示行（含结算结果）。"""
+    """settled 决策 → 展示行（含结算结果）。
+
+    不动作类按 `settlement.flat_hit` 给「判对 / 判偏」（旧账本无字段 ⇒ 平盘）。
+    """
     s = decision.get("settlement") or {}
+    direction = int(decision.get("direction") or 0)
+    judgement = ""
+    if direction == 0:
+        flat_hit = s.get("flat_hit")
+        judgement = "平盘" if flat_hit is None else ("判对" if flat_hit else "判偏")
     return {
         "code": decision.get("code"),
         "name": decision.get("name"),
-        "direction": _direction_label(int(decision.get("direction") or 0)),
+        "direction": _direction_label(direction),
         "detail": decision.get("detail") or "",
         "outcome": s.get("outcome") or "",
         "raw_return": s.get("raw_return"),
         "settle_date": s.get("settle_date") or "",
         "horizon_bars": s.get("horizon_bars") or 0,
+        "judgement": judgement,
     }
 
 
@@ -101,6 +115,8 @@ def build_review_block(
         "available": True,
         "report_date": report_date or "",
         "disclaimer": _DISCLAIMER,
+        # 不动作类（持有/观望/不操作）事后判定汇总：与方向性命中率并列，不进其分母
+        "inaction": stats.get("inaction") or {},
         "pending_count": stats["pending_count"],
         "settled_count": stats["settled_count"],
         "sample_sufficient": stats["sample_sufficient"],

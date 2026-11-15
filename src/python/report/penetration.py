@@ -560,6 +560,21 @@ def compute_penetration_top10(
     holdings: list[Holding],
     details: list[DetailRow],
 ) -> dict[str, Any]:
+    """计算资产穿透TOP10（同一轮内同输入只算一次，见 `_run_scope.run_memo`）。"""
+    from src.python.report._run_scope import run_memo
+
+    key = (
+        "penetration",
+        tuple((getattr(h, "code", ""), str(getattr(h, "shares", ""))) for h in holdings or []),
+        tuple((getattr(d, "code", ""), str(getattr(d, "market_value", ""))) for d in details or []),
+    )
+    return run_memo(key, lambda: _compute_penetration_top10_uncached(holdings, details))
+
+
+def _compute_penetration_top10_uncached(
+    holdings: list[Holding],
+    details: list[DetailRow],
+) -> dict[str, Any]:
     """计算资产穿透TOP10，返回结构化数据。
 
     Excel 写入见 :func:`src.python.report.penetration_sheet.write_penetration_sheet`。

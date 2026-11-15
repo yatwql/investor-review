@@ -21,13 +21,14 @@ import logging
 import os
 
 from src.python.config import resolve_output_dir, get_default
+from src.python.core.constants import EXIT_PARTIAL, EXIT_SEVERE, EXIT_SUCCESS
 
 logger = logging.getLogger("invest")
 
-# ── 退出码（对齐 cli.py）──────────────────────────────
-_EXIT_SUCCESS = 0
-_EXIT_PARTIAL = 1
-_EXIT_SEVERE = 2
+# ── 退出码（单源 core/constants.py，与 CLI 同一套协议）────────────────
+_EXIT_SUCCESS = EXIT_SUCCESS
+_EXIT_PARTIAL = EXIT_PARTIAL
+_EXIT_SEVERE = EXIT_SEVERE
 
 
 # ── worker 执行体（RunManager.executor 注入点）────────────────

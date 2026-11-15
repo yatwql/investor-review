@@ -154,11 +154,19 @@ def record_llm_decisions_and_review_block(
             from src.python.analysis.portfolio_constraints import evaluate_constraints
 
             _constraints = evaluate_constraints(prep.get("holdings_details"), prep.get("total_mv", 0))
+            _verdict = ""
+            try:
+                from src.python.llm.research_contract import get_module_contracts
+
+                _verdict = str((get_module_contracts().get("expert_review") or {}).get("verdict") or "")
+            except Exception:  # 契约载体不可用不阻断登记
+                _verdict = ""
             _llm_reg = decision_llm_capture.register_llm_decisions(
                 llm_content[1],
                 prep.get("holdings_details"),
                 report_date=prep["today_str"],
                 constrained_codes=set(_constraints.get("breached_codes") or []),
+                module_verdict=_verdict,
             )
             if _llm_reg.get("registered"):
                 reporter.ok(f"决策复盘：登记 {_llm_reg['registered']} 条 LLM 操作建议")

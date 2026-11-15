@@ -39,7 +39,7 @@ PROJECT_ROOT = os.environ.get("INVEST_PROJECT_ROOT") or _find_project_root()
 # 应用名称（单一来源，TUI 首页 / 启动日志 / Web 首页 / HTML 报告首页 / Excel 首页统一引用）
 APP_NAME = "投资复盘助手"
 
-APP_VERSION = "0.18.0"
+APP_VERSION = "0.18.1"
 
 # ── 报告产物文件名（单一来源：Excel/HTML 写入器与 Web 预览下载统一引用） ──
 # 报告产物文件基名（归档名 = 基名 + 时间戳后缀）
@@ -259,3 +259,14 @@ REPORT_DEPTH_DEFAULT: str = "standard"
 #: 毫秒戳 → 日期的展示/契约转换、交易日边界、峰谷时段判定——用本机时区会随运行环境漂移
 #: （CI 跑 UTC 时，CST 午夜附近的毫秒戳会算成前一天，测试与报告日期随之不一致）。
 BEIJING_TZ = timezone(timedelta(hours=8))
+
+# ── 进程退出码（CLI 与 Web worker 共用的协议常量，禁各自定义）────────────
+#: 全部成功
+EXIT_SUCCESS = 0
+#: 部分失败（报告已产出但存在失败项）
+EXIT_PARTIAL = 1
+#: 严重失败（未产出报告）
+EXIT_SEVERE = 2
+
+#: 东方财富 push2 单只证券快照接口（core 的交易状态判定与 providers 的行业取数共用）
+EASTMONEY_PUSH2_BASE = "https://push2.eastmoney.com/api/qt/stock/get"

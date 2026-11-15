@@ -62,6 +62,26 @@ def get_session_usage() -> dict[str, Any]:
         return dict(_session_usage)
 
 
+def _contract_metrics() -> dict[str, Any]:
+    """结构化契约指标（惰性读取运行作用域载体；不可用时返回空 dict）。"""
+    try:
+        from src.python.llm.research_contract import contract_metrics
+
+        return contract_metrics()
+    except Exception:  # 埋点不得影响用量统计
+        return {}
+
+
+def _contract_metrics_line() -> str:
+    """结构化契约指标的一句话展示（无数据返回空串）。"""
+    try:
+        from src.python.llm.research_contract import contract_metrics_line
+
+        return contract_metrics_line(_contract_metrics())
+    except Exception:
+        return ""
+
+
 def format_session_usage(raw: dict[str, Any] | None) -> dict[str, Any]:
     """将 get_session_usage() 的原始 dict 格式化为报告展示用的 dict。
 
@@ -101,6 +121,9 @@ def format_session_usage(raw: dict[str, Any] | None) -> dict[str, Any]:
         "cache_hit_tokens": cache_hit,
         "cost_by_currency": costs,
         "cost_display": format_costs(costs),
+        # 结构化契约埋点（开关关闭/无契约时为空串，用量页签不出该行）
+        "contract": _contract_metrics(),
+        "contract_display": _contract_metrics_line(),
     }
 
 

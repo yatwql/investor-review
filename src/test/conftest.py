@@ -367,9 +367,9 @@ def _auto_reset_module_state():
         from src.python.cache import _stats as cache_stats
         from src.python.config._llm_pricing import invalidate_pricing_cache
         from src.python.config._llm_settings import invalidate_llm_config_cache
-        from src.python.core import circuit_breaker, doctor, http_client
-        from src.python.fetcher import batch, factor_catalog_loader, source_adapter
-        from src.python.llm import observation, pacing
+        from src.python.core import circuit_breaker, doctor, http_client, rate_limit_state
+        from src.python.fetcher import batch, bond_yield, factor_catalog_loader, source_adapter
+        from src.python.llm import observation, pacing, research_contract
         from src.python.providers import (
             akshare_extras,
             cninfo,
@@ -386,12 +386,15 @@ def _auto_reset_module_state():
         invalidate_llm_config_cache()
         invalidate_pricing_cache()
         circuit_breaker.reset_circuit_text()
+        rate_limit_state.reset_push2_limit_state()
         doctor.reset_adapter_survey()
         http_client.reset_transport_factory()
         batch.clear_rate_limiter_cache()
         factor_catalog_loader.invalidate_catalog_cache()
+        bond_yield.reset_bond_yield_api_cache()
         source_adapter.reset_adapter_registry()
         observation.clear_llm_observation()
+        research_contract.reset_contract_state()
         pacing.reset_policies()
         akshare_extras.reset_failure_state()
         cninfo.reset_cninfo_limiter()
@@ -517,10 +520,13 @@ def _auto_reset_run_history_state():
     memo 里直接拿数据，表现为「mock 未被调用」或「全量刷新未发生」。
     """
     from src.python.fetcher.chain_incremental import reset_run_history_state
+    from src.python.report._run_scope import clear_run_memo
 
     reset_run_history_state()
+    clear_run_memo()
     yield
     reset_run_history_state()
+    clear_run_memo()
 
 
 @pytest.fixture(autouse=True)

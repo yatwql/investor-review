@@ -10,6 +10,7 @@ from typing import Any
 
 from src.python.core.logger import setup_logger
 from src.python.core.registry import get_report_sheet_name
+from src.python.report.market_value import sum_today_profit
 from src.python.report.progress import ProgressReporter, Timer
 from src.python.report.progress import MSG_FETCHING_MARKET_FIRST
 
@@ -103,7 +104,7 @@ def resolve_market_data(
             "total_mv": sum(d.market_value for d in details),
             "total_cost": sum(d.cost for d in details),
             "total_profit": sum(d.profit for d in details),
-            "today_profit": sum(d.today_profit for d in details),
+            "today_profit": sum_today_profit(details),
             "details": details,
         }
         data["fund_flow_data"] = _build_flow_data(enable_cost_lots, transactions, dividends, holdings, details)
@@ -124,7 +125,7 @@ def resolve_market_data(
             total_mv = sum(d.market_value for d in details)
             total_cost = sum(d.cost for d in details)
             total_profit = sum(d.profit for d in details)
-            today_profit = sum(d.today_profit for d in details)
+            today_profit = sum_today_profit(details)
             data = {
                 "total_mv": total_mv,
                 "total_cost": total_cost,

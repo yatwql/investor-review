@@ -20,7 +20,7 @@ from openpyxl.styles import Alignment, Font
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
-from src.python.core.code_utils import is_a_share_stock
+from src.python.core.code_utils import is_a_share_stock, is_etf_by_name
 from src.python.core.models import Holding
 from src.python.core.registry import get_llm_module_name
 from src.python.report.data_status import STATUS_MESSAGES
@@ -79,8 +79,10 @@ def _index_holdings(lookup: dict, holdings: list[Holding]) -> None:
         for t in _extract_terms(name):
             if t not in lookup:
                 lookup[t] = {"type": "holding", "name": name, "code": code}
-        if "ETF" in name:
-            core = name.replace("ETF", "").strip()
+        # ETF 判定走 code_utils 单源（大小写不敏感）；剥离同一口径，避免 "etf" 小写名
+        # 既漏判又漏剥——关键词召回会与资产类型口径分叉
+        if is_etf_by_name(name):
+            core = re.sub(r"(?i)etf", "", name).strip()
             for t in re.findall(r"[一-鿿]{2,}", core):
                 if t not in lookup:
                     lookup[t] = {"type": "holding", "name": name, "code": code}

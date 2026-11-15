@@ -311,7 +311,7 @@ class TestS27CrossBorderEtf(unittest.TestCase):
         self.assertEqual(sub, "指数")
 
     def test_cross_border_etf_nav_date_t1(self):
-        """跨境 ETF 净值日期为 T-1（港股未开盘）→ today_profit=0。"""
+        """跨境 ETF 净值日期为 T-1（港股未开盘）→ 显示该净值日涨跌并标参考，不计入合计。"""
         from src.python.report.market_value import _compute_detail_row
 
         h = Holding("证券", "恒生科技ETF", "513380", shares=300, cost_price=1.2)
@@ -326,8 +326,9 @@ class TestS27CrossBorderEtf(unittest.TestCase):
         with patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"):
             with patch("src.python.report.market_value.is_market_open", return_value=False):
                 row = _compute_detail_row(h, mkt)
-        # nav_date != trading_day → today_profit = 0
-        self.assertEqual(row.today_profit, 0.0)
+        # nav_date != trading_day → 照实呈现该净值日涨跌，标「参考」且不进组合合计
+        self.assertTrue(row.today_profit_reference)
+        self.assertAlmostEqual(row.today_profit, round((1.25 - 1.24) * 300, 2))
         self.assertEqual(row.nav_date, "2026-07-02")
 
 

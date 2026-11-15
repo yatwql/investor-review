@@ -16,13 +16,15 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from src.python.analysis._math_utils import _MIN_SAMPLE_DAYS
+from src.python.analysis._math_utils import TRADING_DAYS_PER_YEAR
+
 # ── 常量 ────────────────────────────────────────────────
 
-_TRADING_DAYS_PER_YEAR = 252
-"""A 股年化交易日数（用于年化波动率和夏普比率）。"""
+_TRADING_DAYS_PER_YEAR = TRADING_DAYS_PER_YEAR
+"""A 股年化交易日数（单源：`_math_utils.TRADING_DAYS_PER_YEAR`）。"""
 
-_MIN_SAMPLE_DAYS = 20
-"""最小样本天数：不足此天数的指标置信度降为 low 或返回 None。"""
+# 最小样本天数直接使用 `_math_utils._MIN_SAMPLE_DAYS`（统计口径单源，不再本地定义）。
 
 _MAX_DRAWDOWN_EPSILON = 0.001
 """最大回撤下限：当 max_drawdown < 0.1% 时卡玛比率返回 None。"""

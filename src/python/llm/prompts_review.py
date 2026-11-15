@@ -50,6 +50,7 @@ def _build_self_review_prompt(
     holdings_details: list | None = None,
     penetrated_assets: list | None = None,
     per_module_limit: int = 4000,
+    inaction_line: str = "",
 ) -> str:
     """构造自检 user prompt：各模块产出（截断）+ 数据摘要（比对基准）。
 
@@ -58,6 +59,7 @@ def _build_self_review_prompt(
         holdings_details: 持仓明细。
         penetrated_assets: 穿透资产列表。
         per_module_limit: 单个模块文本的字符上限（防止 prompt 无限膨胀）。
+        inaction_line: 不动作类（持有/观望/不操作）命中率口径行；空串不追加段。
 
     Returns:
         自检 user prompt。
@@ -81,6 +83,11 @@ def _build_self_review_prompt(
     lines.append("")
     lines.append("### 穿透资产摘要")
     lines.append(_self_review_penetration_digest(penetrated_assets))
+    if inaction_line:
+        # 不动作类（持有/观望/不操作）命中率：只作为复核参照，不参与任何裁决
+        lines.append("")
+        lines.append("### 不动作建议命中率")
+        lines.append(inaction_line)
     return "\n".join(lines)
 
 

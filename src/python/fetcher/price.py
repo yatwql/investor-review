@@ -261,9 +261,16 @@ def _price_cache_fresh(
 
     新鲜度阈值按路由分域：
       - 场内行情（``price_stock``）要求等于最近交易日；
-      - 场外官方净值（``price_fund_otc``）再按基金类型细分：
-        QDII 合法为 T-1（以前一交易日为阈值），国内场外 T 日当晚即披露、
-        盘后应已到 T（以最近交易日为阈值）。
+      - 场外官方净值（``price_fund_otc``）再按基金类型与**披露时点**细分：
+        国内场外 T 日净值当晚才披露、QDII 因海外收盘与换算再滞后一天，故
+        披露时点（`:func:`market_hours.is_otc_nav_disclosed`，默认 20:00）前
+        只能要求「最近可得的一档」——国内场外 T-1、QDII T-2；披露后收紧回
+        国内场外 T、QDII T-1。
+
+        误判代价：把门禁当「必须等于 T」会让白天每次运行都判定场外缓存过期并
+        全量重取，而重取回来的仍是同一份滞后净值（写回后下次仍判过期），形成
+        稳定的重复取数——报告的「本日盈亏/回撤」照旧来自滞后净值，只是多花
+        一趟网络。故阈值必须随披露时点分档。
 
     场内行情还须通过**收盘时点**校验：``price_date == T`` 只说明「数据属于 T 日」，
     但 T 日收盘（15:00）之前写入的缓存是**盘中残留**——盘后或次日盘前继续沿用会把
@@ -295,10 +302,15 @@ def _price_cache_fresh(
             return False
         td = _gtd()
         if data_type in _OTC_NAV_ROUTES:
-            hint = name or data.get("name", "")
-            if is_qdii_extended(hint):
-                from src.python.report.market_value import get_prev_trading_day as _gp
+            from src.python.core.market_hours import is_otc_nav_disclosed as _nav_disclosed
+            from src.python.report.market_value import get_prev_trading_day as _gp
 
+            hint = name or data.get("name", "")
+            # 披露时点前「当日净值」尚未产生：阈值整体回退一档（国内场外 T-1、
+            # QDII 再退一天 T-2）；披露后恢复国内场外 T / QDII T-1。
+            if not _nav_disclosed():
+                td = _gp(td)
+            if is_qdii_extended(hint):
                 td = _gp(td)
         if pd < td:
             return False

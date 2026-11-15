@@ -269,6 +269,14 @@ def run_self_review(
 
     from src.python.llm.generators import generate_self_review
 
+    # 不动作类命中率（只读账本的一句话口径）：仅作提示，不改权重、不参与任何裁决
+    from src.python.core.decision_ledger import inaction_summary_line
+
+    try:
+        _inaction_line = inaction_summary_line()
+    except Exception:  # 账本不可读不阻断自检
+        _inaction_line = ""
+
     try:
         content, _from_cache = generate_self_review(
             module_outputs,
@@ -280,6 +288,7 @@ def run_self_review(
             holding_change_block=holding_change_block,
             event_impact_block=event_impact_block,
             schedule_replay_block=schedule_replay_block,
+            inaction_line=_inaction_line,
         )
     except Exception as e:  # noqa: BLE001 — 自检失败不得影响主内容（报告照常产出）
         logger.warning("生成后自检调用异常（不影响主内容）: %s", e)

@@ -240,6 +240,7 @@ def _write_content_sheet(
     content: str | None,
     section_order: list[dict] | None = None,
     debate_mode_label: str | None = None,
+    module_key: str | None = None,
 ) -> None:
     """写入一个 LLM 分析章节。
 
@@ -270,6 +271,10 @@ def _write_content_sheet(
         row += 1
 
     if content:
+        # 机器可读契约头不展示（缓存里保留原文，下次仍可解析）
+        from src.python.report.llm_contract_block import contract_rows, strip_contract_line
+
+        content = strip_contract_line(content) or ""
         # 先提取底部 LLM footer（在剥离 HTML 前进行）
         footer_text = _extract_footer_text(content)
 
@@ -296,6 +301,19 @@ def _write_content_sheet(
             ws.row_dimensions[row].height = _calc_row_height(block_text)
             row += 2
 
+        # 主张与证据（结构化契约；开关关闭时无载体 → 空列表，产物不变）
+        for _cells in contract_rows(module_key) if module_key else []:
+            cell = ws.cell(row=row, column=1, value=_cells[0])
+            cell.font = CONTENT_FONT
+            cell.alignment = _CONTENT_ALIGN
+            ws.row_dimensions[row].height = _calc_row_height(str(_cells[0]))
+            row += 1
+            if len(_cells) > 1 and _cells[1]:
+                detail = ws.cell(row=row, column=1, value=_cells[1])
+                detail.font = Font(size=9, color="999999")
+                detail.alignment = _CONTENT_ALIGN
+                ws.row_dimensions[row].height = _calc_row_height(str(_cells[1]))
+                row += 1
         # 底部 LLM 标识行（从 HTML 中提取，与 HTML 报告格式保持一致）
         if footer_text:
             cell = ws.cell(row=row, column=1, value=footer_text)
@@ -365,6 +383,7 @@ def write_llm_sheets(
             content,
             section_order,
             debate_mode_label=(debate_mode_label if mk == "expert_review" else None),
+            module_key=mk,
         )
 
     logger.info("LLM 分析章节写入完成（含%s）", get_llm_module_name("penetration_deep"))

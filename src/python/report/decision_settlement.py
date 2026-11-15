@@ -127,7 +127,7 @@ def settle_pending_decisions(
 
     Returns:
         {"settled": 结算事件数, "ids": 触及的决策 id（去重）,
-         "deferred": 视界级暂缓次数, "skipped": 无方向决策数,
+         "deferred": 视界级暂缓次数, "skipped": 方向值非法的决策数（不动作类会结算）,
          "summary": [{code, decision_id, outcome, raw_return, bench_return,
                       horizon_bars, target_horizon}, ...]}
     """
@@ -160,8 +160,9 @@ def settle_pending_decisions(
         if not missing:
             continue  # 目标视界均已结 → 幂等跳过
         direction = int(d.get("direction") or 0)
-        # 持有/中性无方向语义，不结算（保持 pending，由统计剔除）
-        if direction not in (dl.DIRECTION_LONG, dl.DIRECTION_SHORT):
+        # 不动作类（持有/观望/不操作）同样可结算：判对/判偏落 `flat_hit`，
+        # 不进方向性命中率（与 fold 的 inaction 分项同口径）；非法方向值才跳过
+        if direction not in (dl.DIRECTION_LONG, dl.DIRECTION_SHORT, dl.DIRECTION_FLAT):
             skipped += 1
             continue
         baseline = d.get("baseline_close")
@@ -199,6 +200,8 @@ def settle_pending_decisions(
                 horizon_bars=horizon_used,
                 target_horizon=h,
                 bench_return=bench_ret,
+                # 仅不动作类写 flat_hit（方向性决策留空，避免噪声字段）
+                flat_hit=dl.classify_flat_hit(raw) if direction == dl.DIRECTION_FLAT else None,
                 path=ledger_path,
             )
             if did not in id_set:

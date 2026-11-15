@@ -17,7 +17,13 @@ from src.python.report.orchestrator import (
     generate_report,
 )
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
+pytestmark = [
+    pytest.mark.unit,
+    pytest.mark.unit_report,
+    # 管线会起健康检查线程（真实网络 + akshare V8）：必须离线桩，契约见
+    # `src/test/unit/test_offline_pipeline_contract.py`
+    pytest.mark.usefixtures("offline_external_sources"),
+]
 
 
 def _real_reports_dir() -> str:

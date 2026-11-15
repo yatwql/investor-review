@@ -11,7 +11,7 @@ from src.python.core.models import Holding
 from src.python.report.category import _categorize_holding, calc_yield_text
 from src.python.report.fund_performance import _fund_display_type, is_fund
 from src.python.report._fund_rating import _RATING_COMMENT, _format_rank
-from src.python.report.market_value import DetailRow
+from src.python.report.market_value import DetailRow, sum_today_profit
 from src.python.report.progress import ProgressReporter, SilentProgressReporter
 
 logger = logging.getLogger("invest")
@@ -83,13 +83,14 @@ def _build_category_data(
                     "profit": d.profit if d else 0.0,
                     "profit_rate": d.profit_rate if d else 0.0,
                     "today_profit": d.today_profit if d else 0.0,
+                    "today_profit_reference": bool(getattr(d, "today_profit_reference", False)) if d else False,
                     "yield_text": calc_yield_text(h.code, d, dividend_data),
                 }
             )
         sub_mv = sum(i["market_value"] for i in items)
         sub_cost = sum(i["cost"] for i in items)
         sub_profit = sum(i["profit"] for i in items)
-        sub_today = sum(i["today_profit"] for i in items)
+        sub_today = sum_today_profit(items)
         sub_rate = sub_profit / sub_cost if sub_cost > 0 else 0.0
         result.append(
             {
@@ -181,6 +182,26 @@ def _build_single_perf_item(
 
 
 def _build_perf_data(
+    holdings: list[Holding],
+    details: list[DetailRow],
+    progress: ProgressReporter | None = None,
+) -> list[dict[str, Any]]:
+    """构建基金业绩分析数据（同一轮内同输入只取一次，见 `_run_scope.run_memo`）。
+
+    预取阶段（`prepare_report_data` 的「渲染前置取数」）先算一遍，HTML 区块装配
+    再调时直接命中，避免冷缓存下把 4~6s 的基金排名取数算进渲染阶段。
+    """
+    from src.python.report._run_scope import run_memo
+
+    key = (
+        "perf_data",
+        tuple((h.code, str(getattr(h, "shares", ""))) for h in holdings or []),
+        tuple((d.code, str(getattr(d, "market_value", ""))) for d in details or []),
+    )
+    return run_memo(key, lambda: _build_perf_data_uncached(holdings, details, progress))
+
+
+def _build_perf_data_uncached(
     holdings: list[Holding],
     details: list[DetailRow],
     progress: ProgressReporter | None = None,

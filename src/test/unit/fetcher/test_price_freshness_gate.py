@@ -24,9 +24,28 @@ _TODAY = "2026-10-23"  # 周五
 _YESTERDAY = "2026-10-22"
 _CLOSE_TS = 1_790_000_000.0  # 任意收盘 epoch（具体值由测试注入）
 
+#: 前一交易日映射（支持连续回退：披露前分档最多要回退两个档）
+_PREV_DAYS = {_TODAY: _YESTERDAY, _YESTERDAY: "2026-10-21"}
 
-def _gate(data, data_type="price_stock", name="", cache_key="price_600519", *, market_open=False):
-    """在受控环境下调用门禁：固定交易日、收盘 epoch、缓存写入时刻与当前时刻。"""
+
+def _prev_day(day: str) -> str:
+    return _PREV_DAYS.get(day, "2026-10-19")
+
+
+def _gate(
+    data,
+    data_type="price_stock",
+    name="",
+    cache_key: str | None = "price_600519",
+    *,
+    market_open=False,
+    nav_disclosed=True,
+):
+    """在受控环境下调用门禁：固定交易日、收盘 epoch、缓存写入时刻、披露时点与当前时刻。
+
+    ``nav_disclosed`` 缺省 True（披露后口径）——与本次修改前的严格阈值等价，
+    保证既有用例语义不变；测「披露前」放行时显式传 False。
+    """
     captured = data.pop("_captured_at", None)
 
     def _fake_captured(_key):
@@ -35,13 +54,14 @@ def _gate(data, data_type="price_stock", name="", cache_key="price_600519", *, m
 
     with (
         patch("src.python.core.market_hours.is_market_open", return_value=market_open),
+        patch("src.python.core.market_hours.is_otc_nav_disclosed", return_value=nav_disclosed),
         patch("src.python.report.market_value.get_last_trading_day", return_value=_TODAY),
-        patch("src.python.report.market_value.get_prev_trading_day", return_value=_YESTERDAY),
+        patch("src.python.report.market_value.get_prev_trading_day", side_effect=_prev_day),
         patch("src.python.fetcher.price._cache_captured_at", side_effect=_fake_captured),
         patch("src.python.fetcher.price._trading_day_close_epoch", return_value=_CLOSE_TS),
         patch("src.python.fetcher.price.time.time", return_value=_CLOSE_TS + 1800),
     ):
-        return _price_cache_fresh(data, data_type, name=name, cache_key=cache_key)
+        return _price_cache_fresh(data, data_type, name=name, cache_key=cache_key)  # type: ignore[arg-type]
 
 
 class TestCloseTimeGate:
@@ -100,4 +120,62 @@ class TestDateGate:
         """缺 cache_key 即 TypeError——盘后时点校验不可被调用方静默跳过。"""
         data = {"price_date": _YESTERDAY, "_captured_at": _CLOSE_TS + 300}
         with pytest.raises(TypeError):
-            _price_cache_fresh(data, "price_stock", "招商银行")  # noqa: PLW0108  # 故意缺参
+            _price_cache_fresh(data, "price_stock", "招商银行")  # type: ignore[call-arg]  # noqa: PLW0108  # 故意缺参
+
+
+class TestOtcDisclosureTier:
+    """场外净值按披露时点分档：披露前只能要到「最近可得的一档」。
+
+    回归背景：门禁原口径「国内场外须到 T / QDII 须到 T-1」在白天运行时不可能满足
+    （T 日净值当晚才披露），于是每次运行都把 8 只场外基金判为过期→全量重取，重取回来
+    仍是同一份滞后净值（写回后下次再判过期），形成稳定的重复取数（单次浪费约 12s）。
+    """
+
+    def test_domestic_otc_t1_accepted_before_disclosure(self):
+        """披露前（白天）国内场外缓存到 T-1 即是最新可得，不应重取。"""
+        assert (
+            _gate(
+                {"price_date": _YESTERDAY, "_captured_at": _CLOSE_TS + 300},
+                data_type="price_fund_otc",
+                name="易方达蓝筹精选",
+                nav_disclosed=False,
+            )
+            is True
+        )
+
+    def test_domestic_otc_t1_rejected_after_disclosure(self):
+        """披露后（当晚起）国内场外仍停在 T-1 就是真的过期。"""
+        assert (
+            _gate(
+                {"price_date": _YESTERDAY, "_captured_at": _CLOSE_TS + 300},
+                data_type="price_fund_otc",
+                name="易方达蓝筹精选",
+                nav_disclosed=True,
+            )
+            is False
+        )
+
+    def test_qdii_t2_accepted_before_disclosure(self):
+        """QDII 披露前再滞一档：缓存到 T-2 属最新可得，不再重复取数。"""
+        with patch("src.python.fetcher.price.is_qdii_extended", return_value=True):
+            assert (
+                _gate(
+                    {"price_date": "2026-10-21", "_captured_at": _CLOSE_TS + 300},
+                    data_type="price_fund_otc",
+                    name="华夏纳斯达克100ETF联接",
+                    nav_disclosed=False,
+                )
+                is True
+            )
+
+    def test_domestic_otc_t2_rejected_before_disclosure(self):
+        """披露前也不放行更旧的一档（T-2 之外仍算过期，防止长期沿用陈旧净值）。"""
+        assert (
+            _gate(
+                {"price_date": "2026-10-21", "_captured_at": _CLOSE_TS + 300},
+                data_type="price_fund_otc",
+                name="易方达蓝筹精选",
+                nav_disclosed=False,
+            )
+            is False
+        )

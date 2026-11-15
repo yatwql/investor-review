@@ -38,6 +38,41 @@ def _record_span(recorder, name: str, started: float) -> None:
         recorder.record(name, time.perf_counter() - started)
 
 
+def _warm_render_contracts(holdings: list, details: list, reporter, config: dict) -> None:
+    """预取渲染阶段才需要的基金业绩/风格数据（失败不阻断：渲染阶段会自行重取）。
+
+    Args:
+        holdings: 原始持仓（真实代码，未匿名——取数只认代码）。
+        details: 市值核算明细（与 HTML 侧同一份，匿名化后键仍一致）。
+        reporter: 进度上报（预取也会上屏「正在获取基金业绩排名…」）。
+        config: 报告配置（`enable_fund_deep_analysis` 关闭时跳过风格预取）。
+    """
+    try:
+        from src.python.report.html_builders import _build_perf_data
+
+        _build_perf_data(holdings, details, progress=reporter)
+    except Exception:  # 预取失败不阻断主链路：渲染阶段会重取并各自降级
+        logger.debug("[prefetch] 基金业绩预取失败，渲染阶段重取", exc_info=True)
+    try:
+        # 穿透块的附属取数（盈利预测 ≈2000+ 只、股息率）：载入本身约 2~3s
+        from src.python.report.html_renderers import prefetch_penetration_side_data
+
+        prefetch_penetration_side_data(holdings, details)
+    except Exception:
+        logger.debug("[prefetch] 穿透附属取数预取失败，渲染阶段重取", exc_info=True)
+    try:
+        # 开关判定必须走 config 解析器（缺失键默认 True）：直接读原始键会把「配置里没写」
+        # 当成关闭，渲染阶段再补取一次——预取白做，且取数又回到渲染阶段
+        from src.python.config import is_enable_fund_deep_analysis
+
+        if is_enable_fund_deep_analysis(config):
+            from src.python.report.html_renderers import _render_style_analysis
+
+            _render_style_analysis(holdings, True, reporter)
+    except Exception:
+        logger.debug("[prefetch] 基金风格预取失败，渲染阶段重取", exc_info=True)
+
+
 def prepare_report_data(
     holdings: list,
     reporter: ProgressReporter,
@@ -70,6 +105,7 @@ def prepare_report_data(
         classify_holdings,
         get_last_trading_day,
         get_prev_trading_day,
+        sum_today_profit,
     )
     from src.python.report.penetration import compute_penetration_top10
 
@@ -81,7 +117,7 @@ def prepare_report_data(
     total_mv = sum(d.market_value for d in details)
     total_cost = sum(d.cost for d in details)
     total_profit = sum(d.profit for d in details)
-    total_today_profit = sum(d.today_profit for d in details)
+    total_today_profit = sum_today_profit(details)
     categories = classify_holdings(holdings)
     _record_span(recorder, "行情与明细", _t0)
 
@@ -254,6 +290,14 @@ def prepare_report_data(
             factor_catalog_data = {"available": False, "reason": f"计算异常: {type(exc).__name__}"}
 
     _record_span(recorder, "明细装配与建议", _t0)
+
+    # 渲染前置取数：基金业绩与基金风格这两簇原本到 HTML 区块装配才取数（冷缓存实测
+    # 4~6s），既让「区块装配」计时点看起来像渲染慢，也把同一份取数算在渲染阶段。
+    # 这里先取一次并入单轮复用（`_run_scope.run_memo`），渲染阶段直接命中。
+    _t0 = time.perf_counter()
+    _warm_render_contracts(holdings, details, reporter, config)
+    _record_span(recorder, "渲染前置取数", _t0)
+
     return {
         "details": details,
         "total_mv": total_mv,

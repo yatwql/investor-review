@@ -27,6 +27,7 @@ import logging
 import math
 from typing import Any
 
+from src.python.analysis._math_utils import SHARES_EPS
 from src.python.analysis.portfolio_evolution import _dedup_by_date
 from src.python.core.num_utils import is_finite_number
 from src.python.fetcher.history_diff import HistoryDiff
@@ -41,7 +42,8 @@ MIN_REVIEW_EVENTS = 10
 #: 有效期数下限：去重后不足 2 期无从差分（占位降级）
 _DEFAULT_MIN_PERIODS = 2
 #: 份额差绝对值低于该值视为「不变」（与 HistoryDiff 分类阈值一致）
-_SHARES_EPS = 0.001
+#: 份额容差单源（`_math_utils.SHARES_EPS`，此处保留既有私有名）
+_SHARES_EPS = SHARES_EPS
 #: 基线切换判定：相邻两期快照的持仓代码 Jaccard 相似度低于该阈值 → 视为「换了持仓口径」
 #: （持仓文件被替换/账户重记/同名容器切换），该区间不推断交易事件。
 _BASELINE_SWITCH_MAX_JACCARD = 0.5

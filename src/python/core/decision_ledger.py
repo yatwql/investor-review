@@ -35,6 +35,13 @@ from typing import Any, Iterable
 
 from src.python.core.constants import PROJECT_ROOT
 from src.python.core.atomic_write import write_text_atomic
+from src.python.core.decision_eval_policy import (  # noqa: F401  (阈值/门槛转出给既有导入面)
+    DIRECTION_HIT_THRESHOLD,
+    FLAT_HIT_TOLERANCE,
+    HORIZON_UNIT,
+    MEANINGFUL_SAMPLE,
+    classify_flat_hit,
+)
 from src.python.core.jsonl_store import append_jsonl_atomic, prune_jsonl_by_age, read_jsonl
 
 logger = logging.getLogger("invest")
@@ -67,8 +74,10 @@ SETTLE_HORIZONS: tuple[int, ...] = (MIN_SETTLE_BARS, 20, 60)
 """多视界结算目标（交易日）：5 日为既有口径与命中率统计基准；20/60 日为长视界
 观察（判断依据块结算摘要用）。同一决策可按视界各落一条结算事件，判重键为
 `(decision_id, 目标视界)`——见 `fold_ledger` 的 `settlements` 与结算事件 `target_horizon`。"""
-DIRECTION_THRESHOLD = 0.015  # |区间涨跌| 低于该值判「平盘不判定」，防噪声计为命中
-MEANINGFUL_SAMPLE = 20  # 有效样本 ≥ 该值才给出正式命中率结论
+#: 评估口径单源在 `core/decision_eval_policy.py`（方向阈值/不动作容忍带/样本门槛/视界单位）；
+#: 本模块保留原名转出，既有导入面（报告层、eval 脚本、测试）无需改动。
+DIRECTION_THRESHOLD = DIRECTION_HIT_THRESHOLD  # |区间涨跌| 低于该值判「平盘不判定」
+MEANINGFUL_SAMPLE = MEANINGFUL_SAMPLE
 MIN_LESSON_SAMPLE = 3  # 方向判定样本低于该值不产出教训块（防噪声误导）
 
 # 结算结果枚举
@@ -187,6 +196,7 @@ def append_settlement(
     horizon_bars: int = 0,
     target_horizon: int | None = None,
     bench_return: float | None = None,
+    flat_hit: bool | None = None,
     path: str | None = None,
 ) -> None:
     """为某条 pending 决策追加结算事件（事后不可变，仅追加）。
@@ -198,6 +208,8 @@ def append_settlement(
         horizon_bars: 实际覆盖的后置交易日 bar 数（结算终点口径）
         target_horizon: 目标视界（多视界落账的判重键；缺省视为 5 日口径——
             历史事件无此字段，fold 统一按 MIN_SETTLE_BARS 归属）
+        flat_hit: 不动作类（`direction == 0`）的事后判定结果（True=判对、False=判偏）；
+            仅不动作决策落该字段，方向性决策不写（避免噪声字段）
     """
     event: dict[str, Any] = {
         "event": EVENT_SETTLEMENT,
@@ -214,6 +226,8 @@ def append_settlement(
         event["direction_hit"] = direction_hit
     if bench_return is not None:
         event["bench_return"] = bench_return
+    if flat_hit is not None:
+        event["flat_hit"] = bool(flat_hit)
     _append_event_atomic(event, path=path)
 
 
@@ -249,6 +263,37 @@ def same_day_pending_exists(
     return False
 
 
+def pending_inaction_exists(code: str, *, path: str | None = None) -> bool:
+    """账本中是否已有同 code 的**未结算**不动作类决策（跨日去重）。
+
+    为什么需要：LLM 表里同一只持仓可能每天都被写「持有/观望」，逐日登记会让账本
+    与结算事件按「持仓数 × 天数」增长，而这类结论本就是一段持续意图——同一 code 的
+    不动作观察期内只记一次即可（结算后下次再登记新一期）。
+
+    Args:
+        code: 品种代码。
+        path: 账本路径（测试隔离用）。
+
+    Returns:
+        True 表示已有未结算的不动作决策（调用方应跳过本次登记）。
+    """
+    target = str(code or "").strip()
+    if not target:
+        return False
+    events = load_events(path=path)
+    settled_ids = {ev.get("decision_id") for ev in events if ev.get("event") == EVENT_SETTLEMENT}
+    for ev in events:
+        if ev.get("event") != EVENT_DECISION:
+            continue
+        if int(ev.get("direction") or 0) != DIRECTION_FLAT:
+            continue
+        if ev.get("decision_id") in settled_ids:
+            continue
+        if str(ev.get("code") or "").strip() == target:
+            return True
+    return False
+
+
 def classify_direction_outcome(
     raw_return: float | None,
     direction: int,
@@ -269,6 +314,42 @@ def classify_direction_outcome(
         return OUTCOME_FLAT, None
     hit = (direction == DIRECTION_SHORT and raw_return < 0) or (direction == DIRECTION_LONG and raw_return > 0)
     return (OUTCOME_HIT if hit else OUTCOME_MISS), hit
+
+
+def summarize_inaction(decisions: Iterable[dict[str, Any]]) -> dict[str, Any]:
+    """不动作类（`direction == 0`）事后判定统计（与 fold 同一判定口径）。
+
+    只看 `settlement.flat_hit`：旧账本无该字段的结算视为「未判」，不计入样本。
+
+    Args:
+        decisions: `fold_ledger()` 的 decisions（含 `settlement` / `carrier`）。
+
+    Returns:
+        {total, hit, hit_rate, sample_sufficient, by_carrier:{carrier:{total, hit}}}
+    """
+    total = 0
+    hit = 0
+    by_carrier: dict[str, dict[str, int]] = {}
+    for d in decisions or []:
+        if int(d.get("direction") or 0) != DIRECTION_FLAT:
+            continue
+        s = d.get("settlement") or {}
+        judged = s.get("flat_hit")
+        if judged is None:
+            continue
+        total += 1
+        hit += int(bool(judged))
+        carrier = str(d.get("carrier") or "unknown")
+        slot = by_carrier.setdefault(carrier, {"total": 0, "hit": 0})
+        slot["total"] += 1
+        slot["hit"] += int(bool(judged))
+    return {
+        "total": total,
+        "hit": hit,
+        "hit_rate": hit / total if total else None,
+        "sample_sufficient": total >= MEANINGFUL_SAMPLE,
+        "by_carrier": by_carrier,
+    }
 
 
 # ── fold：decision + settlement 合并统计（不可变聚合）───
@@ -331,6 +412,8 @@ def fold_ledger(
         by_carrier    {carrier: {...分项}}
         by_horizon    {目标视界: {settled, counts, directional_total,
                       direction_accuracy, alpha_mean}}（仅方向性决策）
+        inaction      不动作类（direction == 0）判定：{total, hit, hit_rate,
+                      sample_sufficient}；样本不足时 hit_rate 为 None，只给命中/总数
     """
     if events is None:
         events = load_events(path=path)
@@ -363,10 +446,11 @@ def fold_ledger(
     alpha_sum = 0.0
     alpha_n = 0
     by_carrier: dict[str, dict[str, Any]] = {}
+
     for r in resolved:
         direction = r.get("direction")
         if direction not in (DIRECTION_LONG, DIRECTION_SHORT):
-            continue  # 持有/中性不参与判定统计
+            continue  # 持有/中性不参与方向判定统计（不动作类另由 summarize_inaction 汇总）
         s = r.get("settlement")
         if s is None:
             continue
@@ -389,9 +473,13 @@ def fold_ledger(
     directional_total = counts[OUTCOME_HIT] + counts[OUTCOME_MISS]
     accuracy: float | None = counts[OUTCOME_HIT] / directional_total if directional_total else None
 
+    inaction_stat = summarize_inaction(resolved)
+
     per_carrier: dict[str, dict[str, Any]] = {}
     for carrier, agg in sorted(by_carrier.items()):
         d_total = agg[OUTCOME_HIT] + agg[OUTCOME_MISS]
+        _inaction_carrier = inaction_stat["by_carrier"].get(carrier) or {"total": 0, "hit": 0}
+        flat_total, flat_hit = _inaction_carrier["total"], _inaction_carrier["hit"]
         per_carrier[carrier] = {
             "settled": sum(agg.values()),
             "directional": d_total,
@@ -400,6 +488,25 @@ def fold_ledger(
             "flat": agg[OUTCOME_FLAT],
             "gap": agg[OUTCOME_GAP],
             "accuracy": agg[OUTCOME_HIT] / d_total if d_total else None,
+            # 不动作类样本（旧账本无 `flat_hit` ⇒ 恒 0，不参与统计）
+            "inaction_total": flat_total,
+            "inaction_hit": flat_hit,
+        }
+    # 只出现在不动作类里的载体（无方向性样本）同样要露出，避免统计视图缺行
+    for carrier, _slot in sorted(inaction_stat["by_carrier"].items()):
+        flat_total, flat_hit = _slot["total"], _slot["hit"]
+        if carrier in per_carrier:
+            continue
+        per_carrier[carrier] = {
+            "settled": 0,
+            "directional": 0,
+            "hit": 0,
+            "miss": 0,
+            "flat": 0,
+            "gap": 0,
+            "accuracy": None,
+            "inaction_total": flat_total,
+            "inaction_hit": flat_hit,
         }
 
     # 多视界统计：按目标视界聚合（仅方向性决策；与口径基准统计同法）
@@ -445,7 +552,30 @@ def fold_ledger(
         "alpha_mean": alpha_sum / alpha_n if alpha_n else None,
         "by_carrier": per_carrier,
         "by_horizon": by_horizon,
+        # 不动作类（持有/观望/不操作）事后判定：与方向性命中率并列，不参与其分母
+        "inaction": inaction_stat,
     }
+
+
+def inaction_summary_line(fold: dict[str, Any] | None = None) -> str:
+    """不动作类（持有/观望/不操作）命中率的一句话口径（无样本返回空串）。
+
+    作为唯一文案源，供自检输入与报告口径共用；样本不足时只给「命中/总数」。
+
+    Args:
+        fold: `fold_ledger()` 结果；None 时现读当前账本。
+
+    Returns:
+        如 ``不动作建议：命中率 67%（n=20）``；无已判定样本时返回 ``""``。
+    """
+    stats = fold if fold is not None else fold_ledger()
+    inaction = stats.get("inaction") or {}
+    total = int(inaction.get("total") or 0)
+    if total <= 0:
+        return ""
+    if inaction.get("sample_sufficient") and inaction.get("hit_rate") is not None:
+        return f"不动作建议：命中率 {inaction['hit_rate']:.0%}（n={total}）"
+    return f"不动作建议：命中 {int(inaction.get('hit') or 0)}/{total}（样本不足）"
 
 
 # ── 方向/结论措辞（教训文本用）──

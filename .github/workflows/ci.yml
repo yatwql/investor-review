@@ -154,7 +154,9 @@ jobs:
           pip install --retries 5 --timeout 60 -e ".[test]"
           # 类型检查守护（scripts/check-types.py）的解析器：PyPI 包自带 node 运行时分发，
           # 不入项目依赖（开发者本地装或 npx 均可，见 scripts-reference.md）
-          pip install --retries 5 --timeout 60 pyright
+          # 锁版本：pyright 类型口径随版本演进（实测未锁版本时 CI 比本地先报新 finding），
+          # 门禁要求「同一份代码给出同一结论」——升级须显式改本行并同步本地基线
+          pip install --retries 5 --timeout 60 "pyright==1.1.414"
 
       # 守护清单后台并行回放（与 pre-commit 钩子执行体同款并发调度）：
       #   - 清单与 P0/P2 门禁五处同源（check-doc-drift 守护清单校验断言集合一致），

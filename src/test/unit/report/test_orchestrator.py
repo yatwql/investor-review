@@ -230,6 +230,87 @@ class TestPrepareReportData:
 
 @pytest.mark.unit
 @pytest.mark.unit_report
+class TestWarmRenderContracts:
+    """预取阶段把渲染期取数前置（基金业绩 / 基金风格），渲染阶段直接复用。
+
+    回归背景：基金业绩排名取数原本发生在 HTML「区块装配」内（冷缓存 4~6s），
+    既让该计时点看起来像渲染慢，也把取数算在渲染阶段。
+    """
+
+    def test_perf_data_fetched_once_when_warmed(self):
+        from src.python.core.models import Holding
+        from src.python.report import html_builders
+        from src.python.report._orchestrator_data import _warm_render_contracts
+        from src.python.report._run_scope import clear_run_memo
+        from src.python.report.market_value import DetailRow
+
+        clear_run_memo()
+        holdings = [Holding("证券", "电池ETF招商", "561910", shares=100.0, cost_price=1.0)]
+        details = [DetailRow(account="证券", name="电池ETF招商", code="561910", shares=100.0, market_value=1000.0)]
+        with (
+            patch.object(html_builders, "fetch_fund_rankings_batch", return_value={}) as batch,
+            patch.object(html_builders, "_build_single_perf_item", return_value={"code": "561910"}),
+        ):
+            _warm_render_contracts(holdings, details, MagicMock(), {})
+            _build = html_builders._build_perf_data
+            first = _build(holdings, details)
+            second = _build(holdings, details)
+        assert batch.call_count == 1, "预取 + 渲染两次调用只应触发一次取数"
+        assert first == second
+
+    def test_style_prefetch_skipped_when_feature_off(self):
+        from src.python.core.models import Holding
+        from src.python.report import html_renderers
+        from src.python.report._orchestrator_data import _warm_render_contracts
+        from src.python.report._run_scope import clear_run_memo
+
+        clear_run_memo()
+        holdings = [Holding("证券", "电池ETF招商", "561910", shares=100.0, cost_price=1.0)]
+        with patch.object(html_renderers, "_render_style_analysis") as style:
+            _warm_render_contracts(holdings, [], MagicMock(), {"enable_fund_deep_analysis": False})
+        style.assert_not_called()
+
+    def test_penetration_side_data_prefetched_once(self):
+        """穿透附属取数（盈利预测/股息率）预取后，渲染阶段不再重复载入。
+
+        回归背景：盈利预测（2000+ 只）在 HTML 渲染阶段载入约 2.5s，`区块装配` 因此
+        看起来像渲染慢；预取 + 单轮复用后渲染阶段只剩字符串拼装。
+        """
+        from src.python.core.models import Holding
+        from src.python.report import html_renderers, penetration
+        from src.python.report._run_scope import clear_run_memo
+
+        clear_run_memo()
+        holdings = [Holding("证券", "长江电力", "600900", shares=100.0, cost_price=10.0)]
+        pen_stub = {"top10": [{"codes": ["600900"], "name": "长江电力"}]}
+        with (
+            patch.object(penetration, "compute_penetration_top10", return_value=pen_stub),
+            patch.object(html_renderers, "get_profit_forecast", return_value={"600900": {"eps_2026e": 1.2}}) as fc,
+            patch.object(html_renderers, "get_dividend_data", return_value={}) as dv,
+        ):
+            html_renderers.prefetch_penetration_side_data(holdings, [])
+            html_renderers._render_penetration_section(holdings, [], MagicMock())
+        assert fc.call_count == 1, "预取 + 渲染只应载入一次盈利预测"
+        assert dv.call_count == 1, "股息率同样只应取一次"
+
+    def test_style_prefetch_runs_when_flag_key_missing(self):
+        """配置里没写开关 ≠ 关闭：解析器默认 True，预取必须跟着解析器走。
+
+        回归背景：预取若直接读原始键，缺键（几乎所有用户的 config.json）会被判成关闭 →
+        风格取数又落回渲染阶段，预取形同虚设。
+        """
+        from src.python.core.models import Holding
+        from src.python.report import html_renderers
+        from src.python.report._orchestrator_data import _warm_render_contracts
+        from src.python.report._run_scope import clear_run_memo
+
+        clear_run_memo()
+        holdings = [Holding("证券", "电池ETF招商", "561910", shares=100.0, cost_price=1.0)]
+        with patch.object(html_renderers, "_render_style_analysis") as style:
+            _warm_render_contracts(holdings, [], MagicMock(), {})
+        style.assert_called_once()
+
+
 class TestReportLlmModuleResults:
     """_report_llm_module_results 统一 LLM 结果报告测试。"""
 

@@ -1,5 +1,5 @@
 # 投资复盘助手 — 技术设计
-> 文档版本：0.18.0
+> 文档版本：0.18.1
 
 ## 目录
 
@@ -739,7 +739,7 @@ Provider Chain 采用**职责链（Chain of Responsibility）模式**：每个�
  │  industry:       东方财富 push2          →  行情页 quotedata      │
  │  fund_rank:      天天基金（直达）                                   │
  │  fund_hold:      天天基金 → 同花顺官方（需 key）                   │
- │  bond_yield:     akshare bond_zh_us_rate（国债收益率，无风险利率）│
+ │  bond_yield:     akshare bond_zh_us_rate / bond_zh_us_yield_em（无风险利率）│
  └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -900,12 +900,12 @@ Provider Chain 采用**职责链（Chain of Responsibility）模式**：每个�
 |:-----|:----------|:-----------------------------|:----------|:------------------------------|
 | 实现位置 | `core/provider_registry.py` | `core/provider_registry.py` | `llm/circuit_breaker.py` | `analysis/circuit_breaker_wrapper.py` |
 | 熔断阈值 | 连续 3 次传输级失败 | 连续 6 次传输级失败 | 连续 3 次 | 单指标连续 3 次异常（除零/空数据/置信度不足） |
-| 冷却时长 | 指数退避 60s→300s→900s→3600s | 120s | 60s | 24h（静默，不阻塞其他指标） |
+| 冷却时长 | 指数退避 60s→300s→900s→3600s | 自定义 120s（**下限**；重新熔断取 max(120s, 退避档)） | 60s | 24h（静默，不阻塞其他指标） |
 | 试探次数 | 冷却期满放行一次 | 冷却期满放行一次 | 半开状态放行一次 | 冷却期满后自动复位重试 |
 | 恢复条件 | 试探成功 → record_success | 试探成功 → record_success | 半开成功 → 关闭熔断 | record_success → 复位计数 |
 | 持久化 | `data/state/circuit_breaker.json` | `data/state/circuit_breaker.json` | 会话级（无持久化） | `data/state/metrics_breaker.json` |
 
-**指数退避**：单股票 API 熔断器冷却时间采用指数退避策略（60s→300s→900s→3600s），每次**重新熔断**按退避等级递增一档，成功恢复后重置为基础值。熔断期内到达的并发在途失败只累加计数、不再升档——否则一批并发请求（如 41 个代码同时刷行业接口）在通道掉线时会在 1 秒内把退避从 60s 打到 3600s，等于用一次抖动关停主通道一小时。
+**指数退避**：单股票 API 熔断器冷却时间采用指数退避策略（60s→300s→900s→3600s），每次**重新熔断**按退避等级递增一档，成功恢复后重置为基础值；注册时显式给过冷却期的源（`ProviderState.cooldown_override`，如批量 API 120s）以自定义值为**下限**参与取大，成功恢复后回落到自定义值而非全局默认。熔断期内到达的并发在途失败只累加计数、不再升档——否则一批并发请求（如 41 个代码同时刷行业接口）在通道掉线时会在 1 秒内把退避从 60s 打到 3600s，等于用一次抖动关停主通道一小时。
 
 **跨会话持久化**：熔断器状态持久化到 `data/state/circuit_breaker.json`，与 `data/cache/` 隔离，避免缓存清理误删。会话重启后恢复熔断记忆。
 
@@ -913,7 +913,7 @@ Provider Chain 采用**职责链（Chain of Responsibility）模式**：每个�
 
 #### Chain 自动注册
 
-`fetcher/chain_config.py`（模块加载注册，符号经 `fetcher/chain.py` 门面 re-export）在模块加载时自动调用 `get_registry().register_default_chains()`，从 `_DEFAULT_CHAINS` 配置注册所有 provider 和 chain。在 `register_default_chains()` 中 per-provider 配置 tier/timeout/failure_threshold/cooldown_secs（如 eastmoney_industry 阈值 6 次/冷却 120s）。
+`fetcher/chain_config.py`（模块加载注册，符号经 `fetcher/chain.py` 门面 re-export）在模块加载时自动调用 `get_registry().register_default_chains()`，从 `_DEFAULT_CHAINS` 配置注册所有 provider 和 chain。在 `register_default_chains()` 中 per-provider 配置 tier/timeout/failure_threshold/cooldown_secs（如 eastmoney_industry 阈值 6 次/冷却 120s）。自定义冷却期会被记为 `ProviderState.cooldown_override`：熔断时取「自定义值与退避档的较大者」、成功后回落自定义值——否则退避表首档 60s 会把注册时给的冷却期盖掉，配置形同虚设（日志也会打印成 60s）。
 
 #### 策略选择器
 
@@ -1117,8 +1117,10 @@ _fetch_with_cache_refresh() 返回数据后
 
 两道门禁的语义分工：
 
-- **日期门禁**：`price_date` 早于「该路由允许的最新日期」→ 跨日残留（例如盘中因 Tencent 不可用降级写入 EastMoney 的上一交易日净值），收市后清除重取。阈值按路由分域——场内须等于最近交易日；场外官方净值中 QDII 合法为 T-1，国内场外 T 日当晚披露、盘后须到 T（用 `is_qdii_extended` 按持仓名细分，与「价格更新状态」同源）。
+- **日期门禁**：`price_date` 早于「该路由允许的最新日期」→ 跨日残留（例如盘中因 Tencent 不可用降级写入 EastMoney 的上一交易日净值），收市后清除重取。阈值按路由分域——场内须等于最近交易日；场外官方净值按**披露时点**分档（`market_hours.is_otc_nav_disclosed`，默认 20:00）：披露前当日 T 净值尚未产生，只要求「最近可得的一档」（国内场外 T-1、QDII T-2），披露后收紧回国内场外 T、QDII T-1（用 `is_qdii_extended` 按持仓名细分，与「价格更新状态」同源）。
+  披露前仍按「须到 T」判会把白天每次运行都判成过期并全量重取场外价格，而重取回来的仍是同一份滞后净值（写回后下次再判过期），形成稳定的重复取数（实测单次多花约 12s，且报告数据毫无变化）。
 - **收盘时点门禁**：`price_date == T` 只说明「数据属于 T 日」，但 T 日收盘价只在 15:00 之后才成形。若缓存在 T 日盘中写入（如 13:01 的 29.35），盘后或次日盘前仅凭日期相等就沿用，会把盘中价当成 T 日收盘价，使「本日盈亏」与「快照环比」系统性偏离真实涨跌。故当 T 日已收盘（`now ≥ T 15:00`）时，要求缓存写入时刻 ≥ T 日 15:00；午间休市（T 日尚未收盘）不施加此约束——上午收盘价即当时最新价。缓存写入时刻由 `_cache_captured_at()` 经 `cache.get_cache_age()` 反推（`cache.get` 只返回 `_data`，不暴露 `_ts`）。
+- **本日盈亏口径（与门禁同源）**：场内取当日价差；场外取「各自净值日」的价差——净值日早于当日时行内照实呈现并标「参考」（`DetailRow.today_profit_reference`，HTML 行内 `参考` 小字 + Excel 明细脚注），组合合计只累加 `today_profit_reference=False` 的行（`market_value.sum_today_profit`，全仓 9 处求和各处统一调用），避免把 T-1/T-2 涨跌混进「今日」。
 - **调用点接线**：`report/market_value.py` 的 `CACHE_ONLY` 分支与 `_fetch_price_with_cache_refresh` 均须传 `cache_key`（不传则跳过收盘时点门禁，兼容旧调用）。
 
 #### 2.4.2 指数独立获取
@@ -1728,7 +1730,7 @@ verbose 模式的颜色按 **stderr 自己的流**判定：取 `core.ansi_colors
 
 | 组件 | 文件 | 职责 |
 |:-----|:-----|:------|
-| 编排器 | `html_writer.py` | 区块装配（`html_sections.assemble_sections`）→ 模板渲染 → 后处理表（资产内嵌/匿名化/落盘）→ 保存 |
+| 编排器 | `html_writer.py` | 区块装配（`html_sections.assemble_sections`；穿透（含盈利预测/股息率附属取数）/基金业绩/风格等**取数已前置**到数据准备的「渲染前置取数」段并经 `_run_scope.run_memo` 复用，此处只做串拼装与缓存命中，计时点 `区块装配`）→ 面板视图装配（持仓变动/事件窗/纪律回放，计时点 `面板视图装配`）→ 模板渲染 → 后处理表（资产内嵌/匿名化/落盘）→ 保存 |
 | 区块装配 | `html_sections.py` | `SECTION_BUILDERS` 连续区段表 + `HtmlAssembly` 上下文；产物经 `SectionBindings`（NamedTuple）具名返回，顺序即契约 |
 | 数据构建器 | `html_builders.py` | 原始数据 → 结构化渲染对象 |
 | 渲染器 | `html_renderers.py` | Markdown→HTML 转换、格式处理 |
@@ -2686,7 +2688,7 @@ report/ 渲染                      # Excel 页签 + HTML 章节（模板 contex
 
 **变动类型**（复用 `schemas/history.py _DiffAction` 语义）：新增 / 清仓 / 加仓 / 减仓 / 不变。
 
-**模块分层（C14 依赖 + analysis 单向依赖纪律）**：
+**模块分层（C14 依赖 + analysis 单向依赖纪律）**：analysis 层属于下方纯计算层，**不得 import `llm/` 或 `report/`**；两侧共用的业务约束（如建议执行态校验）一律下沉 `core/`（例：`core/recommendation_policy.py`）。以下为既有分层说明：
 
 ```
 analysis/whatif.py               # 纯计算：_merge_holdings(按 code 合并多账户) → 成本权重/HHI → 变动分类
@@ -2954,6 +2956,8 @@ llm/skeleton.py                 # 教训区块注入专家复盘提示词（开�
 
 **账本口径**：结算作为**独立追加事件**写入（决策事件恒为 `pending`），读取时 `fold_ledger` 按 `decision_id` 折叠出当前态——账本层只提供追加原语、无原地改写路径，避免已落盘事件被覆盖。**「入账必可结算」**：只有带基线价的决策才登记，无基线价者不入账，避免产生永远无法结算的悬空 pending；同日重复登记按 `decision_id` 去重。
 
+**不动作类结算口径**：`direction == 0`（持有/观望/不操作）同样结算，判定落结算事件 `flat_hit`（`|区间涨跌| < 2.0%` 判对），不进方向性命中率分母；`fold_ledger` 另出 `inaction` 分项与 `by_carrier.inaction_*`，旧账本无 `flat_hit` 的结算视为未判、不计样本。
+
 **命中率与样本守门**：方向命中与超额 alpha 由真实后续行情对账得出；**命中率在小样本下不出结论**（样本数不足时只列明细、不报百分比），防「1 次命中 = 100%」的假精确。
 
 **缓存指纹同源**：开关影响专家复盘提示词，故教训区块经 `lessons_cache_suffix()`（内容 md5 前若干位）进入 `llm/module_fingerprint.py`（生成参数经 `generation_params_suffix()` 并入指纹；`cache` 等无关项不参与） 中写侧与预检侧**共用的同一个**构建函数，开关与内容判定收敛在函数内部（无教训时返回空后缀）。
@@ -2979,6 +2983,8 @@ llm/skeleton.py                 # 教训区块注入专家复盘提示词（开�
 **缓存**：索引/章节清单 1 天、正文 30 天（`report` / `report_doc`）——索引是 symbol 级键，日频才能让**新披露最迟次日可见**；正文按 `doc_id` 不可变，月度复用不重复消耗配额。随菜单缓存命令与 TTL 管理。**数据契约** `financial_report_digest_data`（附录 H）；语义命名行见 §6.7。
 
 **数据源说明表**：「数据源可用性矩阵」章在健康度表后附「数据源说明（实际使用清单）」表——逐数据类别列实际链路、用途、计费（财报全文随 `datasink.plan` 动态展示免费/付费档）与凭据要求（是否需 key + 就绪状态），并标本次运行是否实际使用（`report/data_source_matrix.py::build_data_source_catalog`，前缀取自 `_SOURCE_CATEGORIES`、计费取自 provider 套餐表，单一事实来源）。**「本次使用」判定口径**：该类别的取数链路在**取得数据时**（含命中缓存的返回）经 `report/data_status.py::mark_data_used()` 记一条成功事件，说明表据事件前缀判定 `used`；**只记成功、不记降级**——章节名 fuzzy 未命中、标的不在源覆盖范围等预期内空结果不计入 T2 连续失败阈值（否则会把预期内空结果误报为源故障），失败与降级仍由 provider 日志、章节失败清单与链路 FailureDiagnostics 披露。因此 `未使用` 的含义是「本次未取到该类数据」，**不等于**源故障；对 DataSinking 类源另注明「需开启哪些功能开关才会取用」。**新鲜度通道**：`mark_data_used()` 另有 `freshness` 参数，成功事件可标 `stale`（源不可达后回退上次成功载荷），该标记进事件 `detail` 但**不进降级计数**（陈旧回退不是失败，算成失败会误报降级），并在数据质量详细状态块单列「陈旧回退（源不可达，用上次成功数据）」行——否则模型会把数天前的数据当今日数据评。类别清单含 `financial_report`（`report_datasink_`）与 `financial_indicator`（`fin_indicator_`），两者同时进入可用性矩阵与说明表；含同花顺兜底槽位的类别（`price` / `fund_hold` / `history` / `financial_indicator`）在「实际数据源（链路）」列显式列出「→ 同花顺金融数据（…，需 key）」，市场情绪（`sentiment`，同花顺**唯一源**）单列一行并附 key 就绪态。
+
+**矩阵「东财 push2 限流」行**：akshare 内建请求（重试回调）与本仓 `eastmoney_industry` 直连失败的限流/断连命中次数经 `core/rate_limit_state` 汇总，命中 > 0 时矩阵追加一行降级态提示（`东财 push2 限流：本轮 N 次断连（…已走备用通道）`）——把「行业降级」与其根因分开呈现；无命中时不出现该行（零变化）。
 
 **矩阵「命中源」列（provider 级归属）**：矩阵行除了类别健康度，还叠加一层 provider 级归属，回答使用者最常问的「我配的 key 到底被用上了吗」——类别健康度事件（`price_price_stock_600900` 这类键）只含代码不含 provider，**同花顺作为兜底槽接管时旧口径在报告里一字未提**，导致使用者误以为 key 未生效。修复：链路在某个 provider 成功返回时经 `report/data_status.py::mark_provider_used(data_type, provider_id, 展示名)` 登记（`fetcher/chain.py` 的 `fetch_with_fallback` 与 `_try_providers` 两处成功分支 + 同花顺独占的 `report/market_sentiment.py`、`fetcher/financial_indicator.py` 多期序列支路），矩阵按 `_SOURCE_CATEGORIES` 各行的 `data_types` 声明映射归入对应行并渲染为 `名称 ×次数`（按次数降序；无归属显示 `—`）。登记表存放于 `data_status.py` 模块级字典而非 DegradationTracker——归属是纯观测事实，既不参与降级计数，也不在 `.degradation_state.json` 里堆积 provider 键；归属只反映**本次网络取数**，命中缓存时该列为 `—` 而说明表「本次使用」仍为已使用（两列并读即得「用了谁的数」与「有没有取到」）。历史日 K 等类别只登记缓存键、不记降级事件，其矩阵行由 provider 归属单独成立（详情写「取数 N 次（无降级事件）」）。链路的 data_type 必须全部有归属类别，否则命中源静默丢失——`UNMAPPED_CHAIN_DATA_TYPES` 登记有意不进矩阵者（如 `bond_yield`），由 `test_data_source_matrix.py` 的不变式用例强制。附带修复：矩阵类别补齐 `history`（历史走势）与 `sentiment`（市场情绪），与 `datasource.md` 已登记的类别口径一致。
 
@@ -3595,6 +3601,15 @@ make_http_client(timeout=10.0) → httpx.Client
 | `decision_record` | 确定性卖出建议登记（仅带持仓基线者落账，入账必可结算） | 行动建议 | 监控 | 随 `decision_reflection` |
 | `decision_settlement` | 到期决策结算（幂等：同 decision 只结一次，行情不可得保持 pending） | 行动建议 | 监控 | 随 `decision_reflection` |
 | `decision_llm_capture` | LLM 操作建议表解析登记（结构化优先 → 表格兜底；缺行/缺方向/「不操作」行按原因记 INFO 后跳过，异常不中断报告） | 行动建议 | 监控 | 随 `decision_reflection` |
+| `rate_limit_state` | 东财 push2 限流/断连观测（按文案识别、累计本轮次数与首条原文；akshare 内建请求与本仓直连 provider 共用，报告矩阵据此出一行「东财 push2 限流」） | 数据获取 | 监控 | 无 |
+| `recommendation_policy` | 建议执行态与校验的唯一事实位（conditional / blocked / not_applicable + 「需复核/不可执行不得带数量」校验）；analysis 与 llm 两侧单向引用，避免 analysis 反向依赖 llm | 行动建议 | 分析计算 | 无 |
+| `research_contract` | LLM 复盘结构化契约（主张/证据/判决的解析、校验与运行作用域载体；复用决策头括号扫描，不自建解析器；默认关） | LLM 生成 | LLM 生成 | 开关 `llm_research_contract` |
+| `evidence_index` | 证据索引（由该模块提示词输入块生成 `ev:<kind>:<键|哈希>` + 一行摘要；模型只能引用它看得到的内容） | LLM 生成 | LLM 生成 | 开关 `llm_research_contract` |
+| `decision_book` | 决策书装配（把各模块结构化契约汇总成行动建议章可读块：判决 + 主张/证据/失效条件；开关关闭、无契约或匿名化模式非 off 时返回 None） | 行动建议 | 展示 | 开关 `llm_research_contract` |
+| `llm_contract_block` | 契约的展示层装配（HTML 折叠块 / Excel 小节；正文机器可读行展示前剥离） | 行动建议 | 展示 | 开关 `llm_research_contract` |
+| `decision_eval_policy` | 建议事后评估政策单源（方向阈值 1.5% / 不动作容忍带 2.0% / 样本门槛 20 / 视界单位 + 对外 `EVAL_POLICY` 声明；零依赖，账本单向引用） | 行动建议 | 分析计算 | 随 `decision_reflection` |
+| `classify_flat_hit` | 不动作类（持有/观望/不操作）事后判定（`\|区间涨跌\| < 容忍带` ⇒ 判对；无收益/非数值 ⇒ 不可判） | 行动建议 | 分析计算 | 随 `decision_reflection` |
+| `summarize_inaction` | 不动作类折叠统计（按 `settlement.flat_hit` 汇总 total/hit/hit_rate/样本充足性与载体分项；旧账本无字段不计样本） | 行动建议 | 分析计算 | 随 `decision_reflection` |
 | `decision_review_block` | 「历史决策复盘」区块数据契约（结构稳定，HTML/Excel 双端消费） | 行动建议 | 监控 | 随 `decision_reflection` |
 | `decision_basis` | 行动建议章内「判断依据」确定性事实块（形态 A：信号清单/信号可信度/风险预算已接入（信号读账本快照，区分度三态 + 回测结论模块常量登记，可信度规则仲裁四枚举；风险预算三行取 `rebalance.threshold` 与 `discipline.drawdown_pct`，行业上限无配置键即「未配置上限」；纪律明细只读复用纪律引擎触发条并补阶段化执行口径；结算摘要按结算交易日聚合最近 5 批 × 5/20/60 视界均值与超额，未到期显式标注），五节齐，零 LLM） | 行动建议（章内嵌块） | 监控 | 开关 `decision_basis`（默认开，机制与质量组（内置默认常开，不占 `[S]` 编号）；原 `[C]` 5.1 章节子项，移组后不再受「父章关闭则子项置灰拒写入」闸门约束，可与 `enable_action` 状态独立切换） |
 | `build_decision_basis_data` | 判断依据块装配入口（纯确定性：只读信号账本快照与编排层已装配持仓，零取数零 LLM；入参仅确定性数据 `holdings_details`/`total_mv`/`portfolio_peak_mv`，全可缺省） | 行动建议（章内嵌块） | 分析计算 | 随 `decision_basis` |
@@ -3927,6 +3942,21 @@ web/ (Web 服务层，薄入口)
 | LLM 响应解析 | `llm/_api_responses.py` | `llm/api_base.py` 公共 API | llm / report | 公共常量/函数保留；内部 helper 直接导入 owner |
 | Web 生成 / 健康路由 | `web/run_generation.py`、`web/handlers_health.py` | `web/handlers.py` 仅路由聚合 | web / tests | 测试 patch 指向 owner；门面不再转出私有实现 |
 
+**存量分层例外（analysis → report/llm，冻结不新增）**：`check-import-surface` 的 `layer-inversion` 规则拦截**新增**越界；
+下列存量经例外表登记（`scripts/_import_surface_exceptions.json`，含到期日与收敛方向），到期须下沉或续期并复核理由：
+
+| 违规文件 | 被依赖的 report 模块 | 暂不下沉的理由 | 收敛方向 |
+|:---|:---|:---|:---|
+| `analysis/circuit_breaker_wrapper.py` | `report.data_status` | 指标熔断需把降级事件登记进 DegradationTracker，该类现居 report 层 | tracker 登记面（`begin_report`/`mark_*`）下沉 `core/degradation.py`，report 只留报告侧装配 |
+| `analysis/holding_change_events.py` | `report.history_snapshot` | 快照读取/去重原语在 report 侧，事件推断需按同一口径读盘 | 抽 core 级快照读取原语，report 只保留区块装配 |
+| `analysis/portfolio_evolution.py` | `report.history_snapshot` | 同上（演进趋势聚合同口径读快照） | 同上 |
+| `analysis/snapshot_diff.py` | `report.history_snapshot` | 同上（差异计算同口径取数） | 同上 |
+| `analysis/prosperity_framework.py` | `report.penetration` | 景气度评分复用穿透分类（基金→底层资产映射） | 穿透纯分类计算下沉 `analysis`，report 改为消费 |
+| `analysis/prosperity_inputs.py` | `report.penetration` | 同上（输入装配复用分类结果） | 同上 |
+
+> 另：`core/check_sources.py` 直连 `providers/`/`fetcher/` 属**探针模块职责**（连通性检查必须在链外直呼各源），
+> 不入本规则例外表，理由记在模块 docstring；新增探针源时保持同一形态。
+
 **登记例外**（保留理由见代码注释与 `check-import-surface` 的例外登记口径）：
 
 - `analysis/__init__.py`、`core/registry.py`、`llm/__init__.py`、`llm/fact_checker/__init__.py`：包级公共聚合面，`__all__` 只列公共 API；其中 `noqa: F401` 为门面再导出。
@@ -4061,7 +4091,7 @@ web/ (Web 服务层，薄入口)
 | position_status | dict | 是 | prepare_report_data |
 | data_freshness | dict | 是 | prepare_report_data |
 | action_data | dict | 是 | prepare_report_data；basic 路径由 generate_excel_report 就地构建 |
-| decision_basis_data | dict | 是 | 含 `headline`（章首三行摘要，双端逐字同源）与 `settlement.performance`（按视界命中率/均值超额/样本数）；prepare_report_data（首次装配）+ full/both 峰值就绪后重装配（风险预算回撤现状依赖历史峰值）；含 `backtest_as_of`＝回测产物最新运行日，由 `decision_basis.backtest_run_date()` 从 `docs/tmp/decision-quality/*.json` 派生 |
+| decision_basis_data | dict | 是 | 含 `headline`（章首三行摘要，双端逐字同源）与 `settlement.performance`（按视界命中率/均值超额/样本数）；`settlement.inaction`＝不动作类（持有/观望/不操作）判定汇总 {total, hit, hit_rate, sample_sufficient, by_carrier}、`settlement.inaction_label`＝双端同源呈现文案；`decision_book`＝决策书（开关 `llm_research_contract` 开启且有契约时出现：各模块判决 + 主张/证据/失效条件（前言带数据口径 `as_of`），匿名化模式非 off 时不出块），缺席时产物逐字节不变；prepare_report_data（首次装配）+ full/both 峰值就绪后重装配（风险预算回撤现状依赖历史峰值）；含 `backtest_as_of`＝回测产物最新运行日，由 `decision_basis.backtest_run_date()` 从 `docs/tmp/decision-quality/*.json` 派生 |
 | crisis_annotation_data | dict | 是 | assemble_history_augmented_data（full/both 双路径同源装配，`report/_snapshot.py`；危机标注关态恒写、回放态加 replay 层；风险调整超额同点按开关注入 risk_adjusted_excess_data） |
 | risk_adjusted_excess_data | dict | 是 | build_risk_adjusted_excess（报告章节与增强开关 risk_adjusted_excess，默认关） |
 | tail_risk_data | dict | 是 | prepare_report_data |

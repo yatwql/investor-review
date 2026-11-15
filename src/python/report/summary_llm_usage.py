@@ -113,6 +113,10 @@ def _write_llm_summary_section(
     if _cache_hit:
         pairs.append(("缓存命中 Token", f"{_cache_hit:,}"))
     pairs.append(("累计费用", session_usage.get("cost_display", "—")))
+    _contract_display = session_usage.get("contract_display") or ""
+    if _contract_display:
+        # 结构化契约埋点（开关关闭/无契约时不出现该行）
+        pairs.append(("结构化契约", _contract_display))
 
     for key, val in pairs:
         ws.cell(row=row, column=1, value=key).font = _KV_KEY_FONT

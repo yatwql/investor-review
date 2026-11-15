@@ -204,6 +204,18 @@ class _ToolRepoFixture:
         self.BENCH_STAMP_FILE = paths["BENCH_STAMP_FILE"]
 
 
+def isolate_release_runtime_paths(rel_mod, monkeypatch, tmp_path) -> None:
+    """把发布运行态文件（通过戳 / bench 戳 / 耗时台账）重定向到临时目录。
+
+    回归背景：门禁成功用例走完尾部会写「门禁通过戳」，未隔离则把仓库真实的
+    `logs/release-gate-stamp.json` 改写成夹具版本号，使通过戳不可信，且每跑一次
+    单测就再污染一次。各测试模块以 autouse fixture 调本函数。
+    """
+    monkeypatch.setattr(rel_mod, "GATE_STAMP_FILE", tmp_path / "release-gate-stamp.json")
+    monkeypatch.setattr(rel_mod, "BENCH_STAMP_FILE", tmp_path / "release-bench-stamp.json")
+    monkeypatch.setattr(rel_mod, "RELEASE_LOG_FILE", tmp_path / "release.jsonl")
+
+
 def _ok_runner(overrides: list | None = None) -> FakeRunner:
     """预检/一致性/git 默认全过（工作树干净）；各测试按需覆写单条。"""
     pairs: list[tuple] = [

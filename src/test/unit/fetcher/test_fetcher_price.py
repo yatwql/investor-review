@@ -514,7 +514,7 @@ class TestPriceCacheFresh(unittest.TestCase):
     def _call(self, data: dict, data_type: str = "price_stock", name: str = "", cache_key: str | None = None) -> bool:
         from src.python.fetcher.price import _price_cache_fresh
 
-        return _price_cache_fresh(data, data_type, name, cache_key)
+        return _price_cache_fresh(data, data_type, name, cache_key)  # type: ignore[arg-type]
 
     @patch("src.python.core.market_hours.is_market_open", return_value=True)
     def test_market_open_always_fresh(self, mock_open):
@@ -561,16 +561,30 @@ class TestPriceCacheFresh(unittest.TestCase):
         """
         self.assertTrue(self._call({"price_date": "2026-07-30"}, "price_fund_otc", "博时纳斯达克100ETF联接(QDII)A"))
 
+    @patch("src.python.core.market_hours.is_otc_nav_disclosed", return_value=True)
     @patch("src.python.core.market_hours.is_market_open", return_value=False)
     @patch("src.python.report.market_value.get_prev_trading_day", return_value="2026-07-30")
     @patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-31")
-    def test_domestic_otc_nav_t_minus_one_stale(self, mock_td, mock_prev, mock_open):
-        """国内场外盘后 T-1 净值判为过时：T 日当晚已披露，盘后应到 T。
+    def test_domestic_otc_nav_t_minus_one_stale(self, mock_td, mock_prev, mock_open, mock_disclosed):
+        """国内场外**披露后**（当晚起）仍停在 T-1 → 判过时（此时 T 已可得）。
 
         回归：国内场外曾被与 QDII 同用「前一交易日」阈值 → 盘后 T-1 缓存被放行 →
         数据源实际已返回 T，报告「价格更新状态」仍长期缺数。
+        披露时点前的分档放行见 `test_domestic_otc_nav_t_minus_one_fresh_before_disclosure`。
         """
         self.assertFalse(self._call({"price_date": "2026-07-30"}, "price_fund_otc", "建信高端装备股票A"))
+
+    @patch("src.python.core.market_hours.is_otc_nav_disclosed", return_value=False)
+    @patch("src.python.core.market_hours.is_market_open", return_value=False)
+    @patch("src.python.report.market_value.get_prev_trading_day", return_value="2026-07-30")
+    @patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-31")
+    def test_domestic_otc_nav_t_minus_one_fresh_before_disclosure(self, mock_td, mock_prev, mock_open, mock_disclosed):
+        """国内场外**披露前**（白天）缓存到 T-1 即最新可得 → 判新鲜，不重取。
+
+        回归：原口径「须到 T」在白天永远无法满足 → 每次运行把场外基金全量重取，
+        重取回来仍是同一份 T-1 净值（写回后下次再判过期），稳定浪费一趟网络。
+        """
+        self.assertTrue(self._call({"price_date": "2026-07-30"}, "price_fund_otc", "建信高端装备股票A"))
 
     @patch("src.python.core.market_hours.is_market_open", return_value=False)
     @patch("src.python.report.market_value.get_prev_trading_day", return_value="2026-07-30")
@@ -633,7 +647,7 @@ class TestPriceCacheFresh(unittest.TestCase):
         from src.python.fetcher.price import _cache_captured_at
 
         self.assertEqual(_cache_captured_at("price_stock_600900"), 1_000_000.0 - 3600.0)
-        self.assertIsNone(_cache_captured_at(None))
+        self.assertIsNone(_cache_captured_at(None))  # type: ignore[arg-type]
 
     def test_trading_day_close_epoch_is_1500_beijing(self):
         """交易日收盘时点＝北京时间 15:00；非法日期返回 None。"""
@@ -710,10 +724,12 @@ class TestFetchPriceCacheRefresh(unittest.TestCase):
         """国内场外缓存 T-1 → 端到端触发清缓存 + 重取（验证持仓名已转发给新鲜度校验）。
 
         不经 mock 新鲜度校验，用真实 ``_price_cache_fresh`` 验证「持仓名 → QDII 判定」
-        的接线：非 QDII（测试基金）的 T-1 缓存必须被判过时并重取到 T。
+        的接线：非 QDII（测试基金）的 T-1 缓存**在披露后**必须被判过时并重取到 T。
+        披露时点固定为「已披露」，不随运行墙钟变动。
         """
-        mock_fallback.side_effect = [self._STALE, self._FRESH]
-        result = self._call()
+        with patch("src.python.core.market_hours.is_otc_nav_disclosed", return_value=True):
+            mock_fallback.side_effect = [self._STALE, self._FRESH]
+            result = self._call()
         assert result is not None
         self.assertEqual(result["price_date"], "2026-07-31")
         self.assertEqual(mock_fallback.call_count, 2)

@@ -556,3 +556,81 @@ class TestPenetrationRatioNormalization(unittest.TestCase):
         top10 = result.get("top10", [])
         for item in top10:
             self.assertGreaterEqual(item.get("ratio_pct", -1), 0, f"{item.get('name')} 占比为负")
+
+
+class TestRunScopedMemo(unittest.TestCase):
+    """单轮复用：同一次报告里穿透只算一次（HTML 端与 Excel 端各调一遍的重复取数）。
+
+    回归背景：同轮 HTML 与 Excel 各调一遍 `compute_penetration_top10`，冷缓存时
+    两遍都要等网络（单看 HTML 阶段就占了页面写入的大头）。
+    """
+
+    def test_same_input_computed_once(self):
+        calls = {"n": 0}
+
+        def fake_uncached(_holdings, _details):
+            calls["n"] += 1
+            return {"top10": [], "summary": {}, "update_time": "x"}
+
+        holdings = [Holding("证券", "长江电力", "600900", 100.0, 10.0)]
+        details = [DetailRow(account="证券", name="长江电力", code="600900", shares=100.0, market_value=1000.0)]
+        with patch.object(pene, "_compute_penetration_top10_uncached", side_effect=fake_uncached):
+            first = pene.compute_penetration_top10(holdings, details)
+            second = pene.compute_penetration_top10(holdings, details)
+        self.assertEqual(calls["n"], 1)
+        self.assertIs(first, second)
+
+    def test_changed_input_recomputed(self):
+        calls = {"n": 0}
+
+        def fake_uncached(_holdings, _details):
+            calls["n"] += 1
+            return {"top10": [], "summary": {}, "update_time": "x"}
+
+        holdings = [Holding("证券", "长江电力", "600900", 100.0, 10.0)]
+        details = [DetailRow(account="证券", name="长江电力", code="600900", shares=100.0, market_value=1000.0)]
+        details_changed = [DetailRow(account="证券", name="长江电力", code="600900", shares=200.0, market_value=2000.0)]
+        with patch.object(pene, "_compute_penetration_top10_uncached", side_effect=fake_uncached):
+            pene.compute_penetration_top10(holdings, details)
+            pene.compute_penetration_top10(holdings, details_changed)
+        self.assertEqual(calls["n"], 2)
+
+
+class TestRunMemoConcurrency(unittest.TestCase):
+    """单轮复用并发安全：同 key 并发只算一次，不同 key 互不阻塞。
+
+    单轮内若出现并发装配（未来把渲染拆到线程池），无锁字典会让同一份重计算被
+    多个线程各跑一遍（结果仍正确，但白花网络与 CPU）。
+    """
+
+    def test_same_key_computed_once_under_threads(self):
+        import threading
+        import time as _t
+
+        from src.python.report._run_scope import clear_run_memo, run_memo
+
+        clear_run_memo()
+        calls = {"n": 0}
+        lock = threading.Lock()
+
+        def slow_factory():
+            with lock:
+                calls["n"] += 1
+            _t.sleep(0.05)
+            return "value"
+
+        results: list = []
+        threads = [threading.Thread(target=lambda: results.append(run_memo("k", slow_factory))) for _ in range(5)]
+        for th in threads:
+            th.start()
+        for th in threads:
+            th.join()
+        self.assertEqual(calls["n"], 1, "同 key 并发应只算一次")
+        self.assertEqual(results, ["value"] * 5)
+
+    def test_different_keys_do_not_block(self):
+        from src.python.report._run_scope import clear_run_memo, run_memo
+
+        clear_run_memo()
+        self.assertEqual(run_memo("a", lambda: 1), 1)
+        self.assertEqual(run_memo("b", lambda: 2), 2)

@@ -15,6 +15,7 @@ orchestrator 注入 pipeline_data）——与 HTML 端 partials/action_section.h
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
 import pytest
 
@@ -306,3 +307,136 @@ class TestExcelDecisionReviewBlock(_ExcelSheetAssertHelpers, unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestInactionRendering(_ExcelSheetAssertHelpers, unittest.TestCase):
+    """不动作类呈现：结算摘要一行 + 复盘块判定取值（Excel 端）。"""
+
+    @staticmethod
+    def _basis_with_inaction() -> dict:
+        return {
+            "enabled": True,
+            "available": True,
+            "reason": "",
+            "title": "判断依据",
+            "headline": ["信号：暂无信号记录"],
+            "summary": "判断依据：暂无信号记录",
+            "signals": [],
+            "confidence": {
+                "level": "unknown",
+                "level_label": "暂不可判",
+                "level_class": "",
+                "reason": "",
+                "detail": "",
+            },
+            "settlement": {
+                "available": True,
+                "reason": "",
+                "horizons": [5, 20, 60],
+                "batches": [],
+                "note": "暂无结算样本",
+                "inaction_label": "不动作建议：命中 1/2（样本不足）",
+                "performance": [],
+            },
+        }
+
+    @staticmethod
+    def _review_with_inaction_rows() -> dict:
+        return {
+            "available": True,
+            "disclaimer": "非回测",
+            "pending_count": 1,
+            "settled_count": 1,
+            "recent_pending": [
+                {"code": "561910", "name": "电池ETF", "direction": "中性", "judgement": "未到期"},
+            ],
+            "recent_settled": [
+                {
+                    "code": "600900",
+                    "name": "长江电力",
+                    "direction": "中性",
+                    "outcome": "flat",
+                    "raw_return": 0.01,
+                    "judgement": "判对",
+                },
+            ],
+        }
+
+    def test_settlement_inaction_line_rendered(self):
+        text = " ".join(self._flat(self._write(_action_data(), decision_basis_data=self._basis_with_inaction())))
+        assert "不动作建议：命中 1/2（样本不足）" in text
+
+    def test_review_judgement_labels_rendered(self):
+        text = " ".join(self._flat(self._write(_action_data(), decision_review_data=self._review_with_inaction_rows())))
+        assert "判对" in text
+        assert "未到期" in text
+
+    def test_template_binds_inaction_and_judgement(self):
+        """模板结构契约：两侧呈现都读契约字段（不各自写死文案）。"""
+        html = (Path(__file__).resolve().parents[3] / "static" / "tmpl" / "partials" / "action_section.html").read_text(
+            encoding="utf-8"
+        )
+        assert "inaction_label" in html
+        assert 's.get("judgement")' in html
+        assert 'p.get("judgement")' in html
+
+
+class TestDecisionBookRendering(_ExcelSheetAssertHelpers, unittest.TestCase):
+    """决策书（主张/证据/判决）：开关关闭无块，开启时双端同源呈现。"""
+
+    @staticmethod
+    def _basis(book: dict | None) -> dict:
+        data = {
+            "enabled": True,
+            "available": True,
+            "reason": "",
+            "title": "判断依据",
+            "headline": ["信号：暂无信号记录"],
+            "summary": "判断依据：暂无信号记录",
+            "signals": [],
+            "confidence": {
+                "level": "unknown",
+                "level_label": "暂不可判",
+                "level_class": "",
+                "reason": "",
+                "detail": "",
+            },
+        }
+        if book is not None:
+            data["decision_book"] = book
+        return data
+
+    @staticmethod
+    def _book() -> dict:
+        return {
+            "available": True,
+            "title": "决策书（主张与证据）",
+            "modules": [
+                {
+                    "key": "expert_review",
+                    "label": "智囊团深度复盘",
+                    "verdict": "ready",
+                    "verdict_label": "证据齐备",
+                    "claims": [
+                        {
+                            "statement": "长江电力现金流稳健",
+                            "evidence": ["ev:hold:600900"],
+                            "invalidations": ["净利同比转负"],
+                        }
+                    ],
+                }
+            ],
+            "note": "判决为机械校验结果",
+        }
+
+    def test_block_rendered_when_present(self):
+        text = " ".join(self._flat(self._write(_action_data(), decision_basis_data=self._basis(self._book()))))
+        assert "决策书（主张与证据）" in text
+        assert "智囊团深度复盘（判决：证据齐备）" in text
+        assert "长江电力现金流稳健" in text
+        assert "ev:hold:600900" in text
+        assert "失效条件 净利同比转负" in text
+
+    def test_no_block_when_absent(self):
+        text = " ".join(self._flat(self._write(_action_data(), decision_basis_data=self._basis(None))))
+        assert "决策书" not in text

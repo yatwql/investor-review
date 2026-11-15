@@ -95,7 +95,7 @@ def _parse_table_row(line: str) -> dict[str, Any] | None:
     """解析单行表 → 决策行雏形；非数据行（表头/分隔/无操作值）返回 None。
 
     Returns:
-        {code, name, direction, magnitude, detail}；detail 合并理由格（理由可能
+        {code, name, direction, magnitude, detail}；direction 可为首多/看空/不动作（0）；detail 合并理由格（理由可能
         内含竖线，故按剩余列拼接，而非仅取第 4 列）。
     """
     cells = _split_cells(line)
@@ -198,9 +198,31 @@ def extract_llm_decisions(
             if row:
                 _note(_collect_decision(best, row, holdings))
             elif extract_code(line) is not None:
-                # 有品种代码却没解析出方向：区分「不操作/观望」与真正的异常行
-                op_cell = _split_cells(line)[2] if len(_split_cells(line)) >= 4 else ""
-                _note("no_direction" if _is_no_action(op_cell) else "unparsed")
+                # 有品种代码却没解析出方向：区分「不操作/观望」与真正的异常行。
+                # 「不操作」本身是可评估的建议（事后看「不动」对不对），登记为不动作类
+                # （direction=0，强度 low），由结算写 `flat_hit`、折叠进 `inaction` 统计。
+                cells = _split_cells(line)
+                op_cell = cells[2] if len(cells) >= 4 else ""
+                if _is_no_action(op_cell):
+                    code = extract_code(line)
+                    if code is not None:
+                        _note(
+                            _collect_decision(
+                                best,
+                                {
+                                    "code": code,
+                                    "name": _strip_code(cells[1]) if len(cells) >= 4 else "",
+                                    "direction": dl.DIRECTION_FLAT,
+                                    "magnitude": "low",
+                                    "detail": op_cell.strip(),
+                                },
+                                holdings,
+                            )
+                        )
+                    else:
+                        _note("no_direction")
+                else:
+                    _note("unparsed")
     if skipped:
         # 解析兜底：缺行/缺方向（如「不操作」）跳过登记并留痕，不中断报告生成
         logger.info(
@@ -223,8 +245,8 @@ def _collect_decision(
     优先级强度最高一条；name 缺失回填持仓名；detail 缺失回补空串（结构化头
     契约无理由列）；baseline 取持仓 price，无价则 None。
     """
-    if row["direction"] not in (dl.DIRECTION_LONG, dl.DIRECTION_SHORT):
-        return "no_direction"  # 持有/中性/「不操作」剔除（结算无方向语义）
+    if row["direction"] not in (dl.DIRECTION_LONG, dl.DIRECTION_SHORT, dl.DIRECTION_FLAT):
+        return "no_direction"  # 方向值非法（非 ±1/0）才剔除
     holding = holdings.get(row["code"])
     if holding is None:
         return "not_in_holdings"  # 非持仓 code（空上下文/幻觉）不入账
@@ -253,6 +275,7 @@ def register_llm_decisions(
     *,
     report_date: str | None = None,
     constrained_codes: set[str] | None = None,
+    module_verdict: str = "",
     path: str | None = None,
 ) -> dict[str, Any]:
     """登记 expert_review 操作建议表中的方向决策为 pending（开关关闭时无感）。
@@ -260,12 +283,19 @@ def register_llm_decisions(
     Args:
         constrained_codes: 触及集中度/相关性约束的品种代码集合（只标注不阻断；
             None/空集 = 不标注）。
+        module_verdict: 该模块的结构化契约判决（`llm_research_contract` 开启时才有值）：
+            `reject`（主张与证据矛盾）→ 本批建议**不登记**；`evidence_needed` / `revise`
+            （未验证）→ 照常登记但在 detail 标注「未验证」并降为低优先（仍可事后对账）。
 
 
     Returns:
         {"registered": int, "ids": [decision_id, ...]}
     """
     if not is_active():
+        return {"registered": 0, "ids": []}
+    if module_verdict == "reject":
+        # 结论与证据矛盾：不入账，避免污染命中率统计
+        logger.info("[decision_llm_capture] 契约判决 reject：本次建议不登记")
         return {"registered": 0, "ids": []}
     try:
         rows = extract_llm_decisions(expert_review_html, holdings_details)
@@ -274,6 +304,7 @@ def register_llm_decisions(
         return {"registered": 0, "ids": []}
     ids: list[str] = []
     skipped_dup = 0
+    skipped_inaction_dup = 0
     for row in rows:
         baseline = row.get("baseline_close")
         if baseline is None or baseline <= 0:
@@ -282,6 +313,11 @@ def register_llm_decisions(
                 row["code"],
                 row.get("name") or "",
             )
+            continue
+        # 不动作类跨日去重：同一 code 的「持有/观望」是一段持续意图，观察期内只记一次
+        # （结算后再登记新一期），否则账本按「持仓数 × 天数」增长。
+        if row["direction"] == dl.DIRECTION_FLAT and dl.pending_inaction_exists(row["code"], path=path):
+            skipped_inaction_dup += 1
             continue
         # 同日重复登记防重：expert_review 常命中 LLM 缓存，重生成报告时内容不变
         # → 同(报告日, code, carrier) pending 已在账本 → 不再重复入账。
@@ -293,13 +329,15 @@ def register_llm_decisions(
         ):
             skipped_dup += 1
             continue
+        _unverified = module_verdict in ("evidence_needed", "revise")
         did = dl.append_decision(
             code=row["code"],
             name=row["name"],
             direction=row["direction"],
             carrier=dl.CARRIER_EXPERT_REVIEW,
-            magnitude=row["magnitude"],
-            detail=row["detail"],
+            # 未验证（证据不足/需复核）：降为低优先并标注，仍可事后对账但不当作定论
+            magnitude="low" if _unverified else row["magnitude"],
+            detail=(row["detail"] + "（未验证：证据不足，仅参考）") if _unverified else row["detail"],
             report_date=report_date,
             baseline_close=baseline,
             constrained=bool(constrained_codes and row["code"] in constrained_codes),
@@ -308,4 +346,6 @@ def register_llm_decisions(
         ids.append(did)
     if skipped_dup:
         logger.info("[decision_llm_capture] 同日重复 LLM 决策跳过: %d 条", skipped_dup)
+    if skipped_inaction_dup:
+        logger.info("[decision_llm_capture] 不动作类观察期内已登记，跳过: %d 条", skipped_inaction_dup)
     return {"registered": len(ids), "ids": ids}

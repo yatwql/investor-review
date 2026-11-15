@@ -13,6 +13,9 @@
                 <tr><td>缓存命中 token</td><td>{{ llm_session_usage["cache_hit_tokens"] | thousands }}</td></tr>
                 {% endif %}
                 <tr><td>累计费用</td><td>{{ llm_session_usage["cost_display"] }}</td></tr>
+                {% if llm_session_usage.get("contract_display") %}
+                <tr><td>结构化契约</td><td>{{ llm_session_usage["contract_display"] }}</td></tr>
+                {% endif %}
                 {% if debate_mode_label %}
                 <tr><td>辩论模式</td><td>{{ debate_mode_label }}{% if debate_mode_combination %} · {{ debate_mode_combination }}{% endif %}</td></tr>
                 {% endif %}

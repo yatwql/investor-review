@@ -252,7 +252,7 @@ class TestGenerateDetails(unittest.TestCase):
     @patch("src.python.report.market_value.fetch_market_data")
     @patch("src.python.report.market_value.get_last_trading_day")
     def test_eastmoney_stale_nav(self, mock_ltd, mock_fetch):
-        """East Money + nav_date 过期 → today_profit 为 0。"""
+        """East Money + nav_date 过期 → 照实呈现该净值日涨跌，但标「参考」且不计入合计。"""
         mock_ltd.return_value = "2026-06-26"
         mock_fetch.return_value = {
             "name": "中欧医疗健康混合",
@@ -266,7 +266,10 @@ class TestGenerateDetails(unittest.TestCase):
 
         h = Holding("支付宝", "中欧医疗健康混合", "003095", 100.0, 1.0)
         details = mv._generate_details([h], "2026-06-26")
-        self.assertEqual(details[0].today_profit, 0.0)
+        # 滞后净值：行内显示该净值日涨跌（不归零误导「没涨没跌」），标参考
+        self.assertTrue(details[0].today_profit_reference)
+        self.assertAlmostEqual(details[0].today_profit, round((1.5 - 1.48) * 100.0, 2))
+        self.assertEqual(mv.sum_today_profit(details), 0.0)
         # price_type 也是 T-6 对应的格式
         self.assertEqual(details[0].price_type, "官方净值(2026-06-20)")
 
@@ -352,8 +355,8 @@ class TestGenerateDetails(unittest.TestCase):
     # ── 场外基金本日盈亏 ────────────
     @patch("src.python.report.market_value.fetch_market_data")
     @patch("src.python.report.market_value.get_last_trading_day")
-    def test_eastmoney_nav_t_minus_1_today_profit_zero(self, mock_ltd, mock_fetch):
-        """场外基金净值日期为 T-1（今日净值未出）→ 本日盈亏为 0。"""
+    def test_eastmoney_nav_t_minus_1_today_profit_reference(self, mock_ltd, mock_fetch):
+        """场外基金净值日期为 T-1（今日净值未出）→ 显示 T-1 涨跌并标参考，不计入合计。"""
         mock_ltd.return_value = "2026-06-26"
         mock_fetch.return_value = {
             "name": "中欧医疗健康混合",
@@ -366,7 +369,9 @@ class TestGenerateDetails(unittest.TestCase):
         }
         h = Holding("支付宝", "中欧医疗健康混合", "003095", 500.0, 2.0)
         details = mv._generate_details([h], "2026-06-26")
-        self.assertEqual(details[0].today_profit, 0.0)
+        self.assertTrue(details[0].today_profit_reference)
+        self.assertAlmostEqual(details[0].today_profit, round((1.5 - 1.48) * 500.0, 2))
+        self.assertEqual(mv.sum_today_profit(details), 0.0)
         # price_type 仍应为 T-1
         self.assertEqual(details[0].price_type, "官方净值(T-1)")
 
@@ -387,8 +392,9 @@ class TestGenerateDetails(unittest.TestCase):
         h = Holding("基金账户", "016055", "016055", 1000.0, 1.0)
         details = mv._generate_details([h], "2026-06-29")
         self.assertEqual(details[0].price_type, "官方净值(T-2)")
-        # 今日净值未出 → 本日盈亏为 0
-        self.assertEqual(details[0].today_profit, 0.0)
+        # 今日净值未出 → 显示 T-2 涨跌但标参考，合计不计入
+        self.assertTrue(details[0].today_profit_reference)
+        self.assertAlmostEqual(details[0].today_profit, round((1.2 - 1.18) * 1000.0, 2))
 
     @patch("src.python.report.market_value.fetch_market_data")
     @patch("src.python.report.market_value.get_last_trading_day")
@@ -543,7 +549,7 @@ class TestTodayProfitOffMarket(unittest.TestCase):
         self._ld_patcher.stop()
 
     def test_off_market_nav_not_t_day(self):
-        """场外基金 nav_date != trading_day → today_profit=0。"""
+        """场外基金 nav_date != trading_day → 显示该净值日涨跌并标参考（不归零）。"""
         from src.python.report.market_value import _compute_detail_row
         from src.python.core.models import Holding
 
@@ -556,7 +562,8 @@ class TestTodayProfitOffMarket(unittest.TestCase):
             "source_api": "tiantian",
         }
         detail = _compute_detail_row(h, mkt)
-        self.assertEqual(detail.today_profit, 0.0)
+        self.assertTrue(detail.today_profit_reference)
+        self.assertAlmostEqual(detail.today_profit, round((2.1 - 2.05) * 1000, 2))
 
     def test_on_market_nav_is_t_day(self):
         """场外基金 nav_date == trading_day → today_profit 正常计算。"""
@@ -734,12 +741,13 @@ class TestTodayProfitEastMoneyNonTDay(unittest.TestCase):
     @patch("src.python.report.market_value.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     def test_non_t_day_eastmoney(self, mock_open, mock_td):
-        """Eastmoney, nav_date != trading_day → today_profit = 0。"""
+        """Eastmoney, nav_date != trading_day → 显示该净值日涨跌并标参考。"""
         mock_td.return_value = "2026-06-30"
         h = Holding("支付宝", "易方达蓝筹", "005827", 100, 2.0)
         mkt = self._make_market_data("2026-06-23")
         detail = _compute_detail_row(h, mkt)
-        self.assertEqual(detail.today_profit, 0.0)
+        self.assertTrue(detail.today_profit_reference)
+        self.assertAlmostEqual(detail.today_profit, round((2.5 - 2.4) * 100, 2))
 
     @patch("src.python.report.market_value.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)

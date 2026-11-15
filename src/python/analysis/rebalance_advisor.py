@@ -298,15 +298,28 @@ def build_rebalance_advice(
             # 现金负值防护：执行后现金为负的订单剔除，避免透支调仓
             continue
         cash = cash_after
-        advice.append(
-            {
-                "code": cand["code"],
-                "name": cand["name"],
-                "operation": cand["operation"],
-                "shares": shares,
-                "amount": amount,
-                "fee": fee,
-                "cash_after": round(cash_after, 2),
-            }
+        row = {
+            "code": cand["code"],
+            "name": cand["name"],
+            "operation": cand["operation"],
+            "shares": shares,
+            "amount": amount,
+            "fee": fee,
+            "cash_after": round(cash_after, 2),
+            # 执行态与复核态显式落字段：数量只在「可执行且无需复核」时才允许随建议下发
+            "execution_status": "conditional",
+            "review_required": False,
+        }
+        # 不变量守卫：需复核 / 不可执行的建议不得携带可执行数量（校验期拒绝，不依赖提示词自律）
+        from src.python.core.recommendation_policy import validate_recommendation
+
+        _violations = validate_recommendation(
+            review_required=bool(row["review_required"]),
+            execution_status=row["execution_status"],
+            quantity=int(row["shares"]),
         )
+        if _violations:
+            logger.warning("[rebalance] 建议违反执行态约束，已丢弃: %s %s", row["code"], _violations)
+            continue
+        advice.append(row)
     return advice

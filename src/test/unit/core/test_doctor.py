@@ -217,6 +217,37 @@ class TestReviewLedgerOverview:
             assert it["ok"] is True
         assert "账本为空" in next(i["message"] for i in items if i["label"] == "决策复盘账本")
 
+    def test_inaction_rate_shown_beside_directional(self, tmp_path, monkeypatch):
+        """不动作类（持有/观望）命中并列上屏，且不进方向性命中率。"""
+        from src.python.core import decision_ledger as dl
+
+        target = str(tmp_path / "decision_ledger.jsonl")
+        monkeypatch.setattr(dl, "_DECISION_LEDGER_FILE", target)
+        rep = (date.today() - timedelta(days=30)).isoformat()
+        for raw in (0.01, 0.05):
+            did = dl.append_decision(
+                code="561910",
+                name="电池ETF",
+                direction=dl.DIRECTION_FLAT,
+                carrier=dl.CARRIER_EXPERT_REVIEW,
+                report_date=rep,
+            )
+            dl.append_settlement(
+                decision_id=did,
+                raw_return=raw,
+                outcome=dl.OUTCOME_FLAT,
+                horizon_bars=5,
+                flat_hit=dl.classify_flat_hit(raw),
+            )
+
+        items = doctor._check_review_ledger_overview()
+        ledger_items = [i for i in items if i["label"] == "决策复盘账本"]
+        assert len(ledger_items) == 1
+        text = ledger_items[0]["message"]
+        assert "不动作类" in text
+        assert "命中 1/2（样本不足）" in text
+        assert "方向样本不足" in text  # 不动作样本不稀释方向性口径
+
     def test_decision_ledger_counts_shown(self, tmp_path, monkeypatch):
         """pending/settled 计数与方向命中率上屏。"""
         from src.python.core import decision_ledger as dl

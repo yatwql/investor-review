@@ -605,8 +605,8 @@ class TestTodayProfitOffsiteNavDate(unittest.TestCase):
             row = _compute_detail_row(h, mkt)
         self.assertGreater(row.today_profit, 0)
 
-    def test_today_profit_eastmoney_t_minus_1_zero(self):
-        """场外（eastmoney）+ nav_date == T-1 → today_profit = 0。"""
+    def test_today_profit_eastmoney_t_minus_1_reference(self):
+        """场外（eastmoney）+ nav_date == T-1 → 显示该净值日涨跌并标参考（不计入合计）。"""
         from src.python.report.market_value import _compute_detail_row
 
         h = Holding("证券", "测试基金", "003095", 1000, 1.5)
@@ -628,7 +628,8 @@ class TestTodayProfitOffsiteNavDate(unittest.TestCase):
             mock_dt.timedelta = timedelta
             mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
             row = _compute_detail_row(h, mkt)
-        self.assertEqual(row.today_profit, 0.0)
+        self.assertTrue(row.today_profit_reference)
+        self.assertAlmostEqual(row.today_profit, round((1.6 - 1.55) * 1000, 2))
 
     def test_today_profit_no_nav_date_zero(self):
         """无 nav_date → today_profit = 0。"""

@@ -1,7 +1,7 @@
 # LLM 集成层技术设计
 
 > **文档定位**：本文是 `technical.md` 的 LLM 分部（规则层），只给 LLM 集成层架构、契约与判据；运行/调试/发布等操作流程见 `developer-guide.md`，脚本参数见 `scripts-reference.md`，需求口径见 `requirements.md`。
-> 文档版本：0.18.0
+> 文档版本：0.18.1
 
 本文档是 `technical.md` 的 LLM 集成层专项技术设计补充，对应 `technical.md` §5（LLM 集成层概要设计）。
 `technical.md` §5 提供 LLM 层的总体架构、模块清单、调用链概览、多 Provider 链模式概要及关键机制速览；
@@ -169,7 +169,10 @@ skeleton.py:generate_llm_content()
 | `_llm_post_pass.py` | 运行作用域 | 生成后一遍的顺序落点：逐模块事实锚定（含缓存回写与摘要拼接，缓存命中跳过排名校验）→ 生成后自检 → 跨模块收益率核对（副产物落运行作用域载体）；自检输入经 `review_text()` 剥掉用量页脚与校验产物段 | `anchor_fact_checks()` / `apply_generation_post_pass()` |
 | `generators.py` | 生成层 | 生成门面（按生成器域拆分）：辩论模式 pro/con/synthesis 生成 + `generate_self_review()`（生成后自检）+ `generate_holding_change_review()` 门面（实现于 `holding_change_review.py`）+ 单例四函数门面再导出 | 各 `generate_*()` |
 | `generators_singletons.py` | 生成层 | 单例生成函数（global_macro / expert_review / health_check / penetration_deep，自 generators 按生成器域下沉；**测试 patch 以本模块为解析点**——`generate_llm_module` 等 seam 名在本域内解析） | 各 `generate_*()` |
-| `self_review.py` | 运行作用域 | 生成后自检的开关判定/输入存在性判定/失败隔离与运行作用域载体（报告层零参 pull；**不经** `_MODULE_FNS` 并行调度）。输入为**纯分析正文**：编排层先剥离 LLM 用量页脚（`skeleton.strip_llm_footer`）与事实校验产物段落（`fact_checker.strip_fact_check_blocks`）——两段均为运行元信息且随缓存态变化，并入自检输入会让同一份正文算出不同缓存键 | `run_self_review()` / `get_self_review_block()` |
+| `research_contract.py` | 运行作用域 | LLM 复盘结构化契约的解析/校验/载体：契约头（`主张契约：` + 一行 JSON）复用决策头的括号扫描解析；按证据索引校验「证据存在 / 每条≥1 条 / 失效条件必填 / 主张≤6 条」并给出模块级判决（ready/revise/evidence_needed/reject，模型自证 ready 不被采信）；**纯解析零 I/O**，校验失败只标注「未验证」不阻断报告。开关 `llm_research_contract`（默认关，关闭时提示词与产物逐字节不变） | `parse_contract()` / `validate_contract()` / `get_module_contracts()` |
+| `research_contract.contract_metrics` | 运行作用域 | 结构化契约埋点聚合（模块数 / 主张条数 / 校验错误数 / 判决分布 / 证据索引条数与字符数），经 `format_session_usage()` 进「LLM API 用量」页签一行（HTML/Excel 同源文案；开关关闭或无契约时不出行为空串） | `contract_metrics()` / `contract_metrics_line()` |
+| `evidence_index.py` | 运行作用域 | 证据索引：由**该模块提示词输入块**生成 `ev:<kind>:<稳定键|8 位哈希>` + 一行摘要（持仓/行情/归因/结算/指标/穿透/新闻七类）；只给摘要不给全文，控制提示词增量 | `build_evidence_index()` |
+| `self_review.py` | 运行作用域 | 生成后自检的开关判定/输入存在性判定/失败隔离与运行作用域载体（报告层零参 pull；**不经** `_MODULE_FNS` 并行调度）。输入为**纯分析正文**（另附不动作建议命中率一行，仅作提示、不改权重，且该行并入自检指纹）：编排层先剥离 LLM 用量页脚（`skeleton.strip_llm_footer`）与事实校验产物段落（`fact_checker.strip_fact_check_blocks`）——两段均为运行元信息且随缓存态变化，并入自检输入会让同一份正文算出不同缓存键 | `run_self_review()` / `get_self_review_block()` |
 | `holding_change_review.py` | 运行作用域 | 持仓变动复盘归因的契约准入（feature + 快照准入 + 事实块非空）/失败隔离，结果写回契约 `llm_review`（**经** `_MODULE_FNS['holding_change']` 并入并行批：只吃持仓变动契约、不依赖四模块产出，串行后置会把单次 4~25s 白加到关键路径） | `run_holding_change_review()` / `run_holding_change_in_worker()` |
 | `depth_profile.py` | 配置层 | 报告深度档位表（唯一事实来源）：档位只**收窄**模块集合与新闻采集规模，不进提示词正文 | `resolve_depth_profile()` / `depth_gate()` |
 | `generators_news.py` | 生成层 | 新闻 LLM 二次关联分析（批量模式 7 函数） | `enhance_news_correlation()` |
@@ -186,7 +189,7 @@ skeleton.py:generate_llm_content()
 | `prompts_review.py` | 工具 | 自审与持仓变动复盘提示词（`_SYSTEM_SELF_REVIEW` 含四类复核项：数据矛盾 / 未标注推测 / 模块互斥 / **结论是否附条件**；`_SYSTEM_HOLDING_CHANGE_REVIEW` + 构建器与摘要辅助，自 prompts_core 下沉） | `_build_self_review_prompt()` |
 | `prompts_tables.py` | 工具 | 持仓/穿透/指标/情景/数据质量/汇率等数据块格式化为 Markdown | `_format_holdings_block()` / `_build_holdings_summary()` |
 | `prompts_action.py` | 工具 | 各模块 User Prompt 构建（global_macro / expert_review / health_check / penetration_deep / debate_synthesis）+ 集中度问答块 | `_build_expert_review_prompt()` / `_build_concentration_qa_block()` |
-| `rate_caliber.py` | 工具 | 收益率口径标签的唯一声明点（持仓 / 组合 / 区间标签 + 口径说明）；`PROMPT_SCHEMA_VERSION` 为提示词文本版本，并入 `build_llm_fingerprint()`，静态文案改动也换缓存键 | `LABEL_POSITION` / `LABEL_PORTFOLIO` / `LABEL_INTERVAL` / `CALIBER_NOTE` / `PROMPT_SCHEMA_VERSION` |
+| `rate_caliber.py` | 工具 | 收益率与金额口径标签的唯一声明点（持仓 / 组合 / 区间标签 + 口径说明；金额列绝对值口径 `MONEY_SIGN_NOTE`）；`PROMPT_SCHEMA_VERSION` 为提示词文本版本，并入 `build_llm_fingerprint()`，静态文案改动也换缓存键 | `LABEL_POSITION` / `LABEL_PORTFOLIO` / `LABEL_INTERVAL` / `CALIBER_NOTE` / `MONEY_SIGN_NOTE` / `PROMPT_SCHEMA_VERSION` |
 | `prompts_signals.py` | 工具 | 信号预消化：行业资金流向段方向标注与分方向排名（无开关，默认路径）+ 算法评级信号块（市场温度/估值分位/尾部风险/持仓基本面/叙事与数字背离 → `信号：…` 行，`deterministic_signal` 开关（读侧注入面），判定收敛于缓存后缀函数保证读写键同源） | `_build_sector_flow_block()` / `_build_signal_digest_block()` / `_signal_digest_cache_suffix()` |
 | `fingerprint.py` | 工具 | LLM 缓存指纹计算、稳定性字段提取、TTL 查询 | `compute_fingerprint()` / `build_llm_fingerprint()` |
 | `cache_policy.py` | 策略 | **缓存复用策略的唯一判定点**：盘中档不复用（预检与骨架两条路径共用同一判定/日志/归因） | `intraday_reuse_blocked()` |
@@ -880,6 +883,8 @@ penetrated_assets ──→ extract_stable_penetration()
 | `pipeline_data` 派生的【环比变化】【数据质量降级】两段 | `expert_review` / `health_check` / 辩论三键 | `prompts_core._build_difpipeline_data_block()` / `_build_data_degradation_block()` | 由 `_pipeline_block_cache_suffix()` 调用**提示词侧同一构建器**取文本再哈希——「进键的文本」与「进提示词的文本」同源 |
 | `purchase_constraint_block`（申购限购约束块） | 标准四模块 + 辩论三键 + `self_review` | `prompts_tables._build_prompt_appendix()` 第 4 段 |
 | `holding_change_block`（持仓变动复盘提示词块） | 标准四模块 + 辩论三键 + `self_review`（附录形态与 purchase 块平行） | `prompts_tables._build_prompt_appendix()` 第 5 段 | 由 `extract_holding_change_block(pipeline_data)` **唯一提取点**取契约字段 `prompt_block`（report 构建期经展示视图同源渲染一次），同一实例交预检侧 `holding_change_block` 与写侧附录；块空不进提示词也不进键（关态逐字节回退）；章内归因块另走 `holding_change_review_fingerprint` 内容寻址 | 由 `extract_purchase_constraint_block(pipeline_data)` **唯一提取点**取契约字段 `constraint_block`（report 构建期渲染一次），同一实例交预检侧 `purchase_block` 与写侧附录；块空不进提示词也不进键（接线前录制四模块基线，断言空块 == 引入前黄金值，防「空串+分隔符」换哈希）；新闻批量路径 `_batch_prompt` 拼块 + `_batch_preparer` 并入 `context_fp` 同源 |
+
+**金额列符号口径（`rate_caliber.MONEY_SIGN_NOTE`）**：操作建议/调仓建议类表格的「金额」列一律写**绝对值**，买卖方向只由「建议操作 / 操作」列的方向词承担，不得用正负号表示买卖——现金流式写法（减仓回款为正、加仓支出为负）与「操作」列方向词并存时读者按「交易金额」读就会读反，故禁止；机械建议表（`analysis/rebalance_advisor.py` 的 `amount`）同口径，两端口径由此统一。
 
 **提示词文本版本（`rate_caliber.PROMPT_SCHEMA_VERSION`）**：标签、表头、口径说明等**静态文案**改动不改变持仓/行情数据，哪怕提示词内容变了，结构化输入的指纹也可能不变——预检会命中按旧口径生成的缓存，静默复用错口径结论。故 `build_llm_fingerprint()` 把该版本号并入哈希输入：改文案即递增版本（一次性换键，旧缓存自动重算）。标签本身收敛在 `llm/rate_caliber.py` 单一声明点，供 `prompts_action` / `prompts_tables` / `prompts_data_blocks` 共同引用。
 
