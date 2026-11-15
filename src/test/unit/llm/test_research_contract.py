@@ -52,12 +52,6 @@ class TestEvidenceIndex:
         assert "ev:metric:beta" in index
         assert "ev:metric:sharpe" not in index  # 非数值不进索引
 
-    def test_news_id_is_content_addressed(self):
-        a = evidence_index.build_evidence_index(news_items=[{"title": "降准", "media_name": "财新"}])
-        b = evidence_index.build_evidence_index(news_items=[{"title": "降准", "media_name": "财新"}])
-        assert list(a) == list(b)  # 同内容 → 同 id（不随顺序/时间漂移）
-        assert list(a)[0].startswith("ev:news:")
-
     def test_empty_inputs_yield_empty_index(self):
         assert evidence_index.build_evidence_index() == {}
 

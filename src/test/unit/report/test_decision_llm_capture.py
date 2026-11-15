@@ -429,3 +429,20 @@ class TestRegister:
         assert out["registered"] == 2
         stats = dl.fold_ledger(path=lp)
         assert stats["pending_count"] == 2
+
+
+class TestInactionRegistrationDedupe:
+    """不动作类观察期内只登记一次（跨日重复运行不膨胀账本）。"""
+
+    def _decisions(self, lp: str) -> list[dict]:
+        events = [json.loads(line) for line in Path(lp).read_text(encoding="utf-8").splitlines() if line.strip()]
+        return [e for e in events if e.get("event") == "decision" and int(e.get("direction") or 0) == 0]
+
+    def test_second_run_does_not_duplicate_inaction_rows(self, tmp_path):
+        lp = str(tmp_path / "inaction.jsonl")
+        first = cap.register_llm_decisions(_HTML_TWO_ROWS, _HOLDINGS, report_date=_REPORT_DATE, path=lp)
+        assert first["registered"] == 2
+        # 隔日重跑：方向性行同日去重、不动作行按 pending 去重 → 不再新增
+        second = cap.register_llm_decisions(_HTML_TWO_ROWS, _HOLDINGS, report_date=_REPORT_DATE, path=lp)
+        assert second["registered"] == 0
+        assert len(self._decisions(lp)) == 1  # 仅首轮登记的那条不动作决策

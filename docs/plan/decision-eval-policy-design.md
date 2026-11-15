@@ -64,7 +64,7 @@ EVAL_POLICY: dict[str, object] = {
 | `direction == 0`，`\|r\| < 0.02` | `(flat, None)` | `(flat, None)` + 不动作判对 |
 | `direction == 0`，`\|r\| ≥ 0.02` | `(flat, None)` | `(flat, None)` + 不动作判偏 |
 
-**登记口径**：LLM 操作建议表的「持有 / 观望 / 不操作」行登记为 `direction=0`（强度 low），否则不动作评估在生产上无样本可评。
+**登记口径**：LLM 操作建议表的「持有 / 观望 / 不操作」行登记为 `direction=0`（强度 low），并按「同 code 尚无未结算不动作决策」跨日去重（一段持续意图只记一次，结算后可登记新一期，避免账本按「持仓数 × 天数」膨胀）；否则不动作评估在生产上无样本可评。
 
 **不动作判定不新增 outcome 枚举**：`outcome` 列仍是 `flat`（历史口径与既有折叠不改），命中与否落到**独立字段**
 `flat_hit: bool | None`（None = 无收益数据不可判）。这样：历史账本读侧零影响、`directional_total` 不被稀释、

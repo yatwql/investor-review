@@ -304,6 +304,7 @@ def register_llm_decisions(
         return {"registered": 0, "ids": []}
     ids: list[str] = []
     skipped_dup = 0
+    skipped_inaction_dup = 0
     for row in rows:
         baseline = row.get("baseline_close")
         if baseline is None or baseline <= 0:
@@ -312,6 +313,11 @@ def register_llm_decisions(
                 row["code"],
                 row.get("name") or "",
             )
+            continue
+        # 不动作类跨日去重：同一 code 的「持有/观望」是一段持续意图，观察期内只记一次
+        # （结算后再登记新一期），否则账本按「持仓数 × 天数」增长。
+        if row["direction"] == dl.DIRECTION_FLAT and dl.pending_inaction_exists(row["code"], path=path):
+            skipped_inaction_dup += 1
             continue
         # 同日重复登记防重：expert_review 常命中 LLM 缓存，重生成报告时内容不变
         # → 同(报告日, code, carrier) pending 已在账本 → 不再重复入账。
@@ -340,4 +346,6 @@ def register_llm_decisions(
         ids.append(did)
     if skipped_dup:
         logger.info("[decision_llm_capture] 同日重复 LLM 决策跳过: %d 条", skipped_dup)
+    if skipped_inaction_dup:
+        logger.info("[decision_llm_capture] 不动作类观察期内已登记，跳过: %d 条", skipped_inaction_dup)
     return {"registered": len(ids), "ids": ids}

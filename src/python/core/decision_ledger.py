@@ -263,6 +263,37 @@ def same_day_pending_exists(
     return False
 
 
+def pending_inaction_exists(code: str, *, path: str | None = None) -> bool:
+    """账本中是否已有同 code 的**未结算**不动作类决策（跨日去重）。
+
+    为什么需要：LLM 表里同一只持仓可能每天都被写「持有/观望」，逐日登记会让账本
+    与结算事件按「持仓数 × 天数」增长，而这类结论本就是一段持续意图——同一 code 的
+    不动作观察期内只记一次即可（结算后下次再登记新一期）。
+
+    Args:
+        code: 品种代码。
+        path: 账本路径（测试隔离用）。
+
+    Returns:
+        True 表示已有未结算的不动作决策（调用方应跳过本次登记）。
+    """
+    target = str(code or "").strip()
+    if not target:
+        return False
+    events = load_events(path=path)
+    settled_ids = {ev.get("decision_id") for ev in events if ev.get("event") == EVENT_SETTLEMENT}
+    for ev in events:
+        if ev.get("event") != EVENT_DECISION:
+            continue
+        if int(ev.get("direction") or 0) != DIRECTION_FLAT:
+            continue
+        if ev.get("decision_id") in settled_ids:
+            continue
+        if str(ev.get("code") or "").strip() == target:
+            return True
+    return False
+
+
 def classify_direction_outcome(
     raw_return: float | None,
     direction: int,

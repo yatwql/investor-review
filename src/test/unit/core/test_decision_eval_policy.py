@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import ast
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -203,3 +204,34 @@ class TestFoldInactionStats:
         carrier = stats["by_carrier"][ledger.CARRIER_REBALANCE]
         assert carrier["directional"] == 0
         assert carrier["inaction_total"] == 1
+
+
+class TestPendingInactionDedupe:
+    """不动作类按「同 code 未结算」跨日去重，避免账本按「持仓数 × 天数」增长。"""
+
+    def test_pending_exists_then_settled_allows_new_period(self, tmp_path):
+        lp = str(tmp_path / "ledger.jsonl")
+        did = ledger.append_decision(
+            code="600900",
+            name="长江电力",
+            direction=ledger.DIRECTION_FLAT,
+            carrier=ledger.CARRIER_EXPERT_REVIEW,
+            # 日期从当天回推派生：账本按保留期在写侧裁剪，写死绝对日期会静默变空账本
+            report_date=(date.today() - timedelta(days=20)).isoformat(),
+            baseline_close=10.0,
+            path=lp,
+        )
+        assert ledger.pending_inaction_exists("600900", path=lp) is True
+        assert ledger.pending_inaction_exists("561910", path=lp) is False
+        ledger.append_settlement(
+            decision_id=did,
+            raw_return=0.01,
+            outcome=ledger.OUTCOME_FLAT,
+            horizon_bars=5,
+            target_horizon=5,
+            settle_date=(date.today() - timedelta(days=10)).isoformat(),
+            flat_hit=True,
+            path=lp,
+        )
+        # 结算后允许登记新一期
+        assert ledger.pending_inaction_exists("600900", path=lp) is False
