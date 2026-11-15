@@ -47,7 +47,7 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 - [ ] 空态禁用与流水记忆：清单为空时保存 / 预览 / 清空按钮禁用、预览框隐藏；勾「同时记入交易流水」后刷新页面仍保留
 - [ ] 并发闸门：外部改过持仓文件后保存 → `HOLDINGS_STALE` 提示并自动刷新总览
 
-#### `plan-256` 交易日原语单点化（消除 fetcher → report 反向依赖）
+#### `plan-256` ✅ 交易日原语单点化（消除 fetcher → report 反向依赖）
 
 **现状**：`fetcher/price.py` 的价格新鲜度判定沿用 `report/market_value` 的交易日函数再导出（运行期与测试共用一个改动点），
 分层规则把它登记为冻结例外（`check-import-surface` 的 `layer-inversion`，到期 2027-06-30）。
@@ -55,12 +55,17 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 直连 core 后删除该 re-export 依赖与例外登记。
 **验收**：`check-import-surface --ci` 无 fetcher→report 命中；`report/market_value` 相关单测（含 patch 点）全绿。
 
-#### `plan-257` 报告生成编排函数拆分
+**结果**：`report/market_value` 内部改为按属性调用 `core/trading_calendar`，`fetcher/price` 与 `report/_holding_detail_rows`、`report/excel_module_loader` 直连 core；测试 patch 点统一迁到 `core.trading_calendar` 单点（22 个测试文件、136 处）；例外表与「存量分层例外」表删除该行，`check-import-surface --ci` 零命中。
+
+#### `plan-257` 报告生成编排函数拆分（进行中）
 
 **现状**：`report/excel_generator.generate_excel_report` 单函数 479 行、分支 92；`report/_generation_full._generate_report_full` 410 行、
 `report/html_writer.write_html_report` 357 行。文件行数未触红线，故未入门禁，但改动一处需通读全函数。
 **动作**：按页签族提取子函数（明细/汇总/分析/LLM 四组），入参收敛为装配好的上下文对象，保持产物逐字节不变。
 **验收**：拆分前后产物 SHA 同输入一致；P0/P1 门禁全绿。
+
+**进展（本轮）**：`report/excel_generator.generate_excel_report` 479 行 / 92 分支 → **216 行 / 20 分支**，按职责提取 6 个子函数（行动建议兜底 / 市场情绪 / 景气度诊断 / 可选明细页签 / 环比对比摘要 / 收尾保存），逻辑逐行搬运、产物不变（`test_excel_generator` 26 用例全绿）。
+**剩余**：`report/_generation_full._generate_report_full`（410 → 374 行）与 `report/html_writer.write_html_report`（357 → 341 行）只拆出行业资金流向与面板视图两块，仍需按「数据准备 / 取数 / LLM 阶段 / 产出」继续切分。
 
 ### P2 — 下一阶段就绪（满足条件即开工）
 

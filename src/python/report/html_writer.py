@@ -376,6 +376,36 @@ def _run_post_stages(state: dict, mark: Callable[[str], None]) -> None:
         mark(name)
 
 
+def _build_panel_views(
+    holding_change_data: Any, event_impact_data: Any, schedule_replay_data: Any
+) -> tuple[Any, Any, Any]:
+    """装配三个面板视图（持仓变动 / 事件窗 / 纪律回放），契约缺席时为 ``None``。
+
+    与 Excel 端消费同一份预格式化字符串（双端单源）；键缺席 → ``None`` → 章内区块隐藏，
+    逐字节回退既有输出。
+    """
+    holding_change_view = None
+    if holding_change_data:
+        from src.python.report.holding_change_panel import build_holding_change_view
+
+        holding_change_view = build_holding_change_view(holding_change_data)
+    # 事件窗对照视图（双端单源）：与 Excel 新闻页签尾部区块消费同一份预格式化字符串；
+    # 契约缺席（开关关闭/未注入）→ None → 新闻章内区块隐藏，逐字节回退既有输出
+    event_impact_view = None
+    if event_impact_data:
+        from src.python.report.event_impact_panel import build_event_impact_view
+
+        event_impact_view = build_event_impact_view(event_impact_data)
+    # 调仓纪律回放视图（双端单源）：与 Excel 页签消费同一份预格式化字符串；
+    # 契约缺席（开关关闭/未注入）→ None → 章隐藏，逐字节回退既有输出
+    schedule_replay_view = None
+    if schedule_replay_data:
+        from src.python.report.schedule_replay_panel import build_schedule_replay_view
+
+        schedule_replay_view = build_schedule_replay_view(schedule_replay_data)
+    return holding_change_view, event_impact_view, schedule_replay_view
+
+
 def write_html_report(
     holdings: list[Holding],
     output_dir: str = "reports",
@@ -552,25 +582,9 @@ def write_html_report(
     order = section_order or get_report_section_order()
     # 持仓变动复盘视图（双端单源）：与 Excel 页签消费同一份预格式化字符串；
     # 契约缺席（开关关闭）→ None → 章隐藏，逐字节回退既有输出
-    holding_change_view = None
-    if holding_change_data:
-        from src.python.report.holding_change_panel import build_holding_change_view
-
-        holding_change_view = build_holding_change_view(holding_change_data)
-    # 事件窗对照视图（双端单源）：与 Excel 新闻页签尾部区块消费同一份预格式化字符串；
-    # 契约缺席（开关关闭/未注入）→ None → 新闻章内区块隐藏，逐字节回退既有输出
-    event_impact_view = None
-    if event_impact_data:
-        from src.python.report.event_impact_panel import build_event_impact_view
-
-        event_impact_view = build_event_impact_view(event_impact_data)
-    # 调仓纪律回放视图（双端单源）：与 Excel 页签消费同一份预格式化字符串；
-    # 契约缺席（开关关闭/未注入）→ None → 章隐藏，逐字节回退既有输出
-    schedule_replay_view = None
-    if schedule_replay_data:
-        from src.python.report.schedule_replay_panel import build_schedule_replay_view
-
-        schedule_replay_view = build_schedule_replay_view(schedule_replay_data)
+    holding_change_view, event_impact_view, schedule_replay_view = _build_panel_views(
+        holding_change_data, event_impact_data, schedule_replay_data
+    )
     # 三个面板视图（持仓变动 / 事件窗 / 纪律回放）单列一步：与区块装配分开记，
     # 免得住取数时间算到视图拼装头上
     _mark("面板视图装配")

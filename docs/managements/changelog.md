@@ -10,6 +10,8 @@
 
 ### 变更
 
+- **交易日判定单点化**：`report/market_value` 内部改为按属性调用 `core/trading_calendar`，取数侧（`fetcher/price`、`report/_holding_detail_rows`、`report/excel_module_loader`）直连 core；测试 patch 点统一到一处，删除 fetcher→report 分层例外登记。
+- **Excel 编排函数拆分**：`generate_excel_report` 479 行 / 92 分支 → 216 行 / 20 分支，按职责提取 6 个子函数，产物不变。
 - **架构：降级观测面下沉 core**：`report/data_status.py` 迁为 `core/degradation.py`（取数层 `fetcher/`、纯计算层 `analysis/` 在失败当刻即可登记降级事件，不再反向依赖报告层）；`report/_history_quality` 的滞后后果句改为引用 core 单一文案源。`check-import-surface` 的 `layer-inversion` 规则同步扩到 `fetcher → report/llm/analysis` 与 `providers → report/llm/analysis`，存量越界经例外表登记（含到期日与收敛方向），技术设计「存量分层例外」表同步重写。
 
 ## 归档

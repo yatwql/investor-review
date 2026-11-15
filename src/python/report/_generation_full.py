@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 
 from src.python.report._experimental_seams import (
@@ -43,6 +43,49 @@ from src.python.report._report_helpers import (  # noqa: F401
 logger = logging.getLogger("invest")
 
 
+def _fetch_sector_flow(reporter: Any, perf: Any) -> Any:
+    """取行业资金流向，并按「陈旧回退 / 空 / 异常」三态登记降级事件（失败不中断报告）。"""
+    from src.python.fetcher.akshare import get_sector_fund_flow
+
+    reporter.info("正在获取行业资金流向...")
+    perf.start("行业资金流向")
+    try:
+        sector_flow = get_sector_fund_flow()
+        if sector_flow:
+            from src.python.fetcher.akshare import sector_flow_failure
+            from src.python.core.degradation import mark_data_used
+
+            # 陈旧回退（源不可达 → 上次成功载荷）必须如实标注：否则「今日资金流向」
+            # 拿的是 1~3 天前的数据，而报告与 LLM 提示词看不出任何异常。
+            _stale = sector_flow_failure() == "stale"
+            mark_data_used("ff_sector_flow", "T4", freshness="stale" if _stale else "")
+            if _stale:
+                reporter.warn("行业资金流向源不可达，本次使用上次成功数据（已标注陈旧）")
+            reporter.ok("行业资金流向获取完成")
+        else:
+            from src.python.cache.operations import sector_flow_hint
+            from src.python.fetcher.akshare import sector_flow_failure
+            from src.python.core.degradation import mark_data_unavailable
+
+            failure = sector_flow_failure()
+            failure_type = "empty" if failure == "empty" else "unreachable"
+            mark_data_unavailable(
+                "fund_flow",
+                "T4",
+                failure_type=failure_type,
+                message=f"akshare（{sector_flow_hint()}）",
+            )
+            reporter.warn(f"行业资金流向{sector_flow_hint()}，将继续生成报告")
+    except Exception:
+        sector_flow = None
+        from src.python.core.degradation import mark_data_unavailable
+
+        mark_data_unavailable("ff_sector_flow", "T4", failure_type="unreachable", message="akshare（调用异常）")
+        reporter.warn("行业资金流向获取失败，将继续生成报告")
+    perf.stop()
+    return sector_flow
+
+
 def _generate_report_full(
     holdings: list,
     config: dict,
@@ -76,7 +119,6 @@ def _generate_report_full(
         is_enable_portfolio_evolution,
         is_enable_stock_fundamentals,
     )
-    from src.python.fetcher.akshare import get_sector_fund_flow
     from src.python.core.cancel import token_of
     from src.python.core.perf import PerfCollector
     from src.python.core.registry import get_report_section_order
@@ -233,42 +275,7 @@ def _generate_report_full(
     record_deterministic_decisions(prep, _action_data, reporter)
 
     # ── 4. 行业资金流向 ──
-    reporter.info("正在获取行业资金流向...")
-    perf.start("行业资金流向")
-    try:
-        sector_flow = get_sector_fund_flow()
-        if sector_flow:
-            from src.python.fetcher.akshare import sector_flow_failure
-            from src.python.core.degradation import mark_data_used
-
-            # 陈旧回退（源不可达 → 上次成功载荷）必须如实标注：否则「今日资金流向」
-            # 拿的是 1~3 天前的数据，而报告与 LLM 提示词看不出任何异常。
-            _stale = sector_flow_failure() == "stale"
-            mark_data_used("ff_sector_flow", "T4", freshness="stale" if _stale else "")
-            if _stale:
-                reporter.warn("行业资金流向源不可达，本次使用上次成功数据（已标注陈旧）")
-            reporter.ok("行业资金流向获取完成")
-        else:
-            from src.python.cache.operations import sector_flow_hint
-            from src.python.fetcher.akshare import sector_flow_failure
-            from src.python.core.degradation import mark_data_unavailable
-
-            failure = sector_flow_failure()
-            failure_type = "empty" if failure == "empty" else "unreachable"
-            mark_data_unavailable(
-                "fund_flow",
-                "T4",
-                failure_type=failure_type,
-                message=f"akshare（{sector_flow_hint()}）",
-            )
-            reporter.warn(f"行业资金流向{sector_flow_hint()}，将继续生成报告")
-    except Exception:
-        sector_flow = None
-        from src.python.core.degradation import mark_data_unavailable
-
-        mark_data_unavailable("ff_sector_flow", "T4", failure_type="unreachable", message="akshare（调用异常）")
-        reporter.warn("行业资金流向获取失败，将继续生成报告")
-    perf.stop()
+    sector_flow = _fetch_sector_flow(reporter, perf)
 
     # ── 5. 并行获取 LLM + 新闻 ──
     # 观测汇聚器必须在**预检之前**绑定：预检（`_precheck_all_modules`）会记录
