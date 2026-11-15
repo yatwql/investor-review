@@ -19,6 +19,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from dataclasses import dataclass
+
 import logging
 import time as _time
 from datetime import datetime
@@ -406,6 +408,59 @@ def _build_panel_views(
     return holding_change_view, event_impact_view, schedule_replay_view
 
 
+@dataclass
+class _DataSourceBundle:
+    """数据状态摘要 + 历史走势状态 + 数据源可用性矩阵/说明表（渲染期一次性装配）。"""
+
+    status: tuple[Any, Any, Any, Any]
+    history: Any
+    matrix: Any
+    catalog: Any
+
+
+def _build_data_source_bundle(
+    *,
+    a_indices: Any,
+    us_indices: Any,
+    penetration: Any,
+    penetration_profit_ok: bool,
+    penetration_dividend_ok: bool,
+    perf_data: Any,
+    holdings: list,
+    cat_dividend_ok: bool,
+    history_data: Any,
+) -> _DataSourceBundle:
+    """装配数据源状态摘要、历史走势数据状态与可用性矩阵（HTML 数据状态块消费）。"""
+    # ── 10b) 数据源状态摘要 ──
+    (data_status_summary, data_status_penetration, data_status_perf, data_status_category) = (
+        _build_data_status_sections(
+            a_indices,
+            us_indices,
+            penetration,
+            penetration_profit_ok,
+            penetration_dividend_ok,
+            perf_data,
+            holdings,
+            cat_dividend_ok,
+        )
+    )
+
+    # ── 10c) 组合历史走势数据状态 ──
+    data_status_history = _build_history_data_status(history_data)
+
+    # ── 10d) 数据源可用性矩阵 ──
+    from src.python.report.data_source_matrix import build_data_source_catalog, build_data_source_matrix
+
+    data_source_matrix = build_data_source_matrix()
+    data_source_catalog = build_data_source_catalog()
+    return _DataSourceBundle(
+        status=(data_status_summary, data_status_penetration, data_status_perf, data_status_category),
+        history=data_status_history,
+        matrix=data_source_matrix,
+        catalog=data_source_catalog,
+    )
+
+
 def write_html_report(
     holdings: list[Holding],
     output_dir: str = "reports",
@@ -617,28 +672,20 @@ def write_html_report(
         financial_indicator_data=financial_indicator_data,
     )
 
-    # ── 10b) 数据源状态摘要 ──
-    (data_status_summary, data_status_penetration, data_status_perf, data_status_category) = (
-        _build_data_status_sections(
-            a_indices,
-            us_indices,
-            penetration,
-            penetration_profit_ok,
-            penetration_dividend_ok,
-            perf_data,
-            holdings,
-            cat_dividend_ok,
-        )
+    _ds = _build_data_source_bundle(
+        a_indices=a_indices,
+        us_indices=us_indices,
+        penetration=penetration,
+        penetration_profit_ok=penetration_profit_ok,
+        penetration_dividend_ok=penetration_dividend_ok,
+        perf_data=perf_data,
+        holdings=holdings,
+        cat_dividend_ok=cat_dividend_ok,
+        history_data=history_data,
     )
-
-    # ── 10c) 组合历史走势数据状态 ──
-    data_status_history = _build_history_data_status(history_data)
-
-    # ── 10d) 数据源可用性矩阵 ──
-    from src.python.report.data_source_matrix import build_data_source_catalog, build_data_source_matrix
-
-    data_source_matrix = build_data_source_matrix()
-    data_source_catalog = build_data_source_catalog()
+    (data_status_summary, data_status_penetration, data_status_perf, data_status_category) = _ds.status
+    data_status_history = _ds.history
+    data_source_matrix, data_source_catalog = _ds.matrix, _ds.catalog
 
     # 因子中文名映射（单一数据源：analysis 层常量，经 context 传递）
     _factor_names: dict = {}

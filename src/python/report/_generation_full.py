@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -86,6 +88,231 @@ def _fetch_sector_flow(reporter: Any, perf: Any) -> Any:
     return sector_flow
 
 
+@dataclass
+class _LlmStageResult:
+    """LLM + 新闻阶段产出（含观测汇聚器，收尾阶段登记上下文用）。"""
+
+    llm_content: Any
+    news_data: Any
+    news_llm_meta: Any
+    news_ok: bool
+    debate_info: Any
+    llm_sink: Any
+
+
+def _run_llm_stage(
+    *,
+    holdings: list,
+    prep: dict,
+    sector_flow: Any,
+    force_llm: bool,
+    pipeline_data: dict | None,
+    enable_news: bool,
+    enable_llm: bool,
+    reporter: Any,
+    force_llm_modules: Any,
+    history_data: dict | None,
+    comparison_indices: Any,
+    metrics: dict | None,
+    perf: Any,
+) -> _LlmStageResult:
+    """并行取 LLM 章节与新闻，并完成决策登记 / 决策头剥离 / 评级横幅 / 信号沉淀。
+
+    观测汇聚器在**预检之前**绑定（预检会记录缓存命中与重算归因），每次运行从零累计
+    事实校验修正计数与 thinking 等待，长驻进程/N 次生成不跨轮串味。
+    """
+    from src.python.llm.observation import LlmObservation, bind_llm_observation
+    from src.python.report._llm_news import _fetch_llm_and_news
+
+    _llm_sink = LlmObservation()
+    bind_llm_observation(_llm_sink)
+    # 事实校验自动修正计数：每轮从零开始累计（长驻进程/N 次生成不跨轮串味）
+    from src.python.llm.fact_checker import reset_auto_correction_counts
+    from src.python.llm.generators_orchestrator import reset_thinking_wait_total
+
+    reset_auto_correction_counts()
+    reset_thinking_wait_total()
+    perf.start("LLM+新闻")
+    try:
+        # 返回五元组：LLM 内容 / 新闻数据 / 新闻元信息 / 新闻是否成功 / 辩论信息
+        # （辩论信息为可选，无辩论时为 None；force_llm_modules 允许任意集合/列表）
+        llm_content, news_data, news_llm_meta, news_ok, debate_info = _fetch_llm_and_news(
+            holdings,
+            prep,
+            sector_flow,
+            force_llm,
+            pipeline_data,
+            enable_news,
+            enable_llm,
+            reporter,
+            force_llm_modules=force_llm_modules,
+            history_data=history_data,
+            comparison_indices=comparison_indices,
+            metrics=metrics,
+            span_recorder=perf.recorder("LLM+新闻"),
+        )
+    finally:
+        bind_llm_observation(None)
+    if enable_llm:
+        from src.python.llm.fallback import build_fallback_llm_content
+
+        llm_content = build_fallback_llm_content(llm_content)
+
+    return _LlmStageResult(
+        llm_content=llm_content,
+        news_data=news_data,
+        news_llm_meta=news_llm_meta,
+        news_ok=news_ok,
+        debate_info=debate_info,
+        llm_sink=_llm_sink,
+    )
+
+
+@dataclass
+class _FullEmitContext:
+    """full 路径「产出双端报告 + 收尾」的装配上下文（入参收敛，避免长参数表）。"""
+
+    result: Any
+    holdings: list
+    prep: dict
+    config: dict
+    reporter: Any
+    output_dir: str | None
+    sec_order: list
+    pipeline_data: dict | None
+    history_data: dict | None
+    llm_content: Any
+    metrics: dict | None
+    news_data: Any
+    news_llm_meta: Any
+    news_ok: bool
+    debate_info: Any
+    perf: Any
+    llm_sink: Any
+    usage_baseline: Any
+    health_fut: Any
+    enable_cost_lots: bool
+    transactions: Any
+    dividends: Any
+    enable_fund_deep_analysis: bool
+    enable_news: bool
+    enable_history: bool
+    enable_llm: bool
+    enable_portfolio_evolution: bool
+    enable_action: bool
+    enable_stock_fundamentals: bool
+
+
+def _emit_full_reports(ctx: _FullEmitContext) -> Any:
+    """写市场情绪 → 成本流水 → HTML/Excel 双端产物，并收尾（perf / 运行边界 / 健康检查）。"""
+    from src.python.report._report_aux_metrics import compute_market_sentiment_data
+    from src.python.report._run_scope import finish_report_run
+    from src.python.report.excel_market_data import _build_flow_data
+
+    result, holdings, prep, config = ctx.result, ctx.holdings, ctx.prep, ctx.config
+    reporter, output_dir, sec_order = ctx.reporter, ctx.output_dir, ctx.sec_order
+    pipeline_data, history_data = ctx.pipeline_data, ctx.history_data
+    llm_content, news_data, news_llm_meta = ctx.llm_content, ctx.news_data, ctx.news_llm_meta
+    news_ok, debate_info, metrics = ctx.news_ok, ctx.debate_info, ctx.metrics
+    perf, _llm_sink, _usage_baseline, _health_fut = ctx.perf, ctx.llm_sink, ctx.usage_baseline, ctx.health_fut
+    _enable_cost_lots, transactions, dividends = ctx.enable_cost_lots, ctx.transactions, ctx.dividends
+    _enable_fund_deep_analysis, _enable_news = ctx.enable_fund_deep_analysis, ctx.enable_news
+    _enable_history, _enable_llm = ctx.enable_history, ctx.enable_llm
+    _enable_portfolio_evolution, _enable_action = ctx.enable_portfolio_evolution, ctx.enable_action
+    _enable_stock_fundamentals = ctx.enable_stock_fundamentals
+    _metrics = ctx.metrics
+
+    _ms_data = compute_market_sentiment_data(holdings, prep, config, reporter)
+    if _ms_data is not None and pipeline_data is not None:
+        pipeline_data["market_sentiment_data"] = _ms_data
+
+    # ── 6. HTML 报告 ──
+    # 成本流水数据（fund_flow_data）：复用 excel_market_data 组装逻辑，
+    # 开关关闭返回 None（HTML 模板保持既有输出）。
+
+    fund_flow_data = _build_flow_data(_enable_cost_lots, transactions, dividends, holdings, prep["details"])
+    result.html_ok = _generate_full_html_report(
+        holdings,
+        prep,
+        output_dir,
+        sec_order,
+        llm_content,
+        news_data,
+        news_llm_meta,
+        news_ok,
+        history_data,
+        reporter,
+        _enable_fund_deep_analysis,
+        _enable_news,
+        _enable_history,
+        _enable_llm,
+        debate_info,
+        result,
+        metrics,
+        prep.get("style_factor_data"),
+        prep.get("factor_catalog_data"),
+        prep.get("position_relationship_data"),
+        (pipeline_data or {}).get("evolution_data"),
+        _enable_portfolio_evolution,
+        _enable_action,
+        (pipeline_data or {}).get("position_status"),
+        (pipeline_data or {}).get("data_freshness"),
+        (pipeline_data or {}).get("action_data"),
+        (pipeline_data or {}).get("crisis_annotation_data"),
+        (pipeline_data or {}).get("tail_risk_data"),
+        (pipeline_data or {}).get("snapshot_diff_data"),
+        fund_flow_data,
+        (pipeline_data or {}).get("valuation_data"),
+        (pipeline_data or {}).get("market_temperature_data"),
+        (pipeline_data or {}).get("decision_review_data"),
+        prosperity_framework_data=(pipeline_data or {}).get("prosperity_framework_data"),
+        enable_fundamental_snapshot=_enable_stock_fundamentals,
+        financial_report_digest_data=(pipeline_data or {}).get("financial_report_digest_data"),
+        financial_indicator_data=(pipeline_data or {}).get("financial_indicator_data"),
+        purchase_status_data=(pipeline_data or {}).get("purchase_status_data"),
+        market_sentiment_data=(pipeline_data or {}).get("market_sentiment_data"),
+        holding_change_data=(pipeline_data or {}).get("holding_change_data"),
+        event_impact_data=(pipeline_data or {}).get("event_impact_data"),
+        schedule_replay_data=(pipeline_data or {}).get("schedule_replay_data"),
+        risk_adjusted_excess_data=(pipeline_data or {}).get("risk_adjusted_excess_data"),
+        summary_highlights_data=(pipeline_data or {}).get("summary_highlights_data"),
+    )
+
+    # ── 7. Excel 报告 ──
+    result.excel_ok = _generate_full_excel_report(
+        holdings,
+        prep,
+        output_dir,
+        news_ok,
+        llm_content,
+        news_data,
+        news_llm_meta,
+        sec_order,
+        pipeline_data,
+        history_data,
+        reporter,
+        _enable_fund_deep_analysis,
+        _enable_news,
+        _enable_history,
+        _enable_llm,
+        debate_info,
+        result,
+        _enable_portfolio_evolution,
+        _enable_action,
+        _enable_cost_lots,
+        transactions,
+        dividends,
+        enable_fundamental_snapshot=_enable_stock_fundamentals,
+    )
+
+    result.news_ok = news_ok
+    result.report_generated = result.html_ok or result.excel_ok
+    _record_llm_context(perf, _llm_sink, _usage_baseline)
+    finish_report_run(perf)
+    _collect_health_checks(ctx.health_fut, "full", holdings)
+    return result
+
+
 def _generate_report_full(
     holdings: list,
     config: dict,
@@ -122,11 +349,10 @@ def _generate_report_full(
     from src.python.core.cancel import token_of
     from src.python.core.perf import PerfCollector
     from src.python.core.registry import get_report_section_order
-    from src.python.report._llm_news import _fetch_llm_and_news
     from src.python.report._snapshot import capture_snapshot
     from src.python.report.orchestrator import ReportResult, prepare_report_data
 
-    from src.python.report._run_scope import finish_report_run, start_report_run
+    from src.python.report._run_scope import start_report_run
 
     perf = PerfCollector(
         report_type="full",
@@ -281,42 +507,29 @@ def _generate_report_full(
     # 观测汇聚器必须在**预检之前**绑定：预检（`_precheck_all_modules`）会记录
     # 缓存命中与重算归因，绑定晚一步就会让每次进程重启后的首份报告整体丢样本——
     # 而首跑恰是最贵的一份，缺它会让 `ttl_expired` 占比统计系统性偏差。
-    from src.python.llm.observation import LlmObservation, bind_llm_observation
-
-    _llm_sink = LlmObservation()
-    bind_llm_observation(_llm_sink)
-    _comparison_indices = config.get("comparison_indices", None)
-    # 事实校验自动修正计数：每轮从零开始累计（长驻进程/N 次生成不跨轮串味）
-    from src.python.llm.fact_checker import auto_correction_counts, reset_auto_correction_counts
-    from src.python.llm.generators_orchestrator import reset_thinking_wait_total, thinking_wait_total_seconds
-
-    reset_auto_correction_counts()
-    reset_thinking_wait_total()
-    perf.start("LLM+新闻")
-    try:
-        # 返回五元组：LLM 内容 / 新闻数据 / 新闻元信息 / 新闻是否成功 / 辩论信息
-        # （辩论信息为可选，无辩论时为 None；force_llm_modules 允许任意集合/列表）
-        llm_content, news_data, news_llm_meta, news_ok, debate_info = _fetch_llm_and_news(
-            holdings,
-            prep,
-            sector_flow,
-            force_llm,
-            pipeline_data,
-            _enable_news,
-            _enable_llm,
-            reporter,
-            force_llm_modules=force_llm_modules,
-            history_data=history_data,
-            comparison_indices=_comparison_indices,
-            metrics=_metrics,
-            span_recorder=perf.recorder("LLM+新闻"),
-        )
-    finally:
-        bind_llm_observation(None)
-    if _enable_llm:
-        from src.python.llm.fallback import build_fallback_llm_content
-
-        llm_content = build_fallback_llm_content(llm_content)
+    _llm = _run_llm_stage(
+        holdings=holdings,
+        prep=prep,
+        sector_flow=sector_flow,
+        force_llm=force_llm,
+        pipeline_data=pipeline_data,
+        enable_news=_enable_news,
+        enable_llm=_enable_llm,
+        reporter=reporter,
+        force_llm_modules=force_llm_modules,
+        history_data=history_data,
+        comparison_indices=config.get("comparison_indices", None),
+        metrics=_metrics,
+        perf=perf,
+    )
+    llm_content, news_data, news_llm_meta, news_ok, debate_info = (
+        _llm.llm_content,
+        _llm.news_data,
+        _llm.news_llm_meta,
+        _llm.news_ok,
+        _llm.debate_info,
+    )
+    _llm_sink = _llm.llm_sink
 
     # ── 5b. 决策跨期反思闭环（LLM 载体登记 + 复盘区块装配）──
     # ③ 登记 LLM 操作建议 ④ 复盘区块数据契约注入 pipeline_data（HTML/Excel 行动章
@@ -340,6 +553,9 @@ def _generate_report_full(
     # 过早登记会漏采；适配器对缺失键逐项跳过，故不构成硬依赖。
     record_deterministic_signals(pipeline_data, prep, reporter)
     perf.stop()
+
+    from src.python.llm.fact_checker import auto_correction_counts
+    from src.python.llm.generators_orchestrator import thinking_wait_total_seconds
 
     # 事实校验自动修正计数入 perf_history.counters（跨期可看趋势；单次只进日志时
     # 无法判断提示词/口径改动有没有效——实测单轮可修正 5 处数值）
@@ -368,95 +584,36 @@ def _generate_report_full(
     # 须在写 HTML 之前取数——本契约既是行动建议章内嵌区块的数据源，也是「数据源可用性矩阵」
     # 「市场情绪」行与说明表「本次使用」的登记时机（mark_data_used/mark_provider_used 在此
     # 链路内触发）；置于 HTML 之后会让两端产物口径不一致。
-    from src.python.report._report_aux_metrics import compute_market_sentiment_data
-
-    _ms_data = compute_market_sentiment_data(holdings, prep, config, reporter)
-    if _ms_data is not None and pipeline_data is not None:
-        pipeline_data["market_sentiment_data"] = _ms_data
-
-    # ── 6. HTML 报告 ──
-    # 成本流水数据（fund_flow_data）：复用 excel_market_data 组装逻辑，
-    # 开关关闭返回 None（HTML 模板保持既有输出）。
-    from src.python.report.excel_market_data import _build_flow_data
-
-    fund_flow_data = _build_flow_data(_enable_cost_lots, transactions, dividends, holdings, prep["details"])
-    result.html_ok = _generate_full_html_report(
-        holdings,
-        prep,
-        output_dir,
-        sec_order,
-        llm_content,
-        news_data,
-        news_llm_meta,
-        news_ok,
-        history_data,
-        reporter,
-        _enable_fund_deep_analysis,
-        _enable_news,
-        _enable_history,
-        _enable_llm,
-        debate_info,
-        result,
-        _metrics,
-        prep.get("style_factor_data"),
-        prep.get("factor_catalog_data"),
-        prep.get("position_relationship_data"),
-        (pipeline_data or {}).get("evolution_data"),
-        _enable_portfolio_evolution,
-        _enable_action,
-        (pipeline_data or {}).get("position_status"),
-        (pipeline_data or {}).get("data_freshness"),
-        (pipeline_data or {}).get("action_data"),
-        (pipeline_data or {}).get("crisis_annotation_data"),
-        (pipeline_data or {}).get("tail_risk_data"),
-        (pipeline_data or {}).get("snapshot_diff_data"),
-        fund_flow_data,
-        (pipeline_data or {}).get("valuation_data"),
-        (pipeline_data or {}).get("market_temperature_data"),
-        (pipeline_data or {}).get("decision_review_data"),
-        prosperity_framework_data=(pipeline_data or {}).get("prosperity_framework_data"),
-        enable_fundamental_snapshot=_enable_stock_fundamentals,
-        financial_report_digest_data=(pipeline_data or {}).get("financial_report_digest_data"),
-        financial_indicator_data=(pipeline_data or {}).get("financial_indicator_data"),
-        purchase_status_data=(pipeline_data or {}).get("purchase_status_data"),
-        market_sentiment_data=(pipeline_data or {}).get("market_sentiment_data"),
-        holding_change_data=(pipeline_data or {}).get("holding_change_data"),
-        event_impact_data=(pipeline_data or {}).get("event_impact_data"),
-        schedule_replay_data=(pipeline_data or {}).get("schedule_replay_data"),
-        risk_adjusted_excess_data=(pipeline_data or {}).get("risk_adjusted_excess_data"),
-        summary_highlights_data=(pipeline_data or {}).get("summary_highlights_data"),
+    return _emit_full_reports(
+        _FullEmitContext(
+            result=result,
+            holdings=holdings,
+            prep=prep,
+            config=config,
+            reporter=reporter,
+            output_dir=output_dir,
+            sec_order=sec_order,
+            pipeline_data=pipeline_data,
+            history_data=history_data,
+            llm_content=llm_content,
+            metrics=_metrics,
+            news_data=news_data,
+            news_llm_meta=news_llm_meta,
+            news_ok=news_ok,
+            debate_info=debate_info,
+            perf=perf,
+            llm_sink=_llm_sink,
+            usage_baseline=_usage_baseline,
+            health_fut=_health_fut,
+            enable_cost_lots=_enable_cost_lots,
+            transactions=transactions,
+            dividends=dividends,
+            enable_fund_deep_analysis=_enable_fund_deep_analysis,
+            enable_news=_enable_news,
+            enable_history=_enable_history,
+            enable_llm=_enable_llm,
+            enable_portfolio_evolution=_enable_portfolio_evolution,
+            enable_action=_enable_action,
+            enable_stock_fundamentals=_enable_stock_fundamentals,
+        )
     )
-
-    # ── 7. Excel 报告 ──
-    result.excel_ok = _generate_full_excel_report(
-        holdings,
-        prep,
-        output_dir,
-        news_ok,
-        llm_content,
-        news_data,
-        news_llm_meta,
-        sec_order,
-        pipeline_data,
-        history_data,
-        reporter,
-        _enable_fund_deep_analysis,
-        _enable_news,
-        _enable_history,
-        _enable_llm,
-        debate_info,
-        result,
-        _enable_portfolio_evolution,
-        _enable_action,
-        _enable_cost_lots,
-        transactions,
-        dividends,
-        enable_fundamental_snapshot=_enable_stock_fundamentals,
-    )
-
-    result.news_ok = news_ok
-    result.report_generated = result.html_ok or result.excel_ok
-    _record_llm_context(perf, _llm_sink, _usage_baseline)
-    finish_report_run(perf)
-    _collect_health_checks(_health_fut, "full", holdings)
-    return result

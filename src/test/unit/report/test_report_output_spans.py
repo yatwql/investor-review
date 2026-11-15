@@ -307,7 +307,10 @@ class TestLlmObservationRecorded:
         """full 路径登记时传入已绑定的 sink（结构锁定，防回退为取全局）。"""
         import inspect
 
-        src = inspect.getsource(rg._generate_report_full)
+        # 收尾记账随编排拆分移入 `_emit_full_reports`（同一模块），守卫按模块面校验
+        from src.python.report import _generation_full
+
+        src = inspect.getsource(_generation_full)
         assert "_record_llm_context(perf, _llm_sink" in src
         assert "_usage_baseline" in src, "报告用量须按本次运行基线记账（不累加会话累计）"
 

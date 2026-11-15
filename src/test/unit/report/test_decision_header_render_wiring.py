@@ -27,10 +27,13 @@ class TestHeaderStripWiring:
         assert capture < strip
 
     def test_strip_before_both_writer_calls(self) -> None:
+        """剥离须早于双端写出：剥离在主流程，写出在 `_emit_full_reports`（被调用时才执行）。"""
         source = _ASSEMBLY.read_text(encoding="utf-8")
         strip = source.index("strip_structured_header(")
-        assert strip < source.index("_generate_full_html_report(")
-        assert strip < source.index("_generate_full_excel_report(")
+        # 主流程内：剥离必须先于产出阶段调用（产出阶段内才写 HTML/Excel）
+        assert strip < source.index("_emit_full_reports(\n", strip)
+        assert "_generate_full_html_report(" in source
+        assert "_generate_full_excel_report(" in source
 
     def test_strip_applied_to_llm_content_tuple(self) -> None:
         source = _ASSEMBLY.read_text(encoding="utf-8")
