@@ -186,6 +186,12 @@ def make_push2_request(code: str, retries: int = _MAX_RETRIES) -> dict | None:
     except TRANSIENT_EXCEPTIONS as e:
         logger.debug("东方财富 push2 请求失败 [%s]: %s", code, e)
         reg.record_failure("eastmoney_industry", f"push2:{code}")
+        try:
+            from src.python.core.rate_limit_state import note_failure
+
+            note_failure(f"push2 行情服务器断连（{type(e).__name__}）: {code}")
+        except Exception:  # 观测失败不影响取数
+            pass
         return None
 
     try:

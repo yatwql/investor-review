@@ -236,6 +236,13 @@ def run_with_timeout(
             pool.shutdown(wait=False)
 
     def _on_retry(failed_attempt: int, _delay: float, exc: BaseException | None) -> None:
+        # 东财 push2 限流/断连：记入运行期观测（报告矩阵会出一行可读提示）
+        try:
+            from src.python.core.rate_limit_state import note_failure
+
+            note_failure(str(exc) if exc is not None else "")
+        except Exception:  # 观测失败不影响取数
+            pass
         if isinstance(exc, TimeoutError):
             logger.warning("akshare 调用超时 (%.1fs, 第 %d/%d 次)", timeout, failed_attempt, policy.attempts)
         else:

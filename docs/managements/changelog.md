@@ -24,6 +24,8 @@
 
 ### 新增
 
+- **东财 push2 限流显式告警**：新增 `core/rate_limit_state.py` 统一收集两条链路（akshare 内建请求的重试回调 + 本仓 `eastmoney_industry` 直连失败）的限流/断连命中次数；数据源可用性矩阵新增一行「东财 push2 限流」（`本轮 N 次断连（…已走备用通道）`），不再让读者只看到「行业降级」而不知根因。报告边界与测试均复位计数。
+
 - **结构化契约埋点（plan-253 P2 统计）**：`research_contract.contract_metrics()` 聚合模块数 / 主张条数 / 校验错误数 / 判决分布 / 证据索引条数与字符数，经 `format_session_usage()` 在「LLM API 用量」页签出一行「结构化契约：…」（HTML 与 Excel 同源文案）；开关关闭或无契约时不出行（零变化）。
 
 - **分层越界防新增（架构约束：analysis 单向依赖）**：`check-import-surface` 新增 `layer-inversion` 规则——analysis 层 import `report/` 或 `llm/` 即报 finding；6 处存量经例外表登记（含到期日与收敛方向，`technical.md` 同步「存量分层例外」表），到期未下沉即门禁红，存量不再被当先例。

@@ -116,6 +116,12 @@ def start_report_run() -> dict[str, Any]:
     except Exception:  # 观测隔离失败不阻断主链路
         logger.debug("[run_scope] 缓存命中率计数重置失败，已忽略", exc_info=True)
     try:
+        from src.python.core.rate_limit_state import reset_push2_limit_state
+
+        reset_push2_limit_state()
+    except Exception:
+        logger.debug("[run_scope] push2 限流观测重置失败，已忽略", exc_info=True)
+    try:
         from src.python.llm.research_contract import reset_contract_state
 
         reset_contract_state()

@@ -367,7 +367,7 @@ def _auto_reset_module_state():
         from src.python.cache import _stats as cache_stats
         from src.python.config._llm_pricing import invalidate_pricing_cache
         from src.python.config._llm_settings import invalidate_llm_config_cache
-        from src.python.core import circuit_breaker, doctor, http_client
+        from src.python.core import circuit_breaker, doctor, http_client, rate_limit_state
         from src.python.fetcher import batch, bond_yield, factor_catalog_loader, source_adapter
         from src.python.llm import observation, pacing, research_contract
         from src.python.providers import (
@@ -386,6 +386,7 @@ def _auto_reset_module_state():
         invalidate_llm_config_cache()
         invalidate_pricing_cache()
         circuit_breaker.reset_circuit_text()
+        rate_limit_state.reset_push2_limit_state()
         doctor.reset_adapter_survey()
         http_client.reset_transport_factory()
         batch.clear_rate_limiter_cache()
