@@ -220,7 +220,6 @@ def _emit_full_reports(ctx: _FullEmitContext) -> Any:
     _enable_history, _enable_llm = ctx.enable_history, ctx.enable_llm
     _enable_portfolio_evolution, _enable_action = ctx.enable_portfolio_evolution, ctx.enable_action
     _enable_stock_fundamentals = ctx.enable_stock_fundamentals
-    _metrics = ctx.metrics
 
     _ms_data = compute_market_sentiment_data(holdings, prep, config, reporter)
     if _ms_data is not None and pipeline_data is not None:

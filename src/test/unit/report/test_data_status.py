@@ -455,6 +455,7 @@ class TestRecordAggregated:
         assert detail["total_count"] == 15
         assert detail["ratio"] == 0.2
         assert detail["severity"] == "low"
+        assert detail["codes"] == ["001", "002", "003"], "失败代码须落进明细（定位哪些标的失败）"
         assert detail["message"] == "3/15 个基金排名不可用"
 
     def test_ratio_high_severity(self):

@@ -471,7 +471,6 @@ def write_html_report(
     details: list | None = None,
     news_data: list | None = None,
     news_llm_meta: dict | None = None,
-    sector_flow: list | None = None,
     progress: ProgressReporter | None = None,
     section_order: list[dict] | None = None,
     history_data: dict | None = None,
@@ -530,7 +529,6 @@ def write_html_report(
         details: 可选预计算市值核算明细，传入时跳过内部行情获取。
         news_data: 可选预获取新闻数据，传入时跳过内部新闻获取。
         news_llm_meta: 与 news_data 对应的 LLM 元数据字典。
-        sector_flow: 行业资金流向数据（可选），注入全球政经局势 LLM prompt
         history_data: 组合历史走势数据（来自 PortfolioHistoryCalculator），
             包含 bars、max_drawdown、annualized_volatility、total_return、warnings 等。
             None 时历史章节显示占位文本。

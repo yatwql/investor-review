@@ -59,7 +59,7 @@ class DegradationEvent:
     供 get_log() 汇总为 LLM 可消费的结构化列表。
 
     detail 字段为可选字典，用于承载聚合信息
-    （record_aggregated()：failed_count / total_count / ratio / severity / message）
+    （record_aggregated()：failed_count / total_count / ratio / severity / codes（前 20 条）/ message）
     或纯 record() 调用的失败原因（``{"message": ...}``）。
     两者都不提供时保持 ``None``。
     """
@@ -563,6 +563,9 @@ class DegradationTracker:
                             "total_count": total_count,
                             "ratio": round(ratio, 2),
                             "severity": severity,
+                            # codes 收窄到前 20 条：明细用于定位「哪些标的失败」，
+                            # 全量列表会把事件体积顶起来且展示端只取前几条
+                            "codes": list(codes or [])[:20],
                             "message": message,
                         },
                     )
@@ -584,6 +587,7 @@ class DegradationTracker:
                         "total_count": total_count,
                         "ratio": round(ratio, 2),
                         "severity": severity,
+                        "codes": list(codes or [])[:20],
                         "message": message,
                     },
                 )

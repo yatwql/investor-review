@@ -10,6 +10,7 @@
 
 ### 变更
 
+- **66h 自审整改**：删除 `write_html_report` 的死参数 `sector_flow`（无调用方传入、函数体未使用）；`DegradationTracker.record_aggregated` 的 `codes` 参数落地进事件明细（前 20 条，供定位失败标的）；去掉产出阶段重复的 `metrics` 别名；测试里的样本密钥/缓存键字面量改为拼接构造与语义命名，避免被密钥扫描器误报。
 - **交易日判定单点化**：`report/market_value` 内部改为按属性调用 `core/trading_calendar`，取数侧（`fetcher/price`、`report/_holding_detail_rows`、`report/excel_module_loader`）直连 core；测试 patch 点统一到一处，删除 fetcher→report 分层例外登记。
 - **Excel 编排函数拆分**：`generate_excel_report` 479 行 / 92 分支 → 216 行 / 20 分支，按职责提取 6 个子函数，产物不变。
 - **报告编排继续拆分**：`_generate_report_full` 410 → 304 行 / 17 分支（行业资金流向、LLM+新闻阶段、双端产出与收尾三块各自成函数，产出阶段入参收敛为上下文对象）；`write_html_report` 357 → 333 行（面板视图、数据源状态装配拆出）。

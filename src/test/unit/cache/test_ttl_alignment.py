@@ -58,13 +58,13 @@ class TestCleanupReaderAlignment:
         """清理判定的过期阈值 == 读侧 TTL：略小于不删、略大于才删。"""
         from src.python.cache._ttl import get_ttl
 
-        key = "llm_expert_review_deadbeef_probe-main"
+        cache_key = "llm_expert_review_probe-main"
         ttl = get_ttl("llm_expert_review")
 
-        write_cache(cache_env, key, age_seconds=ttl - 60)
+        write_cache(cache_env, cache_key, age_seconds=ttl - 60)
         assert _cleanup(cache_env) == 0, "读侧仍有效的文件不得被清理删除"
 
-        write_cache(cache_env, key, age_seconds=ttl + 60)
+        write_cache(cache_env, cache_key, age_seconds=ttl + 60)
         assert _cleanup(cache_env) == 1
 
     def test_exact_key_mapping_uses_version_stripped_key(self, cache_env):

@@ -380,7 +380,6 @@ class TestWriteHtmlReportLlmType(unittest.TestCase):
                 enable_llm=enable_llm,
                 llm_content=None,
                 include_news=False,
-                sector_flow=[],
             )
 
         return mock_llm
@@ -442,7 +441,6 @@ class TestWriteHtmlReportLlmType(unittest.TestCase):
                 enable_llm=enable_llm,
                 llm_content=None,
                 include_news=False,
-                sector_flow=[],
             )
 
             # 捕获模板渲染参数
