@@ -239,7 +239,7 @@ def _generate_report_full(
         sector_flow = get_sector_fund_flow()
         if sector_flow:
             from src.python.fetcher.akshare import sector_flow_failure
-            from src.python.report.data_status import mark_data_used
+            from src.python.core.degradation import mark_data_used
 
             # 陈旧回退（源不可达 → 上次成功载荷）必须如实标注：否则「今日资金流向」
             # 拿的是 1~3 天前的数据，而报告与 LLM 提示词看不出任何异常。
@@ -251,7 +251,7 @@ def _generate_report_full(
         else:
             from src.python.cache.operations import sector_flow_hint
             from src.python.fetcher.akshare import sector_flow_failure
-            from src.python.report.data_status import mark_data_unavailable
+            from src.python.core.degradation import mark_data_unavailable
 
             failure = sector_flow_failure()
             failure_type = "empty" if failure == "empty" else "unreachable"
@@ -264,7 +264,7 @@ def _generate_report_full(
             reporter.warn(f"行业资金流向{sector_flow_hint()}，将继续生成报告")
     except Exception:
         sector_flow = None
-        from src.python.report.data_status import mark_data_unavailable
+        from src.python.core.degradation import mark_data_unavailable
 
         mark_data_unavailable("ff_sector_flow", "T4", failure_type="unreachable", message="akshare（调用异常）")
         reporter.warn("行业资金流向获取失败，将继续生成报告")

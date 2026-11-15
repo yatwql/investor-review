@@ -574,7 +574,7 @@ class TestSubmitLlmFutureDegradationEvents:
     def _capture_submit_kwargs(self, fail_source_key: str | None) -> tuple[dict, list[dict]]:
         """执行一次提交，返回 (submit 关键字参数, 提交时刻的降级事件日志)。"""
         from src.python.report._llm_news import _submit_llm_future
-        from src.python.report.data_status import get_tracker
+        from src.python.core.degradation import get_tracker
 
         tracker = get_tracker()
         tracker.clear_log()

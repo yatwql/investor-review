@@ -19,7 +19,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.python.core.models import Holding
-from src.python.report.data_status import DataStatusItem, STATUS_MESSAGES
+from src.python.core.degradation import DataStatusItem, STATUS_MESSAGES
 
 pytestmark = [
     pytest.mark.unit,

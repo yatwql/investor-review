@@ -11,7 +11,7 @@ from datetime import datetime
 
 from src.python.core.models import Holding
 from src.python.report.category import build_category_data_status
-from src.python.report.data_status import STATUS_MESSAGES, DataStatus, DataStatusItem
+from src.python.core.degradation import STATUS_MESSAGES, DataStatus, DataStatusItem
 from src.python.report.fund_performance import build_perf_data_status, is_fund
 from src.python.report.market_value import get_last_trading_day
 from src.python.report.penetration_sheet import build_penetration_data_status

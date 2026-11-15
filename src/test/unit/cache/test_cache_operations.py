@@ -184,12 +184,14 @@ class TestStatsPayload:
 @contextlib.contextmanager
 def _report_rules(monkeypatch: pytest.MonkeyPatch, trading_day: str = "2026-11-05", prev: str = "2026-11-04"):
     """把报告侧与历法的判定点全部钉死（只需交易日 / 收市状态）。"""
-    monkeypatch.setattr("src.python.core.trading_calendar.get_last_trading_day", lambda: trading_day)
-    monkeypatch.setattr("src.python.core.trading_calendar.get_prev_trading_day", lambda day="": prev)
-    monkeypatch.setattr("src.python.report.market_value.is_market_open", lambda: False)
-    monkeypatch.setattr("src.python.report.market_value.is_midday_break", lambda: False)
+    # 判定的两处解析路径都要钉死：报告侧（`report.market_value` 绑定名）与取数侧
+    # （`cache/operations` 在函数内从 `core.trading_calendar` 直取，不经过报告层）
     monkeypatch.setattr("src.python.report.market_value.get_last_trading_day", lambda: trading_day)
     monkeypatch.setattr("src.python.report.market_value.get_prev_trading_day", lambda day="": prev)
+    monkeypatch.setattr("src.python.report.market_value.is_market_open", lambda: False)
+    monkeypatch.setattr("src.python.report.market_value.is_midday_break", lambda: False)
+    monkeypatch.setattr("src.python.core.trading_calendar.get_last_trading_day", lambda: trading_day)
+    monkeypatch.setattr("src.python.core.trading_calendar.get_prev_trading_day", lambda day="": prev)
     yield
 
 
@@ -279,6 +281,7 @@ class TestJudgeAfterRefresh:
         def _boom():
             raise RuntimeError("日历不可用")
 
+        monkeypatch.setattr("src.python.report.market_value.get_last_trading_day", _boom)
         monkeypatch.setattr("src.python.core.trading_calendar.get_last_trading_day", _boom)
         assert _judge_after_refresh([SimpleNamespace(code="600900", name="长江电力", account="A")], []) == ("", None)
 

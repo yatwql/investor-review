@@ -20,7 +20,12 @@ from src.python.report.html_jinja_env import _ENV
 from src.python.report.summary_highlights import build_summary_highlights
 from src.python.schemas.history import AccountSnapshot, SnapshotData, SnapshotHolding
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
+pytestmark = [
+    pytest.mark.unit,
+    pytest.mark.unit_report,
+    # 交易日历属该用例的附带依赖（QDII 滞后判定需前一日），离线桩保证不触网
+    pytest.mark.usefixtures("offline_external_sources"),
+]
 
 
 def _diff_dict(**overrides) -> dict:
@@ -286,7 +291,7 @@ class TestQdiiLaggedValueDiff:
             timestamp="2026-01-09T15:00:00",
         )
 
-    @patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-01-12")
+    @patch("src.python.report.market_value.get_last_trading_day", return_value="2026-01-12")
     def test_qdii_subtotal_and_lagged_flag(self, mock_td):
         """QDII 分项 = 各 QDII 品种市值差之和；净值日期早于 T → 滞后口径 True。"""
         from src.python.report._snapshot import _classify_qdii_value_diff
@@ -307,7 +312,7 @@ class TestQdiiLaggedValueDiff:
         assert diff == pytest.approx(-671.69)
         assert lagged is True
 
-    @patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-01-12")
+    @patch("src.python.report.market_value.get_last_trading_day", return_value="2026-01-12")
     def test_no_qdii_returns_zero(self, mock_td):
         """无 QDII 持仓 → (0.0, False)，渲染层据此省略口径注。"""
         from src.python.report._snapshot import _classify_qdii_value_diff

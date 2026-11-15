@@ -79,7 +79,7 @@ FEATURE_FLAG = "deterministic_signal"
 # ── 持久化路径 ──────────────────────────────────────────
 # module-level 变量，测试时可通过 monkeypatch.setattr 重定向（测试隔离模式）。
 # data/state 而非 data/cache：避开 cache.cleanup_expired() 清扫（理由同
-# src/python/report/data_status.py _default_persist_path）。
+# src/python/core/degradation.py _default_persist_path）。
 _SIGNAL_LEDGER_FILE = os.path.join(PROJECT_ROOT, "data", "state", "signal_ledger.jsonl")
 
 SIGNAL_LEDGER_RETENTION_DAYS = 730

@@ -76,7 +76,7 @@ def fetch_latest_indicator(code: str) -> dict[str, Any] | None:
         transform=transform_map,
     )
     if record:
-        from src.python.report.data_status import mark_data_used
+        from src.python.core.degradation import mark_data_used
 
         mark_data_used(f"fin_indicator_{record.get('source_api') or 'unknown'}")
     return record
@@ -97,7 +97,7 @@ def fetch_indicator_series(code: str, limit: int = DEFAULT_PERIODS) -> list[dict
     if isinstance(cached, list):
         return cached
 
-    from src.python.report.data_status import mark_data_used, mark_provider_used
+    from src.python.core.degradation import mark_data_used, mark_provider_used
 
     records: list[dict[str, Any]] = []
     try:

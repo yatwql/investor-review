@@ -123,7 +123,7 @@ def capture_snapshot(
             return None
 
     from src.python.fetcher.history_diff import HistoryDiff
-    from src.python.report.data_status import get_tracker as _get_degradation_tracker
+    from src.python.core.degradation import get_tracker as _get_degradation_tracker
     from src.python.report.history_snapshot import load_comparison_baseline, save
     from src.python.schemas.history import (
         AccountSnapshot,

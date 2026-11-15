@@ -37,7 +37,7 @@
     config/features.py                   → 功能开关覆写
     analysis/_silence.py                 → 静默期状态
     analysis/circuit_breaker_wrapper.py  → 指标断路状态
-    report/data_status.py                → 数据源降级状态
+    core/degradation.py                → 数据源降级状态
 """
 
 from __future__ import annotations

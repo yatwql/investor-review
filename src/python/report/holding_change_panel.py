@@ -33,7 +33,7 @@ from src.python.analysis.holding_change_metrics import (
 )
 from src.python.core.constants import HISTORY_SNAPSHOT_RETENTION_DAYS
 from src.python.core.registry import get_report_sheet_name
-from src.python.report.data_status import STATUS_MESSAGES
+from src.python.core.degradation import STATUS_MESSAGES
 
 logger = logging.getLogger("invest")
 

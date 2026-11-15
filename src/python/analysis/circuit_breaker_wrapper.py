@@ -179,7 +179,7 @@ class IndicatorBreaker:
             )
             # 记录到 DegradationTracker
             try:
-                from src.python.report.data_status import get_tracker
+                from src.python.core.degradation import get_tracker
 
                 tracker = get_tracker()
                 tracker.record(

@@ -362,7 +362,7 @@ class TestIndicatorUsageMarking:
     """财务指标域取数须打「本次取用」标记（主源与解析支路分别标记）。"""
 
     def _keys(self):
-        from src.python.report.data_status import get_tracker
+        from src.python.core.degradation import get_tracker
 
         return [e["source_key"] for e in get_tracker().get_log()]
 

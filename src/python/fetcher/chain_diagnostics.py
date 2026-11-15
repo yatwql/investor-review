@@ -2,7 +2,7 @@
 
 供 ``fetcher/chain.py``（fallback 路由执行）与 ``fetcher/chain_incremental.py``（历史增量合并）
 共用：链路失败时把「哪个 provider、为什么失败」沉淀为可读短句供降级事件上屏；命中归属经
-延迟导入 ``report.data_status`` 登记，链路层不依赖报告层观测设施。
+延迟导入 ``core.degradation`` 登记，链路层不依赖报告层观测设施。
 """
 
 from __future__ import annotations
@@ -55,11 +55,11 @@ class FailureDiagnostics:
 def _mark_provider_used(data_type: str, provider_name: str, display_name: str) -> None:
     """登记「本次该数据类别由此 provider 服务」（矩阵「命中源」列的归属来源）。
 
-    延迟导入 ``report.data_status``：链路层不依赖报告层观测设施（避免模块级循环），
+    延迟导入 ``core.degradation``：链路层不依赖报告层观测设施（避免模块级循环），
     观测失败也不得影响取数。
     """
     try:
-        from src.python.report.data_status import mark_provider_used
+        from src.python.core.degradation import mark_provider_used
 
         mark_provider_used(data_type, provider_name, display_name)
     except Exception:  # 观测失败不影响主链路

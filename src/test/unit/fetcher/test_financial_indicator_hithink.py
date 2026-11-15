@@ -163,9 +163,7 @@ class TestChainOrderAndSeriesFallback:
         monkeypatch.setattr(fi, "cache_set", lambda *a, **k: None)
         monkeypatch.setattr(fi.akshare_financial, "fetch_financial_indicator_history", lambda code, limit: [])
         monkeypatch.setattr(fi, "fetch_hithink_indicator_series", lambda code, limit: derived)
-        monkeypatch.setattr(
-            "src.python.report.data_status.mark_data_used", lambda key: marked.append(key), raising=False
-        )
+        monkeypatch.setattr("src.python.core.degradation.mark_data_used", lambda key: marked.append(key), raising=False)
 
         records = fi.fetch_indicator_series("600900")
         assert records == derived
@@ -180,7 +178,7 @@ class TestChainOrderAndSeriesFallback:
         monkeypatch.setattr(fi, "cache_set", lambda *a, **k: None)
         monkeypatch.setattr(fi.akshare_financial, "fetch_financial_indicator_history", lambda code, limit: primary)
         monkeypatch.setattr(fi, "fetch_hithink_indicator_series", lambda code, limit: called.append(1) or [])
-        monkeypatch.setattr("src.python.report.data_status.mark_data_used", lambda key: None, raising=False)
+        monkeypatch.setattr("src.python.core.degradation.mark_data_used", lambda key: None, raising=False)
 
         assert fi.fetch_indicator_series("600900") == primary
         assert called == []  # 主源可用时不得触碰备源

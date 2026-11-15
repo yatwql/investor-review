@@ -225,7 +225,7 @@ def _mark_used(source_key: str) -> None:
     只记成功事件（含缓存命中返回），不参与降级计数：章节名 fuzzy 未命中等
     预期内空结果不应被计为源故障（详见 ``data_status.mark_data_used``）。
     """
-    from src.python.report.data_status import mark_data_used
+    from src.python.core.degradation import mark_data_used
 
     mark_data_used(source_key)
 
@@ -253,7 +253,7 @@ def _record_index_failure(symbol: str, reason: str) -> None:
     此处仅登记观测事件，不回写 provider 熔断器。
     """
     try:
-        from src.python.report.data_status import get_tracker
+        from src.python.core.degradation import get_tracker
 
         get_tracker().record(
             _SRC_INDEX_DATASINK,

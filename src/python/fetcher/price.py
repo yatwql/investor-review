@@ -361,7 +361,7 @@ def _fetch_price_with_cache_refresh(
     expected_name: str,
 ) -> dict[str, Any] | None:
     """一次 fetch + 收市后新鲜度校验（跨日残留缓存清仓重试）。"""
-    from src.python.report.data_status import get_tracker
+    from src.python.core.degradation import get_tracker
 
     _t = get_tracker()
     _src_key = f"price_{data_type}_{code}"

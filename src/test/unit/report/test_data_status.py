@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import pytest
 
-import src.python.report.data_status as ds
-from src.python.report.data_status import (
+import src.python.core.degradation as ds
+from src.python.core.degradation import (
     STATUS_MESSAGES,
     TIER_PREFIX,
     DegradationTracker,
@@ -665,7 +665,7 @@ class TestGetTracker:
 
     def test_get_tracker_returns_same_instance(self):
         """连续两次调用 get_tracker() 返回同一实例。"""
-        from src.python.report.data_status import get_tracker, reset_tracker
+        from src.python.core.degradation import get_tracker, reset_tracker
 
         reset_tracker()
         t1 = get_tracker()
@@ -674,7 +674,7 @@ class TestGetTracker:
 
     def test_get_log_after_record(self):
         """record() 成功调用后 get_log() 应包含对应事件。"""
-        from src.python.report.data_status import get_tracker, reset_tracker
+        from src.python.core.degradation import get_tracker, reset_tracker
 
         reset_tracker()
         t = get_tracker()
@@ -687,7 +687,7 @@ class TestGetTracker:
 
     def test_get_log_failure_event(self):
         """record(success=False) 后 get_log() 应包含失败事件。"""
-        from src.python.report.data_status import get_tracker, reset_tracker
+        from src.python.core.degradation import get_tracker, reset_tracker
 
         reset_tracker()
         t = get_tracker()
@@ -700,7 +700,7 @@ class TestGetTracker:
 
     def test_get_log_multiple_events_in_order(self):
         """多次 record() 调用按顺序记录在日志中。"""
-        from src.python.report.data_status import get_tracker, reset_tracker
+        from src.python.core.degradation import get_tracker, reset_tracker
 
         reset_tracker()
         t = get_tracker()
@@ -716,7 +716,7 @@ class TestGetTracker:
 
     def test_clear_log(self):
         """clear_log() 后 get_log() 应返回空列表。"""
-        from src.python.report.data_status import get_tracker, reset_tracker
+        from src.python.core.degradation import get_tracker, reset_tracker
 
         reset_tracker()
         t = get_tracker()
@@ -727,7 +727,7 @@ class TestGetTracker:
 
     def test_reset_tracker_creates_new_instance(self):
         """reset_tracker() 后 get_tracker() 返回新实例，旧日志清除。"""
-        from src.python.report.data_status import get_tracker, reset_tracker
+        from src.python.core.degradation import get_tracker, reset_tracker
 
         reset_tracker()
         t1 = get_tracker()
@@ -740,7 +740,7 @@ class TestGetTracker:
 
     def test_get_log_contains_timestamp(self):
         """get_log() 条目应含有效的时间戳。"""
-        from src.python.report.data_status import get_tracker, reset_tracker
+        from src.python.core.degradation import get_tracker, reset_tracker
 
         reset_tracker()
         t = get_tracker()
@@ -751,7 +751,7 @@ class TestGetTracker:
 
     def test_get_log_failure_contains_degraded(self):
         """失败事件的 degraded 字段反映是否触发降级。"""
-        from src.python.report.data_status import get_tracker, reset_tracker
+        from src.python.core.degradation import get_tracker, reset_tracker
 
         reset_tracker()
         t = get_tracker()
@@ -766,7 +766,7 @@ class TestMarkDataUsed:
     """mark_data_used：数据源说明表「本次使用」列的取用标记（只记成功）。"""
 
     def test_records_success_event(self):
-        from src.python.report.data_status import get_tracker, mark_data_used
+        from src.python.core.degradation import get_tracker, mark_data_used
 
         mark_data_used("report_datasink_doc")
         log = get_tracker().get_log()
@@ -775,7 +775,7 @@ class TestMarkDataUsed:
 
     def test_does_not_count_as_degradation(self):
         """取用标记不得推进降级计数（多次标记后仍不降级）。"""
-        from src.python.report.data_status import get_tracker, mark_data_used
+        from src.python.core.degradation import get_tracker, mark_data_used
 
         for _ in range(5):
             mark_data_used("report_datasink_index")
@@ -785,7 +785,7 @@ class TestMarkDataUsed:
 
     def test_never_raises(self, monkeypatch):
         """观测性副作用不得影响取数：tracker 异常时静默。"""
-        import src.python.report.data_status as ds
+        import src.python.core.degradation as ds
 
         class _Boom:
             def record(self, *a, **k):
@@ -805,7 +805,7 @@ class TestDegradationSummary:
 
     def test_max_items_caps_result(self, monkeypatch):
         """max_items 上限生效（超限截断，最新在前）。"""
-        from src.python.report import data_status as ds
+        from src.python.core import degradation as ds
 
         events = [{"source_key": f"src{i}", "degraded": True, "failure_type": "timeout", "count": 1} for i in range(5)]
         tracker = ds.get_tracker()
@@ -818,7 +818,7 @@ class TestDegradationSummary:
 
     def test_empty_log_returns_empty(self, monkeypatch):
         """无事件 → 空列表（门控后的载荷 degradations 字段）。"""
-        from src.python.report import data_status as ds
+        from src.python.core import degradation as ds
 
         tracker = ds.get_tracker()
         monkeypatch.setattr(tracker, "get_log", lambda: [])

@@ -26,7 +26,7 @@ import pytest
 from src.python.analysis.holding_change_events import build_holding_change_events
 from src.python.config.features import feature_switch_registry, is_feature_enabled
 from src.python.core.constants import HISTORY_SNAPSHOT_RETENTION_DAYS, PROJECT_ROOT
-from src.python.report.data_status import STATUS_MESSAGES
+from src.python.core.degradation import STATUS_MESSAGES
 from src.python.report.holding_change_panel import (
     EVENT_HEADER,
     LIMITATIONS_NOTE,

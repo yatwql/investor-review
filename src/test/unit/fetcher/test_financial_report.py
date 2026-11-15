@@ -374,7 +374,7 @@ class TestDatasinkUsageMarking:
     """取数链路须打「本次取用」标记（数据源说明表「本次使用」列的数据来源）。"""
 
     def _keys(self):
-        from src.python.report.data_status import get_tracker
+        from src.python.core.degradation import get_tracker
 
         return [e["source_key"] for e in get_tracker().get_log()]
 
@@ -591,12 +591,12 @@ class TestIndexSourceStatus:
     """索引来源归属与「两源皆失败」的降级登记（report_datasink_index 状态）。"""
 
     def _keys(self):
-        from src.python.report.data_status import get_tracker
+        from src.python.core.degradation import get_tracker
 
         return [e["source_key"] for e in get_tracker().get_log()]
 
     def _last_event(self, key):
-        from src.python.report.data_status import get_tracker
+        from src.python.core.degradation import get_tracker
 
         events = [e for e in get_tracker().get_log() if e["source_key"] == key]
         return events[-1] if events else None

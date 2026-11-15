@@ -10,6 +10,10 @@
   - raw_data_flags = False → 模块隐藏（不占位）
   - raw_data_flags = True 且 _data_status 有失败项 → 页签底部显示状态摘要
   - raw_data_flags = True 且 _data_status 全成功 → 一切正常，不渲染摘要
+
+分层位置：本模块住 `core/`，因为登记面被取数层（`fetcher/`、`providers/`）与纯计算层
+（`analysis/`）共用——降级事件必须能在链路失败当刻登记，若留在 `report/` 会造成下层
+反向依赖报告层。报告侧只做装配与呈现（矩阵、状态摘要）。
 """
 
 from __future__ import annotations
@@ -22,13 +26,15 @@ import time
 from dataclasses import dataclass
 from typing import Any, TypedDict
 
-from src.python.report._history_quality import TERMINAL_STALENESS_CONSEQUENCE
-
 from src.python.cache import get_cache_dir
 from src.python.config import get_config
 from src.python.core.atomic_write import write_json_atomic
 
 logger = logging.getLogger("invest")
+
+#: 终点滞后后果句（**唯一文案源**）：报告的走势口径提示与数据源状态词共用同一句，
+#: 避免同一事实两种说法。历史质量文案（`report/_history_quality.py`）反向引用此处。
+TERMINAL_STALENESS_CONSEQUENCE = "末端日收益与最大回撤会偏低，终点附近的数字只作参考"
 
 # ── 类型定义 ──────────────────────────────────
 

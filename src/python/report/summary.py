@@ -15,7 +15,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 from src.python.cache import get_cache_age_by_data_type, get_ttl
 from src.python.core.constants import APP_NAME, APP_VERSION
 from src.python.core.registry import get_report_sheet_name
-from src.python.report.data_status import (
+from src.python.core.degradation import (
     STATUS_MESSAGES,
     DataStatus,
     DataStatusItem,

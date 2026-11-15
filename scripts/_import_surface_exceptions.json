@@ -5,14 +5,6 @@
   "dynamic-target": [],
   "layer-inversion": [
     {
-      "path": "src/python/analysis/circuit_breaker_wrapper.py",
-      "name": "src.python.report.data_status",
-      "owner": "analysis（指标熔断器）",
-      "reason": "指标熔断需把降级事件登记进 DegradationTracker，该类现居 report 层（fetcher/analysis 三处同款用法）",
-      "expiry": "2027-06-30",
-      "replacement": "把 tracker 的登记面（begin_report/mark_*）下沉 core（如 core/degradation.py），report 只留报告侧装配"
-    },
-    {
       "path": "src/python/analysis/holding_change_events.py",
       "name": "src.python.report.history_snapshot",
       "owner": "analysis（持仓变动事件）",
@@ -51,6 +43,54 @@
       "reason": "同上：输入装配复用穿透分类结果",
       "expiry": "2027-06-30",
       "replacement": "同上（穿透纯计算下沉后一并改引用）"
+    },
+    {
+      "path": "src/python/fetcher/fund_fee.py",
+      "name": "src.python.analysis.fee_schedule_model",
+      "owner": "fetcher（基金费率）",
+      "reason": "解析/派生原语现居 analysis 侧，取数适配器需复用同一口径",
+      "expiry": "2027-06-30",
+      "replacement": "把纯解析/派生原语下沉 core（如 core/fee_schedule.py、core/financial_derive.py），analysis 与 fetcher 共同消费"
+    },
+    {
+      "path": "src/python/providers/tiantian_purchase.py",
+      "name": "src.python.analysis.fee_schedule_model",
+      "owner": "providers（天天基金申购费）",
+      "reason": "解析/派生原语现居 analysis 侧，取数适配器需复用同一口径",
+      "expiry": "2027-06-30",
+      "replacement": "把纯解析/派生原语下沉 core（如 core/fee_schedule.py、core/financial_derive.py），analysis 与 fetcher 共同消费"
+    },
+    {
+      "path": "src/python/fetcher/financial_indicator.py",
+      "name": "src.python.analysis.financial_statement_derive",
+      "owner": "fetcher（财务指标）",
+      "reason": "解析/派生原语现居 analysis 侧，取数适配器需复用同一口径",
+      "expiry": "2027-06-30",
+      "replacement": "把纯解析/派生原语下沉 core（如 core/fee_schedule.py、core/financial_derive.py），analysis 与 fetcher 共同消费"
+    },
+    {
+      "path": "src/python/fetcher/financial_indicator_adapters.py",
+      "name": "src.python.analysis.financial_indicator_extract",
+      "owner": "fetcher（财务指标适配）",
+      "reason": "解析/派生原语现居 analysis 侧，取数适配器需复用同一口径",
+      "expiry": "2027-06-30",
+      "replacement": "把纯解析/派生原语下沉 core（如 core/fee_schedule.py、core/financial_derive.py），analysis 与 fetcher 共同消费"
+    },
+    {
+      "path": "src/python/fetcher/financial_indicator_adapters.py",
+      "name": "src.python.analysis.financial_statement_derive",
+      "owner": "fetcher（财务指标适配）",
+      "reason": "解析/派生原语现居 analysis 侧，取数适配器需复用同一口径",
+      "expiry": "2027-06-30",
+      "replacement": "把纯解析/派生原语下沉 core（如 core/fee_schedule.py、core/financial_derive.py），analysis 与 fetcher 共同消费"
+    },
+    {
+      "path": "src/python/fetcher/price.py",
+      "name": "src.python.report.market_value",
+      "owner": "fetcher（价格新鲜度判定）",
+      "reason": "交易日原语在 report/market_value 处按公共名再导出，取数侧沿用该导入路径以保持「交易日判定」单一改动点（测试与运行期同点）",
+      "expiry": "2027-06-30",
+      "replacement": "报告侧改为按模块属性调用 core.trading_calendar，测试 patch 点随之迁到 core，fetcher 直连 core 后删除该 re-export 依赖"
     }
   ]
 }

@@ -255,7 +255,7 @@ llm/generators_orchestrator.py ──→ cache/（可选）
 | **贯穿** | 路径归一 | 配置/环境变量给出的路径统一口径：绝对原样、相对按项目根拼接并 `normpath`、空串落项目根（日志/缓存目录/数据源凭据钥匙文件共用） | `core/path_utils.py` |
 | **贯穿** | 终端着色 | 转义码字面量唯一来源 `RAW_CODES`；着色判据 `supports_color`（`NO_COLOR` / 非 TTY 降级）与按流取码 `codes_for`，三渠道共用 | `core/ansi_colors.py` |
 | **贯穿** | 文本安全边界 | 孤立代理项净化（合法代理对折叠为星平面字符、孤立项 → U+FFFD）：stdin 的 `surrogateescape` 与 JSON `\udXXX` 产物在进入 LLM 请求体 / 响应正文 / 追问输入前统一过关，避免 `UnicodeEncodeError` 被误分类为 provider 故障 | `core/text_safety.py` |
-| **贯穿** | 任务完成通知 | CLI/Web 报告收尾按 `notify` 配置分发 webhook/邮件/桌面三通道（失败必发、成功需 `on_success`；尽力而为：单通道失败隔离、永不改退出码、未配置静默跳过；降级摘要单源 `report/data_status.degradation_summary()`） | `core/completion_notify.py` |
+| **贯穿** | 任务完成通知 | CLI/Web 报告收尾按 `notify` 配置分发 webhook/邮件/桌面三通道（失败必发、成功需 `on_success`；尽力而为：单通道失败隔离、永不改退出码、未配置静默跳过；降级摘要单源 `core/degradation.degradation_summary()`） | `core/completion_notify.py` |
 
 ### 1.4 概要设计 — 核心架构决策
 
@@ -2556,7 +2556,7 @@ _dedup_by_title(items)
 
 ### 4.11 数据降级治理体系
 
-#### 降级状态基础设施（`report/data_status.py`）
+#### 降级状态基础设施（`core/degradation.py`）
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -2604,7 +2604,7 @@ _dedup_by_title(items)
 | 连续失败计数 | T2: 2 次 / T3: 2 次 / T4: 1 次 | 累计失败次数达阈值后触发降级 |
 | 缓存陈旧天数 | T2: 3 天 / T3: 14 天 / T4: 14 天 | 距上次成功获取的天数超阈值后触发降级 |
 
-> **注**：以上为 `config.json` 的 `degradation` 出厂默认值（T4 为 14 天）。代码内兜底常量 `report/data_status.py::_DEFAULT_STALE_DAYS`（T4=7 天）仅在用户配置缺少该键时生效，不作为默认值口径。
+> **注**：以上为 `config.json` 的 `degradation` 出厂默认值（T4 为 14 天）。代码内兜底常量 `core/degradation.py::_DEFAULT_STALE_DAYS`（T4=7 天）仅在用户配置缺少该键时生效，不作为默认值口径。
 
 可配置于 `config.json` 的 `degradation` 字段。支持跨会话持久化到 `data/state/.degradation_state.json`。
 
@@ -2982,11 +2982,11 @@ llm/skeleton.py                 # 教训区块注入专家复盘提示词（开�
 
 **缓存**：索引/章节清单 1 天、正文 30 天（`report` / `report_doc`）——索引是 symbol 级键，日频才能让**新披露最迟次日可见**；正文按 `doc_id` 不可变，月度复用不重复消耗配额。随菜单缓存命令与 TTL 管理。**数据契约** `financial_report_digest_data`（附录 H）；语义命名行见 §6.7。
 
-**数据源说明表**：「数据源可用性矩阵」章在健康度表后附「数据源说明（实际使用清单）」表——逐数据类别列实际链路、用途、计费（财报全文随 `datasink.plan` 动态展示免费/付费档）与凭据要求（是否需 key + 就绪状态），并标本次运行是否实际使用（`report/data_source_matrix.py::build_data_source_catalog`，前缀取自 `_SOURCE_CATEGORIES`、计费取自 provider 套餐表，单一事实来源）。**「本次使用」判定口径**：该类别的取数链路在**取得数据时**（含命中缓存的返回）经 `report/data_status.py::mark_data_used()` 记一条成功事件，说明表据事件前缀判定 `used`；**只记成功、不记降级**——章节名 fuzzy 未命中、标的不在源覆盖范围等预期内空结果不计入 T2 连续失败阈值（否则会把预期内空结果误报为源故障），失败与降级仍由 provider 日志、章节失败清单与链路 FailureDiagnostics 披露。因此 `未使用` 的含义是「本次未取到该类数据」，**不等于**源故障；对 DataSinking 类源另注明「需开启哪些功能开关才会取用」。**新鲜度通道**：`mark_data_used()` 另有 `freshness` 参数，成功事件可标 `stale`（源不可达后回退上次成功载荷），该标记进事件 `detail` 但**不进降级计数**（陈旧回退不是失败，算成失败会误报降级），并在数据质量详细状态块单列「陈旧回退（源不可达，用上次成功数据）」行——否则模型会把数天前的数据当今日数据评。类别清单含 `financial_report`（`report_datasink_`）与 `financial_indicator`（`fin_indicator_`），两者同时进入可用性矩阵与说明表；含同花顺兜底槽位的类别（`price` / `fund_hold` / `history` / `financial_indicator`）在「实际数据源（链路）」列显式列出「→ 同花顺金融数据（…，需 key）」，市场情绪（`sentiment`，同花顺**唯一源**）单列一行并附 key 就绪态。
+**数据源说明表**：「数据源可用性矩阵」章在健康度表后附「数据源说明（实际使用清单）」表——逐数据类别列实际链路、用途、计费（财报全文随 `datasink.plan` 动态展示免费/付费档）与凭据要求（是否需 key + 就绪状态），并标本次运行是否实际使用（`report/data_source_matrix.py::build_data_source_catalog`，前缀取自 `_SOURCE_CATEGORIES`、计费取自 provider 套餐表，单一事实来源）。**「本次使用」判定口径**：该类别的取数链路在**取得数据时**（含命中缓存的返回）经 `core/degradation.py::mark_data_used()` 记一条成功事件，说明表据事件前缀判定 `used`；**只记成功、不记降级**——章节名 fuzzy 未命中、标的不在源覆盖范围等预期内空结果不计入 T2 连续失败阈值（否则会把预期内空结果误报为源故障），失败与降级仍由 provider 日志、章节失败清单与链路 FailureDiagnostics 披露。因此 `未使用` 的含义是「本次未取到该类数据」，**不等于**源故障；对 DataSinking 类源另注明「需开启哪些功能开关才会取用」。**新鲜度通道**：`mark_data_used()` 另有 `freshness` 参数，成功事件可标 `stale`（源不可达后回退上次成功载荷），该标记进事件 `detail` 但**不进降级计数**（陈旧回退不是失败，算成失败会误报降级），并在数据质量详细状态块单列「陈旧回退（源不可达，用上次成功数据）」行——否则模型会把数天前的数据当今日数据评。类别清单含 `financial_report`（`report_datasink_`）与 `financial_indicator`（`fin_indicator_`），两者同时进入可用性矩阵与说明表；含同花顺兜底槽位的类别（`price` / `fund_hold` / `history` / `financial_indicator`）在「实际数据源（链路）」列显式列出「→ 同花顺金融数据（…，需 key）」，市场情绪（`sentiment`，同花顺**唯一源**）单列一行并附 key 就绪态。
 
 **矩阵「东财 push2 限流」行**：akshare 内建请求（重试回调）与本仓 `eastmoney_industry` 直连失败的限流/断连命中次数经 `core/rate_limit_state` 汇总，命中 > 0 时矩阵追加一行降级态提示（`东财 push2 限流：本轮 N 次断连（…已走备用通道）`）——把「行业降级」与其根因分开呈现；无命中时不出现该行（零变化）。
 
-**矩阵「命中源」列（provider 级归属）**：矩阵行除了类别健康度，还叠加一层 provider 级归属，回答使用者最常问的「我配的 key 到底被用上了吗」——类别健康度事件（`price_price_stock_600900` 这类键）只含代码不含 provider，**同花顺作为兜底槽接管时旧口径在报告里一字未提**，导致使用者误以为 key 未生效。修复：链路在某个 provider 成功返回时经 `report/data_status.py::mark_provider_used(data_type, provider_id, 展示名)` 登记（`fetcher/chain.py` 的 `fetch_with_fallback` 与 `_try_providers` 两处成功分支 + 同花顺独占的 `report/market_sentiment.py`、`fetcher/financial_indicator.py` 多期序列支路），矩阵按 `_SOURCE_CATEGORIES` 各行的 `data_types` 声明映射归入对应行并渲染为 `名称 ×次数`（按次数降序；无归属显示 `—`）。登记表存放于 `data_status.py` 模块级字典而非 DegradationTracker——归属是纯观测事实，既不参与降级计数，也不在 `.degradation_state.json` 里堆积 provider 键；归属只反映**本次网络取数**，命中缓存时该列为 `—` 而说明表「本次使用」仍为已使用（两列并读即得「用了谁的数」与「有没有取到」）。历史日 K 等类别只登记缓存键、不记降级事件，其矩阵行由 provider 归属单独成立（详情写「取数 N 次（无降级事件）」）。链路的 data_type 必须全部有归属类别，否则命中源静默丢失——`UNMAPPED_CHAIN_DATA_TYPES` 登记有意不进矩阵者（如 `bond_yield`），由 `test_data_source_matrix.py` 的不变式用例强制。附带修复：矩阵类别补齐 `history`（历史走势）与 `sentiment`（市场情绪），与 `datasource.md` 已登记的类别口径一致。
+**矩阵「命中源」列（provider 级归属）**：矩阵行除了类别健康度，还叠加一层 provider 级归属，回答使用者最常问的「我配的 key 到底被用上了吗」——类别健康度事件（`price_price_stock_600900` 这类键）只含代码不含 provider，**同花顺作为兜底槽接管时旧口径在报告里一字未提**，导致使用者误以为 key 未生效。修复：链路在某个 provider 成功返回时经 `core/degradation.py::mark_provider_used(data_type, provider_id, 展示名)` 登记（`fetcher/chain.py` 的 `fetch_with_fallback` 与 `_try_providers` 两处成功分支 + 同花顺独占的 `report/market_sentiment.py`、`fetcher/financial_indicator.py` 多期序列支路），矩阵按 `_SOURCE_CATEGORIES` 各行的 `data_types` 声明映射归入对应行并渲染为 `名称 ×次数`（按次数降序；无归属显示 `—`）。登记表存放于 `data_status.py` 模块级字典而非 DegradationTracker——归属是纯观测事实，既不参与降级计数，也不在 `.degradation_state.json` 里堆积 provider 键；归属只反映**本次网络取数**，命中缓存时该列为 `—` 而说明表「本次使用」仍为已使用（两列并读即得「用了谁的数」与「有没有取到」）。历史日 K 等类别只登记缓存键、不记降级事件，其矩阵行由 provider 归属单独成立（详情写「取数 N 次（无降级事件）」）。链路的 data_type 必须全部有归属类别，否则命中源静默丢失——`UNMAPPED_CHAIN_DATA_TYPES` 登记有意不进矩阵者（如 `bond_yield`），由 `test_data_source_matrix.py` 的不变式用例强制。附带修复：矩阵类别补齐 `history`（历史走势）与 `sentiment`（市场情绪），与 `datasource.md` 已登记的类别口径一致。
 
 [↑ 回到顶部](#目录)
 
@@ -3639,7 +3639,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `num_utils` | 数值归一原语（`safe_num` 显式拦下 NaN/±inf，替代失效的 `try: float()` 兜底） | 诊断 | 数据获取 | 无（模块级，A 通道无开关） |
 | `retry` | 重试与退避唯一原语（`RetryPolicy` 策略算式——固定/线性/指数/**显式序列**、`is_transient_exception` 瞬时判据、`retry_transient` 执行器；取数链路、各 provider 与 LLM 调用骨架共用） | 诊断 | 数据获取 | 无（模块级） |
 | `throttle` | 按名最小间隔节流唯一原语（`RateLimiter` + `interval_delay` 抖动算式 + `wait_interval` 一次性等待；数据层限速/批量调度/LLM 端点节流/429 退避窗口共用） | 诊断 | 数据获取 | 无（模块级） |
-| `completion_notify` | 任务完成通知（CLI/Web 报告收尾按 `notify` 配置分发 webhook/邮件/桌面三通道事件——失败必发、成功需 `on_success`；无配置静默跳过；单通道失败隔离、永不抛出不改退出码；webhook URL 日志只记域名；降级摘要单源 `report/data_status.degradation_summary()`） | 诊断 | 报告 | 随 `notify` 配置节 |
+| `completion_notify` | 任务完成通知（CLI/Web 报告收尾按 `notify` 配置分发 webhook/邮件/桌面三通道事件——失败必发、成功需 `on_success`；无配置静默跳过；单通道失败隔离、永不抛出不改退出码；webhook URL 日志只记域名；降级摘要单源 `core/degradation.degradation_summary()`） | 诊断 | 报告 | 随 `notify` 配置节 |
 | `degradation_summary` | 通知降级摘要单源（数据状态跟踪器事件日志 → 摘要行，最新在前按源去重；CLI/Web 收尾共用，渠道层不再各自镜像） | 诊断 | 报告 | 随 `notify` 配置节 |
 | `doctor` | 系统自检（环境/配置/目录/日志与缓存/功能开关/数据源适配/数据源凭据/数据源八组，失败项附可执行建议，自身永不抛异常） | 诊断 | 诊断 | 恒上屏（无开关） |
 | `datasource_fields` | 数据域标准字段记录（`schemas/datasource_fields.py`，类型注解即缺省语义） | 数据源适配 | 数据获取 | 随 `adapter_chain_slots` |
@@ -3782,7 +3782,7 @@ report/excel_generator.py (Excel 编排器)
   → report/excel_sheet_factory.py (页签创建/可见性)
   → report/*.py (各页签写入器)
   → report/excel_writer.py + styles.py
-  → report/data_status.py (降级状态)
+  → core/degradation.py (降级状态)
 
 report/html_writer.py (HTML 编排器)
   → report/html_builders.py (数据构建器)
@@ -3790,7 +3790,7 @@ report/html_writer.py (HTML 编排器)
   → report/html_jinja_env.py (Jinja2 环境)
   → report/html_save.py (文件写入)
   → tmpl/report_template.html (Jinja2 模板)
-  → report/data_status.py
+  → core/degradation.py
 
 llm/ (LLM 集成)
   → llm/generators_orchestrator.py → skeleton.py → api.py → api_base.py
@@ -3869,7 +3869,7 @@ web/ (Web 服务层，薄入口)
 | # | 约束 | 设计目的 | 违反后果 | 适用范围 |
 |:---|:-----|:---------|:---------|:---------|
 | **C2** | **缓存统一管理** — 所有持久化缓存必须通过 `cache/` 子包的 `get()`/`set()` 接口读写，禁止直接操作 `data/cache/` 文件系统（**唯一登记例外**：`data/cache/jinja/` 的模板字节码缓存——二进制非 KV、不能装进 `_ts`/`_data` JSON 壳，由 `report/html_jinja_env.py` 自管，见 §3.1） | 直接操作文件系统导致 TTL 失效（缓存无法感知过期时间）、分组清理遗漏（菜单命令无法清除对应缓存）、路径穿越隐患 | 缓存不一致、TTL 失效、分组清理遗漏、路径安全风险 | 所有读写 data/cache/ 的模块 |
-| **C3** | **缓存原子写入** — 所有缓存/配置文件写入必须使用 `tempfile.mkstemp` + `os.replace` 原子写入模式；**实现收敛到唯一原语** `core/atomic_write.py`（`write_text_atomic` / `write_json_atomic`，成败如实布尔返回），各调用点不得自留第二份 mkstemp + os.replace 拷贝 | 直接覆写文件在断电/崩溃时产生半写损坏文件，导致后续读取解析失败；多份拷贝各自演化会让「原子」语义在其中一份上悄悄失效（修了 A 漏了 B），且调用点无法据成败判定后续动作（如写失败后误删唯一数据源） | 半写文件损坏、数据不完整、崩溃后无法自恢复；迁移类逻辑在写失败时误删数据源 | cache/ 子包（`cache/_io.py`+`_store.py`）、config/ 子包（`config/_core.py`）、`core/atomic_write.py` 及其调用方（`core/jsonl_store.py`、`core/provider_registry.py`、`report/history_snapshot.py`、`config/features.py`、`analysis/_silence.py`、`analysis/circuit_breaker_wrapper.py`、`report/data_status.py`）。例外（契约相反，有意不合并）：`cache/` 需 gzip 分支与文件锁；`config/_core.py::_atomic_write` 契约是「失败即抛且保留异常类型」（`init_config()` 的 `except PermissionError` 并发容忍分支、TUI 的权限不足提示依赖类型） |
+| **C3** | **缓存原子写入** — 所有缓存/配置文件写入必须使用 `tempfile.mkstemp` + `os.replace` 原子写入模式；**实现收敛到唯一原语** `core/atomic_write.py`（`write_text_atomic` / `write_json_atomic`，成败如实布尔返回），各调用点不得自留第二份 mkstemp + os.replace 拷贝 | 直接覆写文件在断电/崩溃时产生半写损坏文件，导致后续读取解析失败；多份拷贝各自演化会让「原子」语义在其中一份上悄悄失效（修了 A 漏了 B），且调用点无法据成败判定后续动作（如写失败后误删唯一数据源） | 半写文件损坏、数据不完整、崩溃后无法自恢复；迁移类逻辑在写失败时误删数据源 | cache/ 子包（`cache/_io.py`+`_store.py`）、config/ 子包（`config/_core.py`）、`core/atomic_write.py` 及其调用方（`core/jsonl_store.py`、`core/provider_registry.py`、`report/history_snapshot.py`、`config/features.py`、`analysis/_silence.py`、`analysis/circuit_breaker_wrapper.py`、`core/degradation.py`）。例外（契约相反，有意不合并）：`cache/` 需 gzip 分支与文件锁；`config/_core.py::_atomic_write` 契约是「失败即抛且保留异常类型」（`init_config()` 的 `except PermissionError` 并发容忍分支、TUI 的权限不足提示依赖类型） |
 
 > **缓存载荷语义版本（词条外，非编号约束）**：当修复改变缓存**载荷字段的含义**而非键结构时，不得只靠 TTL 自然过期——旧条目在 TTL 内会被新代码误读，使修复在缓存未过期的机器上完全失效（已发生：QDII 联接穿透修复被 7 天旧 `fund_hold_*` 条目遮蔽）。规则：生产者在载荷里盖语义版本字段，读侧把「版本不符」当未命中（丢弃重取），判据接在**每一处读缓存接缝**（含批量缓存预检与过期降级）。通用原语：`fetch_with_fallback(cache_validate=...)`。
 
@@ -3942,17 +3942,19 @@ web/ (Web 服务层，薄入口)
 | LLM 响应解析 | `llm/_api_responses.py` | `llm/api_base.py` 公共 API | llm / report | 公共常量/函数保留；内部 helper 直接导入 owner |
 | Web 生成 / 健康路由 | `web/run_generation.py`、`web/handlers_health.py` | `web/handlers.py` 仅路由聚合 | web / tests | 测试 patch 指向 owner；门面不再转出私有实现 |
 
-**存量分层例外（analysis → report/llm，冻结不新增）**：`check-import-surface` 的 `layer-inversion` 规则拦截**新增**越界；
-下列存量经例外表登记（`scripts/_import_surface_exceptions.json`，含到期日与收敛方向），到期须下沉或续期并复核理由：
+**存量分层例外（`fetcher`/`providers`/`analysis` 反向依赖上层，冻结不新增）**：`check-import-surface` 的 `layer-inversion` 规则拦截**新增**越界（规则覆盖 `analysis → report/llm`、`fetcher → report/llm/analysis`、`providers → report/llm/analysis`）；下列存量经例外表登记（`scripts/_import_surface_exceptions.json`，含到期日与收敛方向），到期须下沉或续期并复核理由：
 
-| 违规文件 | 被依赖的 report 模块 | 暂不下沉的理由 | 收敛方向 |
+| 违规文件 | 被依赖的上层模块 | 暂不下沉的理由 | 收敛方向 |
 |:---|:---|:---|:---|
-| `analysis/circuit_breaker_wrapper.py` | `report.data_status` | 指标熔断需把降级事件登记进 DegradationTracker，该类现居 report 层 | tracker 登记面（`begin_report`/`mark_*`）下沉 `core/degradation.py`，report 只留报告侧装配 |
-| `analysis/holding_change_events.py` | `report.history_snapshot` | 快照读取/去重原语在 report 侧，事件推断需按同一口径读盘 | 抽 core 级快照读取原语，report 只保留区块装配 |
-| `analysis/portfolio_evolution.py` | `report.history_snapshot` | 同上（演进趋势聚合同口径读快照） | 同上 |
-| `analysis/snapshot_diff.py` | `report.history_snapshot` | 同上（差异计算同口径取数） | 同上 |
-| `analysis/prosperity_framework.py` | `report.penetration` | 景气度评分复用穿透分类（基金→底层资产映射） | 穿透纯分类计算下沉 `analysis`，report 改为消费 |
-| `analysis/prosperity_inputs.py` | `report.penetration` | 同上（输入装配复用分类结果） | 同上 |
+| `analysis/holding_change_events.py` | `report.history_snapshot` | 读历史快照 JSON 的读取/去重原语在 report/history_snapshot.py，事件推断需按同一口径读快照 | 抽出 core 级快照读取原语（读取 + 去重 + 归一化），report 侧只保留区块装配 |
+| `analysis/portfolio_evolution.py` | `report.history_snapshot` | 同上：演进趋势聚合直接复用 report 侧快照读取原语，避免两套读盘口径 | 同 history_snapshot 原语下沉后改为引用 core |
+| `analysis/snapshot_diff.py` | `report.history_snapshot` | 同上：差异计算按 report 侧同一份快照读取实现取数 | 同 history_snapshot 原语下沉后改为引用 core |
+| `analysis/prosperity_framework.py` | `report.penetration` | 景气度评分需复用穿透分类结果（基金→底层资产映射），该分类现耦合在 report/penetration | 把穿透的纯分类计算（不含 IO/渲染）下沉 analysis，report 侧改为消费 |
+| `analysis/prosperity_inputs.py` | `report.penetration` | 同上：输入装配复用穿透分类结果 | 同上（穿透纯计算下沉后一并改引用） |
+| `fetcher/fund_fee.py`<br>`providers/tiantian_purchase.py` | `analysis.fee_schedule_model` | 解析/派生原语现居 analysis 侧，取数适配器需复用同一口径 | 把纯解析/派生原语下沉 core（如 core/fee_schedule.py、core/financial_derive.py），analysis 与 fetcher 共同消费 |
+| `fetcher/financial_indicator.py`<br>`fetcher/financial_indicator_adapters.py` | `analysis.financial_statement_derive` | 解析/派生原语现居 analysis 侧，取数适配器需复用同一口径 | 把纯解析/派生原语下沉 core（如 core/fee_schedule.py、core/financial_derive.py），analysis 与 fetcher 共同消费 |
+| `fetcher/financial_indicator_adapters.py` | `analysis.financial_indicator_extract` | 解析/派生原语现居 analysis 侧，取数适配器需复用同一口径 | 把纯解析/派生原语下沉 core（如 core/fee_schedule.py、core/financial_derive.py），analysis 与 fetcher 共同消费 |
+| `fetcher/price.py` | `report.market_value` | 交易日原语在 report/market_value 处按公共名再导出，取数侧沿用该导入路径以保持「交易日判定」单一改动点（测试与运行期同点） | 报告侧改为按模块属性调用 core.trading_calendar，测试 patch 点随之迁到 core，fetcher 直连 core 后删除该 re-export 依赖 |
 
 > 另：`core/check_sources.py` 直连 `providers/`/`fetcher/` 属**探针模块职责**（连通性检查必须在链外直呼各源），
 > 不入本规则例外表，理由记在模块 docstring；新增探针源时保持同一形态。

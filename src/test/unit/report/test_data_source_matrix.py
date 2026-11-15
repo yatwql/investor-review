@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from src.python.report.data_status import (
+from src.python.core.degradation import (
     get_tracker,
 )
 
@@ -57,7 +57,7 @@ class TestBuildDataSourceMatrixDegradedList:
 
     def _add_raw_event(self, **kwargs) -> None:
         """向 DegradationTracker 注入一条 DegradationEvent。"""
-        from src.python.report.data_status import DegradationEvent
+        from src.python.core.degradation import DegradationEvent
 
         t = get_tracker()
         ev = DegradationEvent(**kwargs)
@@ -243,7 +243,7 @@ class TestBuildDataSourceMatrixDegradedList:
 
     def test_no_events_returns_empty(self):
         """无任何事件 → 空列表。"""
-        from src.python.report.data_status import reset_tracker
+        from src.python.core.degradation import reset_tracker
 
         reset_tracker()
         matrix = self._build()
@@ -297,7 +297,7 @@ class TestBuildDataSourceCatalog:
 
     def test_used_flag_reflects_observed_events(self):
         """本次观测到事件的类别标记为已使用；未观测到的为未使用。"""
-        from src.python.report.data_status import DegradationEvent, get_tracker
+        from src.python.core.degradation import DegradationEvent, get_tracker
 
         get_tracker()._events.append(
             DegradationEvent(
@@ -373,7 +373,7 @@ class TestDataSourceCatalog:
         assert "financial_report_digest" not in row["note"]
 
     def test_used_by_category_prefix(self):
-        from src.python.report.data_status import mark_data_used
+        from src.python.core.degradation import mark_data_used
 
         rows = self._rows()
         assert rows["financial_report"]["used"] is False
@@ -404,7 +404,7 @@ class TestProviderAttribution:
         return build_data_source_matrix()
 
     def _category_event(self, source_key: str, success: bool = True) -> None:
-        from src.python.report.data_status import DegradationEvent, get_tracker
+        from src.python.core.degradation import DegradationEvent, get_tracker
 
         get_tracker()._events.append(
             DegradationEvent(
@@ -421,7 +421,7 @@ class TestProviderAttribution:
 
     def test_hithink_fallback_attributed_to_category_row(self):
         """同花顺接管行情时，命中源列必须点名同花顺（而非只显示类别健康度）。"""
-        from src.python.report.data_status import mark_provider_used
+        from src.python.core.degradation import mark_provider_used
 
         self._category_event("price_price_stock_600900")
         mark_provider_used("price_stock", "hithink", "同花顺金融数据")
@@ -431,7 +431,7 @@ class TestProviderAttribution:
 
     def test_sentiment_row_from_provider_hits_alone(self):
         """市场情绪只有 provider 级归属（无类别事件）时仍须成行且点名同花顺。"""
-        from src.python.report.data_status import mark_provider_used
+        from src.python.core.degradation import mark_provider_used
 
         mark_provider_used("sentiment", "hithink", "同花顺金融数据")
         mark_provider_used("sentiment", "hithink", "同花顺金融数据")
@@ -443,7 +443,7 @@ class TestProviderAttribution:
 
     def test_provider_hits_aggregate_across_data_types(self):
         """同一类别的多个链路数据类型汇入同一行（行情含场内/场外两条链）。"""
-        from src.python.report.data_status import mark_provider_used
+        from src.python.core.degradation import mark_provider_used
 
         mark_provider_used("price_stock", "tencent", "腾讯财经")
         mark_provider_used("price_fund_otc", "eastmoney", "东方财富")
@@ -459,7 +459,7 @@ class TestProviderAttribution:
 
     def test_history_data_types_mapped_to_history_category(self):
         """历史日 K 无类别级事件，其行由 provider 归属单独成立。"""
-        from src.python.report.data_status import mark_provider_used
+        from src.python.core.degradation import mark_provider_used
 
         mark_provider_used("history_stock", "tencent", "腾讯财经")
         row = next(r for r in self._build() if r["key"] == "history")
@@ -468,7 +468,7 @@ class TestProviderAttribution:
 
     def test_index_history_mapped_to_index_category(self):
         """指数历史日 K 归入「指数数据」（与 index_history_ 类别前缀同口径）。"""
-        from src.python.report.data_status import mark_provider_used
+        from src.python.core.degradation import mark_provider_used
 
         mark_provider_used("history_index", "tencent", "腾讯财经")
         row = next(r for r in self._build() if r["key"] == "index")
@@ -522,7 +522,7 @@ class TestCatalogFallbackAndSentimentRows:
         assert self._rows()["sentiment"]["auth"] == "需 key（未配置）"
 
     def test_sentiment_used_tracks_category_mark(self):
-        from src.python.report.data_status import mark_data_used
+        from src.python.core.degradation import mark_data_used
 
         assert self._rows()["sentiment"]["used"] is False
         mark_data_used("sentiment")
@@ -530,7 +530,7 @@ class TestCatalogFallbackAndSentimentRows:
 
     def test_history_used_follows_provider_hits(self):
         """历史走势只登记缓存键：其「本次使用」以 provider 归属为正面证据。"""
-        from src.python.report.data_status import mark_provider_used
+        from src.python.core.degradation import mark_provider_used
 
         assert self._rows()["history"]["used"] is False
         mark_provider_used("history_stock", "tencent", "腾讯财经")
@@ -542,7 +542,7 @@ class TestFundFlowStatusVisibility:
 
     def test_fund_flow_failure_marks_category(self):
         from src.python.report.data_source_matrix import build_data_source_matrix
-        from src.python.report.data_status import reset_tracker
+        from src.python.core.degradation import reset_tracker
 
         reset_tracker()
         tracker = get_tracker()

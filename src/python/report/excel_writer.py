@@ -401,7 +401,7 @@ def _write_data_status_foot(
         return start_row or ws.max_row + 1
 
     # 延迟导入避免循环依赖（report 内模块互相引用）
-    from src.python.report.data_status import TIER_PREFIX  # noqa: PLC0415
+    from src.python.core.degradation import TIER_PREFIX  # noqa: PLC0415
 
     row = start_row if start_row is not None else ws.max_row + 2
 

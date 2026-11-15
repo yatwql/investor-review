@@ -88,7 +88,7 @@ def fetch_industry_data(code: str) -> dict | None:
         {code, industry, industry_id, concepts, concept_ids, pe, pb, market_cap}
         失败返回 None
     """
-    from src.python.report.data_status import get_tracker
+    from src.python.core.degradation import get_tracker
 
     _t = get_tracker()
     _src_key = f"industry_{code.strip()}"

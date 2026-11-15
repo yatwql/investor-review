@@ -5,6 +5,10 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 
+from src.python.core.degradation import (
+    TERMINAL_STALENESS_CONSEQUENCE as _TERMINAL_STALENESS_CONSEQUENCE,
+)
+
 logger = logging.getLogger("invest")
 
 
@@ -46,8 +50,9 @@ def _validate_bars(bars: list[dict]) -> list[str]:
 #: 终点滞后的口径提示（**唯一文案源**）：报告章内与 Excel 页签、数据源状态词均取自此。
 #: 分段拼接以适配不同渲染器的数字占位（标的数/最大滞后天数由调用方填入）。
 TERMINAL_STALENESS_HEADLINE = "{count} 只标的净值落后组合终点至多 {max_lag} 个交易日，走势终值与最新市值口径不同"
-#: 后果句：与 headline 一起组成完整口径提示（两端呈现必须一字不差，避免同一事实两种说法）
-TERMINAL_STALENESS_CONSEQUENCE = "末端日收益与最大回撤会偏低，终点附近的数字只作参考"
+#: 后果句：与 headline 一起组成完整口径提示（两端呈现必须一字不差，避免同一事实两种说法）；
+#: 文案源在 `core/degradation.py`（数据源状态词同用此句），本模块只再导出
+TERMINAL_STALENESS_CONSEQUENCE = _TERMINAL_STALENESS_CONSEQUENCE
 
 
 def terminal_staleness_caveat(count: int, max_lag: int) -> str:

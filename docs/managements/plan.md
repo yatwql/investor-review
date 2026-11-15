@@ -1,7 +1,7 @@
 # 投资复盘助手 — 实现计划
 
 > 文档版本：0.18.2-dev
-> **编号源**：`plan-next = 256`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-251，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`plan-next = 258`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-251，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -46,6 +46,21 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 - [ ] 保存自动预览：确认框含写回后条数与新增 / 更新 / 移除计数、逐笔清单、`.bak` 提示；写入成功提示含备份文件名
 - [ ] 空态禁用与流水记忆：清单为空时保存 / 预览 / 清空按钮禁用、预览框隐藏；勾「同时记入交易流水」后刷新页面仍保留
 - [ ] 并发闸门：外部改过持仓文件后保存 → `HOLDINGS_STALE` 提示并自动刷新总览
+
+#### `plan-256` 交易日原语单点化（消除 fetcher → report 反向依赖）
+
+**现状**：`fetcher/price.py` 的价格新鲜度判定沿用 `report/market_value` 的交易日函数再导出（运行期与测试共用一个改动点），
+分层规则把它登记为冻结例外（`check-import-surface` 的 `layer-inversion`，到期 2027-06-30）。
+**动作**：`report/market_value` 内部改为按模块属性调用 `core/trading_calendar`；测试 patch 点随之迁到 core 单点；`fetcher/price`
+直连 core 后删除该 re-export 依赖与例外登记。
+**验收**：`check-import-surface --ci` 无 fetcher→report 命中；`report/market_value` 相关单测（含 patch 点）全绿。
+
+#### `plan-257` 报告生成编排函数拆分
+
+**现状**：`report/excel_generator.generate_excel_report` 单函数 479 行、分支 92；`report/_generation_full._generate_report_full` 410 行、
+`report/html_writer.write_html_report` 357 行。文件行数未触红线，故未入门禁，但改动一处需通读全函数。
+**动作**：按页签族提取子函数（明细/汇总/分析/LLM 四组），入参收敛为装配好的上下文对象，保持产物逐字节不变。
+**验收**：拆分前后产物 SHA 同输入一致；P0/P1 门禁全绿。
 
 ### P2 — 下一阶段就绪（满足条件即开工）
 

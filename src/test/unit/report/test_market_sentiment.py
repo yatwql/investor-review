@@ -45,7 +45,7 @@ def _patch_sources(monkeypatch, lhb=_LHB, ladder=_LADDER, cached=None, missing: 
         monkeypatch.setattr(
             ms, "_fetch_limit_up_ladder", lambda: calls.__setitem__("ladder", calls["ladder"] + 1) or ladder
         )
-    monkeypatch.setattr("src.python.report.data_status.mark_data_used", lambda key: None, raising=False)
+    monkeypatch.setattr("src.python.core.degradation.mark_data_used", lambda key: None, raising=False)
     return calls, {}
 
 

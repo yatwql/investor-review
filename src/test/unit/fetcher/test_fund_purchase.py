@@ -262,7 +262,7 @@ class TestDataStatusTracking:
 
     @pytest.fixture()
     def tracker(self, monkeypatch: pytest.MonkeyPatch):
-        from src.python.report import data_status
+        from src.python.core import degradation as data_status
 
         mock = MagicMock(name="tracker")
         monkeypatch.setattr(data_status, "get_tracker", lambda: mock)
