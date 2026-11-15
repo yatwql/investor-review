@@ -83,14 +83,6 @@
       "reason": "解析/派生原语现居 analysis 侧，取数适配器需复用同一口径",
       "expiry": "2027-06-30",
       "replacement": "把纯解析/派生原语下沉 core（如 core/fee_schedule.py、core/financial_derive.py），analysis 与 fetcher 共同消费"
-    },
-    {
-      "path": "src/python/fetcher/price.py",
-      "name": "src.python.report.market_value",
-      "owner": "fetcher（价格新鲜度判定）",
-      "reason": "交易日原语在 report/market_value 处按公共名再导出，取数侧沿用该导入路径以保持「交易日判定」单一改动点（测试与运行期同点）",
-      "expiry": "2027-06-30",
-      "replacement": "报告侧改为按模块属性调用 core.trading_calendar，测试 patch 点随之迁到 core，fetcher 直连 core 后删除该 re-export 依赖"
     }
   ]
 }

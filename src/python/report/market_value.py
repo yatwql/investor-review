@@ -31,10 +31,12 @@ from src.python.core.concurrency import worker_pool
 from src.python.core.models import Holding
 from src.python.core.provider_registry import FetchStrategy, get_registry
 
-# 交易日历原语已下沉至 core/trading_calendar.py——fetcher / analysis 等下层同样需要
-# 交易日判定，而 report 层不得被下层反向依赖。此处按原公共名重新导出，
-# 保持既有导入路径不变（report/html_writer.py、report/summary.py、
-# fetcher/price.py、report/orchestrator.py 等）。
+# 交易日历原语真源在 core/trading_calendar.py——fetcher / analysis 等下层同样需要
+# 交易日判定，而 report 层不得被下层反向依赖。此处按原公共名再导出（保持
+# report/html_writer.py、report/summary.py、report/orchestrator.py 等既有导入路径），
+# 但**模块内部一律按属性调用** `_trading_calendar.*`：运行期与测试共用同一个改动点
+# （patch `core.trading_calendar`），导入路径与判定点因此各自单源。
+from src.python.core import trading_calendar as _trading_calendar
 from src.python.core.trading_calendar import (
     _count_trading_days_back,
     get_last_trading_day,
@@ -181,7 +183,7 @@ def price_update_status(details: list[DetailRow], trading_day: str) -> tuple[int
     """
     total = len(details)
     updated = 0
-    prev_td = get_prev_trading_day(trading_day)
+    prev_td = _trading_calendar.get_prev_trading_day(trading_day)
     for d in details:
         if d.source_api == "tencent":
             # 场内资产：需已收市（非交易时段、非午间休市）且净值日期等于交易日
@@ -219,7 +221,7 @@ def is_midday_break() -> bool:
 def _determine_price_type(source_api: str, nav_date: str, trading_day: str) -> str:
     """判断取价方式。
 
-    "T" 指"所属交易日"（而非自然日），由 get_last_trading_day() 确定。
+    "T" 指"所属交易日"（而非自然日），由 _trading_calendar.get_last_trading_day() 确定。
 
     Tencent（场内股票/ETF）：
       - 交易时段 → "场内实时价"
@@ -251,7 +253,7 @@ def _determine_price_type(source_api: str, nav_date: str, trading_day: str) -> s
         # 已收市，用交易日作为 T
         if not nav_date:
             return "场内收盘价(--)"
-        prev_td = get_prev_trading_day(trading_day)
+        prev_td = _trading_calendar.get_prev_trading_day(trading_day)
         if nav_date == trading_day:
             return "场内收盘价(T)"
         elif prev_td and nav_date == prev_td:
@@ -262,7 +264,7 @@ def _determine_price_type(source_api: str, nav_date: str, trading_day: str) -> s
     if not nav_date:
         return "官方净值(--)"
 
-    prev_td = get_prev_trading_day(trading_day)
+    prev_td = _trading_calendar.get_prev_trading_day(trading_day)
     if nav_date == trading_day:
         return "官方净值(T)"
     elif prev_td and nav_date == prev_td:
@@ -278,7 +280,7 @@ def _determine_price_type(source_api: str, nav_date: str, trading_day: str) -> s
         pass
 
     # 以交易日（而非自然日）计算 N，正确处理周末/节假日跳越
-    td_offset = _count_trading_days_back(trading_day, nav_date)
+    td_offset = _trading_calendar._count_trading_days_back(trading_day, nav_date)
     if td_offset is not None and 2 <= td_offset <= 5:
         return f"官方净值(T-{td_offset})"
     elif td_offset is not None and td_offset > 5:
@@ -320,7 +322,7 @@ def _compute_detail_row(h: Holding, mkt: dict | None) -> DetailRow:
     nav_date = mkt.get("price_date", "")
     source = mkt.get("source", "--")
     source_api = mkt.get("source_api", "")
-    price_type = _determine_price_type(source_api, nav_date, get_last_trading_day())
+    price_type = _determine_price_type(source_api, nav_date, _trading_calendar.get_last_trading_day())
 
     cost = round(h.cost_price * h.shares, 2)
     mv = round(price * h.shares, 2)
@@ -332,7 +334,7 @@ def _compute_detail_row(h: Holding, mkt: dict | None) -> DetailRow:
     if source_api == "tencent" and yclose_usable:
         today_profit = round((price - yclose) * h.shares, 2)
     elif nav_date and yclose_usable:
-        trading_day = get_last_trading_day()
+        trading_day = _trading_calendar.get_last_trading_day()
         today_profit = round((price - yclose) * h.shares, 2)
         # 场外净值未到当日（QDII T-1/T-2 等滞后）：该值是「净值日当日」涨跌，
         # 不是今日涨跌——照实呈现（不归零误导「没涨没跌」）但标参考、不计入合计。

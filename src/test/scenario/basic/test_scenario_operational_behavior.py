@@ -54,7 +54,7 @@ class TestS29DividendSplit(unittest.TestCase):
             "name": "长江电力",
             "code": "600900",
         }
-        with patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"):
+        with patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"):
             with patch("src.python.report.market_value.is_market_open", return_value=False):
                 row = _compute_detail_row(h, mkt)
 
@@ -79,7 +79,7 @@ class TestS29DividendSplit(unittest.TestCase):
             "name": "长江电力",
             "code": "600900",
         }
-        with patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"):
+        with patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"):
             with patch("src.python.report.market_value.is_market_open", return_value=False):
                 row = _compute_detail_row(h, mkt)
 
@@ -104,7 +104,7 @@ class TestS29DividendSplit(unittest.TestCase):
             "name": "某股票",
             "code": "600111",
         }
-        with patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"):
+        with patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"):
             with patch("src.python.report.market_value.is_market_open", return_value=False):
                 row = _compute_detail_row(h, mkt)
 
@@ -140,7 +140,7 @@ class TestS30DcaCostAveraging(unittest.TestCase):
             "name": "沪深300ETF",
             "code": "510300",
         }
-        with patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"):
+        with patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"):
             with patch("src.python.report.market_value.is_market_open", return_value=False):
                 row = _compute_detail_row(h, mkt)
 
@@ -171,7 +171,7 @@ class TestS30DcaCostAveraging(unittest.TestCase):
             "name": "中证500ETF",
             "code": "510500",
         }
-        with patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"):
+        with patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"):
             with patch("src.python.report.market_value.is_market_open", return_value=False):
                 row = _compute_detail_row(h, mkt)
 
@@ -192,7 +192,7 @@ class TestS30DcaCostAveraging(unittest.TestCase):
             "name": "科创50ETF",
             "code": "588000",
         }
-        with patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"):
+        with patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"):
             with patch("src.python.report.market_value.is_market_open", return_value=False):
                 row = _compute_detail_row(h, mkt)
 
@@ -228,7 +228,7 @@ class TestS31PartialSell(unittest.TestCase):
             "name": "贵州茅台",
             "code": "600519",
         }
-        with patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"):
+        with patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"):
             with patch("src.python.report.market_value.is_market_open", return_value=False):
                 row = _compute_detail_row(h, mkt)
 
@@ -252,7 +252,7 @@ class TestS31PartialSell(unittest.TestCase):
             "name": "工商银行",
             "code": "601398",
         }
-        with patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"):
+        with patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"):
             with patch("src.python.report.market_value.is_market_open", return_value=False):
                 row = _compute_detail_row(h, mkt)
 
@@ -274,7 +274,7 @@ class TestS31PartialSell(unittest.TestCase):
             "name": "工商银行",
             "code": "601398",
         }
-        with patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"):
+        with patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"):
             with patch("src.python.report.market_value.is_market_open", return_value=False):
                 row = _compute_detail_row(h, mkt)
 
@@ -311,7 +311,7 @@ class TestS32CrossAccount(unittest.TestCase):
             "name": "长江电力",
             "code": "600900",
         }
-        with patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"):
+        with patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"):
             with patch("src.python.report.market_value.is_market_open", return_value=False):
                 row1 = _compute_detail_row(h1, mkt)
                 row2 = _compute_detail_row(h2, mkt)
@@ -368,7 +368,7 @@ class TestS32CrossAccount(unittest.TestCase):
             "name": "贵州茅台",
             "code": "600519",
         }
-        with patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"):
+        with patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"):
             with patch("src.python.report.market_value.is_market_open", return_value=False):
                 row1 = _compute_detail_row(h1, mkt1)
                 row2 = _compute_detail_row(h2, mkt2)
@@ -419,7 +419,7 @@ class TestS33IpoPendingListing(unittest.TestCase):
             "name": "某新股",
             "code": "789001",
         }
-        with patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"):
+        with patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"):
             with patch("src.python.report.market_value.is_market_open", return_value=False):
                 row = _compute_detail_row(h, mkt)
 
@@ -444,7 +444,7 @@ class TestS33IpoPendingListing(unittest.TestCase):
             "name": "新股A",
             "code": "789001",
         }
-        with patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"):
+        with patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"):
             with patch("src.python.report.market_value.is_market_open", return_value=False):
                 row1 = _compute_detail_row(h1, mkt1)
                 row2 = _compute_detail_row(h2, None)

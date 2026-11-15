@@ -55,8 +55,8 @@ def _gate(
     with (
         patch("src.python.core.market_hours.is_market_open", return_value=market_open),
         patch("src.python.core.market_hours.is_otc_nav_disclosed", return_value=nav_disclosed),
-        patch("src.python.report.market_value.get_last_trading_day", return_value=_TODAY),
-        patch("src.python.report.market_value.get_prev_trading_day", side_effect=_prev_day),
+        patch("src.python.core.trading_calendar.get_last_trading_day", return_value=_TODAY),
+        patch("src.python.core.trading_calendar.get_prev_trading_day", side_effect=_prev_day),
         patch("src.python.fetcher.price._cache_captured_at", side_effect=_fake_captured),
         patch("src.python.fetcher.price._trading_day_close_epoch", return_value=_CLOSE_TS),
         patch("src.python.fetcher.price.time.time", return_value=_CLOSE_TS + 1800),

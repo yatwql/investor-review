@@ -47,7 +47,7 @@ class TestCsvFormulaInjection(unittest.TestCase):
             "source": "腾讯财经",
             "source_api": "tencent",
         }
-        with patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-01"):
+        with patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-01"):
             with patch("src.python.report.market_value.is_market_open", return_value=False):
                 detail = _compute_detail_row(h, mkt)
         # 名称原样保留，不被解释为公式
@@ -66,7 +66,7 @@ class TestCsvFormulaInjection(unittest.TestCase):
             "source": "腾讯财经",
             "source_api": "tencent",
         }
-        with patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-01"):
+        with patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-01"):
             with patch("src.python.report.market_value.is_market_open", return_value=False):
                 detail = _compute_detail_row(h, mkt)
         self.assertEqual(detail.name, "+123456")
@@ -93,7 +93,7 @@ class TestXssCacheInjection(unittest.TestCase):
             "source": "腾讯财经",
             "source_api": "tencent",
         }
-        with patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-01"):
+        with patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-01"):
             with patch("src.python.report.market_value.is_market_open", return_value=False):
                 detail = _compute_detail_row(h, mkt)
         self.assertIn("<script>", detail.name)
@@ -155,7 +155,7 @@ class TestXssCacheInjection(unittest.TestCase):
             "source": "腾讯财经",
             "source_api": "tencent",
         }
-        with patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-01"):
+        with patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-01"):
             with patch("src.python.report.market_value.is_market_open", return_value=False):
                 detail = _compute_detail_row(h, mkt)
         self.assertIn("img src", detail.name)

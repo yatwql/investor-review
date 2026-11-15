@@ -44,7 +44,7 @@ class TestTodayProfitTencentAlways(unittest.TestCase):
         self.addCleanup(self._patch_open.stop)
         self.addCleanup(self._patch_midday.stop)
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     def test_tencent_always_calculates(self, mock_open, mock_td):
         """Tencent 无论 nav_date 是什么 → today_profit 始终计算。"""
@@ -62,7 +62,7 @@ class TestTodayProfitTencentAlways(unittest.TestCase):
         self.assertEqual(detail.today_profit, expected)
         self.assertGreater(detail.today_profit, 0)
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     def test_tencent_empty_nav_date_calculates(self, mock_open, mock_td):
         """Tencent, nav_date 为空 → today_profit 仍计算。"""
@@ -79,7 +79,7 @@ class TestTodayProfitTencentAlways(unittest.TestCase):
         expected = round((25.5 - 25.0) * 100, 2)
         self.assertEqual(detail.today_profit, expected)
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     def test_tencent_qdii_always_calculates(self, mock_td):
         """Tencent QDII ETF → today_profit 始终计算（场内逻辑）。"""
         mock_td.return_value = "2026-06-30"
@@ -105,7 +105,7 @@ class TestTodayProfitEdgeCases(unittest.TestCase):
         self._patch_td.start()
         self.addCleanup(self._patch_td.stop)
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     def test_no_price_data(self, mock_open, mock_td):
         """获取行情失败（price=0）→ today_profit = 0。"""
@@ -122,7 +122,7 @@ class TestTodayProfitEdgeCases(unittest.TestCase):
         self.assertEqual(detail.today_profit, 0.0)
         self.assertFalse(detail.today_profit_reference)
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     def test_today_profit_negative(self, mock_open, mock_td):
         """本日下跌 → today_profit 为负值。"""
@@ -150,7 +150,7 @@ class TestPremiumInWriteSheet(unittest.TestCase):
         self._patch_td.start()
         self.addCleanup(self._patch_td.stop)
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     def test_premium_in_excel_row(self, mock_open, mock_td):
         """写入 Excel 行时溢价率列为 '--'。"""
@@ -180,7 +180,7 @@ class TestForeignDenominatedMarketValue(unittest.TestCase):
         self._patch_td.start()
         self.addCleanup(self._patch_td.stop)
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     def test_qdii_price_in_rmb_from_api(self, mock_open, mock_td):
         """QDII 价格来自 API（已为人民币计值），市值计算正确。"""
@@ -198,7 +198,7 @@ class TestForeignDenominatedMarketValue(unittest.TestCase):
         self.assertAlmostEqual(detail.market_value, 210.0, delta=0.01)
         self.assertAlmostEqual(detail.today_profit, 10.0, delta=0.01)
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     def test_qdii_today_profit_t1(self, mock_td):
         """QDII 净值日期=T-1 → 显示 T-1 涨跌并标参考（不计入组合合计）。"""
         mock_td.return_value = "2026-07-01"
@@ -215,7 +215,7 @@ class TestForeignDenominatedMarketValue(unittest.TestCase):
         self.assertTrue(detail.today_profit_reference)
         self.assertAlmostEqual(detail.today_profit, round((2.1 - 2.0) * 100, 2))
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     def test_price_update_status_qdii_t1_updated(self, mock_td):
         """price_update_status 正确识别 QDII T-1 为已更新。"""
         mock_td.return_value = "2026-07-01"

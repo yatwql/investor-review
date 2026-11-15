@@ -106,7 +106,7 @@ class _SheetMocks:
             patch("src.python.report.excel_writer.save_workbook", return_value="reports/test.xlsx"),
             patch("src.python.report.holdings_detail_sheet.write_holdings_detail_sheet", self.write_holdings_detail),
             patch("src.python.report.market_value.classify_holdings", self.classify_holdings),
-            patch("src.python.report.market_value.get_last_trading_day", self.get_last_trading_day),
+            patch("src.python.core.trading_calendar.get_last_trading_day", self.get_last_trading_day),
             patch("src.python.report.market_value.price_update_status", self.price_update_status),
             patch("src.python.report.penetration.compute_penetration_top10", self.compute_penetration),
             patch("src.python.report.penetration_sheet.write_penetration_sheet", self.write_penetration),

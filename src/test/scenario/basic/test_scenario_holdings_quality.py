@@ -56,7 +56,7 @@ class TestS0aZeroSharesSkipped(unittest.TestCase):
             "code": "600999",
         }
         with (
-            patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"),
+            patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"),
             patch("src.python.report.market_value.datetime") as mock_dt,
         ):
             mock_dt.now.return_value = datetime(2026, 7, 3, 14, 0)
@@ -97,7 +97,7 @@ class TestS0aZeroSharesSkipped(unittest.TestCase):
             "code": "600999",
         }
         with (
-            patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"),
+            patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"),
             patch("src.python.report.market_value.datetime") as mock_dt,
         ):
             mock_dt.now.return_value = datetime(2026, 7, 3, 14, 0)
@@ -128,7 +128,7 @@ class TestS0aZeroSharesSkipped(unittest.TestCase):
         }
 
         with (
-            patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"),
+            patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"),
             patch("src.python.report.market_value.datetime") as mock_dt,
         ):
             mock_dt.now.return_value = datetime(2026, 7, 3, 14, 0)
@@ -398,7 +398,7 @@ class TestS0dSpecialCharacters(unittest.TestCase):
                     "code": code,
                 }
                 with (
-                    patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"),
+                    patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"),
                     patch("src.python.report.market_value.datetime") as mock_dt,
                 ):
                     mock_dt.now.return_value = datetime(2026, 7, 3, 14, 0)
@@ -445,7 +445,7 @@ class TestS0dSpecialCharacters(unittest.TestCase):
         from src.python.report.holdings_detail_sheet import _write_market_value_block
 
         with (
-            patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"),
+            patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"),
             patch("src.python.report.market_value.datetime") as mock_dt,
         ):
             mock_dt.now.return_value = datetime(2026, 7, 3, 14, 0)

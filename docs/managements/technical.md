@@ -3954,7 +3954,6 @@ web/ (Web 服务层，薄入口)
 | `fetcher/fund_fee.py`<br>`providers/tiantian_purchase.py` | `analysis.fee_schedule_model` | 解析/派生原语现居 analysis 侧，取数适配器需复用同一口径 | 把纯解析/派生原语下沉 core（如 core/fee_schedule.py、core/financial_derive.py），analysis 与 fetcher 共同消费 |
 | `fetcher/financial_indicator.py`<br>`fetcher/financial_indicator_adapters.py` | `analysis.financial_statement_derive` | 解析/派生原语现居 analysis 侧，取数适配器需复用同一口径 | 把纯解析/派生原语下沉 core（如 core/fee_schedule.py、core/financial_derive.py），analysis 与 fetcher 共同消费 |
 | `fetcher/financial_indicator_adapters.py` | `analysis.financial_indicator_extract` | 解析/派生原语现居 analysis 侧，取数适配器需复用同一口径 | 把纯解析/派生原语下沉 core（如 core/fee_schedule.py、core/financial_derive.py），analysis 与 fetcher 共同消费 |
-| `fetcher/price.py` | `report.market_value` | 交易日原语在 report/market_value 处按公共名再导出，取数侧沿用该导入路径以保持「交易日判定」单一改动点（测试与运行期同点） | 报告侧改为按模块属性调用 core.trading_calendar，测试 patch 点随之迁到 core，fetcher 直连 core 后删除该 re-export 依赖 |
 
 > 另：`core/check_sources.py` 直连 `providers/`/`fetcher/` 属**探针模块职责**（连通性检查必须在链外直呼各源），
 > 不入本规则例外表，理由记在模块 docstring；新增探针源时保持同一形态。

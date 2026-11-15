@@ -77,7 +77,7 @@ class TestStrategyMarketClosed:
     """非交易时段：CACHE_ONLY → 走缓存，不发起 HTTP。"""
 
     @patch("src.python.report.market_value.is_market_open", return_value=False)
-    @patch("src.python.report.market_value.get_last_trading_day", return_value="2026-06-26")
+    @patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-06-26")
     @patch("src.python.report.market_value.fetch_market_data")
     def test_a_share_cache_only_skips_http(self, mock_fetch, mock_ltd, mock_open):
         """非交易时段，A 股持仓走缓存，fetch_market_data 不被调用。
@@ -122,7 +122,7 @@ class TestStrategyCircuitBreaker:
     """全链熔断 → CACHE_ONLY。"""
 
     @patch("src.python.report.market_value.is_market_open", return_value=True)
-    @patch("src.python.report.market_value.get_last_trading_day", return_value="2026-06-26")
+    @patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-06-26")
     @patch("src.python.report.market_value.fetch_market_data")
     @patch("src.python.core.provider_registry.time")
     def test_chain_broken_reads_cache(self, mock_time, mock_fetch, mock_ltd, mock_open):
@@ -155,7 +155,7 @@ class TestStrategyHealthyChain:
 
     @patch("src.python.report.market_value.is_market_open", return_value=True)
     @patch("src.python.report.market_value.is_midday_break", return_value=False)
-    @patch("src.python.report.market_value.get_last_trading_day", return_value="2026-06-26")
+    @patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-06-26")
     @patch("src.python.report.market_value.fetch_market_data")
     def test_healthy_chain_live_fetch(self, mock_fetch, mock_ltd, mock_midday, mock_open):
         """交易时段 + 链健康 → 调用 fetch_market_data。"""
@@ -176,7 +176,7 @@ class TestStrategyQDII:
 
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     @patch("src.python.report.market_value.is_midday_break", return_value=False)
-    @patch("src.python.report.market_value.get_last_trading_day", return_value="2026-06-26")
+    @patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-06-26")
     @patch("src.python.report.market_value.fetch_market_data")
     def test_qdii_live_fetch_when_market_closed(self, mock_fetch, mock_ltd, mock_midday, mock_open):
         """非交易时段，QDII 仍调用 fetch_market_data。"""
@@ -195,7 +195,7 @@ class TestStrategyMixed:
 
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     @patch("src.python.report.market_value.is_midday_break", return_value=False)
-    @patch("src.python.report.market_value.get_last_trading_day", return_value="2026-06-26")
+    @patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-06-26")
     @patch("src.python.report.market_value.fetch_market_data")
     def test_mixed_qdii_and_a_share(self, mock_fetch, mock_ltd, mock_midday, mock_open):
         """非交易时段：A 股走缓存，QDII 走 HTTP。"""
@@ -228,7 +228,7 @@ class TestStrategyEmptyChain:
 
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     @patch("src.python.report.market_value.is_midday_break", return_value=False)
-    @patch("src.python.report.market_value.get_last_trading_day", return_value="2026-06-26")
+    @patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-06-26")
     @patch("src.python.report.market_value.fetch_market_data")
     def test_empty_chain_defaults_to_live_fetch(self, mock_fetch, mock_ltd, mock_midday, mock_open):
         """不调用 register_default_chains 时，chain 为空 → 回退 LIVE_FETCH。"""
@@ -246,7 +246,7 @@ class TestStrategyLogging:
     """策略选择日志和计数。"""
 
     @patch("src.python.report.market_value.is_market_open", return_value=False)
-    @patch("src.python.report.market_value.get_last_trading_day", return_value="2026-06-26")
+    @patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-06-26")
     @patch("src.python.report.market_value.fetch_market_data")
     def test_cache_only_logged_no_http(self, mock_fetch, mock_ltd, mock_open, caplog):
         """CACHE_ONLY 路径不产生 HTTP 调用日志，不统计为失败。

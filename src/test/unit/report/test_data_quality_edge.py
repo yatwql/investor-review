@@ -78,7 +78,7 @@ def _make_detail_row(code: str, market_value: float = 1000.0, name: str = "持�
 class TestSuspendedStock(unittest.TestCase):
     """停牌股票：行情无更新，today_profit = 0。"""
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     def test_suspended_stock_price_unchanged(self, mock_open, mock_td):
         """停牌股票（price == yesterday_close）→ today_profit = 0。"""
@@ -96,7 +96,7 @@ class TestSuspendedStock(unittest.TestCase):
         detail = _compute_detail_row(h, mkt)
         self.assertEqual(detail.today_profit, 0.0)
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     def test_suspended_stock_zero_price(self, mock_open, mock_td):
         """停牌股票（price=0）→ 市值为 0，today_profit=0。"""
@@ -115,7 +115,7 @@ class TestSuspendedStock(unittest.TestCase):
         self.assertEqual(detail.market_value, 0.0)
         self.assertEqual(detail.today_profit, 0.0)
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     def test_suspended_stock_stale_price_type(self, mock_open, mock_td):
         """停牌股票 → price_type 为场内收盘价(T-1) 或更早。"""
@@ -341,7 +341,7 @@ class TestETFSuperManyHoldings(unittest.TestCase):
 class TestNegativePriceNav(unittest.TestCase):
     """负价格/净值场景。"""
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     def test_negative_price_market_value(self, mock_open, mock_td):
         """负价格 → 市值 = 负值，计算不崩溃。"""
@@ -360,7 +360,7 @@ class TestNegativePriceNav(unittest.TestCase):
         self.assertAlmostEqual(detail.market_value, -500.0)
         self.assertAlmostEqual(detail.today_profit, -1500.0)
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     def test_negative_yclose(self, mock_open, mock_td):
         """昨日收盘为负 → today_profit 计算不崩溃。"""
@@ -408,7 +408,7 @@ class TestNegativePriceNav(unittest.TestCase):
 class TestLowLiquidity(unittest.TestCase):
     """极低流动性资产。"""
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     def test_zero_volume_price_no_change(self, mock_open, mock_td):
         """极低流动性（price==yclose，无波动）→ today_profit=0。"""
@@ -427,7 +427,7 @@ class TestLowLiquidity(unittest.TestCase):
         self.assertEqual(detail.today_profit, 0.0)
         self.assertEqual(detail.profit, 0.0)
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     def test_sub_cent_price_change(self, mock_open, mock_td):
         """价格变动不足 1 分钱 → 小数精度正确。"""
@@ -556,7 +556,7 @@ class TestSameFundMultiShare(unittest.TestCase):
 class TestCrossMarketSuspension(unittest.TestCase):
     """港股通/A 股跨市场停牌时差。"""
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     def test_a_share_suspended_h_trade_normal(self, mock_open, mock_td):
         """A 股停牌但港股交易 → 各自处理，不互扰。"""
@@ -590,7 +590,7 @@ class TestCrossMarketSuspension(unittest.TestCase):
         # 港股正常 → today_profit>0
         self.assertGreater(h_detail.today_profit, 0)
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     def test_hk_suspended_a_trade_normal(self, mock_open, mock_td):
         """港股停牌但 A 股交易 → 各自处理，不互扰。"""

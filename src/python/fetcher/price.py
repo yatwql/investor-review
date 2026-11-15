@@ -293,7 +293,7 @@ def _price_cache_fresh(
     """
     try:
         from src.python.core.market_hours import is_market_open as _mh_open
-        from src.python.report.market_value import get_last_trading_day as _gtd
+        from src.python.core.trading_calendar import get_last_trading_day as _gtd
 
         if _mh_open():
             return True
@@ -303,7 +303,7 @@ def _price_cache_fresh(
         td = _gtd()
         if data_type in _OTC_NAV_ROUTES:
             from src.python.core.market_hours import is_otc_nav_disclosed as _nav_disclosed
-            from src.python.report.market_value import get_prev_trading_day as _gp
+            from src.python.core.trading_calendar import get_prev_trading_day as _gp
 
             hint = name or data.get("name", "")
             # 披露时点前「当日净值」尚未产生：阈值整体回退一档（国内场外 T-1、
@@ -388,7 +388,7 @@ def _fetch_price_with_cache_refresh(
 
     if r is not None and not _price_cache_fresh(r, data_type, expected_name, cache_key):
         from src.python.cache import clear as _cache_clear
-        from src.python.report.market_value import get_last_trading_day as _gtd
+        from src.python.core.trading_calendar import get_last_trading_day as _gtd
 
         _td = _gtd()
         logger.debug("价格缓存来自 %s（交易日 %s），跨日/盘中残留，强制刷新", r.get("price_date", "?"), _td)

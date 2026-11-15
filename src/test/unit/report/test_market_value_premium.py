@@ -69,7 +69,7 @@ class TestDeterminePriceType(unittest.TestCase):
     @patch("src.python.report.market_value.is_midday_break", return_value=False)
     def test_tencent_closed_no_nav_date(self, _, __):
         """tencent + 已收市 + 无净值日期 → 场内收盘价(--)。"""
-        with patch("src.python.report.market_value.get_prev_trading_day", return_value=self.prev):
+        with patch("src.python.core.trading_calendar.get_prev_trading_day", return_value=self.prev):
             result = mv._determine_price_type("tencent", "", self.td)
             self.assertEqual(result, "场内收盘价(--)")
 
@@ -84,7 +84,7 @@ class TestDeterminePriceType(unittest.TestCase):
     @patch("src.python.report.market_value.is_midday_break", return_value=False)
     def test_tencent_closed_nav_prev(self, _, __):
         """tencent + 已收市 + nav_date == T-1 → 场内收盘价(T-1)。"""
-        with patch("src.python.report.market_value.get_prev_trading_day", return_value=self.prev):
+        with patch("src.python.core.trading_calendar.get_prev_trading_day", return_value=self.prev):
             result = mv._determine_price_type("tencent", self.prev, self.td)
             self.assertEqual(result, "场内收盘价(T-1)")
 
@@ -108,7 +108,7 @@ class TestDeterminePriceType(unittest.TestCase):
     @patch("src.python.report.market_value.is_midday_break", return_value=True)
     def test_tencent_midday_nav_prev(self, _, __):
         """tencent + 午间休市 + nav_date == T-1 → 仍为场内收盘价(T-1)。"""
-        with patch("src.python.report.market_value.get_prev_trading_day", return_value=self.prev):
+        with patch("src.python.core.trading_calendar.get_prev_trading_day", return_value=self.prev):
             result = mv._determine_price_type("tencent", self.prev, self.td)
             self.assertEqual(result, "场内收盘价(T-1)")
 
@@ -126,7 +126,7 @@ class TestDeterminePriceType(unittest.TestCase):
 
     def test_eastmoney_nav_prev(self):
         """eastmoney + nav_date == T-1 → 官方净值(T-1)。"""
-        with patch("src.python.report.market_value.get_prev_trading_day", return_value=self.prev):
+        with patch("src.python.core.trading_calendar.get_prev_trading_day", return_value=self.prev):
             result = mv._determine_price_type("eastmoney", self.prev, self.td)
             self.assertEqual(result, "官方净值(T-1)")
 
@@ -191,7 +191,7 @@ class TestGenerateDetails(unittest.TestCase):
         }
 
     @patch("src.python.report.market_value.fetch_market_data")
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open")
     @patch("src.python.report.market_value.is_midday_break")
     def test_tencent_asset(self, mock_midday, mock_open, mock_ltd, mock_fetch):
@@ -226,7 +226,7 @@ class TestGenerateDetails(unittest.TestCase):
         self.assertEqual(d.today_profit, 500.0)
 
     @patch("src.python.report.market_value.fetch_market_data")
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open")
     def test_eastmoney_asset(self, mock_open, mock_ltd, mock_fetch):
         """EastMoney 场外资产：字段正确赋值。"""
@@ -250,7 +250,7 @@ class TestGenerateDetails(unittest.TestCase):
         self.assertEqual(d.today_profit, 10.0)
 
     @patch("src.python.report.market_value.fetch_market_data")
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     def test_eastmoney_stale_nav(self, mock_ltd, mock_fetch):
         """East Money + nav_date 过期 → 照实呈现该净值日涨跌，但标「参考」且不计入合计。"""
         mock_ltd.return_value = "2026-06-26"
@@ -292,7 +292,7 @@ class TestGenerateDetails(unittest.TestCase):
         self.assertEqual(d.today_profit, 0.0)
 
     @patch("src.python.report.market_value.fetch_market_data")
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open")
     def test_multiple_holdings(self, mock_open, mock_ltd, mock_fetch):
         """多个持仓 → 返回多条明细。"""
@@ -324,7 +324,7 @@ class TestGenerateDetails(unittest.TestCase):
         self.assertEqual(details, [])
 
     @patch("src.python.report.market_value.fetch_market_data")
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open")
     def test_today_str_none(self, mock_open, mock_ltd, mock_fetch):
         """today_str 为空（默认取当天）→ 不报错。"""
@@ -340,7 +340,7 @@ class TestGenerateDetails(unittest.TestCase):
         self.assertEqual(len(details), 1)
 
     @patch("src.python.report.market_value.fetch_market_data")
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open")
     def test_account_strip(self, mock_open, mock_ltd, mock_fetch):
         """账户名前后空格被清理。"""
@@ -354,7 +354,7 @@ class TestGenerateDetails(unittest.TestCase):
 
     # ── 场外基金本日盈亏 ────────────
     @patch("src.python.report.market_value.fetch_market_data")
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     def test_eastmoney_nav_t_minus_1_today_profit_reference(self, mock_ltd, mock_fetch):
         """场外基金净值日期为 T-1（今日净值未出）→ 显示 T-1 涨跌并标参考，不计入合计。"""
         mock_ltd.return_value = "2026-06-26"
@@ -376,7 +376,7 @@ class TestGenerateDetails(unittest.TestCase):
         self.assertEqual(details[0].price_type, "官方净值(T-1)")
 
     @patch("src.python.report.market_value.fetch_market_data")
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     def test_eastmoney_nav_t_minus_2_price_type(self, mock_ltd, mock_fetch):
         """场外基金净值日期为 T-2（如 6/25 → T=6/29 周一）→ 显示官方净值(T-2)。"""
         mock_ltd.return_value = "2026-06-29"
@@ -397,7 +397,7 @@ class TestGenerateDetails(unittest.TestCase):
         self.assertAlmostEqual(details[0].today_profit, round((1.2 - 1.18) * 1000.0, 2))
 
     @patch("src.python.report.market_value.fetch_market_data")
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     def test_eastmoney_nav_today_today_profit_computed(self, mock_ltd, mock_fetch):
         """场外基金净值日期等于交易日（T）→ 本日盈亏正常计算。"""
         mock_ltd.return_value = "2026-06-26"
@@ -533,7 +533,7 @@ class TestTodayProfitOffMarket(unittest.TestCase):
     def setUp(self):
         # 固定交易日为 "2026-06-26"
         self._ld_patcher = unittest.mock.patch(
-            "src.python.report.market_value.get_last_trading_day",
+            "src.python.core.trading_calendar.get_last_trading_day",
             return_value="2026-06-26",
         )
         self._ld_patcher.start()
@@ -630,7 +630,7 @@ class TestPremiumPlaceholder(unittest.TestCase):
         self._patch_td.start()
         self.addCleanup(self._patch_td.stop)
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     @patch("src.python.report.market_value.is_midday_break", return_value=False)
     def test_tencent_premium_placeholder(self, mock_midday, mock_open, mock_td):
@@ -648,7 +648,7 @@ class TestPremiumPlaceholder(unittest.TestCase):
         self.assertEqual(detail.premium, _FUND_PREMIUM_PLACEHOLDER)
         self.assertEqual(detail.premium, "--")
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     def test_eastmoney_premium_placeholder(self, mock_open, mock_td):
         """Eastmoney 场外基金 → premium = '--'。"""
@@ -664,7 +664,7 @@ class TestPremiumPlaceholder(unittest.TestCase):
         detail = _compute_detail_row(h, mkt)
         self.assertEqual(detail.premium, "--")
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     def test_detail_to_row_values_premium(self, mock_open, mock_td):
         """_detail_to_row_values 序列化 premium 值正确。"""
@@ -684,7 +684,7 @@ class TestPremiumPlaceholder(unittest.TestCase):
         premium_col = values[7]
         self.assertEqual(premium_col, "--")
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     def test_multiple_assets_all_premium_placeholder(self, mock_open, mock_td):
         """多种资产溢价率全部为 '--'。"""
@@ -738,7 +738,7 @@ class TestTodayProfitEastMoneyNonTDay(unittest.TestCase):
             "source_api": source_api,
         }
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     def test_non_t_day_eastmoney(self, mock_open, mock_td):
         """Eastmoney, nav_date != trading_day → 显示该净值日涨跌并标参考。"""
@@ -749,7 +749,7 @@ class TestTodayProfitEastMoneyNonTDay(unittest.TestCase):
         self.assertTrue(detail.today_profit_reference)
         self.assertAlmostEqual(detail.today_profit, round((2.5 - 2.4) * 100, 2))
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     def test_t_day_eastmoney_calculates(self, mock_open, mock_td):
         """Eastmoney, nav_date == trading_day → today_profit > 0。"""
@@ -761,7 +761,7 @@ class TestTodayProfitEastMoneyNonTDay(unittest.TestCase):
         self.assertEqual(detail.today_profit, expected)
         self.assertGreater(detail.today_profit, 0)
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     def test_empty_nav_date_eastmoney(self, mock_open, mock_td):
         """Eastmoney, nav_date 为空 → today_profit = 0。"""

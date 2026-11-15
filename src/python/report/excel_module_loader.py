@@ -53,9 +53,12 @@ def load_report_modules(prog: ProgressReporter) -> dict[str, Any]:
         from src.python.report.market_value import (
             _generate_details,
             classify_holdings,
-            get_last_trading_day,
             price_update_status,
         )
+
+        # 交易日判定取 core 真源（不在报告侧再导出名上取）：装配表与运行期、测试共用
+        # 同一个 patch 点，避免「报告侧名字也要跟着 patch」的双点维护
+        from src.python.core.trading_calendar import get_last_trading_day
 
         modules.update(
             classify_holdings=classify_holdings,

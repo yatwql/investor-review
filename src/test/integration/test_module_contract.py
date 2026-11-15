@@ -57,7 +57,7 @@ class TestModuleContractChain(unittest.TestCase):
         }
 
         with (
-            patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"),
+            patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"),
             patch("src.python.report.market_value.datetime") as mock_dt,
         ):
             mock_dt.now.return_value = datetime(2026, 7, 3, 14, 30)
@@ -258,7 +258,7 @@ class TestModuleContractChain(unittest.TestCase):
             ),
         ]
         with (
-            patch("src.python.report.market_value.get_prev_trading_day", return_value="2026-07-02"),
+            patch("src.python.core.trading_calendar.get_prev_trading_day", return_value="2026-07-02"),
         ):
             updated, total, all_updated = price_update_status(details, "2026-07-03")
 

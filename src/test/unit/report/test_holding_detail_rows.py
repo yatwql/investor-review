@@ -132,7 +132,7 @@ class TestTradingDays:
         import src.python.analysis.rebalance as rebalance
 
         monkeypatch.setattr(rebalance, "build_holding_trading_days", lambda _tx, _day: {"600900": 12})
-        monkeypatch.setattr("src.python.report.market_value.get_last_trading_day", lambda: "2026-01-05")
+        monkeypatch.setattr("src.python.core.trading_calendar.get_last_trading_day", lambda: "2026-01-05")
 
     def test_both_paths_attach_holding_days(self):
         transactions = [SimpleNamespace(code="600900", date="2025-12-01", action="buy")]
