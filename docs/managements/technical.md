@@ -2984,6 +2984,8 @@ llm/skeleton.py                 # 教训区块注入专家复盘提示词（开�
 
 **数据源说明表**：「数据源可用性矩阵」章在健康度表后附「数据源说明（实际使用清单）」表——逐数据类别列实际链路、用途、计费（财报全文随 `datasink.plan` 动态展示免费/付费档）与凭据要求（是否需 key + 就绪状态），并标本次运行是否实际使用（`report/data_source_matrix.py::build_data_source_catalog`，前缀取自 `_SOURCE_CATEGORIES`、计费取自 provider 套餐表，单一事实来源）。**「本次使用」判定口径**：该类别的取数链路在**取得数据时**（含命中缓存的返回）经 `report/data_status.py::mark_data_used()` 记一条成功事件，说明表据事件前缀判定 `used`；**只记成功、不记降级**——章节名 fuzzy 未命中、标的不在源覆盖范围等预期内空结果不计入 T2 连续失败阈值（否则会把预期内空结果误报为源故障），失败与降级仍由 provider 日志、章节失败清单与链路 FailureDiagnostics 披露。因此 `未使用` 的含义是「本次未取到该类数据」，**不等于**源故障；对 DataSinking 类源另注明「需开启哪些功能开关才会取用」。**新鲜度通道**：`mark_data_used()` 另有 `freshness` 参数，成功事件可标 `stale`（源不可达后回退上次成功载荷），该标记进事件 `detail` 但**不进降级计数**（陈旧回退不是失败，算成失败会误报降级），并在数据质量详细状态块单列「陈旧回退（源不可达，用上次成功数据）」行——否则模型会把数天前的数据当今日数据评。类别清单含 `financial_report`（`report_datasink_`）与 `financial_indicator`（`fin_indicator_`），两者同时进入可用性矩阵与说明表；含同花顺兜底槽位的类别（`price` / `fund_hold` / `history` / `financial_indicator`）在「实际数据源（链路）」列显式列出「→ 同花顺金融数据（…，需 key）」，市场情绪（`sentiment`，同花顺**唯一源**）单列一行并附 key 就绪态。
 
+**矩阵「东财 push2 限流」行**：akshare 内建请求（重试回调）与本仓 `eastmoney_industry` 直连失败的限流/断连命中次数经 `core/rate_limit_state` 汇总，命中 > 0 时矩阵追加一行降级态提示（`东财 push2 限流：本轮 N 次断连（…已走备用通道）`）——把「行业降级」与其根因分开呈现；无命中时不出现该行（零变化）。
+
 **矩阵「命中源」列（provider 级归属）**：矩阵行除了类别健康度，还叠加一层 provider 级归属，回答使用者最常问的「我配的 key 到底被用上了吗」——类别健康度事件（`price_price_stock_600900` 这类键）只含代码不含 provider，**同花顺作为兜底槽接管时旧口径在报告里一字未提**，导致使用者误以为 key 未生效。修复：链路在某个 provider 成功返回时经 `report/data_status.py::mark_provider_used(data_type, provider_id, 展示名)` 登记（`fetcher/chain.py` 的 `fetch_with_fallback` 与 `_try_providers` 两处成功分支 + 同花顺独占的 `report/market_sentiment.py`、`fetcher/financial_indicator.py` 多期序列支路），矩阵按 `_SOURCE_CATEGORIES` 各行的 `data_types` 声明映射归入对应行并渲染为 `名称 ×次数`（按次数降序；无归属显示 `—`）。登记表存放于 `data_status.py` 模块级字典而非 DegradationTracker——归属是纯观测事实，既不参与降级计数，也不在 `.degradation_state.json` 里堆积 provider 键；归属只反映**本次网络取数**，命中缓存时该列为 `—` 而说明表「本次使用」仍为已使用（两列并读即得「用了谁的数」与「有没有取到」）。历史日 K 等类别只登记缓存键、不记降级事件，其矩阵行由 provider 归属单独成立（详情写「取数 N 次（无降级事件）」）。链路的 data_type 必须全部有归属类别，否则命中源静默丢失——`UNMAPPED_CHAIN_DATA_TYPES` 登记有意不进矩阵者（如 `bond_yield`），由 `test_data_source_matrix.py` 的不变式用例强制。附带修复：矩阵类别补齐 `history`（历史走势）与 `sentiment`（市场情绪），与 `datasource.md` 已登记的类别口径一致。
 
 [↑ 回到顶部](#目录)
@@ -3599,6 +3601,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `decision_record` | 确定性卖出建议登记（仅带持仓基线者落账，入账必可结算） | 行动建议 | 监控 | 随 `decision_reflection` |
 | `decision_settlement` | 到期决策结算（幂等：同 decision 只结一次，行情不可得保持 pending） | 行动建议 | 监控 | 随 `decision_reflection` |
 | `decision_llm_capture` | LLM 操作建议表解析登记（结构化优先 → 表格兜底；缺行/缺方向/「不操作」行按原因记 INFO 后跳过，异常不中断报告） | 行动建议 | 监控 | 随 `decision_reflection` |
+| `rate_limit_state` | 东财 push2 限流/断连观测（按文案识别、累计本轮次数与首条原文；akshare 内建请求与本仓直连 provider 共用，报告矩阵据此出一行「东财 push2 限流」） | 数据获取 | 监控 | 无 |
 | `recommendation_policy` | 建议执行态与校验的唯一事实位（conditional / blocked / not_applicable + 「需复核/不可执行不得带数量」校验）；analysis 与 llm 两侧单向引用，避免 analysis 反向依赖 llm | 行动建议 | 分析计算 | 无 |
 | `research_contract` | LLM 复盘结构化契约（主张/证据/判决的解析、校验与运行作用域载体；复用决策头括号扫描，不自建解析器；默认关） | LLM 生成 | LLM 生成 | 开关 `llm_research_contract` |
 | `evidence_index` | 证据索引（由该模块提示词输入块生成 `ev:<kind>:<键|哈希>` + 一行摘要；模型只能引用它看得到的内容） | LLM 生成 | LLM 生成 | 开关 `llm_research_contract` |
