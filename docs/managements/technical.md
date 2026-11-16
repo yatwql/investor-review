@@ -3943,7 +3943,7 @@ web/ (Web 服务层，薄入口)
 | LLM 响应解析 | `llm/_api_responses.py` | `llm/api_base.py` 公共 API | llm / report | 公共常量/函数保留；内部 helper 直接导入 owner |
 | Web 生成 / 健康路由 | `web/run_generation.py`、`web/handlers_health.py` | `web/handlers.py` 仅路由聚合 | web / tests | 测试 patch 指向 owner；门面不再转出私有实现 |
 
-**存量分层例外（`analysis`/`fetcher`/`providers` 反向依赖上层，冻结不新增）**：`check-import-surface` 的 `layer-inversion` 规则拦截**新增**越界（规则覆盖 `analysis → report/llm`、`fetcher → report/llm/analysis`、`providers → report/llm/analysis`、`report/llm → tui/web/cli`）；下列存量经例外表登记（`scripts/_import_surface_exceptions.json`，含到期日与收敛方向），到期须下沉或续期并复核理由：
+**存量分层例外（`analysis`/`fetcher`/`providers` 反向依赖上层，冻结不新增）**：`check-import-surface` 的 `layer-inversion` 规则拦截**新增**越界（规则覆盖 `analysis → report/llm`、`fetcher → report/llm/analysis`、`providers → report/llm/analysis`、`report/llm → tui/web/cli`、`cache → report/llm/tui/web/cli`、`config → report/llm/analysis/tui/web/cli`）；下列存量经例外表登记（`scripts/_import_surface_exceptions.json`，含到期日与收敛方向），到期须下沉或续期并复核理由：
 
 | 违规文件 | 被依赖的上层模块 | 暂不下沉的理由 | 收敛方向 |
 |:---|:---|:---|:---|
@@ -3955,6 +3955,13 @@ web/ (Web 服务层，薄入口)
 | `fetcher/fund_fee.py`<br>`providers/tiantian_purchase.py` | `analysis.fee_schedule_model` | 解析/派生原语现居 analysis 侧，取数适配器需复用同一口径 | 把纯解析/派生原语下沉 core（如 core/fee_schedule.py、core/financial_derive.py），analysis 与 fetcher 共同消费 |
 | `fetcher/financial_indicator.py`<br>`fetcher/financial_indicator_adapters.py` | `analysis.financial_statement_derive` | 解析/派生原语现居 analysis 侧，取数适配器需复用同一口径 | 把纯解析/派生原语下沉 core（如 core/fee_schedule.py、core/financial_derive.py），analysis 与 fetcher 共同消费 |
 | `fetcher/financial_indicator_adapters.py` | `analysis.financial_indicator_extract` | 解析/派生原语现居 analysis 侧，取数适配器需复用同一口径 | 把纯解析/派生原语下沉 core（如 core/fee_schedule.py、core/financial_derive.py），analysis 与 fetcher 共同消费 |
+| `cache/_cache_refresh.py` | `report.news_correlation` | 新闻预热复用报告侧行业关键词扩展（同一口径），实现居 report | 把行业关键词扩展下沉 core（如 core/news_keywords.py），预热与报告共同消费 |
+| `cache/_cache_refresh.py` | `report.fund_style_classify` | 基金风格扩展数据预取复用报告侧装配 | 风格扩展取数原语下沉 core/fetcher，报告只做装配 |
+| `cache/operations.py` | `report.market_value` | 刷新后判定交易日与市值构成需复用报告侧市值核算原语 | 市值核算与价格类型判定下沉 core（交易日原语已下沉，剩余为市值派生） |
+| `config/_llm_providers.py` | `llm.pacing` | 线路配置落盘后需即时注册端点节流策略 | LLM 侧提供注册回调，config 只发配置事件（不直接调 llm） |
+| `config/_validation_llm.py` | `llm.depth_profile` | 思考档位枚举与默认值由 llm 侧单一真源提供 | 档位枚举下沉 core/config 注册表（llm 反向引用） |
+| `config/_validation_sections.py` | `analysis.drawdown_events` | 回撤窗口下限绑定分析层最少交易日常量 | 把 MIN_SPAN 常量下沉 core/constants（分析层再导出） |
+| `config/_validation_sections.py` | `analysis.fee_schedule_model` | 费率表校验复用分析层费率阶梯建模（同一口径） | 费率阶梯纯解析下沉 core/fee_schedule，分析与配置共同消费 |
 
 > 另：`core/check_sources.py` 直连 `providers/`/`fetcher/` 属**探针模块职责**（连通性检查必须在链外直呼各源），
 > 不入本规则例外表，理由记在模块 docstring；新增探针源时保持同一形态。

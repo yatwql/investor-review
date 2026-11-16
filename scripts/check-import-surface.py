@@ -222,6 +222,10 @@ _LAYER_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
     # 交互层（`tui`/`web`/`cli`）在报告层之上：报告侧不得反向依赖它们的格式化与状态条实现
     ("report", ("tui", "web", "cli")),
     ("llm", ("tui", "web", "cli")),
+    # cache 属基础设施层：可编排取数（预热调 fetcher，设计如此），但不得依赖报告/LLM/交互层
+    ("cache", ("report", "llm", "tui", "web", "cli")),
+    # config 属配置层：校验可读注册表，但不得依赖报告/LLM/分析的计算实现与交互层
+    ("config", ("report", "llm", "analysis", "tui", "web", "cli")),
 )
 
 

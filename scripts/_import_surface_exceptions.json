@@ -83,6 +83,62 @@
       "reason": "解析/派生原语现居 analysis 侧，取数适配器需复用同一口径",
       "expiry": "2027-06-30",
       "replacement": "把纯解析/派生原语下沉 core（如 core/fee_schedule.py、core/financial_derive.py），analysis 与 fetcher 共同消费"
+    },
+    {
+      "path": "src/python/cache/_cache_refresh.py",
+      "name": "src.python.report.news_correlation",
+      "owner": "cache（预热编排）",
+      "reason": "新闻预热复用报告侧行业关键词扩展（同一口径），实现居 report",
+      "expiry": "2027-06-30",
+      "replacement": "把行业关键词扩展下沉 core（如 core/news_keywords.py），预热与报告共同消费"
+    },
+    {
+      "path": "src/python/cache/_cache_refresh.py",
+      "name": "src.python.report.fund_style_classify",
+      "owner": "cache（预热编排）",
+      "reason": "基金风格扩展数据预取复用报告侧装配",
+      "expiry": "2027-06-30",
+      "replacement": "风格扩展取数原语下沉 core/fetcher，报告只做装配"
+    },
+    {
+      "path": "src/python/cache/operations.py",
+      "name": "src.python.report.market_value",
+      "owner": "cache（刷新判定）",
+      "reason": "刷新后判定交易日与市值构成需复用报告侧市值核算原语",
+      "expiry": "2027-06-30",
+      "replacement": "市值核算与价格类型判定下沉 core（交易日原语已下沉，剩余为市值派生）"
+    },
+    {
+      "path": "src/python/config/_llm_providers.py",
+      "name": "src.python.llm.pacing",
+      "owner": "config（LLM 线路配置）",
+      "reason": "线路配置落盘后需即时注册端点节流策略",
+      "expiry": "2027-06-30",
+      "replacement": "LLM 侧提供注册回调，config 只发配置事件（不直接调 llm）"
+    },
+    {
+      "path": "src/python/config/_validation_llm.py",
+      "name": "src.python.llm.depth_profile",
+      "owner": "config（LLM 参数校验）",
+      "reason": "思考档位枚举与默认值由 llm 侧单一真源提供",
+      "expiry": "2027-06-30",
+      "replacement": "档位枚举下沉 core/config 注册表（llm 反向引用）"
+    },
+    {
+      "path": "src/python/config/_validation_sections.py",
+      "name": "src.python.analysis.drawdown_events",
+      "owner": "config（章节参数校验）",
+      "reason": "回撤窗口下限绑定分析层最少交易日常量",
+      "expiry": "2027-06-30",
+      "replacement": "把 MIN_SPAN 常量下沉 core/constants（分析层再导出）"
+    },
+    {
+      "path": "src/python/config/_validation_sections.py",
+      "name": "src.python.analysis.fee_schedule_model",
+      "owner": "config（费率表校验）",
+      "reason": "费率表校验复用分析层费率阶梯建模（同一口径）",
+      "expiry": "2027-06-30",
+      "replacement": "费率阶梯纯解析下沉 core/fee_schedule，分析与配置共同消费"
     }
   ]
 }

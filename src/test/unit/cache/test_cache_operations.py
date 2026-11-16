@@ -19,11 +19,12 @@ pytestmark = [pytest.mark.unit, pytest.mark.unit_core]
 
 
 class _Holder:
-    """最小持仓替身（warm 需要 code/name 属性）。"""
+    """最小持仓替身（warm 需要 code/name/account 属性：基金判定取三者）。"""
 
-    def __init__(self, code: str, name: str):
+    def __init__(self, code: str, name: str, account: str = "A"):
         self.code = code
         self.name = name
+        self.account = account
 
 
 class TestUpdateAllCache:
@@ -106,7 +107,7 @@ class TestUpdateBasicCacheScope:
 class TestWarmNewAssetCaches:
     """预热编排在共享层：变更检测 → 行情/基金 → 行业；异常不阻断。"""
 
-    @patch("src.python.report.fund_performance.is_fund", return_value=False)
+    @patch("src.python.core.code_utils.is_fund_holding", return_value=False)
     @patch("src.python.fetcher.industry.batch_fetch_industry_data", return_value={"SH510300": {"industry": "指数"}})
     @patch("src.python.fetcher.price.fetch_market_data", return_value={"price": 4.2})
     @patch("src.python.cache.check_and_refresh_caches", return_value=["SH510300"])

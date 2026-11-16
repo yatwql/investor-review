@@ -182,9 +182,9 @@ def update_basic_cache(holdings: list, reporter) -> CacheUpdateResult:
     # 报告退化成「首检」，故点名保留。
     clear_by_group("refresh", only=_BASIC_REFRESHED_CACHE_KEYS, exclude_keys=TRACKING_SNAPSHOT_KEYS)
 
-    from src.python.report.fund_performance import is_fund
+    from src.python.core.code_utils import is_fund_holding
 
-    funds = [h for h in holdings if is_fund(h)]
+    funds = [h for h in holdings if is_fund_holding(h.name, h.code, h.account)]
     result.total_funds = len(funds)
 
     pool = _get_pool()
@@ -580,7 +580,7 @@ def warm_new_asset_caches(holdings: list, reporter) -> list[str]:
     from src.python.fetcher.fund import fetch_fund_holdings, fetch_fund_rankings
     from src.python.fetcher.industry import batch_fetch_industry_data
     from src.python.fetcher.price import fetch_market_data
-    from src.python.report.fund_performance import is_fund
+    from src.python.core.code_utils import is_fund_holding
 
     new_codes: list[str] = []
     try:
@@ -599,7 +599,7 @@ def warm_new_asset_caches(holdings: list, reporter) -> list[str]:
                 reporter.ok(f"行情 {name} {result['price']:.4f}")
             else:
                 reporter.warn(f"行情 {name} 获取失败")
-            if h and is_fund(h):
+            if h and is_fund_holding(h.name, h.code, h.account):
                 perf = fetch_fund_rankings(code)
                 if perf:
                     reporter.ok(f"业绩排名 {name}")

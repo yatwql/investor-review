@@ -140,7 +140,7 @@ def test_unparsable_exception_table_is_finding(surface, monkeypatch, tmp_path):
 def test_layer_inversion_detected(surface, tmp_path):
     """三层反向依赖均报 layer-inversion：analysis→report/llm、fetcher→report/analysis、providers→report/analysis。"""
     root = tmp_path / "py"
-    for layer in ("analysis", "fetcher", "providers", "report", "llm", "core", "tui", "web"):
+    for layer in ("analysis", "fetcher", "providers", "report", "llm", "core", "tui", "web", "cache", "config"):
         (root / layer).mkdir(parents=True)
     (root / "analysis" / "a1.py").write_text(
         "from src.python.report.data_status import get_tracker\n", encoding="utf-8"
@@ -155,6 +155,13 @@ def test_layer_inversion_detected(surface, tmp_path):
     # 报告/llm 层不得反向依赖交互层（tui/web/cli）的格式化与状态条实现
     (root / "report" / "r1.py").write_text("from src.python.tui.live_status import LiveStatusBar\n", encoding="utf-8")
     (root / "llm" / "l1.py").write_text("from src.python.web.progress import WebProgressReporter\n", encoding="utf-8")
+    # 基础设施层同样单向：cache 可编排取数但不得依赖报告层，config 不得依赖分析层实现
+    (root / "cache" / "c1.py").write_text(
+        "from src.python.report.market_value import classify_holdings\n", encoding="utf-8"
+    )
+    (root / "config" / "g1.py").write_text(
+        "from src.python.analysis.drawdown_events import MIN_SPAN\n", encoding="utf-8"
+    )
     findings = surface.scan_layer_inversion(root)
     assert any("[layer-inversion]" in f and "a1.py" in f and "report.data_status" in f for f in findings)
     assert any("[layer-inversion]" in f and "a2.py" in f and "llm.skeleton" in f for f in findings)
@@ -162,6 +169,8 @@ def test_layer_inversion_detected(surface, tmp_path):
     assert any("[layer-inversion]" in f and "p1.py" in f and "report.data_status" in f for f in findings)
     assert any("[layer-inversion]" in f and "r1.py" in f and "tui.live_status" in f for f in findings)
     assert any("[layer-inversion]" in f and "l1.py" in f and "web.progress" in f for f in findings)
+    assert any("[layer-inversion]" in f and "c1.py" in f and "report.market_value" in f for f in findings)
+    assert any("[layer-inversion]" in f and "g1.py" in f and "analysis.drawdown_events" in f for f in findings)
 
 
 def test_layer_inversion_core_import_allowed(surface, tmp_path):
