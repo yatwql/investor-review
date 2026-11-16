@@ -369,7 +369,7 @@ section_visible = board_enabled(section.type) AND data_available(section.data_fl
 
 - **薄入口**：渠道层只保留交互外壳（菜单 / argparse / HTTP 路由），不承载业务逻辑。TUI 的 `tui/handlers_*`、CLI 的 argparse 直调、Web 的 API 路由均委托共享层（`report/orchestrator.py` + `cache/operations.py`）。展示与校验类共性规则同样单源：LLM 配置状态经 `core/system_info.llm_status()` 组装（三渠道状态行只渲染不判定），空持仓门经 `core/reader.require_holdings()`（各渠道捕获后映射自身错误通道）。
 - **共享管线**：`generate_report()`（报告编排器，§4.2）为同步函数，通过可注入的 `ProgressReporter` 接口输出阶段消息，与终端/浏览器完全解耦——三渠道注入各自的 reporter 子类即可，**管线代码零改动**。
-- **进度抽象**：`report/progress.py` 定义 `ProgressReporter` 基类（info/ok/warn/error/add_error/timer），三渠道各实现子类：`TuiProgressReporter`（菜单区刷新）、`CliProgressReporter`（logging + verbose stderr）、`WebProgressReporter`（事件缓冲 → 浏览器轮询）。
+- **进度抽象**：`report/progress.py` 定义渠道无关的 `ProgressReporter` 基类（info/ok/warn/error/add_error/timer），`tui/progress.py` 放 `TuiProgressReporter`（状态条对接，报告层不依赖交互层）、`CliProgressReporter`（logging + verbose stderr）、`WebProgressReporter`（事件缓冲 → 浏览器轮询）。
 - **配置快照**：生成任务执行时取一次 `get_config()` 快照，run 期间不受外部配置修改影响（Web 侧在任务**出队时**取快照，见 §1.8.5）。
 
 **渠道共性规则的单源清单**（渠道层不得各写一份）：报告输出目录 `config.resolve_output_dir`、尺寸格式化 `core.num_utils.format_size`、异常→用户提示 `core.error_hints.hint_for`、原始 `llm_settings.json` 读取 `config.read_llm_settings_file`、doctor 网络预算 `core.doctor.NETWORK_TIMEOUT_*`、产物定位/打开 `core.artifacts`、页头新鲜度 `core.data_freshness.header_freshness`、调仓输入持仓不可读提示 `report/whatif_operations.WHATIF_BASE_HOLDINGS_UNREADABLE` / `WHATIF_TARGET_HOLDINGS_UNREADABLE`、日志读取失败提示 `core/log_reader.LOG_READ_FAILED_MESSAGE`、健康历史读取失败提示 `core/perf.HEALTH_HISTORY_READ_FAILED_MESSAGE`、相对路径绝对化 `core.path_utils.resolve_project_path`、着色判据与按流取码 `core.ansi_colors.supports_color` / `codes_for`。
@@ -424,7 +424,8 @@ TUI（Text User Interface）是系统**主要交互渠道**：桌面终端内的
 | `tui/switch_panel.py` | `[S]` 面板响应式排版 | `layout_tier()` 按终端列数分三档（≥96 宽 / 64~95 中 / <64 窄）、`status_text()` 状态唯一实现（关闭恒红）、`format_item()` 逐档生成「编号·名称·键名(淡色)·状态·备注」行、`legend_lines()` 页脚图例折行、`format_item(reveal_key=)` 窄屏按 `k` 追加键名行；终端宽度探测与折行原语在 `tui/text_layout.py`（本模块 re-export `terminal_columns`）；**只排版不取数**，不变式「任意档位每行 ≤ 面板内宽」由单测锁定 |
 | `tui/panel_runtime.py` | TUI 统一交互运行时 | `NavState`（游标 + engaged 导航态，语义真值取自主循环 `sel`）/ `PanelItem`（key/label/kind/action 派发项）/ `panel_loop`（读键→导航→派发→反馈/重绘单源循环：方向键回绕且跳过 return 项、Enter 防误触 engaged 门控、直达键游标同步不置 engaged、Esc/return 退出、`pick>1` 收集、`on_text` 词法、Ctrl+C/EOF/render 异常原样上抛）；全列表面板（`[C]/[A]/[D]/[I]/[S]/[M]`/缓存）与主循环 `sel` 收敛于此，导航态为实例态、模块内零可变全局（C14）；只统一「怎么到达一次派发」，不改「派发什么」 |
 | `tui/status_line.py` | 页头状态行 | `build_status_line()` 页头状态（上次报告时间/数据新鲜度/数据源失败数/LLM 状态点常驻 + `缓存过期 N` 仅 N>0 上屏；异常段自带带键动作短语为第二行，正常态无第二行），全本地取数、逐项降级、TTL 记忆化 |
-| `report/progress.py` | 进度报告 | TuiProgressReporter（`[..]`/`[OK]`/`[!]`/`[ERR]` 前缀 + 耗时排行） |
+| `report/progress.py` | 进度报告基类（渠道无关） | `ProgressReporter` / `AnnouncingProgressReporter` / `SilentProgressReporter` / `Timer` |
+| `tui/progress.py` | TUI 进度报告器 | `TuiProgressReporter`（`[..]`/`[OK]`/`[!]`/`[ERR]` 前缀 + 状态条 + 耗时排行） |
 
 #### 1.6.2 主循环与键盘导航
 
@@ -491,7 +492,7 @@ while True:
 
 #### 1.6.5 TuiProgressReporter 进度输出
 
-`report/progress.py:TuiProgressReporter`（`ProgressReporter` 基类子类，§1.5.2）：
+`tui/progress.py:TuiProgressReporter`（`report/progress.py` 基类子类，§1.5.2）：
 
 - **前缀语义**：`[..]`（进行中，CYAN）/ `[OK]`（成功，GREEN）/ `[!]`（告警，YELLOW）/ `[ERR]`（错误，RED）——四态前缀与 UI 输出前缀约定一致。
 - **call_sheet 页签粒度**：`info("正在生成X...")` → 执行 → `ok("X生成完成")`，页签级进度可视。
@@ -3804,7 +3805,7 @@ qa/ (报告对话式追问，依赖方向 qa → llm 单向)
 
 tui/handlers_*.py (TUI 命令)
   → orchestrator.py 或 cache/operations.py (委托业务逻辑)
-  → report/progress.py (TuiProgressReporter)
+  → tui/progress.py (TuiProgressReporter)
 
 config/ → core/registry.py
 core/code_utils.py → 各 fetcher/report/llm 模块（跨层依赖，无环）

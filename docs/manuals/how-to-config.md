@@ -328,7 +328,7 @@
 
 ```json
 {
-  "market_temperature": false
+  "valuation_percentile": true
 }
 ```
 
