@@ -104,7 +104,7 @@ LLM 分析结果独立缓存，通过指纹自动失效，不占用数据源请�
 - **A 股指数** → `history_index` 通道：腾讯财经 → 东方财富 `push2his`（免 key 的独立厂商备源）→ 新浪财经。新浪 `getKLineData` 端点实测不可用，故东方财富为实际第二可用源；同花顺**不在**本通道——其指数 K 线只能走 A 股端点，指数代码会被上游以 `code=1002` 拒收；各 provider 内置传输级退避重试（历史链无链级重试）
 - **美股指数** → `history_index_us` 通道：新浪财经 → 腾讯财经。两者共用指数 K 线函数（`fetch_index_kline`），新浪侧实现位于 `providers/sina_kline.py`，但其 `getKLineData` 端点对全部代码返回 404/空，实际取数通常由腾讯完成；而腾讯 K 线接口对 `gb_*` 代码支持有限，因此该通道可能整链取空——空结果按正常降级记录（成因与现状见 `datasource-reliability.md` §4.2）
 - **风格与因子分析·风格因子回归**（`analysis/style_factor_regression.py`，写入 `style_factor_data` 契约）复用 `history_index` 通道，并行拉取 CSI 风格因子指数 K 线（价值=sh000919、成长=sh000925、质量=sh000930）与基准指数（沪深300 sh000300）做 OLS 回归。因子指数不注册到 `_A_INDICES`（避免污染实时指数循环 fetch_indices），无专属缓存前缀，随 `history_index_` 统一按 TTL 管理
-- **风格与因子分析·行业 Beta 子表**（`analysis/industry_beta.py`，内嵌于 `style_factor_data.industry_beta`，功能开关 `industry_beta` 默认关）复用 `history_index` 通道拉取中证行业指数 K 线（`INDUSTRY_INDEX_MAP`：银行=sh000986、证券=sz399975、白酒/食品饮料=sz399997、半导体/电子=sz399995、有色/贵金属=sz399996、煤炭=sz399998、医药=sz399989、钢铁=sz399994、房地产=sh000980、能源=sh000928、环保=sz399973、保险=sz399983）做单因子 OLS（复用 `compute_factor_exposure`，不重复实现）；行业分类复用 `batch_fetch_industry_data`（`industry_` 前缀缓存）
+- **风格与因子分析·行业 Beta 子表**（`analysis/industry_beta.py`，与因子目录同一功能开关 `factor_catalog`，内嵌于 `style_factor_data.industry_beta`，功能开关 `industry_beta` 默认关）复用 `history_index` 通道拉取中证行业指数 K 线（`INDUSTRY_INDEX_MAP`：银行=sh000986、证券=sz399975、白酒/食品饮料=sz399997、半导体/电子=sz399995、有色/贵金属=sz399996、煤炭=sz399998、医药=sz399989、钢铁=sz399994、房地产=sh000980、能源=sh000928、环保=sz399973、保险=sz399983）做单因子 OLS（复用 `compute_factor_exposure`，不重复实现）；行业分类复用 `batch_fetch_industry_data`（`industry_` 前缀缓存）
 
 ### 实时行情
 

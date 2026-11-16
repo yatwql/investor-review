@@ -32,6 +32,25 @@ REQUIRED_SECTIONS = [
     "Known Gaps",
 ]
 
+#: 交互契约只写当前状态，禁复盘式叙述（改名/迁移/清零等叙述性用词）
+HISTORY_TRACE_MARKERS = (
+    "旧 `",
+    "旧名",
+    "旧版",
+    "原 `",
+    "已删除",
+    "已移除",
+    "宽限期",
+    "收敛为",
+    "归零",
+    "清零",
+    "已废弃",
+    "此前",
+    "改走",
+    "已落地",
+    "存量",
+)
+
 # 表格列契约：列名是判据的一部分（降级成散文即失效），按子集校验
 REQUIRED_TABLE_COLUMNS = {
     "Keys": ["键", "唯一语义", "禁止用法"],
@@ -237,3 +256,12 @@ class TestContractReferencedFilesExist:
         text = _read()
         assert "DESIGN.md" in text, "缺少指向 DESIGN.md 的对称引用"
         assert (REPO_ROOT / "docs" / "managements" / "DESIGN.md").is_file()
+
+
+class TestDesignTuiDocCurrentStateOnly:
+    """契约只描述当前状态：不得残留历史复盘痕迹。"""
+
+    def test_no_history_trace_markers(self):
+        text = CONTRACT.read_text(encoding="utf-8")
+        hits = [m for m in HISTORY_TRACE_MARKERS if m in text]
+        assert hits == [], f"DESIGN-TUI.md 出现历史痕迹用语 {hits}：契约只写当前状态"

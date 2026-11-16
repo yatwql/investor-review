@@ -93,7 +93,7 @@ def start_report_run() -> dict[str, Any]:
         logger.debug("[run_scope] 缓存键归因基线重置失败，已忽略", exc_info=True)
     baseline: dict[str, Any] = {}
     try:
-        from src.python.report.data_status import get_tracker
+        from src.python.core.degradation import get_tracker
 
         get_tracker().begin_report()
     except Exception:  # 观测隔离失败不阻断主链路

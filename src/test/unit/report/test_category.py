@@ -194,7 +194,7 @@ class TestDividendStatusRecording:
         return [Holding(account="证券账户", name="长江电力", code="600900", shares=100, cost_price=10.0)]
 
     def _events(self):
-        from src.python.report.data_status import get_tracker
+        from src.python.core.degradation import get_tracker
 
         return [e for e in get_tracker().get_log() if e["source_key"] == "dividend_data"]
 

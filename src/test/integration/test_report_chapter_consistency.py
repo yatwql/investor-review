@@ -104,7 +104,7 @@ class TestReportChapterConsistency(unittest.TestCase):
           - llm_enabled_flag = enable_llm（真实 full 流经 build_fallback_llm_content
             兜底后内容恒非空，llm_enabled_flag 恒与 board 开关一致）。
         """
-        from src.python.report.html_writer import _compute_section_visibility
+        from src.python.report.html_writer_nav import _compute_section_visibility
 
         placeholder = {} if fund_deep else None
         visible_numbers, _visible_dict, _ = _compute_section_visibility(
@@ -173,7 +173,7 @@ class TestReportChapterConsistency(unittest.TestCase):
 
     def test_html_visible_numbers_match_registry_all_data_present(self):
         """数据全就绪时 HTML 连续编号与注册表顺序一致，llm_usage 位于末位。"""
-        from src.python.report.html_writer import _compute_section_visibility
+        from src.python.report.html_writer_nav import _compute_section_visibility
 
         order = get_report_section_order()
         placeholder = {}
@@ -253,7 +253,7 @@ class TestReportChapterConsistency(unittest.TestCase):
         用于锁定 should_create_sheet 缺省 True 与 HTML data_flags 缺省 False
         在「显式 False」下的一致性。
         """
-        from src.python.report.html_writer import _compute_section_visibility
+        from src.python.report.html_writer_nav import _compute_section_visibility
 
         order = get_report_section_order()
         gap_avail = {

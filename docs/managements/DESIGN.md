@@ -9,7 +9,7 @@
 - **品牌标记（Brand Mark）**：吉祥物猫头鹰「守望」以**小尺寸标记**身份出现——页头 ≤40px、favicon 32px、Excel 首页 ≤48px；**只做身份识别，不做装饰**：不放大成 hero、不加动效、不重复出现在正文区块。标记用 `src/static/web/favicon.svg`（32px 头像版）或 `owl-mascot.svg`（完整插画版，仅 README 与 ≤48px 场景）。
 - **双面构成**：
   - **HTML 报告**（`src/static/tmpl/`，约 180 个 CSS 变量）——阅读产物，「长文 + 密集数字表」场景，明暗双主题完整（`[data-theme="dark"]` 68 变量覆盖 + `theme.js` 偏好持久化/图表重烘焙/打印协调）。
-  - **Web 工作台**（`src/static/web/style.css`，18 个角色名 token；旧 `--color-*` 命名体系已于宽限期结束时删除映射）——操作台，五区标签页（生成报告/调仓模拟/配置/运行状态/日志），当前浅色单世界。
+  - **Web 工作台**（`src/static/web/style.css`，18 个角色名 token）——操作台，五区标签页（生成报告/调仓模拟/配置/运行状态/日志），浅色单世界。
 - **单一强调色**：品牌蓝唯一（报告 `#2E75B6` 系、工作台 `#1f6fb2` 系）；禁第二强调色。焦点环、主按钮、链接强调同源。
 - **状态即一等公民**：数据降级、健康检查、来源可用性是本工具的核心叙事——状态色、空态、降级文案必须按本契约语义化呈现，禁止临时拼凑。
 - **中文优先**：所有界面文案、空态、状态提示为中文；术语与 `../manuals/` 一致。
@@ -32,7 +32,7 @@
 出类名由过滤器 `profit_class`（盈→`profit`、亏→`loss`、零→空）与 `price_type_class` 统一产出，模板只做拼接。数据驱动的几何量（如分布条宽度）走 HTML/SVG 属性（`<svg width="{{ pct }}%">`），不走 CSS 值。守卫见 `src/test/unit/report/test_html_report_structure.py`。
 
 
-> 角色族是**真值**，两面变量名是实现细节。双面同义异名的收敛、旧名兼容映射由 token 统一任务落地；落地后本表「实现列」即为终态。
+> 角色族是**真值**，两面变量名是实现细节；本表「实现列」为终态（两面同名、无别名映射）。
 
 | 角色族 | 角色 | 报告侧实现 | 工作台侧实现 | 备注 |
 |---|---|---|---|---|
@@ -46,14 +46,14 @@
 | Chart 专用 | 系列色 / 网格 / 图文字 | `--chart-primary` `--chart-secondary` `--chart-success` `--chart-danger` `--chart-warning` `--chart-grid` `--chart-text` `--chart-bg` | —（工作台无图） | 仅图表使用；`theme.js` 切主题时重读烘焙 |
 | 组件派生面 | 表格斑马/小计/合计、行警示、徽标、辩论、来源标签、空态底 | `--table-*` `--subtotal-bg` `--grand-total-bg` `--row-*` `--notice-*` `--debate-*` `--source-tag-*` `--empty-section-bg` `--heat-*`（相关系数分档）`--corr-*`（相关性方向×强度）`--cell-na-bg` `--alloc-*` `--danger-text` 等 | — | 组件级派生色，必须引用基础角色而非裸值 |
 
-**同名对齐（双面 token 统一）**：共享角色在两面 `:root` **同名定义**（验收见 `src/test/unit/report/test_design_tokens.py` 对表测试）；同名跨面允许按各自明暗世界取值（品牌蓝报告 `#2E75B6` / 工作台 `#1f6fb2`），对表**验名不验值**。工作台旧 `--color-*` 名 `var()` 兼容映射已删除（`test_design_tokens.TestLegacyMappingRemoved` 负向锁防回填，新代码一律用角色名）。
+**同名对齐（双面 token 统一）**：共享角色在两面 `:root` **同名定义**（验收见 `src/test/unit/report/test_design_tokens.py` 对表测试）；同名跨面允许按各自明暗世界取值（品牌蓝报告 `#2E75B6` / 工作台 `#1f6fb2`），对表**验名不验值**。工作台只接受角色名，别名回填由 `test_design_tokens.TestLegacyMappingRemoved` 负向锁阻断。
 
 **双主题规则**：亮色为源，暗色为配对世界——新增/修改亮色角色时**必须同步** `[data-theme="dark"]` 覆盖（或在 Known Gaps 声明单主题豁免）。品牌蓝在暗色下保持原值（蓝底白字清晰，刻意不调）。
 
 ## Typography — 字阶表
 
-- **字体栈**（两面已统一 `--font-stack` 同值）：`"PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, -apple-system, sans-serif`。
-- **目标字阶**（已落地两模板：201 处字号字面量收敛为 8 档 token，图标 >24px 豁免）：
+- **字体栈**（两面 `--font-stack` 同值）：`"PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, -apple-system, sans-serif`。
+- **目标字阶**（两模板均取 8 档 token；图标 >24px 豁免）：
 
 | 类别 | 字号 | 行高 | 用途 |
 |---|---|---|---|
@@ -64,8 +64,8 @@
 | 表格/密集数据 | 12–13px | 1.5 | 明细表、矩阵表 |
 | 脚注/图例/题注 | 11px | 1.5 | 注释行、来源标注、图表题注 |
 
-- **字重**：400 正文、500 次级强调、600 标题与按钮（现状 600 主导 63 处，描述性基线）；**700 禁止新增**（存量 9 处：报告 8 + 工作台 1，均先于本契约存在，随阅读版式收敛）。
-- **数字排版**（已落地）：所有表格 `font-variant-numeric: tabular-nums` + 既有 `.text-right` 右对齐约定 + 涨跌色按「涨跌语义域」；正负数值单元格统一用语义类 `.tone-profit` / `.tone-loss`（报告模板内置），**不得在 `style` 属性内拼颜色表达式**（模板校验与暗色同步依赖单一出口）（亮色 `--loss` 已调深至 `#007a00` 过 AA）；等宽感来自数字对齐而非换等宽字体。
+- **字重**：400 正文、500 次级强调、600 标题与按钮（当前以 600 为主导）；**700 禁止新增**（豁免仅 9 处：报告 8 + 工作台 1，只减不增）。
+- **数字排版**：所有表格 `font-variant-numeric: tabular-nums` + 既有 `.text-right` 右对齐约定 + 涨跌色按「涨跌语义域」；正负数值单元格统一用语义类 `.tone-profit` / `.tone-loss`（报告模板内置），**不得在 `style` 属性内拼颜色表达式**（模板校验与暗色同步依赖单一出口）（亮色 `--loss` 已调深至 `#007a00` 过 AA）；等宽感来自数字对齐而非换等宽字体。
 
 ## Components — 组件状态矩阵
 
@@ -80,14 +80,14 @@
 | loading | 进行中（工作台按钮/进度区既有模式复用） |
 | error | 失败反馈（状态语义域红 + 中文原因文案） |
 
-- **双面现状**：工作台五态矩阵已落地（hover/focus-visible/selected/disabled + loading `aria-busy`/空态 `.empty-note`/字段错误 `.has-error`，全局 `:focus-visible` 兜底）；报告侧交互组件少（按钮/折叠组），以表格与章节为主。
+- **落地范围**：工作台交互组件覆盖五态矩阵（hover/focus-visible/selected/disabled + loading `aria-busy`/空态 `.empty-note`/字段错误 `.has-error`，全局 `:focus-visible` 兜底）；报告侧交互组件少（按钮/折叠组），以表格与章节为主。
 - **报告表格行态族**：粘性表头 + 行悬停 + 首列/数值列对齐；斑马纹为可选档（`--table-even`）；小计/合计用专属底色角色（`--subtotal-bg`/`--grand-total-bg`）与加粗 600。
 
 ## Layout — 间距、圆角与宽度
 
 - **间距阶**：4 / 8 / 12 / 16 / 24 / 32px——组件内距取 8/12/16，卡间与章节节奏取 24/32；禁 14/18/20 等阶外值新增。
-- **圆角档**：小件（徽标/标签/输入）4px、按钮与卡内件 6px、卡面 8px、药丸/全圆钮 999px；工作台 `--radius` 已收敛 8px（旧 12px 出档，2026-10-08 随样式护栏落地）。报告存量 3px/10px 属历史档外观察项（护栏机检 W 级统计），禁新增档外值。
-- **宽度策略**（已落地）：正文单列阅读宽（`.section p` 限 78ch 行长）；宽表与图表区独享横向密度（章节自带 `overflow-x: auto` 横滚），不挤压正文行长；手机视口下限宽自然失效不受影响。
+- **圆角档**：小件（徽标/标签/输入）4px、按钮与卡内件 6px、卡面 8px、药丸/全圆钮 999px；工作台 `--radius` 取 8px。报告侧 3px/10px 为档外观察项（护栏机检 W 级统计），禁止新增档外值。
+- **宽度策略**：正文单列阅读宽（`.section p` 限 78ch 行长）；宽表与图表区独享横向密度（章节自带 `overflow-x: auto` 横滚），不挤压正文行长；手机视口下限宽自然失效不受影响。
 - **工作台网格**：内容区 760px 基准；状态区 5+ 卡自适应三列/两列（既有注释规则）。
 
 ## Elevation & Depth — 阴影阶
@@ -102,7 +102,7 @@
 
 ## Responsive — 断点与触控契约
 
-> 四档断点与触控/塌缩细则**已落地三面**（主报告 / What-if / Web 工作台）：断点收敛四档族（旧 899/900/375 残值零）、宽表首列冻结（打印归位）、触控目标与移动防护就位；机检见响应式契约测试。
+> 四档断点与触控/塌缩细则覆盖三面（主报告 / What-if / Web 工作台）：断点限四档族、宽表首列冻结（打印归位）、触控目标与移动防护齐备；机检见响应式契约测试。
 
 | 档 | 断点 | 行为要点 |
 |---|---|---|
@@ -122,7 +122,7 @@
 - **三档空态族**（类名即契约）：
   - **章节级 `empty-section`**：整章无数据——淡底虚线框、居中、muted（主模板与 partial 分布共 19 处）。
   - **折叠块族（`<details>`）**：LLM 主张与证据 / 决策书用浏览器原生折叠（默认收起），不新增颜色与组件类；判决与「未验证 / 需复核」用行内小字（`text-muted`），不染状态色（与状态域隔离）。
-  - **单元级 `empty-note`**：单元格/单指标/说明提示——占位框（`--empty-section-bg` 淡底 + 虚线 + 6px 圆角）已**并入基底**（原 `placeholder-note` 同义修饰类归并，20 处双类清零）。
+  - **单元级 `empty-note`**：单元格/单指标/说明提示——占位框（`--empty-section-bg` 淡底 + 虚线 + 6px 圆角）由基底样式直接提供，无需额外修饰类。
   - **图表级 `chart-empty-note`**：图无数据不渲染空白 canvas，图位内 flex 居中占位（5 处）。
 - **文案二元口径**（HTML/Excel 同源，禁多口径并存）：
   - **合法空**（数据就绪但无内容）：「暂无 + 具体对象」唯一句式（例：`暂无指数数据` / `暂无穿透数据` / `暂无关联新闻`）——禁对象不明的「暂无数据 / 无数据」变体。
@@ -147,7 +147,7 @@
 11. **DO** 品牌标记（猫头鹰「守望」）只作身份识别、尺寸 ≤40px（favicon 32px / Excel 首页 ≤48px）；**DON'T** 把它放大成 hero、加动效、或塞进正文区块当装饰。
 12. **DO** 分组标题（域/块/组、报告章节区标题）统一取结构色 `--primary` + 分隔线/竖线，跨渠道同一色调同一风格；**DON'T** 用状态色（绿/黄/红）做组标题，或让分组标题随状态变化。
 
-> **机检落地**（`scripts/check-style-guardrails.py`，复用 `_shared/checklib` 契约）：**E 级判 finding**（`--ci` 退出 2）——护栏 3 强调色越权（品牌蓝 hex 集从 `:root` 强调系 token 动态提取）、护栏 5 明暗同步（dark 覆盖变量根缺）、Colors「同名对齐」段双面 token 对表（表↔实现双向）、**W3 内联色值**（存量 40 处 token 化归零后由观察升为 E 级）；**W 级观察统计不判 finding**——护栏 1 裸色值存量、护栏 2 圆角档位（`-v` 明细）；**W4 档外字号 / W5 档外间距**（增设：W1 的引号整行豁免为 JS 图表配置设计，HTML 内联 `style=` 色值属盲区——W3 按位置级判定找回；W4/W5 把 Do-Don't「不发明新档」从自觉升级为可观察，均只判字面量、token 用法天然不命中）。**观察期**：未入 pre-commit 钩子域与 CI guards，待误报稳定后评估入域（护栏 4/6/7/9/10 由既有测试与 code-traces 等守护分担）。
+> **机检**（`scripts/check-style-guardrails.py`，复用 `_shared/checklib` 契约）：**E 级判 finding**（`--ci` 退出 2）——护栏 3 强调色越权（品牌蓝 hex 集从 `:root` 强调系 token 动态提取）、护栏 5 明暗同步（dark 覆盖变量根缺）、Colors「同名对齐」段双面 token 对表（表↔实现双向）、**W3 内联色值**（E 级判 finding）；**W 级观察统计不判 finding**——护栏 1 裸色值统计、护栏 2 圆角档位（`-v` 明细）；**W4 档外字号 / W5 档外间距**（W1 的引号整行豁免为 JS 图表配置设计，HTML 内联 `style=` 色值由 W3 按位置级判定覆盖；W4/W5 把 Do-Don't「不发明新档」落为可观察项，只判字面量、token 用法不命中）。**门禁归属**：由 unit 测试快反馈 + `release.py gate` 执行，不入 pre-commit 钩子域与 CI guards（护栏 4/6/7/9/10 由既有测试与 code-traces 等守护分担）。
 
 ## Iteration Guide — 增量指引
 
@@ -159,5 +159,5 @@
 
 ## Known Gaps — 未覆盖面（随任务推进更新）
 
-- 报告 `--focus` token 已就位，应用点为组件状态矩阵（该项未覆盖）；工作台旧名 `--color-*` 兼容映射已到期删除（负向锁见 `test_design_tokens`）。
-- 样式护栏机检（`check-style-guardrails`）：E 级判 finding；W 级观察项当前均为零（裸色值 0 / 圆角档外 0，另含误报修复与豁免域精确化），存量白名单 15 条带理由登记于脚本 `_RAW_COLOR_EXEMPTIONS`。W1 归零口径含「引号内整行豁免」（为 JS 图表配置设计）——HTML 内联色值由增设的 W3 独立观察，存量登记：**W3 归零**（内联色已全部 token 化——新增报告侧 `--heat-*`/`--corr-*`/`--cell-na-bg`/`--alloc-*`/`--danger-text` 组件派生 token（Colors 表登记，暗色配对同步），升为 E 级 finding）、**W4 档外字号 8 处**（工作台 `0.95rem≈15.2px` 非 15px 整值）、**W5 档外间距 172 处**（6/10/14/18px 存量），三维均只减不增（`TestBaselineNoGrowth` 基线断言）；内联/档外新增一律走 token 或先入本段登记。**管控定档**：运行域=unit 测试快反馈（E 级+基线断言）+ 发布门禁 release.py gate（E 级拦/W 级统计留档）；纳入 pre-commit/CI guards 须独立决策；白名单只减不增（腐化自动警告）；收敛优先于豁免。观察数只减不增由 `TestBaselineNoGrowth` 基线断言机制化。
+- 报告 `--focus` token 已定义，组件状态矩阵的应用点未覆盖。
+- 样式护栏机检（`check-style-guardrails`）：E 级判 finding；W 级观察项（裸色值 0 / 圆角档外 0），豁免白名单 15 条带理由登记于脚本 `_RAW_COLOR_EXEMPTIONS`。W1 口径含「引号内整行豁免」（JS 图表配置）；HTML 内联色值由 W3 独立判定（E 级，报告侧组件派生 token `--heat-*`/`--corr-*`/`--cell-na-bg`/`--alloc-*`/`--danger-text` 均登记于 Colors 表并同步暗色配对）。当前观察项：**W4 档外字号 0 处**、**W5 档外间距 1 处**（`action_section.html` 2px，间距阶 [0,4,8,12,16,24,32]），只减不增（`TestBaselineNoGrowth` 基线断言）；档外新增一律走 token 或先在本段登记。**管控定档**：运行域=unit 测试快反馈（E 级+基线断言）+ 发布门禁 release.py gate（E 级拦/W 级统计留档）；纳入 pre-commit/CI guards 须独立决策；白名单只减不增（腐化自动警告）；收敛优先于豁免。观察数只减不增由 `TestBaselineNoGrowth` 基线断言机制化。

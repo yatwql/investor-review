@@ -19,18 +19,20 @@ GROUP_MARKET = "market"
 GROUP_FUND_STYLE = "fund_style"
 GROUP_EVENT_SUMMARY = "event_summary"
 GROUP_MECHANISM = "mechanism"
+GROUP_INTERACTION = "interaction"
 GROUP_STANDALONE = "standalone"
 GROUP_CHAPTER_OPTIONS = "chapter_options"
 
 
 GROUP_LABELS: dict[str, str] = {
-    GROUP_PORTFOLIO: "💼 持仓与交易（成本、申赎状态、成本收益、风险调整）",
-    GROUP_MARKET: "📈 市场与估值（温度、估值分位、景气度、危机回放）",
-    GROUP_FUND_STYLE: "🧩 基金与风格（候选比较、行业 Beta、因子目录）",
-    GROUP_EVENT_SUMMARY: "📰 事件与摘要（事件窗、情绪热点、本期要点）",
-    GROUP_MECHANISM: "⚙ 机制与质量（提示词注入 / 报告追问 / 输出评级）",
-    GROUP_STANDALONE: "📑 独立章节与回放（新增整页签或多期回放）",
-    GROUP_CHAPTER_OPTIONS: "🧩 章节内选项（由 [C] 作为章节子项渲染）",
+    GROUP_PORTFOLIO: "💼 持仓与交易",
+    GROUP_MARKET: "📈 市场与估值",
+    GROUP_FUND_STYLE: "🧩 基金与风格",
+    GROUP_EVENT_SUMMARY: "📰 事件与摘要",
+    GROUP_MECHANISM: "⚙ 机制与质量",
+    GROUP_STANDALONE: "📑 独立章节与回放",
+    GROUP_CHAPTER_OPTIONS: "🧩 章节内选项",
+    GROUP_INTERACTION: "🎛 交互与追问",
 }
 
 GROUP_ORDER: tuple[str, ...] = (
@@ -39,6 +41,7 @@ GROUP_ORDER: tuple[str, ...] = (
     GROUP_FUND_STYLE,
     GROUP_EVENT_SUMMARY,
     GROUP_MECHANISM,
+    GROUP_INTERACTION,
     GROUP_STANDALONE,
     GROUP_CHAPTER_OPTIONS,
 )
@@ -79,6 +82,7 @@ GROUP_DOMAIN: dict[str, str] = {
     GROUP_FUND_STYLE: DOMAIN_REPORT_CONTENT,
     GROUP_EVENT_SUMMARY: DOMAIN_REPORT_CONTENT,
     GROUP_MECHANISM: DOMAIN_PRESENTATION_MECHANISM,
+    GROUP_INTERACTION: DOMAIN_PRESENTATION_MECHANISM,
     GROUP_STANDALONE: DOMAIN_REPORT_CONTENT,
     GROUP_CHAPTER_OPTIONS: DOMAIN_REPORT_CONTENT,
 }
@@ -93,6 +97,7 @@ PANEL_GROUPS: dict[str, tuple[str, ...]] = {
         # [C] 是章节驱动的面板（章节注册表 + 子项），渲染机制组要另建一套行模型，
         # 收益不抵成本。判断依据与输出评级改内置后已不占编号。
         GROUP_MECHANISM,
+        GROUP_INTERACTION,
     ),
     "[C]": (GROUP_STANDALONE, GROUP_CHAPTER_OPTIONS),
 }
@@ -141,14 +146,14 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
     ),
     "portfolio_constraints": FeatureSwitchDef(
         "集中度/相关性约束",
-        "按可配置上限标注单品种/行业/相关性超限（只标注不阻断；阈值需显式配置）",
-        GROUP_MECHANISM,
+        "标注单品种/行业/相关性超限，只标注不阻断（阈值需显式配置）",
+        GROUP_PORTFOLIO,
         False,
         True,
     ),
     "llm_research_contract": FeatureSwitchDef(
         "LLM 复盘结构化契约",
-        "要求 LLM 输出「主张 + 证据 + 判决」结构头并按证据索引机检（默认关；关闭时提示词与产物逐字节不变）",
+        "作用于 [C] 自检复盘章内容：要求主张/证据/判决结构头并按证据索引机检（关则产物不变）",
         GROUP_MECHANISM,
         False,
         True,
@@ -165,8 +170,8 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
     #    消费点：web/handlers._handle_report_qa_ask（403 门）+ 报告模板追问区块 ──
     "report_qa": FeatureSwitchDef(
         "报告对话式追问",
-        "报告页内针对本期报告的会话式追问（零新增取数、轮数上限；回答由 LLM 生成、按量计费，用量独立记账）",
-        GROUP_MECHANISM,
+        "报告页内针对本期报告追问（零新增取数、轮数上限；LLM 生成按量计费）",
+        GROUP_INTERACTION,
         False,
         True,
         experimental=True,
@@ -195,8 +200,8 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
     ),
     # 因子目录（已转正，2026-10-11；门槛评测三指标过审）
     "factor_catalog": FeatureSwitchDef(
-        "因子目录",
-        "25 因子五来源族横截面信号入账与风格与因子分析区「因子目录」区块",
+        "风格与因子区块",
+        "「风格与因子分析」章的行业 Beta 子表 + 因子目录区块（25 因子五来源族信号入账）",
         GROUP_FUND_STYLE,
         False,
         True,
@@ -236,13 +241,6 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
     ),
     # ── 机制与诊断：只读诊断（不改产物、不写文件，默认关的代价是环境出故障者看不到它） ──
     # ── 分析增强与独立章节与回放（以下声明顺序即各组组内面板顺序）──
-    "industry_beta": FeatureSwitchDef(
-        "行业Beta子表",
-        "「风格与因子分析」章渲染行业 Beta 子表（行业暴露 + 回归敏感性）",
-        GROUP_FUND_STYLE,
-        False,
-        True,
-    ),
     "candidate_compare": FeatureSwitchDef(
         "候选基金比较子表",
         "「基金业绩分析」章渲染候选基金横向比较表（候选来自 comparison_candidates）",
@@ -271,6 +269,7 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         GROUP_MARKET,
         True,
         True,
+        panel_visible=False,
     ),
     "stock_fundamentals": FeatureSwitchDef(
         "个股基本面",
@@ -293,6 +292,7 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         GROUP_PORTFOLIO,
         True,
         True,
+        panel_visible=False,
     ),
     "cost_position": FeatureSwitchDef(
         "持仓成本区间位置",
@@ -300,11 +300,12 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         GROUP_PORTFOLIO,
         True,
         True,
+        panel_visible=False,
     ),
     "risk_adjusted_excess": FeatureSwitchDef(
         "风险调整超额",
-        "走势章新增「风险调整超额」子块：滚动 1Y 超额曲线 + 年化 IR/跟踪误差 + 近 12/24 月跑赢基准胜率（需配置业绩基准，独立拉长取数窗口）",
-        GROUP_PORTFOLIO,
+        "走势章子块：滚动 1Y 超额曲线 + IR/跟踪误差 + 跑赢基准胜率（需配基准）",
+        GROUP_MARKET,
         False,
         True,
     ),
@@ -328,6 +329,7 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         GROUP_EVENT_SUMMARY,
         True,
         True,
+        panel_visible=False,
     ),
     # ── 分析增强：投资方法框架（转正项：评分口径验证达成，已摘除实验身份、默认开；
     # 行动章内嵌评分卡区块，作用域属既有章内追加） ──

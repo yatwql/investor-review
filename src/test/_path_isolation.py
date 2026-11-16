@@ -48,7 +48,7 @@ def seed_sensitive_path_isolation(monkeypatch, tmp_path, _doctor_probe_targets) 
     monkeypatch.setenv("CHECK_CONCLUSION_CACHE_DIR", str(tmp_path / "data/cache/guard_conclusions"))
     # data/state/ 运行时状态目录隔离（从 cache_dir 推导，显式 patch 确保清晰）
     monkeypatch.setattr(
-        "src.python.report.data_status._default_persist_path",
+        "src.python.core.degradation._default_persist_path",
         lambda: str(tmp_path / "data/state/.degradation_state.json"),
     )
     # rebalance 静默期文件隔离（owner：_silence.py；调用方直接 patch owner）

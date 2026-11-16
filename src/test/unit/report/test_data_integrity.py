@@ -289,7 +289,7 @@ class TestForeignDenominatedMarketValue(unittest.TestCase):
             "code": "513500",
         }
         with (
-            patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"),
+            patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"),
             patch("src.python.report.market_value.datetime") as mock_dt,
         ):
             mock_dt.now.return_value = datetime(2026, 7, 3, 14, 0)
@@ -325,8 +325,8 @@ class TestQdiiNavConsistency(unittest.TestCase):
             ),
         ]
         with (
-            patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"),
-            patch("src.python.report.market_value.get_prev_trading_day", return_value="2026-07-02"),
+            patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"),
+            patch("src.python.core.trading_calendar.get_prev_trading_day", return_value="2026-07-02"),
             patch("src.python.report.market_value.datetime") as mock_dt,
         ):
             mock_dt.now.return_value = datetime(2026, 7, 3, 16, 0)
@@ -504,7 +504,7 @@ class TestPremiumRateCalculation(unittest.TestCase):
             "code": "513500",
         }
         with (
-            patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"),
+            patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"),
             patch("src.python.report.market_value.datetime") as mock_dt,
         ):
             mock_dt.now.return_value = datetime(2026, 7, 3, 14, 0)
@@ -570,7 +570,7 @@ class TestTodayProfitOffsiteNavDate(unittest.TestCase):
             "code": "600519",
         }
         with (
-            patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"),
+            patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"),
             patch("src.python.report.market_value.datetime") as mock_dt,
         ):
             mock_dt.now.return_value = datetime(2026, 7, 3, 14, 0)
@@ -594,7 +594,7 @@ class TestTodayProfitOffsiteNavDate(unittest.TestCase):
             "code": "003095",
         }
         with (
-            patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"),
+            patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"),
             patch("src.python.core.trading_calendar._is_trading_day", return_value=True),
             patch("src.python.report.market_value.datetime") as mock_dt,
         ):
@@ -619,7 +619,7 @@ class TestTodayProfitOffsiteNavDate(unittest.TestCase):
             "code": "003095",
         }
         with (
-            patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"),
+            patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"),
             patch("src.python.core.trading_calendar._is_trading_day", return_value=True),
             patch("src.python.report.market_value.datetime") as mock_dt,
         ):
@@ -645,7 +645,7 @@ class TestTodayProfitOffsiteNavDate(unittest.TestCase):
             "code": "003095",
         }
         with (
-            patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"),
+            patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"),
             patch("src.python.core.trading_calendar._is_trading_day", return_value=True),
             patch("src.python.report.market_value.datetime") as mock_dt,
         ):

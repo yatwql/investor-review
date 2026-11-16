@@ -1,10 +1,11 @@
 # src/static/ — 前端资产
 
-非 Python 前端资产统一存放于此目录，按归属分为三类：
+非 Python 前端资产统一存放于此目录，按归属分为四类：
 
 1. **报告图表 bundle**（`chart*.js` / `toc.js` / `fold.js` / `theme.js` / `test-chart.html`）：报告生成时由 `report/html_writer_assets.py` 的 `_inline_js_assets` **内嵌**进报告 HTML 的行内 `<script>`（不产出松散副本，单文件完全自包含；资产清单见该模块的 `JS_ASSETS`），报告下载/移动/单发移动端浏览均不依赖外部文件（纯本地 bundle 决策）。
 2. **Web UI 前端**（`web/`）：轻量 Web 模式单页 UI 的 Jinja 模板 + 静态资产。`web/app.py` 的 Flask `template_folder` / `static_folder` 指向 `src/static/web/`，URL 前缀 `/static/`、`render_template("index.html")` 契约与归入前一致。
 3. **报告 Jinja 模板**（`tmpl/`）：HTML 报告主模板、调仓 What-if 独立页与章节级 partial，由 `report/html_jinja_env.py` 的 `FileSystemLoader` 加载（单加载点）。
+4. **文档配图与品牌资产**（`*.svg` / `*.png` / `*.jpg`）：README 与手册引用的架构图、吉祥物、报告/Excel/TUI/Web/CLI 截图，以及 GitHub 社交预览图；由 `scripts/make-screenshots.py`（截图）与 `scripts/make-assets.py`（社交预览）生成，改版后需重新生成。
 
 ---
 
@@ -20,7 +21,7 @@ Chart.js 交互式图表的前端资产（引擎 + 自有 JS + 独立调试页�
 | `chart-print.js` | 打印降级：beforeprint 快照 `<img>` / afterprint 恢复 | ~3KB |
 | `chart-config.js` | 全局配置：配色（CSS 变量驱动）、关闭动画、限制 `devicePixelRatio` | ~4KB |
 | `chart-common.js` | 图表公共 helper（`window.ChartCommon`：登记/折线/环形配置），主报告与 What-if 页共用 | ~3KB |
-| `chart-init.js` | 主报告图表初始化（单图异常隔离 + `typeof Chart` 守卫） | ~16KB |
+| `chart-init.js` | 主报告 12 图初始化（核心 8 / 演进 3 / 纪律回放 1；单图异常隔离 + `typeof Chart` 守卫） | ~18KB |
 | `chart-export.js` | 单图导出 PNG / CSV 按钮（`window.ChartExport.register`） | ~6KB |
 | `toc.js` | 左侧目录：折叠/展开、点击平滑滚动、滚动高亮当前章节 | ~3KB |
 | `fold.js` | 正文大块折叠（`details.section-fold`）交互增强与锚点自动展开 | ~4KB |
@@ -37,7 +38,7 @@ Chart.js 交互式图表的前端资产（引擎 + 自有 JS + 独立调试页�
 
 1. 从官方/镜像下载新版 `chart.umd.min.js`，替换本文件（重命名为 `chart.min.js`）
 2. **无需 SRI**：本地文件来自自身可信下载源，`file://` 下部分浏览器不校验 integrity
-3. 升级后在 **`test-chart.html`** 验证 6 图渲染 + 交互 + 4 场景（正常/降级/空数据/离线）——打开调试页即可自检，替代完整报告生成
+3. 升级后在 **`test-chart.html`** 验证 12 图渲染 + 交互 + 4 场景（正常/降级/空数据/离线）——打开调试页即可自检，替代完整报告生成
 4. 通过后补做全链路手动验证（真实报告打印 + 微信/离线场景）
 5. 更新本文件「版本记录」表
 

@@ -343,7 +343,8 @@ class TestHtmlCallSiteSeam:
         """full 路径的包装调用点须从 pipeline_data 取契约传入。"""
         import inspect
 
-        from src.python.report import _report_generation
+        from src.python.report import _generation_full
 
-        src = inspect.getsource(_report_generation._generate_report_full)
+        # 接线随编排拆分移入 `_emit_full_reports`（同一模块的写出阶段），守卫按模块面校验
+        src = inspect.getsource(_generation_full)
         assert 'prosperity_framework_data=(pipeline_data or {}).get("prosperity_framework_data")' in src

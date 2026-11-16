@@ -4,6 +4,9 @@
   单个指标连续失败 N 次后静默 24h，不阻塞其他指标计算，
   避免一次波动性失败污染全管线。
 
+失败语义：指标计算异常按「该指标不可用」处理（返回空值 + 登记降级事件），
+不向上抛异常；熔断只影响该指标，不影响同轮其他指标。
+
 与 provider_registry 的边界：
   provider_registry（传输层熔断）：
     管 HTTP 层面的快速跳过（超时/断连/5xx），per-provider 粒度。
@@ -179,7 +182,7 @@ class IndicatorBreaker:
             )
             # 记录到 DegradationTracker
             try:
-                from src.python.report.data_status import get_tracker
+                from src.python.core.degradation import get_tracker
 
                 tracker = get_tracker()
                 tracker.record(

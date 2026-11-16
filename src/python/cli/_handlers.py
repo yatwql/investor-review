@@ -344,8 +344,8 @@ def _print_artifact_paths(config: dict, output_override: str | None) -> None:
 
 
 def _collect_degradation_summary(max_items: int = 10) -> list[str]:
-    """降级摘要行——委托 `report/data_status.degradation_summary`（单源，CLI/Web 收尾共用）。"""
-    from src.python.report.data_status import degradation_summary
+    """降级摘要行——委托 `core/degradation.degradation_summary`（单源，CLI/Web 收尾共用）。"""
+    from src.python.core.degradation import degradation_summary
 
     return degradation_summary(max_items)
 

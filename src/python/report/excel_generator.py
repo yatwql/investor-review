@@ -102,6 +102,363 @@ def _write_summary_experimental_notice(sheets: dict[str, Any]) -> None:
     logger.info("汇总页签页脚已写入实验功能清单（LLM 用量页签无落点）")
 
 
+def _ensure_basic_action_data(
+    pipeline_data: dict[str, Any] | None,
+    data: dict[str, Any],
+    transactions: list | None,
+    enable_action: bool,
+) -> dict[str, Any] | None:
+    """basic 路径就地组装行动建议与判断依据（编排层已注入时不重复构建）。
+
+    Args:
+        pipeline_data: 编排层注入的管线数据（可为 ``None``）
+        data: 行情/明细装配结果（``details`` 与 ``total_mv`` 由它提供）
+        transactions: 交易流水（行动建议的持仓成本口径）
+        enable_action: 行动建议板块开关
+
+    Returns:
+        补齐 ``action_data`` / ``decision_basis_data`` 后的管线数据
+    """
+    if enable_action and not (pipeline_data or {}).get("action_data"):
+        _action_details = data.get("details") or []
+        if _action_details:
+            from src.python.analysis.action_advisor import build_action_data
+            from src.python.report._report_helpers import _action_holdings_details
+
+            pipeline_data = {**(pipeline_data or {})}
+            _basic_holdings = _action_holdings_details(_action_details, transactions)
+            _basic_action = build_action_data(
+                _basic_holdings,
+                data.get("total_mv", 0.0),
+            )
+            pipeline_data["action_data"] = _basic_action
+            if not pipeline_data.get("decision_basis_data"):
+                # 判断依据块：basic 不经编排层，由同一份明细就地构建（回撤现状按
+                # 「峰值未知」标未评估）；full/both 路径已注入时不重复构建。
+                from src.python.report.decision_basis import build_decision_basis_data
+
+                pipeline_data["decision_basis_data"] = build_decision_basis_data(
+                    _basic_holdings,
+                    data.get("total_mv", 0.0),
+                    discipline_signals=_basic_action.get("discipline_signals"),
+                )
+    return pipeline_data
+
+
+def _ensure_market_sentiment(
+    pipeline_data: dict[str, Any] | None,
+    holdings: list,
+    pen_result: dict | None,
+    prog: ProgressReporter,
+) -> dict[str, Any] | None:
+    """basic 路径就地组装市场情绪（穿透结果已就绪；编排层注入时不重复构建）。"""
+    if not (pipeline_data or {}).get("market_sentiment_data"):
+        from src.python.config import get_config
+        from src.python.report._report_aux_metrics import compute_market_sentiment_data
+
+        _ms_data = compute_market_sentiment_data(
+            holdings, {"penetrated_assets": (pen_result or {}).get("top10")}, get_config(), prog
+        )
+        if _ms_data is not None:
+            pipeline_data = {**(pipeline_data or {})}
+            pipeline_data["market_sentiment_data"] = _ms_data
+    return pipeline_data
+
+
+def _ensure_prosperity_framework(
+    pipeline_data: dict[str, Any] | None,
+    holdings: list,
+    data: dict[str, Any],
+    pen_result: dict | None,
+    financial_indicator_data: dict | None,
+    history_data: dict | None,
+    prog: ProgressReporter,
+) -> dict[str, Any] | None:
+    """basic 路径就地组装景气度框架诊断（实验功能；异常只降级不中断报告）。"""
+    if not (pipeline_data or {}).get("prosperity_framework_data"):
+        from src.python.config import get_config
+        from src.python.report._report_aux_metrics import compute_prosperity_framework_data
+
+        try:
+            _pf = compute_prosperity_framework_data(
+                holdings,
+                data.get("details"),
+                {"penetrated_assets": (pen_result or {}).get("top10")},
+                get_config(),
+                prog,
+                financial_indicator_data=financial_indicator_data,
+                history_data=history_data,
+            )
+        except Exception:  # 双保险：实验性诊断异常不得中断报告生成
+            logger.warning("[prosperity_framework] 诊断装配异常，本次跳过（主报告不受影响）", exc_info=True)
+            _pf = None
+        if _pf is not None:
+            pipeline_data = {**(pipeline_data or {})}
+            pipeline_data["prosperity_framework_data"] = _pf
+    return pipeline_data
+
+
+def _write_optional_detail_sheets(
+    sheets: dict[str, Any],
+    pipeline_data: dict[str, Any] | None,
+    history_data: dict | None,
+    financial_indicator_data: dict | None,
+    financial_report_digest_data: dict | None,
+    enable_history: bool,
+    prog: ProgressReporter,
+) -> None:
+    """写入可选明细页签（走势回撤 / 演进 / 持仓变动 / 事件窗 / 规则回放 / 基本面 / 行动建议 / 数据质量）。
+
+    每个页签各自兜底：数据键缺席即不建不写，单个页签异常只记 debug，不中断报告生成。
+    """
+    if enable_history:
+        ws_hd = sheets.get("portfolio_history_drawdown")
+        if ws_hd is not None:
+            prog.info("正在写入组合历史走势与回撤页签...")
+            try:
+                _write_portfolio_history_drawdown_sheet(
+                    sheets,
+                    history_data,
+                    (pipeline_data or {}).get("crisis_annotation_data"),
+                    (pipeline_data or {}).get("tail_risk_data"),
+                    (pipeline_data or {}).get("risk_adjusted_excess_data"),
+                )
+            except Exception:
+                logger.debug("[excel] 组合历史走势与回撤页签写入失败（非关键）", exc_info=True)
+
+    # ── 组合演进页签（多快照趋势，evolution_data） ──
+    ws_evo = sheets.get("portfolio_evolution")
+    if ws_evo is not None:
+        prog.info("正在写入组合演进页签...")
+        try:
+            from src.python.report.evolution_sheet import write_evolution_sheet
+
+            write_evolution_sheet(
+                ws_evo,
+                (pipeline_data or {}).get("evolution_data"),
+                snapshot_diff_data=(pipeline_data or {}).get("snapshot_diff_data"),
+            )
+        except Exception:
+            logger.debug("[excel] 组合演进页签写入失败（非关键）", exc_info=True)
+
+    # ── 持仓变动复盘页签（快照事件级，holding_change_data；报告章节与增强开关默认关，
+    #      键缺席时页签不创建，此处自然不触发） ──
+    ws_hc = sheets.get("holding_change")
+    if ws_hc is not None:
+        prog.info("正在写入持仓变动复盘页签...")
+        try:
+            from src.python.report.holding_change_panel import write_holding_change_sheet
+
+            write_holding_change_sheet(ws_hc, (pipeline_data or {}).get("holding_change_data"))
+        except Exception:
+            logger.debug("[excel] 持仓变动复盘页签写入失败（非关键）", exc_info=True)
+
+    # ── 事件窗对照区块（并入财经新闻页签尾部；报告章节与增强开关 event_window_impact
+    #      默认关，键缺席时区块不渲染，此处自然不触发） ──
+    ws_news = sheets.get("news_correlation")
+    event_data = (pipeline_data or {}).get("event_impact_data")
+    if ws_news is not None and event_data is not None:
+        prog.info("正在写入事件窗对照区块（财经新闻页签尾部）...")
+        try:
+            from src.python.report.event_impact_panel import write_event_impact_footer
+
+            write_event_impact_footer(ws_news, event_data, start_row=ws_news.max_row + 2)
+        except Exception:
+            logger.debug("[excel] 事件窗对照区块写入失败（非关键）", exc_info=True)
+
+    # ── 调仓纪律回放页签（多期规则回放 vs 买入持有；实验开关
+    #      rebalance_schedule_replay 默认关，键缺席时页签不创建，此处自然不触发） ──
+    ws_sr = sheets.get("schedule_replay")
+    if ws_sr is not None:
+        prog.info("正在写入调仓纪律回放页签...")
+        try:
+            from src.python.report.schedule_replay_panel import write_schedule_replay_sheet
+
+            write_schedule_replay_sheet(ws_sr, (pipeline_data or {}).get("schedule_replay_data"))
+        except Exception:
+            logger.debug("[excel] 调仓纪律回放页签写入失败（非关键）", exc_info=True)
+
+    # ── 持仓基本面页签（财务指标 + 财报摘要，一章两区块） ──
+    ws_fs = sheets.get("fundamental_snapshot")
+    if ws_fs is not None:
+        prog.info("正在写入持仓基本面页签...")
+        try:
+            from src.python.report.fundamental_snapshot_sheet import write_fundamental_snapshot_sheet
+
+            write_fundamental_snapshot_sheet(
+                ws_fs,
+                indicator_data=financial_indicator_data,
+                digest_data=financial_report_digest_data,
+            )
+        except Exception:
+            logger.debug("[excel] 持仓基本面页签写入失败（非关键）", exc_info=True)
+
+    # ── 行动建议页签（行动板块，action_data） ──
+    ws_action = sheets.get("action")
+    if ws_action is not None:
+        prog.info("正在写入行动建议页签...")
+        try:
+            from src.python.report.action_sheet import write_action_sheet
+
+            write_action_sheet(
+                ws_action,
+                (pipeline_data or {}).get("action_data"),
+                decision_review_data=(pipeline_data or {}).get("decision_review_data"),
+                prosperity_framework_data=(pipeline_data or {}).get("prosperity_framework_data"),
+                market_sentiment_data=(pipeline_data or {}).get("market_sentiment_data"),
+                decision_basis_data=(pipeline_data or {}).get("decision_basis_data"),
+            )
+        except Exception:
+            logger.debug("[excel] 行动建议页签写入失败（非关键）", exc_info=True)
+
+    # ── 数据质量仪表盘 / 数据源可用性矩阵页签 ──
+    ws_ds = sheets.get("data_source_status")
+    if ws_ds is not None:
+        # 数据质量仪表盘（内置恒开）：源健康 + 品种覆盖 + 可信度
+        prog.info("正在写入数据质量仪表盘...")
+        try:
+            from src.python.report.data_quality_sheet import write_data_quality_sheet
+            from src.python.report.data_source_matrix import build_data_source_matrix
+
+            write_data_quality_sheet(
+                ws_ds,
+                build_data_source_matrix(),
+                (pipeline_data or {}).get("position_status"),
+                (pipeline_data or {}).get("data_freshness"),
+                # 历史走势终点滞后：与 HTML 数据状态同一事实，双端同文（源健康标降级 +
+                # 逐品种标出滞后交易日数）
+                (history_data or {}).get("terminal_staleness"),
+            )
+        except Exception:
+            logger.debug("[excel] 数据质量仪表盘页签写入失败（非关键）", exc_info=True)
+
+
+def _write_diff_summary_block(
+    sheets: dict[str, Any],
+    pipeline_data: dict[str, Any] | None,
+    prog: ProgressReporter,
+) -> None:
+    """把「环比对比」摘要写到汇总页签底部（无 diff 时零输出）。"""
+    if pipeline_data and pipeline_data.get("diff") and "summary" in sheets:
+        prog.info("正在写入环比对比摘要...")
+        try:
+            _diff = pipeline_data["diff"]
+            _ws_sum = sheets["summary"]
+            # 找到最后一行的行号
+            _last_row = _ws_sum.max_row + 2
+            from openpyxl.styles import Font
+
+            _section_font = Font(size=12, bold=True, color="2E75B6")
+            _bold_font = Font(bold=True)
+            # 标题行
+            _ws_sum.cell(row=_last_row, column=1, value="【环比对比】").font = _section_font
+            _last_row += 1
+            # 对比数据
+            if _diff.get("days_since_last_report") is not None:
+                _ws_sum.cell(row=_last_row, column=1, value="距上次报告")
+                _ws_sum.cell(row=_last_row, column=2, value=f"{_diff['days_since_last_report']} 天")
+                _last_row += 1
+            if _diff.get("baseline_generated_at"):
+                _ws_sum.cell(row=_last_row, column=1, value="对比基准")
+                _ws_sum.cell(
+                    row=_last_row,
+                    column=2,
+                    value=f"交易日 {_diff.get('baseline_trading_day') or '--'} · 报告生成 {_diff['baseline_generated_at']}",
+                )
+                _last_row += 1
+            if _diff.get("total_value_diff") is not None:
+                _ws_sum.cell(row=_last_row, column=1, value="总市值变化").font = _bold_font
+                _cell = _ws_sum.cell(row=_last_row, column=2, value=_diff["total_value_diff"])
+                _cell.number_format = "#,##0.00"
+                _cell.font = Font(color="CC0000" if _diff["total_value_diff"] >= 0 else "009900")
+                _last_row += 1
+            if _diff.get("total_value_diff_pct") is not None:
+                _ws_sum.cell(row=_last_row, column=1, value="总市值变化率")
+                _cell = _ws_sum.cell(row=_last_row, column=2, value=round(_diff["total_value_diff_pct"] / 100, 4))
+                _cell.number_format = "0.00%"
+                _last_row += 1
+            if _diff.get("total_pnl_diff") is not None:
+                _ws_sum.cell(row=_last_row, column=1, value="总盈亏变化").font = _bold_font
+                _cell = _ws_sum.cell(row=_last_row, column=2, value=_diff["total_pnl_diff"])
+                _cell.number_format = "#,##0.00"
+                _cell.font = Font(color="CC0000" if _diff["total_pnl_diff"] >= 0 else "009900")
+                _last_row += 1
+            # 持仓变动概要
+            for _label, _key in [
+                ("新增持仓", "added"),
+                ("清仓标的", "removed"),
+                ("增持标的", "increased"),
+                ("减持标的", "decreased"),
+            ]:
+                _items = _diff.get(_key, [])
+                if _items:
+                    _ws_sum.cell(row=_last_row, column=1, value=_label).font = _bold_font
+                    _names = ", ".join(f"{i.get('name', '')}({i.get('code', '')})" for i in _items[:5])
+                    if len(_items) > 5:
+                        _names += f" 等{len(_items)}只"
+                    _ws_sum.cell(row=_last_row, column=2, value=_names)
+                    _last_row += 1
+            logger.info("环比对比摘要已写入 summary 页签")
+        except Exception:
+            logger.debug("[F delta] Excel 环比对比摘要写入失败（非关键）", exc_info=True)
+
+
+def _finalize_and_save(
+    wb: Any,
+    sheets: dict[str, Any],
+    holdings: list,
+    save_workbook: Any,
+    data: dict[str, Any],
+    output_dir: str,
+    prog: ProgressReporter,
+) -> None:
+    """收尾并保存工作簿：实验清单 / 隐私脚注 / 返回链接 / 匿名化清扫。"""
+    with Timer("保存 Excel/HTML 文件"):
+        # 实验功能清单的兜底落点：LLM 用量页签未承载时落到汇总页脚
+        try:
+            _write_summary_experimental_notice(sheets)
+        except Exception:
+            logger.debug("[excel] 汇总页脚实验功能清单写入失败（非关键）", exc_info=True)
+
+        # 在每个页签底部写入隐私声明脚注
+        for _ws_name, _ws in sheets.items():
+            if _ws is not None:
+                try:
+                    from src.python.report.excel_writer import write_privacy_footer
+
+                    write_privacy_footer(_ws, ncols=5)
+                except Exception:
+                    logger.debug("[privacy] 页签 %s 写入隐私脚注失败（非关键）", _ws_name, exc_info=True)
+        # 各页签标题行尾「↩ 返回汇总」内部超链接（内容写完后定位行尾，不移位）
+        try:
+            from src.python.report.excel_sheet_factory import stamp_back_to_summary
+
+            stamp_back_to_summary(sheets)
+        except Exception:
+            logger.debug("[excel] 返回汇总链接写入失败（非关键）", exc_info=True)
+        # 产物单元格清扫（匿名化）：字符串单元格统一真名→代号（full 另掩真码），
+        # 兑底字段层未覆盖的派生页签；数值单元格不动（无数字子串误伤）。
+        # off → 恒等零开销跳过。
+        from src.python.config.anonymizer import build_report_alias_map, get_anonymization_mode
+        from src.python.report.excel_writer import mask_workbook_text
+
+        _anon_mode = get_anonymization_mode()
+        if _anon_mode != "off":
+            mask_workbook_text(wb, build_report_alias_map(holdings, _anon_mode))
+
+        prog.info("正在保存 Excel 报告...")
+        path = save_workbook(wb, output_dir=output_dir)
+        logger.info("Excel 报告已生成: %s", path)
+        logger.info(
+            "总市值: %.2f元, 总成本: %.2f元, 总盈亏: %.2f元, 本日盈亏: %.2f元",
+            data["total_mv"],
+            data["total_cost"],
+            data["total_profit"],
+            data["today_profit"],
+        )
+        prog.ok(f"Excel 报告已保存: {path}")
+
+
 def generate_excel_report(
     holdings: list,
     include_news: bool = False,
@@ -239,29 +596,7 @@ def generate_excel_report(
     # 已注入时不重复构建，保持编排层为唯一事实来源。
     # portfolio_peak_mv 缺省：basic 不含历史走势，组合峰值未知，回撤纪律按
     # 「峰值未知」处理（组合级回撤不激活），其余纪律不受影响。
-    if enable_action and not (pipeline_data or {}).get("action_data"):
-        _action_details = data.get("details") or []
-        if _action_details:
-            from src.python.analysis.action_advisor import build_action_data
-            from src.python.report._report_helpers import _action_holdings_details
-
-            pipeline_data = {**(pipeline_data or {})}
-            _basic_holdings = _action_holdings_details(_action_details, transactions)
-            _basic_action = build_action_data(
-                _basic_holdings,
-                data.get("total_mv", 0.0),
-            )
-            pipeline_data["action_data"] = _basic_action
-            if not pipeline_data.get("decision_basis_data"):
-                # 判断依据块：basic 不经编排层，由同一份明细就地构建（回撤现状按
-                # 「峰值未知」标未评估）；full/both 路径已注入时不重复构建。
-                from src.python.report.decision_basis import build_decision_basis_data
-
-                pipeline_data["decision_basis_data"] = build_decision_basis_data(
-                    _basic_holdings,
-                    data.get("total_mv", 0.0),
-                    discipline_signals=_basic_action.get("discipline_signals"),
-                )
+    pipeline_data = _ensure_basic_action_data(pipeline_data, data, transactions, enable_action)
 
     # ── 各页签写入 ──
     pen_result = write_content_sheets(
@@ -293,39 +628,13 @@ def generate_excel_report(
 
     # ── 市场情绪契约（报告增强开关 market_sentiment）就地兜底 ──
     # basic 路径不经编排层；此处穿透结果已就绪，就地组装（full/both 由编排层注入）
-    if not (pipeline_data or {}).get("market_sentiment_data"):
-        from src.python.config import get_config
-        from src.python.report._report_aux_metrics import compute_market_sentiment_data
-
-        _ms_data = compute_market_sentiment_data(
-            holdings, {"penetrated_assets": (pen_result or {}).get("top10")}, get_config(), prog
-        )
-        if _ms_data is not None:
-            pipeline_data = {**(pipeline_data or {})}
-            pipeline_data["market_sentiment_data"] = _ms_data
+    pipeline_data = _ensure_market_sentiment(pipeline_data, holdings, pen_result, prog)
 
     # ── 景气度框架诊断契约（实验性功能 prosperity_framework）就地兜底 ──
     # basic 路径不经编排层；此处穿透结果已就绪，就地组装（full/both 由编排层注入）
-    if not (pipeline_data or {}).get("prosperity_framework_data"):
-        from src.python.config import get_config
-        from src.python.report._report_aux_metrics import compute_prosperity_framework_data
-
-        try:
-            _pf = compute_prosperity_framework_data(
-                holdings,
-                data.get("details"),
-                {"penetrated_assets": (pen_result or {}).get("top10")},
-                get_config(),
-                prog,
-                financial_indicator_data=financial_indicator_data,
-                history_data=history_data,
-            )
-        except Exception:  # 双保险：实验性诊断异常不得中断报告生成
-            logger.warning("[prosperity_framework] 诊断装配异常，本次跳过（主报告不受影响）", exc_info=True)
-            _pf = None
-        if _pf is not None:
-            pipeline_data = {**(pipeline_data or {})}
-            pipeline_data["prosperity_framework_data"] = _pf
+    pipeline_data = _ensure_prosperity_framework(
+        pipeline_data, holdings, data, pen_result, financial_indicator_data, history_data, prog
+    )
     # 风格与因子分析：数据契约 数据在编排层注入 pipeline_data（style_factor_data 主键），
     # 此处透传页签写入（一章四区块：风格表 + 因子回归 + 行业 Beta 子表 + 因子目录）
     write_fund_deep_analysis_sheets(
@@ -351,233 +660,18 @@ def generate_excel_report(
     )
 
     # ── 组合历史走势与回撤页签（一章两区块：走势表 + 回撤矩阵 + 危机区间标注） ──
-    if enable_history:
-        ws_hd = sheets.get("portfolio_history_drawdown")
-        if ws_hd is not None:
-            prog.info("正在写入组合历史走势与回撤页签...")
-            try:
-                _write_portfolio_history_drawdown_sheet(
-                    sheets,
-                    history_data,
-                    (pipeline_data or {}).get("crisis_annotation_data"),
-                    (pipeline_data or {}).get("tail_risk_data"),
-                    (pipeline_data or {}).get("risk_adjusted_excess_data"),
-                )
-            except Exception:
-                logger.debug("[excel] 组合历史走势与回撤页签写入失败（非关键）", exc_info=True)
-
-    # ── 组合演进页签（多快照趋势，evolution_data） ──
-    ws_evo = sheets.get("portfolio_evolution")
-    if ws_evo is not None:
-        prog.info("正在写入组合演进页签...")
-        try:
-            from src.python.report.evolution_sheet import write_evolution_sheet
-
-            write_evolution_sheet(
-                ws_evo,
-                (pipeline_data or {}).get("evolution_data"),
-                snapshot_diff_data=(pipeline_data or {}).get("snapshot_diff_data"),
-            )
-        except Exception:
-            logger.debug("[excel] 组合演进页签写入失败（非关键）", exc_info=True)
-
-    # ── 持仓变动复盘页签（快照事件级，holding_change_data；报告章节与增强开关默认关，
-    #      键缺席时页签不创建，此处自然不触发） ──
-    ws_hc = sheets.get("holding_change")
-    if ws_hc is not None:
-        prog.info("正在写入持仓变动复盘页签...")
-        try:
-            from src.python.report.holding_change_panel import write_holding_change_sheet
-
-            write_holding_change_sheet(ws_hc, (pipeline_data or {}).get("holding_change_data"))
-        except Exception:
-            logger.debug("[excel] 持仓变动复盘页签写入失败（非关键）", exc_info=True)
-
-    # ── 事件窗对照区块（并入财经新闻页签尾部；报告章节与增强开关 event_window_impact
-    #      默认关，键缺席时区块不渲染，此处自然不触发） ──
-    ws_news = sheets.get("news_correlation")
-    event_data = (pipeline_data or {}).get("event_impact_data")
-    if ws_news is not None and event_data is not None:
-        prog.info("正在写入事件窗对照区块（财经新闻页签尾部）...")
-        try:
-            from src.python.report.event_impact_panel import write_event_impact_footer
-
-            write_event_impact_footer(ws_news, event_data, start_row=ws_news.max_row + 2)
-        except Exception:
-            logger.debug("[excel] 事件窗对照区块写入失败（非关键）", exc_info=True)
-
-    # ── 调仓纪律回放页签（多期规则回放 vs 买入持有；实验开关
-    #      rebalance_schedule_replay 默认关，键缺席时页签不创建，此处自然不触发） ──
-    ws_sr = sheets.get("schedule_replay")
-    if ws_sr is not None:
-        prog.info("正在写入调仓纪律回放页签...")
-        try:
-            from src.python.report.schedule_replay_panel import write_schedule_replay_sheet
-
-            write_schedule_replay_sheet(ws_sr, (pipeline_data or {}).get("schedule_replay_data"))
-        except Exception:
-            logger.debug("[excel] 调仓纪律回放页签写入失败（非关键）", exc_info=True)
-
-    # ── 持仓基本面页签（财务指标 + 财报摘要，一章两区块） ──
-    ws_fs = sheets.get("fundamental_snapshot")
-    if ws_fs is not None:
-        prog.info("正在写入持仓基本面页签...")
-        try:
-            from src.python.report.fundamental_snapshot_sheet import write_fundamental_snapshot_sheet
-
-            write_fundamental_snapshot_sheet(
-                ws_fs,
-                indicator_data=financial_indicator_data,
-                digest_data=financial_report_digest_data,
-            )
-        except Exception:
-            logger.debug("[excel] 持仓基本面页签写入失败（非关键）", exc_info=True)
-
-    # ── 行动建议页签（行动板块，action_data） ──
-    ws_action = sheets.get("action")
-    if ws_action is not None:
-        prog.info("正在写入行动建议页签...")
-        try:
-            from src.python.report.action_sheet import write_action_sheet
-
-            write_action_sheet(
-                ws_action,
-                (pipeline_data or {}).get("action_data"),
-                decision_review_data=(pipeline_data or {}).get("decision_review_data"),
-                prosperity_framework_data=(pipeline_data or {}).get("prosperity_framework_data"),
-                market_sentiment_data=(pipeline_data or {}).get("market_sentiment_data"),
-                decision_basis_data=(pipeline_data or {}).get("decision_basis_data"),
-            )
-        except Exception:
-            logger.debug("[excel] 行动建议页签写入失败（非关键）", exc_info=True)
-
-    # ── 数据质量仪表盘 / 数据源可用性矩阵页签 ──
-    ws_ds = sheets.get("data_source_status")
-    if ws_ds is not None:
-        # 数据质量仪表盘（内置恒开）：源健康 + 品种覆盖 + 可信度
-        prog.info("正在写入数据质量仪表盘...")
-        try:
-            from src.python.report.data_quality_sheet import write_data_quality_sheet
-            from src.python.report.data_source_matrix import build_data_source_matrix
-
-            write_data_quality_sheet(
-                ws_ds,
-                build_data_source_matrix(),
-                (pipeline_data or {}).get("position_status"),
-                (pipeline_data or {}).get("data_freshness"),
-                # 历史走势终点滞后：与 HTML 数据状态同一事实，双端同文（源健康标降级 +
-                # 逐品种标出滞后交易日数）
-                (history_data or {}).get("terminal_staleness"),
-            )
-        except Exception:
-            logger.debug("[excel] 数据质量仪表盘页签写入失败（非关键）", exc_info=True)
+    _write_optional_detail_sheets(
+        sheets,
+        pipeline_data,
+        history_data,
+        financial_indicator_data,
+        financial_report_digest_data,
+        enable_history,
+        prog,
+    )
 
     # ── 组合历史走势：环比对比摘要（写入 summary 页签底部） ──
-    if pipeline_data and pipeline_data.get("diff") and "summary" in sheets:
-        prog.info("正在写入环比对比摘要...")
-        try:
-            _diff = pipeline_data["diff"]
-            _ws_sum = sheets["summary"]
-            # 找到最后一行的行号
-            _last_row = _ws_sum.max_row + 2
-            from openpyxl.styles import Font
-
-            _section_font = Font(size=12, bold=True, color="2E75B6")
-            _bold_font = Font(bold=True)
-            # 标题行
-            _ws_sum.cell(row=_last_row, column=1, value="【环比对比】").font = _section_font
-            _last_row += 1
-            # 对比数据
-            if _diff.get("days_since_last_report") is not None:
-                _ws_sum.cell(row=_last_row, column=1, value="距上次报告")
-                _ws_sum.cell(row=_last_row, column=2, value=f"{_diff['days_since_last_report']} 天")
-                _last_row += 1
-            if _diff.get("baseline_generated_at"):
-                _ws_sum.cell(row=_last_row, column=1, value="对比基准")
-                _ws_sum.cell(
-                    row=_last_row,
-                    column=2,
-                    value=f"交易日 {_diff.get('baseline_trading_day') or '--'} · 报告生成 {_diff['baseline_generated_at']}",
-                )
-                _last_row += 1
-            if _diff.get("total_value_diff") is not None:
-                _ws_sum.cell(row=_last_row, column=1, value="总市值变化").font = _bold_font
-                _cell = _ws_sum.cell(row=_last_row, column=2, value=_diff["total_value_diff"])
-                _cell.number_format = "#,##0.00"
-                _cell.font = Font(color="CC0000" if _diff["total_value_diff"] >= 0 else "009900")
-                _last_row += 1
-            if _diff.get("total_value_diff_pct") is not None:
-                _ws_sum.cell(row=_last_row, column=1, value="总市值变化率")
-                _cell = _ws_sum.cell(row=_last_row, column=2, value=round(_diff["total_value_diff_pct"] / 100, 4))
-                _cell.number_format = "0.00%"
-                _last_row += 1
-            if _diff.get("total_pnl_diff") is not None:
-                _ws_sum.cell(row=_last_row, column=1, value="总盈亏变化").font = _bold_font
-                _cell = _ws_sum.cell(row=_last_row, column=2, value=_diff["total_pnl_diff"])
-                _cell.number_format = "#,##0.00"
-                _cell.font = Font(color="CC0000" if _diff["total_pnl_diff"] >= 0 else "009900")
-                _last_row += 1
-            # 持仓变动概要
-            for _label, _key in [
-                ("新增持仓", "added"),
-                ("清仓标的", "removed"),
-                ("增持标的", "increased"),
-                ("减持标的", "decreased"),
-            ]:
-                _items = _diff.get(_key, [])
-                if _items:
-                    _ws_sum.cell(row=_last_row, column=1, value=_label).font = _bold_font
-                    _names = ", ".join(f"{i.get('name', '')}({i.get('code', '')})" for i in _items[:5])
-                    if len(_items) > 5:
-                        _names += f" 等{len(_items)}只"
-                    _ws_sum.cell(row=_last_row, column=2, value=_names)
-                    _last_row += 1
-            logger.info("环比对比摘要已写入 summary 页签")
-        except Exception:
-            logger.debug("[F delta] Excel 环比对比摘要写入失败（非关键）", exc_info=True)
+    _write_diff_summary_block(sheets, pipeline_data, prog)
 
     # ── 保存 ──
-    with Timer("保存 Excel/HTML 文件"):
-        # 实验功能清单的兜底落点：LLM 用量页签未承载时落到汇总页脚
-        try:
-            _write_summary_experimental_notice(sheets)
-        except Exception:
-            logger.debug("[excel] 汇总页脚实验功能清单写入失败（非关键）", exc_info=True)
-
-        # 在每个页签底部写入隐私声明脚注
-        for _ws_name, _ws in sheets.items():
-            if _ws is not None:
-                try:
-                    from src.python.report.excel_writer import write_privacy_footer
-
-                    write_privacy_footer(_ws, ncols=5)
-                except Exception:
-                    logger.debug("[privacy] 页签 %s 写入隐私脚注失败（非关键）", _ws_name, exc_info=True)
-        # 各页签标题行尾「↩ 返回汇总」内部超链接（内容写完后定位行尾，不移位）
-        try:
-            from src.python.report.excel_sheet_factory import stamp_back_to_summary
-
-            stamp_back_to_summary(sheets)
-        except Exception:
-            logger.debug("[excel] 返回汇总链接写入失败（非关键）", exc_info=True)
-        # 产物单元格清扫（匿名化）：字符串单元格统一真名→代号（full 另掩真码），
-        # 兑底字段层未覆盖的派生页签；数值单元格不动（无数字子串误伤）。
-        # off → 恒等零开销跳过。
-        from src.python.config.anonymizer import build_report_alias_map, get_anonymization_mode
-        from src.python.report.excel_writer import mask_workbook_text
-
-        _anon_mode = get_anonymization_mode()
-        if _anon_mode != "off":
-            mask_workbook_text(wb, build_report_alias_map(holdings, _anon_mode))
-
-        prog.info("正在保存 Excel 报告...")
-        path = save_workbook(wb, output_dir=output_dir)
-        logger.info("Excel 报告已生成: %s", path)
-        logger.info(
-            "总市值: %.2f元, 总成本: %.2f元, 总盈亏: %.2f元, 本日盈亏: %.2f元",
-            data["total_mv"],
-            data["total_cost"],
-            data["total_profit"],
-            data["today_profit"],
-        )
-        prog.ok(f"Excel 报告已保存: {path}")
+    _finalize_and_save(wb, sheets, holdings, save_workbook, data, output_dir, prog)

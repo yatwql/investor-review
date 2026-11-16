@@ -407,18 +407,18 @@ Web 模式全链路可复跑冒烟验证（上传→生成→进度→产物，F
 使漂移在提交前暴露。与 `check-doc-traces.py` 互补：那边管「不该写的内容」（历史痕迹），这边管
 「写了但与实现不符的内容」。
 
-二十七项检查（权威源 → 受检文档）：
+二十八项检查（权威源 → 受检文档）：
 
 1. 报告章节表（`reports-instruction.md`）↔ 章节注册表 `_REPORT_SECTION_DEFAULT`（行数/序号/名称）；
    含「可见性规则总览」表 `type` 行双向对账（文档 type 集合 ↔ 注册表 type 集合）——只看行数不够：type 集合漂移时
    行数可能恰好相等而表内写的是不存在的 type 名称，故须按集合双向比对
 2. 章节数量断言（`页签编号 1~N` / `默认顺序（N 项` / `返回 result（N 项` / `N 个报告章节`）↔ 注册表章节数
-3. 功能开关表（`how-to-config.md` 四组区段）↔ `feature_switch_registry`（成员/默认值/无表外键）
+3. 功能开关表（`how-to-config.md` 八组区段）↔ `feature_switch_registry`（成员/默认值/无表外键）
 4. 开关分组计数断言（八组连写、`<组名>（N 项`、`共 N 项开关`、旧三组名残留检测）↔ 分组计数
 5. 开关默认值断言（`` `flag` `` 后紧随「默认开/关」）↔ 注册表默认值
 6. 配置标量默认值表（`how-to-config.md`）↔ `_DEFAULT_CONFIG`
 7. LLM 默认参数表（`llm-technical.md`）↔ `_DEFAULT_LLM_SETTINGS` + 缓存 TTL 注册表
-8. TUI 两面板编号与分组边界（`how-to-use-tui-menu.md`）：`[S]` 五组编号 ↔ `features.panel_option_numbers`、`[C]` 章节与 `7.1`/`7.2` 子项编号 ↔ 章节注册表，块标题区间与 features 键名映射逐项对账（实现见 `_doc_drift/_format_panels.py`）
+8. TUI 两面板编号与分组边界（`how-to-use-tui-menu.md`）：`[S]` 六组编号 ↔ `features.panel_option_numbers`、`[C]` 章节与 `7.1`/`7.2` 子项编号 ↔ 章节注册表，块标题区间与 features 键名映射逐项对账（实现见 `_doc_drift/_format_panels.py`）
 9. 目录树（`folders.md`）↔ 文件系统实测（`src/`、`scripts/`、`docs/{managements,manuals,plan}`）；同父目录 `vN.N.x/` 版本目录块按版本号升序
 10. 项目统计表（`folders.md`）↔ 实测文件数/行数（加 `--with-test-count` 再核「测试用例」行）
 11. 测试覆盖计数表（`test-coverage.md`）↔ `scripts/test-collect-coverage.py` 快照（仅 `--with-test-count`）
@@ -460,10 +460,11 @@ Web 模式全链路可复跑冒烟验证（上传→生成→进度→产物，F
 27. 手册总索引覆盖：`manuals/README.md` 的分册链接集合 ↔ `docs/manuals/*.md` 双向对账（漏列 = 分册无人可达；
     幽灵引用 = 死链；实现 `_doc_drift/_format.py::check_manuals_index`）
 
+28. 归档目录布局：每个版本目录顶层只放三份台账归档（changelog / plan / review-findings 的归档文件），设计文档须进语义子目录（顶层散落即报错；实现 `_doc_drift/_ledger.py::check_archive_layout`）
 **使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
 
 ```bash
-.venv/bin/python scripts/check-doc-drift.py                   # 二十七项全查
+.venv/bin/python scripts/check-doc-drift.py                   # 二十八项全查
 .venv/bin/python scripts/check-doc-drift.py -v                # 详细输出（打印解析结果与实测统计）
 .venv/bin/python scripts/check-doc-drift.py --ci              # CI 模式（只输出 文件:描述，退出码 2）
 .venv/bin/python scripts/check-doc-drift.py --with-test-count # 附带 pytest 收集，核对「测试用例」与 test-coverage.md 计数表
@@ -859,12 +860,11 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 类型错误里混着真实缺陷（`cost_first` 单价键读错导致策略静默退化、上下文管理器 `__exit__`
 声明 `bool` 使 `result` 可能未绑定、配置段 `None` 直接下标、CI 区间 `None` 参与乘法），
-但项目此前没有任何类型门禁——只能靠偶发人工扫描发现。本守护把「产品代码零 ERROR 级诊断」
-变成可回归的约束：
+这类缺陷靠偶发人工扫描不可靠，本守护把「产品代码零 ERROR 级诊断」变成可回归的约束：
 
 1. **受检域**：`src/python` + `scripts`（`[tool.pyright] include`）——产品代码与入口/守护脚本
-   的类型错误同样是缺陷；`scripts/` 的历史噪声已清零（50 处：流对象 `reconfigure`、
-   平台桩 `ctypes.windll`/`msvcrt`、动态 target 的 `build_parser`、AST 节点 `lineno` 等）。
+   的类型错误同样是缺陷；`scripts/` 需处理的已知模式为流对象 `reconfigure`、平台桩
+   `ctypes.windll`/`msvcrt`、动态 target 的 `build_parser`、AST 节点 `lineno` 等。
    `src/test` 刻意排除——单测天然大量 mock/行内 dict，静态噪音远多于缺陷收益，其正确性由
    pytest 运行时守卫。
 2. **判据**：只计 `ERROR` 级诊断（pyright 默认级别即可，不自造阈值）；`WARNING`/`INFORMATION`

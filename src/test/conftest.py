@@ -109,7 +109,7 @@ def _install_session_state_fallback_isolation() -> None:
     import tempfile
     from pathlib import Path
 
-    from src.python.report import data_status
+    from src.python.core import degradation as data_status
 
     fallback = Path(tempfile.mkdtemp(prefix="pytest-state-")) / ".degradation_state.json"
     data_status._default_persist_path = lambda: str(fallback)
@@ -936,7 +936,7 @@ def _reset_degradation_tracker():
     每次测试执行前清空计数器和事件日志。
     依赖 reset_tracker() 销毁当前实例，下次 get_tracker() 重新创建。
     """
-    from src.python.report.data_status import reset_tracker
+    from src.python.core.degradation import reset_tracker
 
     reset_tracker()
 
@@ -949,7 +949,7 @@ def _reset_provider_usage():
     与 _reset_degradation_tracker 同模式：逐用例清空，避免某用例登记的
     provider 归属泄漏到后续用例的 build_data_source_matrix() 输出。
     """
-    from src.python.report.data_status import reset_provider_usage
+    from src.python.core.degradation import reset_provider_usage
 
     reset_provider_usage()
 

@@ -64,9 +64,9 @@ class TestContentPanelToggles:
 
     def test_derived_number_toggles_switch(self, capsys):
         """编号全部由面板注册表派生：任意一项按其派生编号都能精确命中。"""
-        flag = "cost_position"
+        flag = "market_sentiment"  # 面板上默认关，切换后落盘为 True
         save = self._toggle(flag, capsys)
-        save.assert_called_once_with({flag: False})
+        save.assert_called_once_with({flag: True})
 
     def test_numbering_is_contiguous_from_registry(self, capsys):
         """面板编号 1..N 连续，且与注册表组序一致（不写死条数）。"""

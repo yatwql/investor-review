@@ -16,7 +16,7 @@ from src.python.cache import get_cache_age_by_data_type, get_ttl
 from src.python.core.code_utils import is_a_share_code
 from src.python.core.models import Holding
 from src.python.core.registry import get_llm_module_name, get_report_sheet_name
-from src.python.report.data_status import (
+from src.python.core.degradation import (
     STATUS_MESSAGES,
     DataStatus,
     DataStatusItem,

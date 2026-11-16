@@ -27,9 +27,9 @@ class TestCrossModuleCacheConsistency(unittest.TestCase):
         """fetch_market_data 使用正确缓存前缀，不同前缀不冲突。"""
         from src.python.fetcher.price import _price_cache_key, resolve_price_route
 
-        key = _price_cache_key("600519", resolve_price_route("600519", "贵州茅台"))
-        self.assertIn("price_", key)
-        self.assertEqual(key, "price_stock_600519")
+        cache_key = _price_cache_key("600519", resolve_price_route("600519", "贵州茅台"))
+        self.assertIn("price_", cache_key)
+        self.assertEqual(cache_key, "price_stock_600519")
 
     def test_cache_sharing_between_fetcher_and_market_value(self):
         """fetch_market_data 的缓存可被 market_value 模块重用。

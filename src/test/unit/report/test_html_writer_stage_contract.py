@@ -126,8 +126,9 @@ def _run(*, raiser: str | None = None):
             hw, "_save_html_report", side_effect=lambda html, *_a, **_k: calls.append("落盘") or "/tmp/x.html"
         ),
         # 数据状态与矩阵装配（非区块装配，替身即可）
-        patch.object(hw, "_build_data_status_sections", return_value=("a", "b", "c", "d")),
-        patch.object(hw, "_build_history_data_status", return_value=None),
+        # 数据状态两函数由渲染前置装配模块按需导入，patch 其 owner 即生效
+        patch("src.python.report.html_writer_status._build_data_status_sections", return_value=("a", "b", "c", "d")),
+        patch("src.python.report.html_writer_status._build_history_data_status", return_value=None),
         patch("src.python.report.data_source_matrix.build_data_source_matrix", return_value={}),
         patch("src.python.report.data_source_matrix.build_data_source_catalog", return_value={}),
         patch("src.python.report._debate_utils.detect_debate_mode", return_value=(None, "")),

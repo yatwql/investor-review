@@ -20,7 +20,12 @@ from src.python.report.html_jinja_env import _ENV
 from src.python.report.summary_highlights import build_summary_highlights
 from src.python.schemas.history import AccountSnapshot, SnapshotData, SnapshotHolding
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
+pytestmark = [
+    pytest.mark.unit,
+    pytest.mark.unit_report,
+    # 交易日历属该用例的附带依赖（QDII 滞后判定需前一日），离线桩保证不触网
+    pytest.mark.usefixtures("offline_external_sources"),
+]
 
 
 def _diff_dict(**overrides) -> dict:

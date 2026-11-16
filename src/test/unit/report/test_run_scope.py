@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.python.report import data_status as ds
+from src.python.core import degradation as ds
 from src.python.report._generation_shared import _usage_delta
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report]

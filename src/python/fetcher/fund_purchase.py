@@ -59,7 +59,7 @@ def fetch_fund_purchase_status() -> dict[str, Any] | None:
         ``{"rows", "fetched_at", "purchase_schema", "source"}``；全链失败且
         无（有效的）过期缓存时返回 None。
     """
-    from src.python.report.data_status import get_tracker
+    from src.python.core.degradation import get_tracker
 
     _t = get_tracker()
     diag = FailureDiagnostics()

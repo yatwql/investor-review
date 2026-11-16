@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """TUI ``[S]`` 报告章节内容呈现面板：18 项五组（组序与编号取自功能开关注册表）。
 
-``[S]`` 只呈现 ``PANEL_GROUPS["[S]"]`` 的五组内容开关（持仓与交易 / 市场与估值 /
-基金与风格 / 事件与摘要 / 机制与质量）；LLM 章节与默认关闭的整章在 ``[C]``，
+``[S]`` 只呈现 ``PANEL_GROUPS["[S]"]`` 的六组内容开关（持仓与交易 / 市场与估值 /
+基金与风格 / 事件与摘要 / 机制与质量 / 交互与追问）；LLM 章节与默认关闭的整章在 ``[C]``，
 本面板不再混排（只给既有页签加层的 What-if 交易成本对比归持仓与交易组，在本面板）。
 编号由 :func:`config.features.panel_option_numbers`
 派生——增删开关后自动重排，渠道层不写死数字。
@@ -103,7 +103,7 @@ def show_switch_detail(choice: str, items: list[tuple[int, str, str, bool]]) -> 
 
 
 def run_content_options_panel() -> None:
-    """配置报告章节内的内容与呈现（五组功能开关，编号由注册表派生）。
+    """配置报告章节内的内容与呈现（六组功能开关，编号由注册表派生）。
 
     分组标题、显示名与顺序均取自 ``features.PANEL_GROUPS`` / ``GROUP_LABELS``，
     新增开关自动上屏，渠道层不另写清单。

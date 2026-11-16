@@ -12,7 +12,7 @@ from unittest.mock import patch
 import pytest
 
 from src.python.report.data_source_matrix import _failure_entry
-from src.python.report.data_status import DegradationTracker
+from src.python.core.degradation import DegradationTracker
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
 
@@ -139,7 +139,7 @@ class TestStaleFreshnessMarking:
     def test_stale_marking_lands_in_event_detail(self, tracker):
         from unittest.mock import patch
 
-        from src.python.report import data_status
+        from src.python.core import degradation as data_status
 
         with patch.object(data_status, "get_tracker", return_value=tracker):
             data_status.mark_data_used("ff_sector_flow", "T4", freshness="stale")
@@ -150,7 +150,7 @@ class TestStaleFreshnessMarking:
     def test_plain_use_has_no_detail(self, tracker):
         from unittest.mock import patch
 
-        from src.python.report import data_status
+        from src.python.core import degradation as data_status
 
         with patch.object(data_status, "get_tracker", return_value=tracker):
             data_status.mark_data_used("ff_sector_flow", "T4")
@@ -160,7 +160,7 @@ class TestStaleFreshnessMarking:
         """标注不得把自己算成一次失败（否则数据源矩阵会误报降级）。"""
         from unittest.mock import patch
 
-        from src.python.report import data_status
+        from src.python.core import degradation as data_status
 
         with patch.object(data_status, "get_tracker", return_value=tracker):
             data_status.mark_data_used("ff_sector_flow", "T4", freshness="stale")

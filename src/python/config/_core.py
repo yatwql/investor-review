@@ -191,7 +191,11 @@ def _persist_config_patch(new_raw: str, op: str) -> None:
         raise
     config_path = _config_defaults.get_config_path()
     config_dir = os.path.dirname(config_path)
-    os.makedirs(config_dir, exist_ok=True)
+    try:
+        os.makedirs(config_dir, exist_ok=True)
+    except OSError as e:  # 目录不可建（权限/只读盘）：给出可读原因后照常抛出
+        logger.error("配置目录创建失败，无法写入 config.json: %s（%s）", config_dir, e)
+        raise
     _atomic_write(config_path, new_raw)
     _config_cache = None
     _config_mtime = 0
@@ -220,8 +224,12 @@ def set_config(key: str, value: Any) -> None:
         # 使首次 set_config 创建的文件同样带完整分组注释。
         raw: str | None = None
         if os.path.exists(config_path):
-            with open(config_path, encoding="utf-8-sig") as f:
-                raw = f.read()
+            try:
+                with open(config_path, encoding="utf-8-sig") as f:
+                    raw = f.read()
+            except OSError as e:  # 读失败（占用/权限）：中止写入，避免基于空内容覆盖
+                logger.error("config.json 读取失败，中止写入: %s（%s）", config_path, e)
+                raise
         if raw is None or not raw.strip():
             raw = _config_defaults._get_default_config_template()
 
@@ -254,8 +262,12 @@ def del_config(key: str) -> None:
     with _config_lock:
         if not os.path.exists(config_path):
             return
-        with open(config_path, encoding="utf-8-sig") as f:
-            raw = f.read()
+        try:
+            with open(config_path, encoding="utf-8-sig") as f:
+                raw = f.read()
+        except OSError as e:  # 读失败：中止删除，避免把空内容当成「无键」返回
+            logger.error("config.json 读取失败，中止删除: %s（%s）", config_path, e)
+            raise
         # 校验原文件可解析（保持 _strict 语义：损坏则中止）
         try:
             json.loads(strip_json_comments(raw))
@@ -291,7 +303,11 @@ def init_config(config_path: str | None = None) -> None:
         validate_config(config)
         return
     config_dir = os.path.dirname(config_path)
-    os.makedirs(config_dir, exist_ok=True)
+    try:
+        os.makedirs(config_dir, exist_ok=True)
+    except OSError as e:  # 目录不可建：给出可读原因后照常抛出
+        logger.error("配置目录创建失败，无法生成默认 config.json: %s（%s）", config_dir, e)
+        raise
     try:
         _atomic_write(config_path, _config_defaults._get_default_config_template())
     except PermissionError:
@@ -489,15 +505,15 @@ def is_enable_market_temperature() -> bool:
     return is_feature_enabled("market_temperature")
 
 
-def is_enable_industry_beta() -> bool:
-    """行业 Beta 子表是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_FUND_STYLE``）。
+def is_enable_factor_catalog() -> bool:
+    """「风格与因子区块」是否启用（行业 Beta 子表 + 因子目录，出厂默认关）。
 
-    取值来自功能开关注册表（``features.industry_beta``，出厂默认关），可用 `features.json`
-    覆盖。
+    取值来自功能开关注册表（``features.factor_catalog``），可用 `features.json` 覆盖；
+    开启决定「风格与因子分析」章是否追加这两块内容。
     """
     from src.python.config.features import is_feature_enabled
 
-    return is_feature_enabled("industry_beta")
+    return is_feature_enabled("factor_catalog")
 
 
 def is_enable_fund_purchase_limit() -> bool:

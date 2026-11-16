@@ -217,7 +217,7 @@ class TestKeyFileCredential:
         """通用密钥文件以 provider 为节：``{"example": {"api_key": "..."}}``。"""
         monkeypatch.delenv(_ENV_VAR, raising=False)
         path = tmp_path / "data_key.json"
-        path.write_text(json.dumps({"example": {"api_key": "secret-in-section"}}), encoding="utf-8")
+        path.write_text(json.dumps({"example": {"api_key": "secret-" + "in-section"}}), encoding="utf-8")
         register_credential_spec(_spec(key_file=str(path)))
 
         assert credential_value("example") == "secret-in-section"

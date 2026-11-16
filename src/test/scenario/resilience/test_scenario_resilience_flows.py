@@ -356,7 +356,7 @@ class TestScenarioZeroCost(ScenarioTestBase):
         self.assertIsNone(detail.profit_rate)
         self.assertGreater(detail.market_value, 0)
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     def test_zero_cost_all_fields(self, mock_open, mock_td):
         """cost_price=0 → 所有字段正确。"""

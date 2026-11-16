@@ -17,7 +17,7 @@ from src.python.config import get_config, get_default, resolve_output_dir
 from src.python.core.logger import setup_logger
 from src.python.core.reader import get_xlsx_info, list_xlsx_files, read_holdings
 from src.python.tui.error_tail import emit_error
-from src.python.report.progress import TuiProgressReporter
+from src.python.tui.progress import TuiProgressReporter
 from src.python.tui.text_layout import wrap_prompt
 from src.python.tui.tui_keys import PromptCancelledError, input_choice
 from src.python.tui.tui_handlers import print_error_with_hint, select_holdings_file

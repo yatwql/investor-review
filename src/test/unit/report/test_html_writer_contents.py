@@ -380,7 +380,6 @@ class TestWriteHtmlReportLlmType(unittest.TestCase):
                 enable_llm=enable_llm,
                 llm_content=None,
                 include_news=False,
-                sector_flow=[],
             )
 
         return mock_llm
@@ -442,7 +441,6 @@ class TestWriteHtmlReportLlmType(unittest.TestCase):
                 enable_llm=enable_llm,
                 llm_content=None,
                 include_news=False,
-                sector_flow=[],
             )
 
             # 捕获模板渲染参数
@@ -792,7 +790,7 @@ class TestComputeSectionVisibilityEvolution(unittest.TestCase):
 
     def _compute(self, enable_portfolio_evolution: bool, evolution_data: dict | None) -> dict:
         from src.python.core.registry import get_report_section_order
-        from src.python.report.html_writer import _compute_section_visibility
+        from src.python.report.html_writer_nav import _compute_section_visibility
 
         order = get_report_section_order({})
         _, svis, _ = _compute_section_visibility(

@@ -1,7 +1,7 @@
 # 投资复盘助手 — 实现计划
 
-> 文档版本：0.18.1
-> **编号源**：`plan-next = 256`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-251，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> 文档版本：0.18.2
+> **编号源**：`plan-next = 259`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-251，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -97,6 +97,16 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 **已定调**：估值分位/因子目录信号按「已回测未通过」「样本不足」**归档**（三态标注照常呈现；真实 PE/PB 口径不入管线；`scripts/eval-decision-quality.py` 保留，供样本累积后一次性复跑，日常不排期）；独立章节形态 B 不启用；LLM 章维持解读层。
 **长期观察（不排期，触发条件满足时再评估）**：① R8 纪律规则重构——前置 V5 成熟样本 ≥100（现 2 条）；② V7 相关性约束启用——前置样本期 ≥250 交易日（现 146）；③ 讨论稿优先级 6 与 V4/V6/V7 模型 A/B（人工采样，不入自动化）。以上任一前置达成前，资源投向其他任务。
 **事实位**：轮次明细、验收记录与回测读数见设计稿 [`investment-decision-basis-design.md`](../plan/investment-decision-basis-design.md) §4/§5 及[归档讨论稿](../archive/v0.16.x/investment-decision-quality/investment-decision-quality.md) §8.1；本表不复述。
+
+#### `plan-258` 深层渲染契约收敛（`_render_template` 收上下文对象）
+
+**现状**：`report/html_writer._render_template` 声明 80 个关键字形参并原样转发给 Jinja 渲染；`write_html_report` 有 50+ 入参，
+两侧都是长参数表。`plan-257` 已把编排逻辑切完，剩下的纯粹是「参数搬运」。
+**动作（条件性）**：`_render_template` 改为接收单个 `_RenderContext` 上下文对象（内部 `render(**vars(ctx))`），
+`write_html_report` 的入参分族收敛为该上下文，再逐层下传到调用方；渲染契约（模板变量键集合）由新增守卫用例锁死，
+`report_template.html` 不改。
+**为何暂不做**：触碰模板变量装配面 + 10 余个调用方，须按字节对拍产物；收益是可读性而非缺陷风险，等下次确有「改渲染入参」需求时一并做，避免为拆而拆。
+**验收**：模板变量键集合与拆分前完全一致（守卫用例比对）；同输入产物 SHA 一致；P0/P1 门禁全绿。
 
 #### `plan-254` 不动作建议命中率的真机读数（等样本成熟）
 

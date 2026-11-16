@@ -5,6 +5,11 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 
+from src.python.core.degradation import (
+    TERMINAL_STALENESS_CONSEQUENCE as _TERMINAL_STALENESS_CONSEQUENCE,
+)
+from src.python.core.num_utils import finite_or
+
 logger = logging.getLogger("invest")
 
 
@@ -46,8 +51,9 @@ def _validate_bars(bars: list[dict]) -> list[str]:
 #: 终点滞后的口径提示（**唯一文案源**）：报告章内与 Excel 页签、数据源状态词均取自此。
 #: 分段拼接以适配不同渲染器的数字占位（标的数/最大滞后天数由调用方填入）。
 TERMINAL_STALENESS_HEADLINE = "{count} 只标的净值落后组合终点至多 {max_lag} 个交易日，走势终值与最新市值口径不同"
-#: 后果句：与 headline 一起组成完整口径提示（两端呈现必须一字不差，避免同一事实两种说法）
-TERMINAL_STALENESS_CONSEQUENCE = "末端日收益与最大回撤会偏低，终点附近的数字只作参考"
+#: 后果句：与 headline 一起组成完整口径提示（两端呈现必须一字不差，避免同一事实两种说法）；
+#: 文案源在 `core/degradation.py`（数据源状态词同用此句），本模块只再导出
+TERMINAL_STALENESS_CONSEQUENCE = _TERMINAL_STALENESS_CONSEQUENCE
 
 
 def terminal_staleness_caveat(count: int, max_lag: int) -> str:
@@ -67,7 +73,7 @@ def terminal_staleness_asset_line(asset: dict) -> str:
     """单只滞后标的的明细行（标的 / 最新净值日 / 滞后交易日数 / 占组合比）。"""
     return (
         f"{asset.get('label', '?')}：最新净值日 {asset.get('last_date', '?')}"
-        f"（滞后 {asset.get('lag_trading_days', 0)} 个交易日，占 {float(asset.get('weight_pct') or 0):.1f}%）"
+        f"（滞后 {asset.get('lag_trading_days', 0)} 个交易日，占 {finite_or(asset.get('weight_pct')):.1f}%）"
     )
 
 
@@ -100,7 +106,7 @@ def _detect_terminal_staleness(
         if not series:
             continue
         last_bar = series[-1]
-        observed.append((label, code, str(last_bar.get("date", "")), float(last_bar.get("value") or 0.0)))
+        observed.append((label, code, str(last_bar.get("date", "")), finite_or(last_bar.get("value"))))
     if not observed:
         return None
 

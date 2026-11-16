@@ -134,7 +134,7 @@ class TestReportProducingSwitches:
     """报告产物开关（作用域横跨五个内容组 / 独立章 / 章节选项）：功能开关注册表为唯一真源。"""
 
     KEYS = (
-        "industry_beta",
+        "factor_catalog",
         "candidate_compare",
         "cost_lots",
         "valuation_percentile",

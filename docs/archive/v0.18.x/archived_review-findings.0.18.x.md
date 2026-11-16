@@ -1,8 +1,8 @@
 # 自审记录归档 — v0.18.x
 
-> 归档时间：2026-11-12（v0.18.0 发布，本系列首批已修复批次并入）；2026-11-12 v0.18.0 本批原表搬运；2026-11-15 v0.18.1 本批原表搬运
+> 归档时间：2026-11-12（v0.18.0 发布，本系列首批已修复批次并入）；2026-11-12 v0.18.0 本批原表搬运；2026-11-15 v0.18.1 本批原表搬运；2026-11-16 v0.18.2 本批原表搬运
 > 原始文件：`docs/managements/review-findings.md`
-> 涵盖版本：v0.18.x 已修复项（按发布版号批次，v0.18.0 → ）（含 v0.18.1）
+> 涵盖版本：v0.18.x 已修复项（按发布版号批次，v0.18.0 → ）（含 v0.18.2）
 > 归档内容：台账表格经 `release.py prepare` 整块搬运（无损）；表外散文留主台账
 
 ---
@@ -34,3 +34,20 @@
 | **rf-1136** | 「代码类型判定中心化」纪律被违反：`report/news_correlation._index_holdings` 自建 `"ETF" in name` 判定，既绕过 `core/code_utils.is_etf_by_name`，又因大小写敏感导致小写 `etf` 的品种不进 ETF 关键词扩展分支、且 `replace("ETF","")` 剥不掉，关键词召回与该品种的资产类型口径分叉 | 改为 `is_etf_by_name(name)` 判定 + `re.sub(r"(?i)etf", "", name)` 剥离，补 3 条回归用例（小写扩展 / 大写保持 / 判定单源） |
 | **rf-1135** | `developer-guide.md` 把 HTML 生成细分写成「四步」且断言「模板编译占绝大多数」——实测 `模板渲染` 约 0.0s、`面板视图装配` 2.1s of 2.13s，该结论会把优化方向指向 jinja；同时 `面板视图装配` 这一步（本轮新增的计时点）文档未列 | 两处文档同步为实际细分与实测结论（`developer-guide.md` 慢段排查表、`technical.md` 编排器职责链） |
 | **rf-1134** | `check-doc-drift` 的已解决台账行只认 `| **rf-N** |` 加粗形态，未加粗时既不进已解决集合、归档步也按「本版无待迁档」跳过（0.18.0 发布时实际发生：已修项主台账未被搬运） | 新增 `_RF_ROW_UNBOLD` 分支：已解决区出现 `| rf-N |` 未加粗行即报 finding + 2 条回归用例（报/不报各一）；归档识别口径不变 |
+
+## 已修复（0.18.2）
+
+> 完整复盘见 `changelog.md` 0.18.2 段；此处为台账原表搬运（无损），本批发布日 2026-11-16。
+
+| # | 问题 | 修复 |
+| --- | --- | --- |
+| **rf-1144** | 分层门禁只覆盖 5 层：`cache` / `config` 的向上依赖无人看守，其中 `cache/operations.py` 判定基金经 `report.fund_performance.is_fund` 转发纯 `core` 谓词，属真实越界 | 规则扩到 `cache → report/llm/tui/web/cli` 与 `config → report/llm/analysis/tui/web/cli`（`cache → fetcher` 显式允许）；基金判定改直调 `core.code_utils.is_fund_holding`；存量 7 处入例外表并写明下沉方向，`technical.md` 例外表重生成 |
+| **rf-1145** | `report/html_writer.py` 因拆函数涨到 959 行，逼近 1000 行红线 | 渲染前置装配（面板视图 / 数据源状态包 / 章节可见性与掩码上下文）下沉 `report/_html_render_context.py`，写出函数回到 751 行 |
+| **rf-1146** | `DESIGN.md` 组件矩阵声称字段错误态 `.has-error` / `.field-error` 已落地，实际全仓无代码挂载（只有 CSS 定义） | Web 显式保存失败处接线（行挂 `.has-error` + 行内 `.field-error` 原因，成功即清）；`.field-error` 补 `flex-basis:100%` 避免与输入框挤同一 flex 行 |
+| **rf-1147** | 文件膨胀登记表（P4）8 条多已过期（含已降到 656 行的一条），实际 >700 行文件 16 个 | 按实测重写登记表，补登 10 个越线文件与拆分方向 |
+| **rf-1148** | `test-chart.html` 调试页只覆盖 6 图，而生产 `chart-init.js` 已初始化 12 图——Chart.js 升级验收会漏一半图 | 补 6 张图与配套数据段，自检基数改为派生（`KEYS.length`）；`chart-init.js` 头注、`folders.md`、`src/static/README.md` 的「6 图 / 9 张图」口径统一为 12 图 |
+| **rf-1149** | `docs/archive/v0.17.x/` 顶层散落四份设计契约，与 v0.15/v0.16「顶层只放三份台账 + 专题子目录」的归档布局不符 | 收进语义子目录 `stage-split-contracts/`；`check-doc-drift` 新增归档布局校验（第 28 项，守护脚本数量不变）并配 2 条用例 |
+| **rf-1150** | `DESIGN.md` / `DESIGN-TUI.md` 残留复盘痕迹（「旧 `--color-*` 已删映射」「存量 9 处」「原 `placeholder-note` 归并」「机检落地/观察期」等） | 全量改写为当前状态陈述；两份契约新增守卫用例（出现复盘式用词即红）；`test_report_empty_states` 的「应记录归并历史」断言反转 |
+| **rf-1151** | 用户/管理文档多处口径过期：`[S]` 仍写五组、Web 配置编号 1-5/6-9/10-11/12-14、Web 面板「10 块」、行业 Beta 仍挂已删除的 `industry_beta` 开关、进度抽象仍写 `report/progress.py` 里的 `TuiProgressReporter` | 逐份校正到实测（六组 14 项 / 16 块 / `factor_catalog` / `tui/progress.py`），`DESIGN.md` 护栏观察项数字改实测，features.json 示例改用上屏开关 |
+| **rf-1152** | 「缓存命中率 39%」与「`llm_news` 30 条全 miss」易被误判为缓存失效（实际是 TTL 到期与 refresh 组清空） | `datasource-reliability.md` §4.3 补判读口径：命中率按距上次运行间隔分层、真异常看同键重复未命中；说明 `llm_news_item_*` 属行情类缓存组会被整组清 |
+| **rf-1153** | `release.py verify` 只跑核心单元，未覆盖 integration 档：渲染前置装配下沉后 3 处集成用例仍从 `html_writer` 导入 `_compute_section_visibility`，本地全绿而 CI 三版本全红 | 用例改从 owner 模块（`html_writer_nav`）导入；收尾前本地跑全量 `src/test` 覆盖 integration 档 |

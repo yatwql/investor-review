@@ -293,7 +293,7 @@ def _cmd_config_output_dir() -> None:
 # 本表只做「配置散在哪些键」的导流说明（零行为变化，不改任何配置）。新增配置入口时
 # 在此补一行；键位调整时由 test_handlers_config 的「入口地图键均存在于主菜单」用例兜底。
 _CONFIG_ENTRY_MAP: tuple[tuple[str, str, str], ...] = (
-    ("功能开关 / LLM 模块启停 / 实验项", "[S]", "五组内容开关（18 项）+ 7 个 LLM 标准模块，行尾费用摘要与启用统计"),
+    ("功能开关 / LLM 模块启停 / 实验项", "[S]", "六组内容开关（18 项）+ 7 个 LLM 标准模块，行尾费用摘要与启用统计"),
     ("报告章节取舍（顺序与开关）", "[C]", "五个顶层章节组的可见性"),
     ("对比指数池（自定义基准）", "[G]", "全局设置 → I（增删指数、恢复默认）"),
     ("持仓匿名化（代码/名称脱敏）", "[G]", "全局设置 → A（四档）"),
@@ -517,7 +517,7 @@ def _cmd_config_comparison_indices() -> None:
         PanelItem(
             "A",
             "添加指数",
-            action=lambda: _add_comparison_index(_indices()),
+            action=_add_comparison_index,
             detail="输入指数代码与名称后加入对比指数池（用于报告中的基准对比）",
         ),
         PanelItem(
@@ -547,7 +547,7 @@ def _cmd_config_comparison_indices() -> None:
         print()
 
 
-def _add_comparison_index(indices: dict[str, str]) -> None:
+def _add_comparison_index() -> None:
     """添加指数到对比池。"""
     print("  请输入指数代码（如 sh000905）:")
     try:

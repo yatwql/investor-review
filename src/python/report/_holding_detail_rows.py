@@ -110,7 +110,7 @@ def attach_holding_trading_days(rows: list[dict], transactions: list | None) -> 
     if not transactions:
         return
     from src.python.analysis.rebalance import build_holding_trading_days
-    from src.python.report.market_value import get_last_trading_day
+    from src.python.core.trading_calendar import get_last_trading_day
 
     trading_days = build_holding_trading_days(transactions, get_last_trading_day())
     for row in rows:

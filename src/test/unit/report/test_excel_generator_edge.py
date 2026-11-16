@@ -18,7 +18,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.python.report.data_status import STATUS_MESSAGES, TIER_PREFIX
+from src.python.core.degradation import STATUS_MESSAGES, TIER_PREFIX
 from src.python.report.progress import SilentProgressReporter
 
 pytestmark = [
@@ -144,8 +144,8 @@ class TestMessageConsistency(unittest.TestCase):
 
     def test_status_messages_shared_constant(self):
         """Excel 和 HTML 使用相同的 STATUS_MESSAGES 常量（同一对象引用）。"""
-        from src.python.report import data_status as ds1
-        from src.python.report import data_status as ds2
+        from src.python.core import degradation as ds1
+        from src.python.core import degradation as ds2
 
         self.assertIs(ds1.STATUS_MESSAGES, ds2.STATUS_MESSAGES)
 

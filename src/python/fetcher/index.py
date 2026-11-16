@@ -3,6 +3,8 @@
 主链路 → 备用链路 → 过期缓存降级：
   - A 股指数：腾讯财经 → 新浪财经 → 过期缓存
   - 美股指数：新浪财经 → 腾讯财经 → 过期缓存
+
+三条链路全失败时返回空 dict 并登记降级事件，不抛异常（消费方按「无指数」降级渲染）。
 """
 
 from __future__ import annotations
@@ -383,7 +385,7 @@ def fetch_index_history(code: str, days: int = 365) -> list[dict] | None:
         diag.add(chain_name, f"{type(exc).__name__}")
 
     # 记录降级事件
-    from src.python.report.data_status import get_tracker
+    from src.python.core.degradation import get_tracker
 
     _t = get_tracker()
     _src_key = f"index_history_{chain_name}_{code}"

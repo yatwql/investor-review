@@ -364,7 +364,7 @@ class TestDegradationSummary:
         ]
         tracker = MagicMock()
         tracker.get_log.return_value = events
-        with patch("src.python.report.data_status.get_tracker", return_value=tracker):
+        with patch("src.python.core.degradation.get_tracker", return_value=tracker):
             lines = _collect_degradation_summary()
         assert lines == [
             "tencent: timeout（累计5次）",
@@ -373,7 +373,7 @@ class TestDegradationSummary:
 
     def test_tracker_failure_returns_empty(self):
         """跟踪器异常 → 返回空列表（通知摘要非关键，不拖垮收尾）。"""
-        with patch("src.python.report.data_status.get_tracker", side_effect=RuntimeError("boom")):
+        with patch("src.python.core.degradation.get_tracker", side_effect=RuntimeError("boom")):
             assert _collect_degradation_summary() == []
 
 

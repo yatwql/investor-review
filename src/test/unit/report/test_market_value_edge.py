@@ -263,7 +263,7 @@ class TestNumericalEdge(unittest.TestCase):
 
     # ── 极微份额 ────────────────────────────────────
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     def test_tiny_shares_001(self, mock_open, mock_td):
         """极微份额（0.01 份）→ 市值计算正确无精度丢失。"""
@@ -283,7 +283,7 @@ class TestNumericalEdge(unittest.TestCase):
         self.assertAlmostEqual(detail.market_value, 2100.0)
         self.assertAlmostEqual(detail.profit, 100.0)
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     def test_tiny_shares_0001(self, mock_open, mock_td):
         """极微份额（0.0001 份）→ 市值计算正确。"""
@@ -305,7 +305,7 @@ class TestNumericalEdge(unittest.TestCase):
 
     # ── 超高单价 ────────────────────────────────────
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     def test_ultra_high_price(self, mock_open, mock_td):
         """超高单价（20 万/份）→ 市值计算正确无溢出。"""
@@ -325,7 +325,7 @@ class TestNumericalEdge(unittest.TestCase):
         self.assertAlmostEqual(detail.cost, 2000000.0)
         self.assertAlmostEqual(detail.profit, 100000.0)
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     def test_ultra_high_price_precision(self, mock_open, mock_td):
         """超高单价（万元级带两位小数）× 份额 → 精度正确。"""
@@ -348,7 +348,7 @@ class TestNumericalEdge(unittest.TestCase):
 
     # ── 收益率超 ±1000% ─────────────────────────────
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     def test_extreme_positive_profit_rate_over_1000pct(self, mock_open, mock_td):
         """收益率 > 1000%（微成本暴涨）→ profit_rate > 10.0 不崩溃。"""
@@ -367,7 +367,7 @@ class TestNumericalEdge(unittest.TestCase):
         self.assertGreater(detail.profit_rate, 10.0)
         self.assertAlmostEqual(detail.profit_rate, 4999.0)
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     def test_extreme_negative_profit_rate(self, mock_open, mock_td):
         """严重亏损（成本远高于市值）→ profit_rate ≈ -100%。"""
@@ -427,7 +427,7 @@ class TestNumericalEdge(unittest.TestCase):
 
     # ── int32 溢出 ──────────────────────────────────
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     def test_market_value_exceeds_int32(self, mock_open, mock_td):
         """市值超过 int32 范围（> 21 亿）→ Python 无溢出。"""
@@ -446,7 +446,7 @@ class TestNumericalEdge(unittest.TestCase):
         self.assertGreater(detail.market_value, 2**31 - 1)
         self.assertAlmostEqual(detail.market_value, 50_000_000_000.0)
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     def test_market_value_exceeds_int64(self, mock_open, mock_td):
         """市值超过 int64 范围（> 9e18）→ Python 浮点不溢出。"""
@@ -467,7 +467,7 @@ class TestNumericalEdge(unittest.TestCase):
 
     # ── 负成本 ──────────────────────────────────────
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     def test_negative_cost_price(self, mock_open, mock_td):
         """负成本（赠予/合并形成）→ profit_rate = None（cost≤0 保护），其他值正常。"""
@@ -488,7 +488,7 @@ class TestNumericalEdge(unittest.TestCase):
         self.assertAlmostEqual(detail.profit, 1500.0)
         self.assertIsNone(detail.profit_rate)  # cost=-500 ≤ 0，源码中 profit_rate = None
 
-    @patch("src.python.report.market_value.get_last_trading_day")
+    @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open", return_value=False)
     def test_zero_cost_price(self, mock_open, mock_td):
         """零成本 → profit_rate = None（避免除零），其他值正常。"""

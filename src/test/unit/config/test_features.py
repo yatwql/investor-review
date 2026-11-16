@@ -640,7 +640,7 @@ class TestDeterministicSignalRegistry:
 
 @pytest.mark.unit
 class TestFactorCatalogSwitch:
-    """因子目录开关（R-FCT-05 载体）：已转正入分析增强组、默认关、--experiment 不再接受。"""
+    """风格与因子区块开关（R-FCT-05 载体）：行业 Beta 与因子目录合并后的单一开关，已转正、默认关。"""
 
     @pytest.mark.unit
     def test_registered_in_analysis_group_default_off(self):
@@ -666,7 +666,7 @@ class TestFactorCatalogSwitch:
         """面板显示名登记（语义名与文档一致）。"""
         from src.python.config.features import feature_switch_registry
 
-        assert feature_switch_registry["factor_catalog"].label == "因子目录"
+        assert feature_switch_registry["factor_catalog"].label == "风格与因子区块"
 
 
 class TestBannerLogLevel:
@@ -714,11 +714,11 @@ class TestHistoryAugmentedSwitches:
     """风险调整超额（risk_adjusted_excess）/ 危机回放（crisis_replay）注册断言。"""
 
     def test_registered_in_report_scope_groups_default_off(self):
-        """注册于报告产物作用域（持仓与交易 / 市场与估值等组）、出厂默认关、声明影响报告产物、标签说明非空。"""
+        """注册于报告产物作用域（市场与估值等组）、出厂默认关、声明影响报告产物、标签说明非空。"""
         from src.python.config import features
 
         expected_group = {
-            "risk_adjusted_excess": features.GROUP_PORTFOLIO,
+            "risk_adjusted_excess": features.GROUP_MARKET,
             "crisis_replay": features.GROUP_MARKET,
         }
         for flag, group in expected_group.items():

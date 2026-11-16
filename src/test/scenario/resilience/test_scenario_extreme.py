@@ -53,7 +53,7 @@ class TestS0cLargeHoldings(unittest.TestCase):
             "source_api": "tencent",
         }
 
-        self._td_patcher = patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03")
+        self._td_patcher = patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03")
         self._mock_td = self._td_patcher.start()
 
         self._dt_patcher = patch("src.python.report.market_value.datetime")
@@ -177,7 +177,7 @@ class TestScenarioExtreme(unittest.TestCase):
             "source": "腾讯财经",
             "source_api": "tencent",
         }
-        with patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"):
+        with patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"):
             detail = _compute_detail_row(h, mkt)
 
         # 市值 = 28.5 * 10^10
@@ -197,7 +197,7 @@ class TestScenarioExtreme(unittest.TestCase):
             "source": "腾讯财经",
             "source_api": "tencent",
         }
-        with patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"):
+        with patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"):
             detail = _compute_detail_row(h, mkt)
 
         # 市值 = 28.55 * 1
@@ -219,7 +219,7 @@ class TestScenarioExtreme(unittest.TestCase):
             "source": "腾讯财经",
             "source_api": "tencent",
         }
-        with patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"):
+        with patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"):
             detail = _compute_detail_row(h, mkt)
 
         # 不应崩溃
@@ -238,7 +238,7 @@ class TestScenarioExtreme(unittest.TestCase):
             "source": "天天基金",
             "source_api": "eastmoney",
         }
-        with patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"):
+        with patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"):
             detail = _compute_detail_row(h, mkt)
 
         # 计算应有 round 保护
@@ -259,7 +259,7 @@ class TestScenarioExtreme(unittest.TestCase):
             "source": "--",
             "source_api": "",
         }
-        with patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"):
+        with patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"):
             detail = _compute_detail_row(h, mkt)
 
         # 零份额 + 零成本 → 全零

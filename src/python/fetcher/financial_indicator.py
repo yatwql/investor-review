@@ -1,5 +1,8 @@
 """财务指标域取数编排 —— 多期指标序列（缓存 + 降级）。
 
+失败语义：主源与解析支路都不可用时返回空序列并登记降级事件——「这只票没有指标」
+与「指标取数失败」在展示层必须区分，故不抛异常、不返回伪造零值。
+
 **分层说明（与单期链路的边界）**：
 
 - **单期**最新记录走既有 Provider Chain（``fetcher/chain.py`` 的
@@ -76,7 +79,7 @@ def fetch_latest_indicator(code: str) -> dict[str, Any] | None:
         transform=transform_map,
     )
     if record:
-        from src.python.report.data_status import mark_data_used
+        from src.python.core.degradation import mark_data_used
 
         mark_data_used(f"fin_indicator_{record.get('source_api') or 'unknown'}")
     return record
@@ -97,7 +100,7 @@ def fetch_indicator_series(code: str, limit: int = DEFAULT_PERIODS) -> list[dict
     if isinstance(cached, list):
         return cached
 
-    from src.python.report.data_status import mark_data_used, mark_provider_used
+    from src.python.core.degradation import mark_data_used, mark_provider_used
 
     records: list[dict[str, Any]] = []
     try:

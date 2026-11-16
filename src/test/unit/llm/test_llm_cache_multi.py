@@ -29,24 +29,24 @@ class TestBuildProviderCacheKey(unittest.TestCase):
         """无 _provider_list → 返回原 key。"""
         from src.python.llm.skeleton import _build_provider_cache_key
 
-        key = _build_provider_cache_key(
+        cache_key = _build_provider_cache_key(
             "llm_global_macro_fp123",
             {"provider": "claude"},
             "global_macro",
         )
-        self.assertEqual(key, "llm_global_macro_fp123")
+        self.assertEqual(cache_key, "llm_global_macro_fp123")
 
     def test_chain_mode_appends_provider(self) -> None:
         """有 _provider_list + resolved_first_name → key 含 provider name。"""
         from src.python.llm.skeleton import _build_provider_cache_key
 
-        key = _build_provider_cache_key(
+        cache_key = _build_provider_cache_key(
             "llm_global_macro_fp123",
             {"_provider_list": [{"name": "p1"}, {"name": "p2"}]},
             "global_macro",
             resolved_first_name="p1",
         )
-        self.assertEqual(key, "llm_global_macro_fp123_p1")
+        self.assertEqual(cache_key, "llm_global_macro_fp123_p1")
 
     def test_diff_providers_diff_keys(self) -> None:
         """不同 provider → 不同 cache key。"""

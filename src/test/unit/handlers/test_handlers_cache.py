@@ -182,7 +182,7 @@ class TestCmdCleanupCache(unittest.TestCase):
     @patch("src.python.tui.handlers_cache.press_any_key")
     def test_cleanup_removed_some(self, mock_press, mock_cleanup):
         """有过期文件：cleanup_cache 以 TuiProgressReporter 调用一次，完成后直接回面板。"""
-        from src.python.report.progress import TuiProgressReporter
+        from src.python.tui.progress import TuiProgressReporter
         from src.python.tui.handlers_cache import _cmd_cleanup_cache
 
         _cmd_cleanup_cache()

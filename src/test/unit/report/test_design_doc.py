@@ -45,6 +45,25 @@ REQUIRED_COLOR_FAMILIES = [
 # 字阶类别（子集断言）
 REQUIRED_TYPE_SCALE = ["章节标题", "正文", "表格", "脚注"]
 
+#: 设计契约只写当前状态，禁复盘式叙述（改名/迁移/清零等叙述性用词）
+HISTORY_TRACE_MARKERS = (
+    "旧 `",
+    "旧名",
+    "旧版",
+    "原 `",
+    "已删除",
+    "已移除",
+    "宽限期",
+    "收敛为",
+    "归零",
+    "清零",
+    "已废弃",
+    "此前",
+    "改走",
+    "已落地",
+    "存量",
+)
+
 
 def _read() -> str:
     assert DESIGN_DOC.exists(), f"设计契约缺失: {DESIGN_DOC}"
@@ -175,3 +194,12 @@ class TestBrandMark:
         ws = wb.active
         summary._embed_brand_mark(ws)  # 不应抛出
         assert len(ws._images) == 0
+
+
+class TestDesignDocCurrentStateOnly:
+    """契约只描述当前状态：不得出现复盘式叙述用词（改名 / 迁移 / 清零）。"""
+
+    def test_no_history_trace_markers(self):
+        text = _read()
+        hits = [m for m in HISTORY_TRACE_MARKERS if m in text]
+        assert hits == [], f"DESIGN.md 出现历史痕迹用语 {hits}：契约只写当前状态，改法见 Iteration Guide"

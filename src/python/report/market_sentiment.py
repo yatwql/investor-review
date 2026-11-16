@@ -52,7 +52,7 @@ def build_market_sentiment_data(
     if dragon_tiger or ladder:
         # provider 级归属已由 fetch_with_fallback 在链路内登记；
         # 这里只补类别级取用标记（数据源说明表「本次使用」）
-        from src.python.report.data_status import mark_data_used
+        from src.python.core.degradation import mark_data_used
 
         mark_data_used("sentiment")
 

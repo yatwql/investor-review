@@ -20,7 +20,7 @@ from openpyxl.styles import Font
 from openpyxl.worksheet.worksheet import Worksheet
 
 from src.python.core.registry import get_report_sheet_name
-from src.python.report.data_status import STATUS_MESSAGES
+from src.python.core.degradation import STATUS_MESSAGES
 from src.python.report.excel_writer import (
     write_block_title,
     _write_placeholder,

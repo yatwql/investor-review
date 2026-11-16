@@ -23,7 +23,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 from src.python.core.code_utils import is_a_share_stock, is_etf_by_name
 from src.python.core.models import Holding
 from src.python.core.registry import get_llm_module_name
-from src.python.report.data_status import STATUS_MESSAGES
+from src.python.core.degradation import STATUS_MESSAGES
 from src.python.report.excel_writer import (
     _write_placeholder,
     auto_width,

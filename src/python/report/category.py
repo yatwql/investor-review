@@ -15,7 +15,7 @@ from src.python.core.code_utils import (
 )
 from src.python.core.models import Holding
 from src.python.core.num_utils import finite_or
-from src.python.report.data_status import STATUS_MESSAGES, DataStatus, DataStatusItem
+from src.python.core.degradation import STATUS_MESSAGES, DataStatus, DataStatusItem
 
 logger = logging.getLogger("invest")
 
@@ -121,7 +121,7 @@ def _record_dividend_status(success: bool, message: str = "") -> None:
     源不可达记失败（附可读原因）。
     """
     try:
-        from src.python.report.data_status import get_tracker
+        from src.python.core.degradation import get_tracker
 
         tracker = get_tracker()
         if success:

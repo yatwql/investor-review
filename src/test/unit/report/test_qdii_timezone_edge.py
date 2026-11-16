@@ -43,7 +43,7 @@ class TestQdiiNavDateConsistency(unittest.TestCase):
             "source_api": "eastmoney",
             "nav_date": nav_date,
         }
-        with patch("src.python.report.market_value.get_last_trading_day", return_value=trading_day):
+        with patch("src.python.core.trading_calendar.get_last_trading_day", return_value=trading_day):
             return _compute_detail_row(h, mkt)
 
     def _make_hk_qdii_detail(self, nav_date: str, trading_day: str) -> dict:
@@ -59,7 +59,7 @@ class TestQdiiNavDateConsistency(unittest.TestCase):
             "source_api": "eastmoney",
             "nav_date": nav_date,
         }
-        with patch("src.python.report.market_value.get_last_trading_day", return_value=trading_day):
+        with patch("src.python.core.trading_calendar.get_last_trading_day", return_value=trading_day):
             return _compute_detail_row(h, mkt)
 
     def test_us_qdii_nav_date_t1(self):
@@ -109,7 +109,7 @@ class TestQdiiNavDateConsistency(unittest.TestCase):
         self.assertEqual(total, 2)
         self.assertTrue(all_updated)
 
-    @patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-01")
+    @patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-01")
     def test_classify_holdings_qdii_detection(self, mock_td):
         """classify_holdings 正确识别各类型 QDII 名称变体。"""
         from src.python.report.market_value import classify_holdings

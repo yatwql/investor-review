@@ -214,40 +214,58 @@ def scan_dynamic(root: Path = PY_ROOT, exceptions=None) -> list[str]:
     return findings
 
 
-def scan_layer_inversion(root: Path = PY_ROOT, exceptions=None) -> list[str]:
-    """layer-inversion：analysis 层（纯计算）不得 import `report/` 或 `llm/`。
+#: 分层越界规则（层 → 禁止依赖的上层模块）：上层单向依赖下层，两侧共用的业务约束下沉 `core/`
+_LAYER_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("analysis", ("report", "llm")),
+    ("fetcher", ("report", "llm", "analysis")),
+    ("providers", ("report", "llm", "analysis")),
+    # 交互层（`tui`/`web`/`cli`）在报告层之上：报告侧不得反向依赖它们的格式化与状态条实现
+    ("report", ("tui", "web", "cli")),
+    ("llm", ("tui", "web", "cli")),
+    # cache 属基础设施层：可编排取数（预热调 fetcher，设计如此），但不得依赖报告/LLM/交互层
+    ("cache", ("report", "llm", "tui", "web", "cli")),
+    # config 属配置层：校验可读注册表，但不得依赖报告/LLM/分析的计算实现与交互层
+    ("config", ("report", "llm", "analysis", "tui", "web", "cli")),
+)
 
-    分层纪律：analysis 位于 core 之上、fetcher/report/llm 之下（上层单向依赖下层）。
-    两侧共用的业务约束应下沉 `core/`（例：`core/recommendation_policy.py`）。
-    存量越界走例外表（`path` = 违规文件，`name` = 被导入的目标模块），到期须收敛。
+
+def scan_layer_inversion(root: Path = PY_ROOT, exceptions=None) -> list[str]:
+    """layer-inversion：下层不得 import 上层模块（规则见 :data:`_LAYER_RULES`）。
+
+    分层纪律：`core` → `fetcher`/`providers` → `analysis` → `report`/`llm` → `tui`/`web`/`cli`，
+    上层单向依赖下层。取数层（fetcher/providers）反向依赖 `report/`/`llm/`/`analysis/`
+    与纯计算层（analysis）反向依赖 `report/`/`llm/` 同属越界；两侧共用的业务约束
+    （观测登记面、派生原语）应下沉 `core/`（例：`core/recommendation_policy.py`、
+    `core/trading_calendar.py`）。存量越界走例外表（`path` = 违规文件，`name` = 被
+    导入的目标模块），到期须收敛。
     """
     exceptions = exceptions or {}
     findings: list[str] = []
-    analysis_root = root / "analysis"
-    if not analysis_root.exists():
-        return findings
-    forbidden = ("report", "llm")
-    for path in sorted(analysis_root.rglob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            targets: list[str] = []
-            lineno = 0
-            if isinstance(node, ast.ImportFrom) and node.module:
-                # 只判模块依赖面（`from a.b import c` 的目标是 `a.b`）：符号级展开会把
-                # 例外表逼成逐符号登记，且分层纪律看的是模块依赖方向
-                targets = [node.module]
-                lineno = node.lineno
-            elif isinstance(node, ast.Import):
-                targets = [a.name for a in node.names]
-                lineno = node.lineno
-            for target in targets:
-                parts = target.split(".")
-                if len(parts) < 3 or parts[0] != "src" or parts[1] != "python" or parts[2] not in forbidden:
-                    continue
-                if _excepted(exceptions, "layer-inversion", path, target):
-                    continue
-                findings.append(f"[layer-inversion] {rel(path)}:{lineno} analysis 不得依赖 {target}")
-                break
+    for layer, forbidden in _LAYER_RULES:
+        layer_root = root / layer
+        if not layer_root.exists():
+            continue
+        for path in sorted(layer_root.rglob("*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                targets: list[str] = []
+                lineno = 0
+                if isinstance(node, ast.ImportFrom) and node.module:
+                    # 只判模块依赖面（`from a.b import c` 的目标是 `a.b`）：符号级展开会把
+                    # 例外表逼成逐符号登记，且分层纪律看的是模块依赖方向
+                    targets = [node.module]
+                    lineno = node.lineno
+                elif isinstance(node, ast.Import):
+                    targets = [a.name for a in node.names]
+                    lineno = node.lineno
+                for target in targets:
+                    parts = target.split(".")
+                    if len(parts) < 3 or parts[0] != "src" or parts[1] != "python" or parts[2] not in forbidden:
+                        continue
+                    if _excepted(exceptions, "layer-inversion", path, target):
+                        continue
+                    findings.append(f"[layer-inversion] {rel(path)}:{lineno} {layer} 不得依赖 {target}")
+                    break
     return findings
 
 

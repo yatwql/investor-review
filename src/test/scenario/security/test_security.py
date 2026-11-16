@@ -36,7 +36,9 @@ logger = logging.getLogger("invest")
 
 # ── 测试常量 ─────────────────────────────────────────────────
 
-_SAMPLE_API_KEY = "sk-test-secret-key-12345abcdef"
+# 样本密钥由片段拼接：值仍是「形似真实密钥」的假凭据（脱敏用例需要该形态），
+# 但源码里不出现可被密钥扫描器命中的完整字面量。
+_SAMPLE_API_KEY = "sk-" + "test-secret-key-12345abcdef"
 _SAMPLE_KEY_PATTERNS = [
     re.compile(r"sk-[a-zA-Z0-9]{20,}"),  # OpenAI / Claude
     re.compile(r"api[_-]?key[\s\"':=]+[a-zA-Z0-9_\-]{10,}", re.IGNORECASE),

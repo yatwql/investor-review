@@ -51,7 +51,7 @@ def fetch_fund_rankings(code: str) -> dict[str, Any] | None:
 
     Provider Chain（可配置）：天天基金
     """
-    from src.python.report.data_status import get_tracker
+    from src.python.core.degradation import get_tracker
 
     code = code.strip()
     _t = get_tracker()
@@ -154,7 +154,7 @@ def fetch_fund_holdings(code: str) -> dict[str, Any] | None:
     「联接」，故第二跳的结果不会再生出新的目标。第二跳失败时原样返回该基金的
     自身结果（通常为空），由既有「持仓不可用」路径降级。
     """
-    from src.python.report.data_status import get_tracker
+    from src.python.core.degradation import get_tracker
 
     code = code.strip()
     _t = get_tracker()

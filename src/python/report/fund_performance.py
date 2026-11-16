@@ -26,7 +26,7 @@ from src.python.core.code_utils import is_fund_holding
 from src.python.fetcher.fund import fetch_fund_benchmark, fetch_fund_rankings, fetch_fund_rankings_batch
 from src.python.core.models import Holding
 from src.python.core.registry import get_report_sheet_name
-from src.python.report.data_status import (
+from src.python.core.degradation import (
     STATUS_MESSAGES,
     DataStatus,
     DataStatusItem,

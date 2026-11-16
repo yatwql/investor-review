@@ -72,7 +72,7 @@ class TestApiKeyNotInLog(unittest.TestCase):
         """_call_llm 的日志不包含 api_key 明文。"""
         from src.python.llm.api import call_llm
 
-        secret_key = "sk-test-secret-key-12345"
+        secret_key = "sk-" + "test-secret-key-12345"
         config = {"provider": "claude", "api_key": secret_key}
 
         with patch("src.python.llm.api.call_single_provider") as mock_call:
@@ -87,7 +87,7 @@ class TestApiKeyNotInLog(unittest.TestCase):
         """API 调用失败日志不包含 api_key。"""
         from src.python.llm.api_base import call_llm_with_retry as _retry
 
-        secret_key = "sk-another-secret-99999"
+        secret_key = "sk-" + "another-secret-99999"
         with patch("src.python.llm.api_base._attempt_api_call") as mock_attempt:
             mock_attempt.return_value = ("retryable", 429)
             _retry(
@@ -113,7 +113,7 @@ class TestApiKeyNotInLog(unittest.TestCase):
         from unittest.mock import MagicMock
         from src.python.llm.api import call_claude
 
-        secret_key = "sk-header-key-88888"
+        secret_key = "sk-" + "header-key-88888"
         with patch("src.python.llm._api_claude.call_llm_with_retry") as mock_retry:
             mock_retry.return_value = ("result", {"input_tokens": 10})
             call_claude(
@@ -179,7 +179,7 @@ class TestSanitizeEndpointInLogs(unittest.TestCase):
         # 创建临时 llm_key.json 含 api_key
         tmp = tempfile.TemporaryDirectory()
         key_path = os.path.join(tmp.name, "llm_key.json")
-        secret = "sk-config-secret-666"
+        secret = "sk-" + "config-secret-666"
         with open(key_path, "w", encoding="utf-8") as f:
             json.dump({"provider": "claude", "api_key": secret}, f)
 

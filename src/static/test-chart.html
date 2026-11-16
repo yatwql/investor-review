@@ -58,7 +58,7 @@
 <body>
 
 <h1>Chart.js 交互图表调试页</h1>
-<div class="sub">独立验证 6 图渲染 + 交互 + 降级场景（TD8）；升级 chart.min.js 后在此页验证（S2 流程）。场景切换见下，离线场景模拟引擎缺失。</div>
+<div class="sub">独立验证 12 图渲染（核心 8 / 演进 3 / 纪律回放 1） + 交互 + 降级场景；升级 chart.min.js 后在此页验证。场景切换见下，离线场景模拟引擎缺失。</div>
 
 <div class="scenario-bar" id="scenario-bar">
   <a href="?s=ok">正常</a>
@@ -69,8 +69,12 @@
 
 <div id="banner">加载中…</div>
 
-<!-- chart-data 契约（§4.12）：与报告模板同 id，chart-init.js 读取此元素 -->
+<!-- 三份数据契约与报告模板同 id（chart-init.js 按元素读取）：
+     #chart-data（8 键数据集）/ #evolution-chart-data（组合演进 3 图）/
+     #schedule-replay-chart-data（纪律回放 1 图） -->
 <script type="application/json" id="chart-data"></script>
+<script type="application/json" id="evolution-chart-data"></script>
+<script type="application/json" id="schedule-replay-chart-data"></script>
 
 <div class="grid">
   <div class="chart-box">
@@ -97,6 +101,30 @@
     <div class="chart-title">量化指标<span class="badge" id="bd_radar">…</span></div>
     <div class="chart-holder"><canvas id="chart_radar" width="480" height="320" style="width:100%;height:100%;" aria-label="量化指标雷达图（悬停查看指标值）" role="img">图表无法显示，数据见智囊团复盘页</canvas></div>
     <div class="note" id="radar-note"></div>
+  </div>
+  <div class="chart-box">
+    <div class="chart-title">组合演进：市值/盈亏<span class="badge" id="bd_evolution_total">…</span></div>
+    <div class="chart-holder"><canvas id="chart_evolution_total" width="800" height="300" style="width:100%;height:100%;" aria-label="组合演进总市值与总盈亏折线图" role="img">图表无法显示，数据见组合演进明细表</canvas></div>
+  </div>
+  <div class="chart-box">
+    <div class="chart-title">组合演进：HHI 集中度<span class="badge" id="bd_evolution_hhi">…</span></div>
+    <div class="chart-holder"><canvas id="chart_evolution_hhi" width="800" height="300" style="width:100%;height:100%;" aria-label="组合演进 HHI 集中度折线图" role="img">图表无法显示，数据见组合演进明细表</canvas></div>
+  </div>
+  <div class="chart-box">
+    <div class="chart-title">组合演进：前六持仓占比<span class="badge" id="bd_evolution_top">…</span></div>
+    <div class="chart-holder"><canvas id="chart_evolution_top" width="800" height="300" style="width:100%;height:100%;" aria-label="组合演进前六持仓占比折线图" role="img">图表无法显示，数据见组合演进明细表</canvas></div>
+  </div>
+  <div class="chart-box">
+    <div class="chart-title">调仓纪律回放 vs 买入持有<span class="badge" id="bd_schedule_replay">…</span></div>
+    <div class="chart-holder"><canvas id="chart_schedule_replay" width="800" height="300" style="width:100%;height:100%;" aria-label="调仓纪律回放与买入持有净值对比折线图" role="img">图表无法显示，数据见调仓纪律回放明细表</canvas></div>
+  </div>
+  <div class="chart-box">
+    <div class="chart-title">风险调整超额：滚动 1Y<span class="badge" id="bd_excess_rolling">…</span></div>
+    <div class="chart-holder"><canvas id="chart_excess_rolling" width="800" height="300" style="width:100%;height:100%;" aria-label="风险调整超额滚动曲线" role="img">图表无法显示，数据见风险调整超额表</canvas></div>
+  </div>
+  <div class="chart-box">
+    <div class="chart-title">持仓相关性（滚动）<span class="badge" id="bd_corr_rolling">…</span></div>
+    <div class="chart-holder"><canvas id="chart_corr_rolling" width="800" height="300" style="width:100%;height:100%;" aria-label="持仓重合度滚动相关系数折线图" role="img">图表无法显示，数据见持仓结构表</canvas></div>
   </div>
 </div>
 
@@ -168,6 +196,17 @@
       radar: {
         labels: ['夏普比率', '卡玛比率', '胜率', '换手率', '组合 Beta', '集中度 HHI'],
         datasets: [{ label: '量化指标', data: [1.2, 0.9, 0.58, 0.35, 0.92, 0.18], borderColor: 'var(--chart-primary)', degraded: false }]
+      },
+      excess_rolling: {
+        labels: DATES,
+        datasets: [{ label: '滚动 1Y 超额', data: [0.8, 1.2, -0.4, 0.6, 1.5, 0.9, 1.1, 0.3, -0.2], borderColor: 'var(--chart-primary)', backgroundColor: 'rgba(46,117,182,0.1)' }]
+      },
+      corr_rolling: {
+        labels: DATES,
+        datasets: [
+          { label: '沪深300ETF × 中证500ETF', data: [0.82, 0.80, 0.79, 0.81, 0.83, 0.80, 0.78, 0.79, 0.81], borderColor: 'var(--chart-primary)' },
+          { label: '茅台 × 五粮液', data: [0.91, 0.90, 0.92, 0.89, 0.90, 0.91, 0.90, 0.88, 0.90], borderColor: '#CC0000', borderDash: [6, 4] }
+        ]
       }
     },
  /* 降级场景：净值/回撤 degraded（虚线）+ radar 3 轴兜底 + note（§6.6/） */
@@ -226,8 +265,31 @@
 
   var data = scenario === 'offline' ? DATA.ok : DATA[scenario];
 
-  /* 填充 chart-data（chart-init.js 读取） */
+  /* 填充 chart-data / evolution-chart-data / schedule-replay-chart-data（chart-init.js 读取） */
   document.getElementById('chart-data').textContent = JSON.stringify(data);
+
+  /* 组合演进 3 图（evolution_data 契约：periods + 三序列 + top_holdings.weights） */
+  var PERIODS = ['2026-07-31', '2026-08-31', '2026-09-30', '2026-10-31'];
+  var evolution = (scenario === 'empty') ? { periods: [] } : {
+    periods: PERIODS,
+    total_value: [601200, 612400, 598900, 618700],
+    total_pnl: [11200, 22400, 8900, 18700],
+    hhi: [0.191, 0.204, 0.188, 0.212],
+    top_holdings: [
+      { name: '贵州茅台', weights: [23.8, 24.1, 23.5, 24.0] },
+      { name: '沪深300ETF', weights: [13.6, 13.9, 13.5, 13.7] },
+      { name: '宁德时代', weights: [12.0, 11.8, 12.4, 11.9] }
+    ]
+  };
+  document.getElementById('evolution-chart-data').textContent = JSON.stringify(evolution);
+
+  /* 调仓纪律回放（schedule_replay.chart 契约：dates + replay + buyhold） */
+  var replay = (scenario === 'empty') ? { dates: [] } : {
+    dates: PERIODS,
+    replay: [100.0, 101.6, 99.8, 103.4],
+    buyhold: [100.0, 102.4, 100.1, 102.9]
+  };
+  document.getElementById('schedule-replay-chart-data').textContent = JSON.stringify(replay);
 
   /* radar 降级 note（模板独立渲染，chart-init.js 不处理） */
   if (scenario === 'degraded' && data.radar && data.radar.datasets && data.radar.datasets[0] && data.radar.datasets[0].note) {
@@ -248,7 +310,9 @@
   }
 
   /* ── 自检（chart-init.js 加载执行完成后触发；兜底 3s 防脚本加载异常）── */
-  var KEYS = ['portfolio_line', 'drawdown', 'category_doughnut', 'industry_bar', 'penetration_bar', 'radar'];
+  var KEYS = ['portfolio_line', 'drawdown', 'category_doughnut', 'industry_bar', 'penetration_bar',
+              'radar', 'evolution_total', 'evolution_hhi', 'evolution_top', 'schedule_replay',
+              'excess_rolling', 'corr_rolling'];
   var checked = false;
   function runSelfCheck() {
     if (checked) { return; }
@@ -266,7 +330,12 @@
       var canvas = document.getElementById('chart_' + key);
       var badge = document.getElementById('bd_' + key);
       var ds = data[key];
-      var expect = ds && ds.labels && ds.labels.length ? 'ok' : 'empty';
+      /* 演进/回放三图读独立数据段，键不在 data 里 → 用各自的数据段是否存在判定期望 */
+    var independent = key.indexOf('evolution_') === 0 || key === 'schedule_replay';
+    var hasRows = independent
+      ? (key === 'schedule_replay' ? (replay.dates || []).length > 0 : (evolution.periods || []).length > 0)
+      : !!(ds && ds.labels && ds.labels.length);
+    var expect = hasRows ? 'ok' : 'empty';
       if (scenario === 'degraded' && key === 'radar') { expect = 'degraded'; }
       if (canvas && Chart.getChart(canvas)) {
         initCount++;
@@ -277,8 +346,8 @@
         badge.className = 'badge ' + (expect === 'empty' ? 'empty' : 'err');
       }
     }
-    banner.className = initCount === 6 ? 'ok' : 'warn';
-    banner.textContent = '场景 [' + scenario + ']：' + initCount + '/6 图已初始化。' +
+    banner.className = initCount === KEYS.length ? 'ok' : 'warn';
+    banner.textContent = '场景 [' + scenario + ']：' + initCount + '/' + KEYS.length + ' 图已初始化。' +
       (scenario === 'degraded' ? '降级图应显示虚线描边 + radar 底部"仅限基础指标"。' : '') +
       (scenario === 'empty' ? '空数据图应显示占位文本（badge 灰色）。' : '') +
       ' 悬停任意图查看 tooltip。打印预览验证 2x DPI 快照（chart-print.js）。';

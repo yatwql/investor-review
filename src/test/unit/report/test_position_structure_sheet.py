@@ -15,7 +15,7 @@ from typing import Any
 
 import pytest
 
-from src.python.report.data_status import STATUS_MESSAGES
+from src.python.core.degradation import STATUS_MESSAGES
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
 

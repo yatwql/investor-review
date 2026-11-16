@@ -21,7 +21,7 @@ from openpyxl.cell.cell import MergedCell
 from openpyxl.styles import Font, PatternFill
 from openpyxl.worksheet.worksheet import Worksheet
 
-from src.python.report.data_status import STATUS_MESSAGES
+from src.python.core.degradation import STATUS_MESSAGES
 from src.python.report.excel_writer import (
     _write_placeholder,
     auto_width,

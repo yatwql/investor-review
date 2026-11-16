@@ -159,7 +159,7 @@ class TestMarkDataUsedFailureType:
     """成功取用事件不得携带失败类型（否则下游按 failure_type 统计会误报）。"""
 
     def test_success_event_uses_neutral_failure_type(self, tmp_path, monkeypatch):
-        from src.python.report import data_status as ds
+        from src.python.core import degradation as ds
 
         tracker = ds.DegradationTracker(persist_path=str(tmp_path / "degradation.json"))
         monkeypatch.setattr(ds, "get_tracker", lambda: tracker)

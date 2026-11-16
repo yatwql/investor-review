@@ -39,7 +39,7 @@ class TestNotifyWebCompletion:
         with (
             patch("src.python.config.get_config", return_value={"notify": {}}),
             patch("src.python.core.completion_notify.build_completion_event") as mock_build,
-            patch("src.python.report.data_status.degradation_summary") as mock_degr,
+            patch("src.python.core.degradation.degradation_summary") as mock_degr,
         ):
             _notify_web_completion(_state(), {"report_type": "basic"}, 0, None)
 
@@ -56,7 +56,7 @@ class TestNotifyWebCompletion:
         result = MagicMock(excel_ok=True, html_ok=True)
         with (
             patch("src.python.config.get_config", return_value=cfg),
-            patch("src.python.report.data_status.degradation_summary", return_value=["tencent: timeout（累计5次）"]),
+            patch("src.python.core.degradation.degradation_summary", return_value=["tencent: timeout（累计5次）"]),
             patch("src.python.core.completion_notify.dispatch_completion_notification") as mock_dispatch,
         ):
             _notify_web_completion(state, {"report_type": "basic"}, 1, result)
@@ -77,7 +77,7 @@ class TestNotifyWebCompletion:
         cfg = {"notify": {"webhook_url": "http://example.invalid/hook"}, "output_dir": "reports"}
         with (
             patch("src.python.config.get_config", return_value=cfg),
-            patch("src.python.report.data_status.degradation_summary", return_value=[]),
+            patch("src.python.core.degradation.degradation_summary", return_value=[]),
             patch("src.python.core.completion_notify.dispatch_completion_notification") as mock_dispatch,
         ):
             _notify_web_completion(_state(errors=["上传文件已过期"]), {"report_type": "both"}, 2, None)
@@ -91,7 +91,7 @@ class TestNotifyWebCompletion:
         cfg = {"notify": {"webhook_url": "http://example.invalid/hook"}, "output_dir": "reports"}
         with (
             patch("src.python.config.get_config", return_value=cfg),
-            patch("src.python.report.data_status.degradation_summary", return_value=[]),
+            patch("src.python.core.degradation.degradation_summary", return_value=[]),
             patch(
                 "src.python.core.completion_notify.dispatch_completion_notification",
                 side_effect=RuntimeError("boom"),
@@ -115,7 +115,7 @@ class TestNotifyWebCompletion:
         result = MagicMock(excel_ok=True, html_ok=False)
         with (
             patch("src.python.config.get_config", return_value=cfg),
-            patch("src.python.report.data_status.degradation_summary", return_value=[]),
+            patch("src.python.core.degradation.degradation_summary", return_value=[]),
             patch("src.python.core.completion_notify.dispatch_completion_notification") as mock_dispatch,
         ):
             _notify_web_completion(state, {"report_type": "basic"}, 0, result)

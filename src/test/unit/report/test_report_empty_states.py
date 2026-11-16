@@ -129,7 +129,7 @@ class TestDesignAlignment:
         for tier in ("empty-section", "empty-note", "chart-empty-note"):
             assert f"`{tier}`" in sec, f"DESIGN 状态节缺三档类名 {tier}"
         assert "暂无" in sec and "数据不可用：" in sec, "DESIGN 状态节缺二元口径"
-        assert "placeholder-note" in sec, "DESIGN 应记录归并历史（同义类收敛）"
+        assert "placeholder-note" not in sec, "DESIGN 只写当前状态：不记录同义类归并经过"
 
     def test_design_gaps_no_stale_empty_entry(self) -> None:
         """Known Gaps 不再挂空态归并在办条目（任务已完成）。"""

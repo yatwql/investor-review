@@ -273,7 +273,7 @@ class TestConfigEnvEdge(unittest.TestCase):
         with open(settings_path, "w", encoding="utf-8") as f:
             json.dump({"schema_version": 2, "modules": {"global_macro": {"enabled": True}}}, f)
         with open(key_path, "w", encoding="utf-8") as f:
-            json.dump({"api_key": "  sk-test-with-spaces  ", "provider": "claude"}, f)
+            json.dump({"api_key": "  sk-" + "test-with-spaces  ", "provider": "claude"}, f)
 
         with (
             patch("src.python.config._llm_settings.get_llm_settings_path", return_value=settings_path),
@@ -293,7 +293,7 @@ class TestConfigEnvEdge(unittest.TestCase):
 
         # llm_settings.json 含 api_key 且无 llm_key.json → 返回 None（凭据分离）
         with open(settings_path, "w", encoding="utf-8") as f:
-            json.dump({"api_key": "\t sk-ant-from-settings \n", "temperature": 0.7}, f)
+            json.dump({"api_key": "\t sk-" + "ant-from-settings \n", "temperature": 0.7}, f)
 
         with (
             patch("src.python.config._llm_settings.get_llm_settings_path", return_value=settings_path),

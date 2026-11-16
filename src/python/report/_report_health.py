@@ -63,7 +63,7 @@ def _collect_health_checks(
         save_health_check_snapshot(results, report_type=report_type, holdings_count=len(holdings))
 
         # 将结果注入 DegradationTracker，供 data_source_matrix 使用
-        from src.python.report.data_status import get_tracker
+        from src.python.core.degradation import get_tracker
 
         tracker = get_tracker()
         for r in results:

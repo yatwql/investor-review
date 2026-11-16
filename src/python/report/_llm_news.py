@@ -91,7 +91,7 @@ def _submit_llm_future(
     if not enable_llm:
         return None
     from src.python.llm import generate_all_llm
-    from src.python.report.data_status import get_tracker
+    from src.python.core.degradation import get_tracker
 
     # 数据降级事件快照：行情/基金等数据获取阶段已结束，此处读取一次即定稿，
     # 随参数送入持仓体检提示词的【数据质量降级】详情段。必须在主线程读取

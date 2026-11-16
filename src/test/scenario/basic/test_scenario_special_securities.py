@@ -98,7 +98,7 @@ class TestS22ConvertibleBond(unittest.TestCase):
             "source": "腾讯财经",
             "source_api": "tencent",
         }
-        with patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"):
+        with patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"):
             with patch("src.python.report.market_value.is_market_open", return_value=False):
                 row = _compute_detail_row(h, mkt)
         self.assertEqual(row.market_value, 1085.0)  # 108.5 * 10
@@ -137,7 +137,7 @@ class TestS23PublicReits(unittest.TestCase):
             "source": "腾讯财经",
             "source_api": "tencent",
         }
-        with patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"):
+        with patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"):
             with patch("src.python.report.market_value.is_market_open", return_value=False):
                 row = _compute_detail_row(h, mkt)
         self.assertEqual(row.market_value, 9200.0)  # 9.2 * 1000
@@ -175,7 +175,7 @@ class TestS24MoneyMarketFund(unittest.TestCase):
             "source": "天天基金",
             "source_api": "tiantian",
         }
-        with patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"):
+        with patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"):
             with patch("src.python.report.market_value.is_market_open", return_value=False):
                 row = _compute_detail_row(h, mkt)
         self.assertEqual(row.price, 1.0)
@@ -275,7 +275,7 @@ class TestS26CommodityGoldEtf(unittest.TestCase):
             "source": "腾讯财经",
             "source_api": "tencent",
         }
-        with patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"):
+        with patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"):
             with patch("src.python.report.market_value.is_market_open", return_value=False):
                 row = _compute_detail_row(h, mkt)
         self.assertEqual(row.premium, _FUND_PREMIUM_PLACEHOLDER)
@@ -323,7 +323,7 @@ class TestS27CrossBorderEtf(unittest.TestCase):
             "source": "天天基金",
             "source_api": "tiantian",
         }
-        with patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"):
+        with patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"):
             with patch("src.python.report.market_value.is_market_open", return_value=False):
                 row = _compute_detail_row(h, mkt)
         # nav_date != trading_day → 照实呈现该净值日涨跌，标「参考」且不进组合合计
@@ -389,7 +389,7 @@ class TestS28BondHoldings(unittest.TestCase):
             "source": "腾讯财经",
             "source_api": "tencent",
         }
-        with patch("src.python.report.market_value.get_last_trading_day", return_value="2026-07-03"):
+        with patch("src.python.core.trading_calendar.get_last_trading_day", return_value="2026-07-03"):
             with patch("src.python.report.market_value.is_market_open", return_value=False):
                 row = _compute_detail_row(h, mkt)
         self.assertEqual(row.market_value, 9950.0)  # 99.5 * 100

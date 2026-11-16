@@ -123,7 +123,7 @@ def capture_snapshot(
             return None
 
     from src.python.fetcher.history_diff import HistoryDiff
-    from src.python.report.data_status import get_tracker as _get_degradation_tracker
+    from src.python.core.degradation import get_tracker as _get_degradation_tracker
     from src.python.report.history_snapshot import load_comparison_baseline, save
     from src.python.schemas.history import (
         AccountSnapshot,
@@ -324,7 +324,7 @@ def _crisis_index_days() -> int:
     except (KeyError, TypeError, ValueError):
         return _CRISIS_INDEX_DAYS_MAX
     span = (_date.today() - earliest).days
-    return max(0, min(_CRISIS_INDEX_DAYS_MAX, int(span * 252 / 365) + 60))
+    return max(0, min(_CRISIS_INDEX_DAYS_MAX, int(float(span) * 252 / 365) + 60))
 
 
 def latest_quotes_from_detail_rows(rows: list | None) -> dict[str, tuple[float, str]]:
@@ -348,7 +348,7 @@ def latest_quotes_from_detail_rows(rows: list | None) -> dict[str, tuple[float, 
         nav_date = str(detail_value(row, "nav_date", "") or "").strip()
         if not code or not nav_date or not isinstance(price, (int, float)) or price <= 0:
             continue
-        quotes[code] = (float(price), nav_date)
+        quotes[code] = (float(price), nav_date)  # isinstance 已限定数值型
     return quotes
 
 

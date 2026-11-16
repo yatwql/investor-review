@@ -195,7 +195,7 @@ def _notify_web_completion(state, params: dict, exit_code: int, result: object) 
             dispatch_completion_notification,
             should_notify,
         )
-        from src.python.report.data_status import degradation_summary
+        from src.python.core.degradation import degradation_summary
 
         config = get_config() or {}
         notify_cfg = config.get("notify") or {}

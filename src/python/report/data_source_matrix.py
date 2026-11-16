@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from src.python.report.data_status import get_provider_usage, get_tracker
+from src.python.core.degradation import get_provider_usage, get_tracker
 
 logger = logging.getLogger("invest")
 
@@ -483,7 +483,7 @@ def build_data_source_catalog() -> list[dict[str, Any]]:
     Returns:
         每行含 ``id / category / provider / usage / billing / auth / used / note``。
         ``used`` 为 True 表示本次运行**取得过该类别数据**（含命中缓存）——由各类别的
-        取数链路以 ``report.data_status.mark_data_used`` 标记（**只记成功、不记降级**，
+        取数链路以 ``core.degradation.mark_data_used`` 标记（**只记成功、不记降级**，
         故「未使用」仅说明本次未取到该类数据，不等于该源故障）；未登记类别级标记的
         类别（如历史走势只登记缓存键）以 provider 级归属为补充正面证据。
         需 key 的类别（如财报全文）的 ``auth`` 附加就绪状态。

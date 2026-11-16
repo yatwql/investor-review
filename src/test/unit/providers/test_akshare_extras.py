@@ -522,12 +522,12 @@ class TestCacheKey(unittest.TestCase):
     """测试缓存键生成。"""
 
     def test_with_fingerprint(self) -> None:
-        key = ae._cache_key("dividend_", "abc123def456")
-        self.assertEqual(key, "dividend_abc123def456")
+        cache_key = ae._cache_key("dividend_", "abc123def456")
+        self.assertEqual(cache_key, "dividend_abc123def456")
 
     def test_without_fingerprint(self) -> None:
-        key = ae._cache_key("dividend_", "")
-        self.assertEqual(key, "dividend_nofp")
+        cache_key = ae._cache_key("dividend_", "")
+        self.assertEqual(cache_key, "dividend_nofp")
 
 
 class TestMemoCache(unittest.TestCase):
