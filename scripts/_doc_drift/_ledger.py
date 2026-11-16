@@ -122,6 +122,59 @@ def check_archive_layout(archive_root: Path | None = None) -> list[str]:
     return findings
 
 
+#: 变更日志里属「自审/自查发现」的条目特征词（这类修复须先在台账登记）
+_AUDIT_BULLET_WORDS = ("自审", "自查", "整改", "审计", "核对")
+_DEV_SECTION = re.compile(r"^## \[([^\]]+-dev)\][^\n]*$", re.M)
+
+
+def check_audit_logged(changelog_text: str | None = None, review_findings_text: str | None = None) -> list[str]:
+    """当前开发周期「有自审修复、台账却无条目」须报警。
+
+    纪律：自查发现的问题**先**登记 `review-findings.md`（`rf-N`），修完再在 changelog 写条目。
+    实际执行时容易反过来——先改代码、changelog 记一句，台账漏登；等到发布才被 archive 前置断言
+    拦住（要回填整批 rf 行）。本项把这类漏登提前到提交阶段暴露：只要本周期 changelog 出现
+    「自审/自查/整改/审计/核对」类条目，而「开发期已修复」表里一条 rf 行都没有，即报 finding。
+
+    只查「零条」这一确定形态：台账有行但不全时不做数量比对（条目与 bullet 并非一一对应）。
+    """
+    changelog = (
+        changelog_text if changelog_text is not None else (_MANAGEMENTS / "changelog.md").read_text(encoding="utf-8")
+    )
+    findings_text = (
+        review_findings_text
+        if review_findings_text is not None
+        else (_MANAGEMENTS / "review-findings.md").read_text(encoding="utf-8")
+    )
+
+    dev = _DEV_SECTION.search(changelog)
+    if not dev:
+        return []
+    body_start = dev.end()
+    nxt = re.search(r"^## ", changelog[body_start:], re.M)
+    body = changelog[body_start : body_start + nxt.start()] if nxt else changelog[body_start:]
+    audit_bullets = [
+        line for line in body.splitlines() if line.startswith("- ") and any(w in line for w in _AUDIT_BULLET_WORDS)
+    ]
+    if not audit_bullets:
+        return []
+
+    version = dev.group(1)
+    fixed = re.search(rf"^###\s+开发期已修复（{re.escape(version)}）[^\n]*$", findings_text, re.M)
+    rows = 0
+    if fixed:
+        tail = findings_text[fixed.end() :]
+        stop = _H3_HEADING.search(tail)
+        section = tail[: stop.start()] if stop else tail
+        rows = len(_RF_ROW_ID.findall(section)) + len(_RF_ROW_UNBOLD.findall(section))
+    if rows:
+        return []
+    return [
+        f"docs/managements/changelog.md: 本周期有 {len(audit_bullets)} 条自审/整改类变更，但 "
+        f"review-findings「开发期已修复（{version}）」表无 rf 条目——纪律要求先登记再修复"
+        f"（先去台账补 rf 行，发布归档才搬得动）"
+    ]
+
+
 def audit_management_partitions(
     *,
     review_findings: str,
