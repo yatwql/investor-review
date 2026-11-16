@@ -2,37 +2,18 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
-> **最近发布 [0.18.1]**（2026-11-15）——已发布版本段随发布移入 [`archived_changelog.0.18.x.md`](../archive/v0.18.x/archived_changelog.0.18.x.md)；本文件只保留当前开发版本段与归档索引。
+> **最近发布 [0.18.2]**（2026-11-16）——已发布版本段随发布移入 [`archived_changelog.0.18.x.md`](../archive/v0.18.x/archived_changelog.0.18.x.md)；本文件只保留当前开发版本段与归档索引。
 
 ---
 
-## [0.18.2-dev] - 开发中（未发布）
+## [0.18.3-dev] - 开发中（未发布）
 
-### 变更
 
-- **架构：分层门禁扩到 `cache` / `config`**：`layer-inversion` 规则此前只覆盖 `analysis`/`fetcher`/`providers`/`report`/`llm`，基础设施层（`cache` 刷新判定与预热编排、`config` 校验）的向上依赖无人看守。现规定 `cache → report/llm/tui/web/cli` 与 `config → report/llm/analysis/tui/web/cli` 为越界（`cache → fetcher` 属预热编排设计，显式允许），存量 7 处入例外表（到期 2027-06-30、写明下沉方向），`technical.md`「存量分层例外」表按例外表重生成；补 2 条规则用例。同时去掉一处真实越界：`cache/operations.py` 判定基金改调 `core.code_utils.is_fund_holding`（原经 `report.fund_performance` 转发）。
-- **归档目录布局规范化**：`docs/archive/v0.17.x/` 的四份编排拆分契约（`html-writer` / `report-both` / `generate-all-llm` / `llm-dispatch`）收进语义子目录 `stage-split-contracts/`，与 v0.15/v0.16 的「版本目录顶层只放 changelog/plan/review-findings 三份台账 + 专题子目录」一致；`folders.md` 目录树与说明样式同步。`check-doc-drift` 内部新增一项归档布局校验（`_ledger.check_archive_layout`，检查项 27 → 28 项，守护脚本数量不变）：版本目录顶层出现设计文档或非 .md 文件即报错，配 2 条用例；`scripts-reference.md` 的检查项清单同步补第 28 项。顺带清掉 `v0.15.x` 里未入库的 `__pycache__`。
-- **52h 自审整改**：`report/html_writer.py` 渲染前置装配（面板视图 / 数据源状态包 / 章节可见性与掩码上下文，约 200 行）下沉新模块 `report/_html_render_context.py`，写出函数回到 751 行；Web 字段错误态 `.field-error` 补 `flex-basis:100%`（`.config-path-row` 是 flex，提示原本会与输入框挤同一行）；文件膨胀登记表（`review-findings.md` P4）按实测重写——补登 10 个越过 700 行的文件（`html_writer` / `perf` / `doctor` / `_numerical` / `handlers_config` / `_doc_drift/_format` / `degradation` / `action_sheet` / `akshare_extras` / `provider_registry`），并删掉已降到线下的一行。
-- **文档内容核对**：`technical.md` 进度抽象与模块表按迁移后的位置改写（`report/progress.py` 只剩渠道无关基类，`TuiProgressReporter` 在 `tui/progress.py`；调用链图同步）；`DESIGN.md` 护栏观察项数字校正为实测（W4 档外字号 0 处、W5 档外间距 1 处 = `action_section.html` 2px）；`how-to-config.md` 的 features.json 示例改用上屏开关 `valuation_percentile`（原示例项已转内置恒开、面板不可见，易误读）。
-- **文档去复盘痕迹（管理/用户文档全域）**：删除/改写历史叙述——`requirements.md` 与 `technical.md` 里「原 `financial_indicator`/`financial_report_digest` 两开关已并入」「原 `signal_pre_digest`/`signal_ledger` 合并转正」「原 `code_utils` 转发已删除」「原 `providers/utils.py` 已改名」「等价原 `(sel ± 1) % len`」「原 `profit_color` 内联色过滤器已下线」「开关已移除」「子功能并入说明」等；`technical.md` 的「**修复**：…」评审口吻改「**实现**：…」；`scripts-reference.md` 的「此前没有任何类型门禁」「历史噪声已清零（50 处）」；`developer-guide.md`「已移除的配置键」改「未登记的配置键」、「原面 re-export」改「门面 re-export」（`folders.md` 同步 3 处，另两处设计目录的「此前仅用于…」改述当前设计）；`DESIGN.md`「两面已统一」改「两面同值」；用户手册侧：`how-to-config.md`「原两开关并入本单一开关」、`how-to-config-reference.md`「行业 Beta 子表已并入此开关」、`how-to-use-tui-menu.md`「合并原两个入口」、`reports-instruction.md`「回退旧『上一份快照』口径」、`faq.md`「历史 Canvas 回退路径已移除」、`datasource-reliability.md`「串行等待已收敛」。
-- **设计契约去复盘痕迹**：`DESIGN.md` / `DESIGN-TUI.md` 改为只陈述当前状态——删掉「旧 `--color-*` 命名为宽限期删映射」「字重现状 63 处 / 存量 9 处」「圆角旧 12px 出档（2026-10-08）」「断点旧 899/900/375 残值零」「empty-note 原 `placeholder-note` 同义类归并 20 处清零」「W3 内联色存量 40 处归零后升 E 级」「机检落地/观察期」等改版叙述，`DESIGN-TUI.md` Known Gaps 表头「现状」改「当前表现」、`[S]` 项数 18→14；两份契约新增守卫用例，出现「旧 ` / 原 ` / 已删除 / 已移除 / 宽限期 / 收敛为 / 归零 / 清零 / 已废弃 / 此前 / 改走 / 已落地 / 存量」等复盘式用词即测试红；`test_report_empty_states` 的「DESIGN 应记录归并历史」断言反转为「不得记录归并经过」。
-- **文档核对**：`requirements.md`（`[S]` 六组补「交互与追问」、报产物开关改「八组」、行业 Beta 归属合并后的 `factor_catalog`）、`technical.md`（`[S]` 六组、数据字典 `industry_beta` 归属）、`DESIGN-TUI.md`（`[S]` 六组）、`scripts-reference.md`（八组区段 / 六组编号）、`how-to-config.md`（前六组在 `[S]`）、`how-to-config-reference.md`（Web 分组表按实际 14 编号重写、补交互与追问与内置恒开行、「附」节移入目录并归位到 S 之后）、`how-to-use-tui-menu.md` 与 `how-to-config-llm.md`（`[S]` 六组）、`testplan.md`（T22~T24 从日期场景表移出，新立「1.9 业务增强场景」并按编号排序；Web 配置分块口径改为按域派生）。
-- **静态资源自查整改**：`test-chart.html` 调试页补到 12 图（原仅 6 图，演进 3 / 纪律回放 / 超额 / 相关性四类未覆盖，Chart.js 升级验收会漏图）并把自检基数改为派生；`chart-init.js` 头注与 `folders.md`、`src/static/README.md` 的「6 图 / 9 张图」口径统一为 12 图（8 数据集键 + 4 扩展图）；Web 字段错误态接线——显式保存失败时行挂 `.has-error` + `.field-error` 原因（DESIGN.md 组件矩阵此前只有 CSS 定义、无代码使用）；`src/static/README.md` 补第 4 类资产（文档配图与品牌资产）。
-- **自审清理**：合并后删除重复访问器 `is_enable_industry_beta`（行业 Beta 一律走 `is_enable_factor_catalog`）、`_add_comparison_index` 的死参数；`how-to-config.md` 给 7 项「内置恒开、不上面板」的开关补标注，`requirements.md` 区块三归属同步到合并后的开关。
-- **4 项默认开的关键开关转内置**：`fund_purchase_limit`（申购状态列）、`cost_position`（成本区间位置）、`market_temperature`（市场温度）、`summary_highlights`（首页执行摘要卡）改为**内置恒开、不上面板**（数据缺失仍逐项静默隐列/省略，`features.json` 仍可覆写关闭）；`[S]` 面板 18 → 14 项。
-- **开关合并：风格与因子区块**：`industry_beta` 并入 `factor_catalog`（同属「风格与因子分析」章、共用一份风格回归数据），合并后单开关控制「行业 Beta 子表 + 因子目录」两块，功能开关 27 → 26 项；`features.json` 里残留的 `industry_beta` 键按未登记开关告警并回落到默认值，不影响启动。另为配置读写路径补上目录创建/文件读取的失败日志（原样抛出，语义不变）。
-- **开关面板归位与文案收敛**：`portfolio_constraints` 归「持仓与交易」、`risk_adjusted_excess` 归「市场与估值」、`report_qa` 独立成新组「🎛 交互与追问」（原混在机制组）；组名去掉括号清单，开关说明统一为「影响面 → 动作 → 缺失时行为」三段式并压到 45 字内；`llm_research_contract` 说明点明作用于 `[C]` 自检复盘章。`[S]` 由五组扩为六组，19 项编号随之重排。
-- **HTML 写出继续拆分**：`write_html_report` 357 → **312 行 / 6 分支**（原 10），新增 `_prepare_render_context` 把「章节序号/可见性 + 数据源状态 + 因子名映射 + 代码掩码」四类渲染前置量收成 `_RenderContext`，主流程只留装配调用。
-- **分层纠偏：TUI 进度报告器归位**：`TuiProgressReporter` 从 `report/progress.py` 迁至 `tui/progress.py`，消除「报告层 → 交互层」反向依赖；`layer-inversion` 规则同步扩到 `report/llm → tui/web/cli`（补对应用例），报告层此后只保留渠道无关的 `ProgressReporter`/`AnnouncingProgressReporter`。
-- **66h 自审整改**：删除 `write_html_report` 的死参数 `sector_flow`（无调用方传入、函数体未使用）；`DegradationTracker.record_aggregated` 的 `codes` 参数落地进事件明细（前 20 条，供定位失败标的）；去掉产出阶段重复的 `metrics` 别名；测试里的样本密钥/缓存键字面量改为拼接构造与语义命名，避免被密钥扫描器误报。
-- **交易日判定单点化**：`report/market_value` 内部改为按属性调用 `core/trading_calendar`，取数侧（`fetcher/price`、`report/_holding_detail_rows`、`report/excel_module_loader`）直连 core；测试 patch 点统一到一处，删除 fetcher→report 分层例外登记。
-- **Excel 编排函数拆分**：`generate_excel_report` 479 行 / 92 分支 → 216 行 / 20 分支，按职责提取 6 个子函数，产物不变。
-- **报告编排继续拆分**：`_generate_report_full` 410 → 304 行 / 17 分支（行业资金流向、LLM+新闻阶段、双端产出与收尾三块各自成函数，产出阶段入参收敛为上下文对象）；`write_html_report` 357 → 333 行（面板视图、数据源状态装配拆出）。
-- **架构：降级观测面下沉 core**：`report/data_status.py` 迁为 `core/degradation.py`（取数层 `fetcher/`、纯计算层 `analysis/` 在失败当刻即可登记降级事件，不再反向依赖报告层）；`report/_history_quality` 的滞后后果句改为引用 core 单一文案源。`check-import-surface` 的 `layer-inversion` 规则同步扩到 `fetcher → report/llm/analysis` 与 `providers → report/llm/analysis`，存量越界经例外表登记（含到期日与收敛方向），技术设计「存量分层例外」表同步重写。
+（本次发布内容见下方归档索引）
 
 ## 归档
 
-- [`archived_changelog.0.18.x.md`](../archive/v0.18.x/archived_changelog.0.18.x.md) — v0.18.0 ~ v0.18.1（2026-11-12 ~ 2026-11-15）
+- [`archived_changelog.0.18.x.md`](../archive/v0.18.x/archived_changelog.0.18.x.md) — v0.18.0 ~ v0.18.2（2026-11-12 ~ 2026-11-16）
 - [`archived_changelog.0.17.x.md`](../archive/v0.17.x/archived_changelog.0.17.x.md) — v0.17.0 ~ v0.17.9（2026-11-04 ~ 2026-11-11）
 - [`archived_changelog.0.16.x.md`](../archive/v0.16.x/archived_changelog.0.16.x.md) — v0.16.0 ~ v0.16.17（2026-10-25 ~ 2026-11-03）
 - [`archived_changelog.0.15.x.md`](../archive/v0.15.x/archived_changelog.0.15.x.md) — v0.15.0 ~ v0.15.9（2026-10-24 ~ 2026-10-25）
