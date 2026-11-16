@@ -461,6 +461,131 @@ def _build_data_source_bundle(
     )
 
 
+@dataclass
+class _RenderContext:
+    """渲染前一次性算好的派生上下文（可见性/数据源状态/因子名/代码掩码）。"""
+
+    section_numbers: dict
+    section_visible_dict: dict
+    sv_fn: Any
+    status: tuple[Any, Any, Any, Any]
+    data_status_history: Any
+    data_source_matrix: Any
+    data_source_catalog: Any
+    factor_names: dict
+    code_display_map: dict
+
+
+def _prepare_render_context(
+    *,
+    order: list,
+    manager_analysis: Any,
+    overlap_matrix: Any,
+    concentration_analysis: Any,
+    style_analysis: Any,
+    include_news: bool,
+    llm_enabled_flag: bool,
+    enable_llm: bool,
+    enable_news: bool,
+    enable_fund_deep_analysis: bool,
+    enable_history: bool,
+    enable_portfolio_evolution: bool,
+    enable_action: bool,
+    style_factor_data: Any,
+    position_relationship_data: Any,
+    evolution_data: Any,
+    holding_change_data: Any,
+    schedule_replay_data: Any,
+    enable_fundamental_snapshot: bool,
+    financial_report_digest_data: Any,
+    financial_indicator_data: Any,
+    a_indices: Any,
+    us_indices: Any,
+    penetration: Any,
+    penetration_profit_ok: bool,
+    penetration_dividend_ok: bool,
+    perf_data: Any,
+    holdings: list,
+    cat_dividend_ok: bool,
+    history_data: Any,
+    details: Any,
+) -> _RenderContext:
+    """装配渲染前置上下文：章节序号/可见性、数据源状态、因子名映射、代码掩码。
+
+    这些量都在「渲染之前」一次算好且互不依赖输出顺序，集中在此以免主流程被
+    25+ 个装饰性赋值切碎；任一环节失败都按原语义降级（空映射/空集）。
+    """
+    from src.python.llm.skeleton import get_llm_chapter_disabled
+
+    llm_module_disabled = get_llm_chapter_disabled() if enable_llm else None
+    section_numbers, section_visible_dict, _sv_fn = _compute_section_visibility(
+        order,
+        manager_analysis,
+        overlap_matrix,
+        concentration_analysis,
+        style_analysis,
+        include_news,
+        llm_enabled_flag,
+        llm_module_disabled=llm_module_disabled,
+        enable_news=enable_news,
+        enable_fund_deep_analysis=enable_fund_deep_analysis,
+        enable_history=enable_history,
+        enable_portfolio_evolution=enable_portfolio_evolution,
+        enable_action=enable_action,
+        enable_llm=enable_llm,  # enable_llm is the board param for LLM
+        style_factor_data=style_factor_data,
+        position_relationship_data=position_relationship_data,
+        evolution_data=evolution_data,
+        holding_change_data=holding_change_data,
+        schedule_replay_data=schedule_replay_data,
+        enable_fundamental_snapshot=enable_fundamental_snapshot,
+        financial_report_digest_data=financial_report_digest_data,
+        financial_indicator_data=financial_indicator_data,
+    )
+
+    _ds = _build_data_source_bundle(
+        a_indices=a_indices,
+        us_indices=us_indices,
+        penetration=penetration,
+        penetration_profit_ok=penetration_profit_ok,
+        penetration_dividend_ok=penetration_dividend_ok,
+        perf_data=perf_data,
+        holdings=holdings,
+        cat_dividend_ok=cat_dividend_ok,
+        history_data=history_data,
+    )
+    (data_status_summary, data_status_penetration, data_status_perf, data_status_category) = _ds.status
+    data_status_history = _ds.history
+    data_source_matrix, data_source_catalog = _ds.matrix, _ds.catalog
+
+    # 因子中文名映射（单一数据源：analysis 层常量，经 context 传递）
+    _factor_names: dict = {}
+    if style_factor_data:
+        try:
+            from src.python.analysis.style_factor_regression import FACTOR_NAMES
+
+            _factor_names = FACTOR_NAMES
+        except Exception:
+            _factor_names = {}
+
+    # 匿名化：代码列渲染点掩码映射（真码 → 显示掩码）。渲染前一次性构造，
+    # 经模板全局变量注入，各章节以 {{ x | anon_code }} 精确键控折叠代码。
+    from src.python.config.anonymizer import build_code_display_map, get_anonymization_mode
+
+    _code_display_map = build_code_display_map(details if details is not None else holdings, get_anonymization_mode())
+    return _RenderContext(
+        section_numbers=section_numbers,
+        section_visible_dict=section_visible_dict,
+        sv_fn=_sv_fn,
+        status=(data_status_summary, data_status_penetration, data_status_perf, data_status_category),
+        data_status_history=data_status_history,
+        data_source_matrix=data_source_matrix,
+        data_source_catalog=data_source_catalog,
+        factor_names=_factor_names,
+        code_display_map=_code_display_map,
+    )
+
+
 def write_html_report(
     holdings: list[Holding],
     output_dir: str = "reports",
@@ -642,24 +767,20 @@ def write_html_report(
     # 免得住取数时间算到视图拼装头上
     _mark("面板视图装配")
     # 章级：enabled_llm 模块禁用的 LLM 分析章整章隐藏（与 Excel 端同函数同配置推导）
-    from src.python.llm.skeleton import get_llm_chapter_disabled
-
-    llm_module_disabled = get_llm_chapter_disabled() if enable_llm else None
-    section_numbers, section_visible_dict, _sv_fn = _compute_section_visibility(
-        order,
-        manager_analysis,
-        overlap_matrix,
-        concentration_analysis,
-        style_analysis,
-        include_news,
-        llm_enabled_flag,
-        llm_module_disabled=llm_module_disabled,
+    _ctx = _prepare_render_context(
+        order=order,
+        manager_analysis=manager_analysis,
+        overlap_matrix=overlap_matrix,
+        concentration_analysis=concentration_analysis,
+        style_analysis=style_analysis,
+        include_news=include_news,
+        llm_enabled_flag=llm_enabled_flag,
+        enable_llm=enable_llm,
         enable_news=enable_news,
         enable_fund_deep_analysis=enable_fund_deep_analysis,
         enable_history=enable_history,
         enable_portfolio_evolution=enable_portfolio_evolution,
         enable_action=enable_action,
-        enable_llm=enable_llm,  # enable_llm is the board param for LLM
         style_factor_data=style_factor_data,
         position_relationship_data=position_relationship_data,
         evolution_data=evolution_data,
@@ -668,9 +789,6 @@ def write_html_report(
         enable_fundamental_snapshot=enable_fundamental_snapshot,
         financial_report_digest_data=financial_report_digest_data,
         financial_indicator_data=financial_indicator_data,
-    )
-
-    _ds = _build_data_source_bundle(
         a_indices=a_indices,
         us_indices=us_indices,
         penetration=penetration,
@@ -680,26 +798,14 @@ def write_html_report(
         holdings=holdings,
         cat_dividend_ok=cat_dividend_ok,
         history_data=history_data,
+        details=details,
     )
-    (data_status_summary, data_status_penetration, data_status_perf, data_status_category) = _ds.status
-    data_status_history = _ds.history
-    data_source_matrix, data_source_catalog = _ds.matrix, _ds.catalog
-
-    # 因子中文名映射（单一数据源：analysis 层常量，经 context 传递）
-    _factor_names: dict = {}
-    if style_factor_data:
-        try:
-            from src.python.analysis.style_factor_regression import FACTOR_NAMES
-
-            _factor_names = FACTOR_NAMES
-        except Exception:
-            _factor_names = {}
-
-    # 匿名化：代码列渲染点掩码映射（真码 → 显示掩码）。渲染前一次性构造，
-    # 经模板全局变量注入，各章节以 {{ x | anon_code }} 精确键控折叠代码。
-    from src.python.config.anonymizer import build_code_display_map, get_anonymization_mode
-
-    _code_display_map = build_code_display_map(details if details is not None else holdings, get_anonymization_mode())
+    section_numbers, section_visible_dict, _sv_fn = _ctx.section_numbers, _ctx.section_visible_dict, _ctx.sv_fn
+    (data_status_summary, data_status_penetration, data_status_perf, data_status_category) = _ctx.status
+    data_status_history = _ctx.data_status_history
+    data_source_matrix, data_source_catalog = _ctx.data_source_matrix, _ctx.data_source_catalog
+    _factor_names = _ctx.factor_names
+    _code_display_map = _ctx.code_display_map
 
     html = _render_template(
         now_str=now_str,
