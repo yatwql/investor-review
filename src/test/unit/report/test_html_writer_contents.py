@@ -790,7 +790,7 @@ class TestComputeSectionVisibilityEvolution(unittest.TestCase):
 
     def _compute(self, enable_portfolio_evolution: bool, evolution_data: dict | None) -> dict:
         from src.python.core.registry import get_report_section_order
-        from src.python.report.html_writer import _compute_section_visibility
+        from src.python.report.html_writer_nav import _compute_section_visibility
 
         order = get_report_section_order({})
         _, svis, _ = _compute_section_visibility(

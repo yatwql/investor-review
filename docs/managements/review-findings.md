@@ -41,18 +41,27 @@
 
 ### P4 — 持续监控：文件膨胀登记
 
-行数与拆分优先级以 `scripts/check-file-length.py -v` 为准（口径见 `technical.md` C28），达警告线即登记。下表为**存量监控清单**（不占用 rf 编号，拆分后删除对应行；条数即表内行数，全在可选优化区间，无红线违规；登记行数与实测的一致性由 `check-file-length.py` 断言）：
+行数与拆分优先级以 `scripts/check-file-length.py -v` 为准（口径见 `technical.md` C28），达警告线（主程序 700 / 脚本 600 / 测试 900）即登记。下表为存量监控项（红线：主程序 1000 / 测试 1200，触线必须拆分）：
 
 | 文件 | 现状与拆分方向 |
 |------|----------------|
-| `src/test/conftest.py` 1193 行（测试登记线 900） | fixture 族按域下沉（行情/LLM/网络/持久化各一模块），conftest 只留 autouse 装配与 marker 注册 |
-| `src/python/llm/generators_orchestrator.py` 656 行（主程序登记线 700） | 块装配与生成后一遍已下沉（`_llm_context_blocks` / `_llm_post_pass`）；预检键/指纹段后续可再下沉 `generators_orchestrator_cache.py` |
-| `src/python/llm/skeleton.py` 847 行（主程序登记线 700） | 模板数据与渲染逻辑可下沉 `llm/skeleton_*`（骨架模板 / 占位渲染 / 缓存归因 / 回写四簇并存） |
-| `src/python/cli/_handlers.py` 858 行（主程序登记线 700） | 命令处理器按渠道分文件（generate/config/data 三簇），保持入口薄壳 |
-| `src/python/tui/handlers_holdings.py` 825 行（红线 1000） | 面板流程与输入采集高度耦合（共用 `_Session`），拆分收益低于回归面；再涨 ~150 行则按「面板流程 / 输入采集」两段拆，并把 `_market_data` 的会话内记忆一并做进去 |
-| `src/python/fetcher/financial_report.py` 719 行（主程序登记线 700） | 刚过线：再涨则按「索引 / 正文 / 全文定位」三阶下沉（负缓存样板统一在 `cache/_negative.py`） |
-| `src/static/tmpl/report_template.html` 277 行（样式已抽到 `partials/_report_styles.html` 750 行，各自单一关注点，均未触 1000 行） | 主模板只剩骨架 + include；再增长则按「首页/持仓/LLM/附录」四段拆 partial |
-| `src/static/tmpl/whatif_template.html` 543 行（**不在行数守护域内**：`check-file-length` 只扫 `.py`） | 样式已抽到 `partials/_whatif_styles.html`；剩余为标记与图表配置，暂无需拆分 |
+| `src/test/conftest.py` 1193 行（测试登记线 900） | fixture 族按域下沉（行情/LLM/网络/持久化各一模块），conftest 只留 autouse 与装配 |
+| `src/python/report/html_writer.py` 751 行（主程序登记线 700） | 渲染前置装配已下沉 `_html_render_context`；再涨按「模板渲染 / 后处理三段」继续切 |
+| `src/python/core/perf.py` 799 行 | 采集器与台账落盘可拆（`perf` 采集 / `perf_history` 读写两文件） |
+| `src/python/core/doctor.py` 769 行 | 检查项按域分文件（环境 / 配置 / 数据源 / 报告产物），入口只留编排 |
+| `src/python/llm/fact_checker/_numerical.py` 764 行 | 数值校验按规则族拆（金额 / 比率 / 计数），共享解析原语上提包内 `_common` |
+| `src/python/tui/handlers_config.py` 743 行 | 配置面板按域拆（内容选项 / 全局设置 / 目录与文件名） |
+| `scripts/_doc_drift/_format.py` 742 行 | 格式化规则按文档类型拆（章节 / 表格 / 树 / 统计） |
+| `src/python/core/degradation.py` 734 行 | 状态词与事件模型、登记面与持久化可拆两文件 |
+| `src/python/report/action_sheet.py` 726 行 | 行动页签内各块（建议表 / 判断依据 / 决策书 / 复盘）拆子模块 |
+| `src/python/fetcher/financial_report.py` 719 行 | 按「索引 / 正文 / 全文定位」三阶下沉 |
+| `src/python/providers/akshare_extras.py` 714 行 | 按接口族拆（指数 / 行业 / 分红 / 盈利预测） |
+| `src/python/core/provider_registry.py` 710 行 | 熔断与会话缓存各自独立文件 |
+| `src/python/llm/skeleton.py` 847 行 | 模板数据与渲染逻辑可下沉 `llm/skeleton_*`（骨架模板 / 占位渲染） |
+| `src/python/cli/_handlers.py` 858 行 | 命令处理器按渠道分文件（generate/config/data 三簇），保持入口薄 |
+| `src/python/tui/handlers_holdings.py` 825 行 | 面板流程与输入采集高度耦合（共用 `_Session`），拆分收益低于风险，暂不拆 |
+| `src/static/tmpl/report_template.html` 277 行 | 样式已抽到 `partials/_report_styles.html`，各自单一关注点，均未触 1000 行 |
+| `src/static/tmpl/whatif_template.html` 543 行 | **不在行数守护域内**（`check-file-length` 只扫 `.py`）；样式已抽到 `partials/_whatif_styles.html` |
 
 ## 已解决问题
 
