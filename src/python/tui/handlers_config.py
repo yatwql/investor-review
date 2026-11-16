@@ -517,7 +517,7 @@ def _cmd_config_comparison_indices() -> None:
         PanelItem(
             "A",
             "添加指数",
-            action=lambda: _add_comparison_index(_indices()),
+            action=_add_comparison_index,
             detail="输入指数代码与名称后加入对比指数池（用于报告中的基准对比）",
         ),
         PanelItem(
@@ -547,7 +547,7 @@ def _cmd_config_comparison_indices() -> None:
         print()
 
 
-def _add_comparison_index(indices: dict[str, str]) -> None:
+def _add_comparison_index() -> None:
     """添加指数到对比池。"""
     print("  请输入指数代码（如 sh000905）:")
     try:

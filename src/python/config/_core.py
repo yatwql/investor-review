@@ -516,17 +516,6 @@ def is_enable_factor_catalog() -> bool:
     return is_feature_enabled("factor_catalog")
 
 
-def is_enable_industry_beta() -> bool:
-    """行业 Beta 子表是否启用（与「因子目录」合并为同一开关，出厂默认关）。
-
-    行业 Beta 与因子目录同属「风格与因子分析」章、共用一份风格回归数据，合并后由
-    ``features.factor_catalog`` 统一控制，可用 `features.json` 覆盖。
-    """
-    from src.python.config.features import is_feature_enabled
-
-    return is_feature_enabled("factor_catalog")
-
-
 def is_enable_fund_purchase_limit() -> bool:
     """基金申购限购列是否启用（报告增强开关，登记于功能开关注册表 ``GROUP_FUND_STYLE``）。
 

@@ -89,7 +89,7 @@ class TestCalcLayerMissingDependency:
     def test_industry_beta_degrades_when_calc_module_unimportable(self, monkeypatch):
         """行业 Beta 计算层不可导入 → 子表降级，不阻塞主报告。"""
         monkeypatch.setattr("src.python.config.is_enable_fund_deep_analysis", lambda config: True)
-        monkeypatch.setattr("src.python.config.is_enable_industry_beta", lambda: True)
+        monkeypatch.setattr("src.python.config.is_enable_factor_catalog", lambda: True)
         monkeypatch.setitem(sys.modules, "src.python.analysis.industry_beta", None)
         reporter = _Reporter()
 

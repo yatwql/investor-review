@@ -238,14 +238,14 @@ def compute_industry_beta_data(
 
     Returns:
         数据子契约 dict（含 available/status/exposure/betas/...）；
-        功能开关 `industry_beta` 关闭时返回 None（区块隐藏，不渲染）；
+        功能开关 `factor_catalog`（行业 Beta 与因子目录合并后的开关）关闭时返回 None（区块隐藏）；
         push2 行业分类 / 指数 K 线不足时 available=False（标题 + 占位，§1.4.5）。
     """
-    from src.python.config import is_enable_fund_deep_analysis, is_enable_industry_beta
+    from src.python.config import is_enable_factor_catalog, is_enable_fund_deep_analysis
 
     if not is_enable_fund_deep_analysis(config):
         return None
-    if not is_enable_industry_beta():
+    if not is_enable_factor_catalog():
         return None
 
     from src.python.analysis.style_factor_regression import asif_portfolio_daily_returns, klines_to_returns
