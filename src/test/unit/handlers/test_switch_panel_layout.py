@@ -390,7 +390,7 @@ class TestNarrowKeyReveal:
         """按 k 后以缩进行显示键名，供需要时抄写/粘贴（再按 k 收起）。"""
         lines = self._rows(("k", "0"))
         text = "\n".join(lines)
-        assert "deterministic_signal" in text and "market_temperature" in text
+        assert "deterministic_signal" in text and "portfolio_constraints" in text
         assert "k 隐藏键名" in text
         # 键名行缩进在名称行之下（不与编号行同列起始）
         key_line = next(ln for ln in lines if "deterministic_signal" in ln)

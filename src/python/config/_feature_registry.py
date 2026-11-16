@@ -269,6 +269,7 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         GROUP_MARKET,
         True,
         True,
+        panel_visible=False,
     ),
     "stock_fundamentals": FeatureSwitchDef(
         "个股基本面",
@@ -291,6 +292,7 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         GROUP_PORTFOLIO,
         True,
         True,
+        panel_visible=False,
     ),
     "cost_position": FeatureSwitchDef(
         "持仓成本区间位置",
@@ -298,6 +300,7 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         GROUP_PORTFOLIO,
         True,
         True,
+        panel_visible=False,
     ),
     "risk_adjusted_excess": FeatureSwitchDef(
         "风险调整超额",
@@ -326,6 +329,7 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
         GROUP_EVENT_SUMMARY,
         True,
         True,
+        panel_visible=False,
     ),
     # ── 分析增强：投资方法框架（转正项：评分口径验证达成，已摘除实验身份、默认开；
     # 行动章内嵌评分卡区块，作用域属既有章内追加） ──
