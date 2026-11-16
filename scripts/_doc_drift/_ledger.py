@@ -95,6 +95,33 @@ def check_archive_index(docs: dict[Path, str] | None = None) -> list[str]:
     return findings
 
 
+_ARCHIVE_LEDGER_PREFIXES = ("archived_changelog.", "archived_plan.", "archived_review-findings.")
+
+
+def check_archive_layout(archive_root: Path | None = None) -> list[str]:
+    """归档目录布局：每个版本目录顶层只放三份台账归档，其余归档文件须进语义子目录。
+
+    章节/段落类归档（设计稿、契约、方案）按主题建子目录存放（如 ``config-rework/``、
+    ``stage-split-contracts/``）；顶层散落的设计文档会让「先看台账、再看专题」的
+    阅读顺序失效。子目录命名不做机检（语义名由人工定），只拦「顶层散落」。
+    """
+    root = archive_root or (REPO_ROOT / "docs" / "archive")
+    findings: list[str] = []
+    for version_dir in sorted(p for p in root.iterdir() if p.is_dir()):
+        for entry in sorted(version_dir.iterdir()):
+            if entry.is_dir():
+                continue
+            if entry.suffix != ".md":
+                findings.append(f"{rel(entry)}: 归档目录顶层出现非文档文件（归档只收 .md 与专题子目录）")
+                continue
+            if not entry.name.startswith(_ARCHIVE_LEDGER_PREFIXES):
+                findings.append(
+                    f"{rel(entry)}: 归档设计文档须放进语义子目录（顶层只留 "
+                    f"archived_changelog / archived_plan / archived_review-findings）"
+                )
+    return findings
+
+
 def audit_management_partitions(
     *,
     review_findings: str,

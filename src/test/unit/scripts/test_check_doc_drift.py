@@ -496,3 +496,30 @@ class TestTestCoverageCounts:
 
         collect = load_script("test-collect-coverage.py")
         assert collect.UNIT_DOMAIN_LABELS is UNIT_DOMAIN_LABELS
+
+
+class TestArchiveLayout:
+    """归档目录布局：顶层只留三份台账归档，设计文档须进语义子目录。"""
+
+    def test_top_level_design_doc_reported(self, tmp_path):
+        from scripts._doc_drift._ledger import check_archive_layout
+
+        root = tmp_path / "archive"
+        ver = root / "v0.17.x"
+        ver.mkdir(parents=True)
+        (ver / "archived_plan.0.17.x.md").write_text("x", encoding="utf-8")
+        (ver / "archived_changelog.0.17.x.md").write_text("x", encoding="utf-8")
+        (ver / "archived_review-findings.0.17.x.md").write_text("x", encoding="utf-8")
+        (ver / "loose-design.md").write_text("x", encoding="utf-8")
+        findings = check_archive_layout(root)
+        assert any("loose-design.md" in f and "语义子目录" in f for f in findings)
+
+    def test_design_doc_in_subdir_passes(self, tmp_path):
+        from scripts._doc_drift._ledger import check_archive_layout
+
+        root = tmp_path / "archive"
+        ver = root / "v0.17.x"
+        (ver / "stage-split-contracts").mkdir(parents=True)
+        (ver / "archived_plan.0.17.x.md").write_text("x", encoding="utf-8")
+        (ver / "stage-split-contracts" / "html-writer-stage-contract.md").write_text("x", encoding="utf-8")
+        assert check_archive_layout(root) == []
