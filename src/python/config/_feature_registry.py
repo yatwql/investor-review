@@ -200,8 +200,8 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
     ),
     # 因子目录（已转正，2026-10-11；门槛评测三指标过审）
     "factor_catalog": FeatureSwitchDef(
-        "因子目录",
-        "25 因子五来源族横截面信号入账与风格与因子分析区「因子目录」区块",
+        "风格与因子区块",
+        "「风格与因子分析」章的行业 Beta 子表 + 因子目录区块（25 因子五来源族信号入账）",
         GROUP_FUND_STYLE,
         False,
         True,
@@ -241,13 +241,6 @@ feature_switch_registry: dict[str, FeatureSwitchDef] = {
     ),
     # ── 机制与诊断：只读诊断（不改产物、不写文件，默认关的代价是环境出故障者看不到它） ──
     # ── 分析增强与独立章节与回放（以下声明顺序即各组组内面板顺序）──
-    "industry_beta": FeatureSwitchDef(
-        "行业Beta子表",
-        "「风格与因子分析」章渲染行业 Beta 子表（行业暴露 + 回归敏感性）",
-        GROUP_FUND_STYLE,
-        False,
-        True,
-    ),
     "candidate_compare": FeatureSwitchDef(
         "候选基金比较子表",
         "「基金业绩分析」章渲染候选基金横向比较表（候选来自 comparison_candidates）",
