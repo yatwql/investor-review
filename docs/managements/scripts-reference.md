@@ -407,7 +407,7 @@ Web 模式全链路可复跑冒烟验证（上传→生成→进度→产物，F
 使漂移在提交前暴露。与 `check-doc-traces.py` 互补：那边管「不该写的内容」（历史痕迹），这边管
 「写了但与实现不符的内容」。
 
-二十七项检查（权威源 → 受检文档）：
+二十八项检查（权威源 → 受检文档）：
 
 1. 报告章节表（`reports-instruction.md`）↔ 章节注册表 `_REPORT_SECTION_DEFAULT`（行数/序号/名称）；
    含「可见性规则总览」表 `type` 行双向对账（文档 type 集合 ↔ 注册表 type 集合）——只看行数不够：type 集合漂移时
@@ -460,10 +460,11 @@ Web 模式全链路可复跑冒烟验证（上传→生成→进度→产物，F
 27. 手册总索引覆盖：`manuals/README.md` 的分册链接集合 ↔ `docs/manuals/*.md` 双向对账（漏列 = 分册无人可达；
     幽灵引用 = 死链；实现 `_doc_drift/_format.py::check_manuals_index`）
 
+28. 归档目录布局：每个版本目录顶层只放三份台账归档（changelog / plan / review-findings 的归档文件），设计文档须进语义子目录（顶层散落即报错；实现 `_doc_drift/_ledger.py::check_archive_layout`）
 **使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
 
 ```bash
-.venv/bin/python scripts/check-doc-drift.py                   # 二十七项全查
+.venv/bin/python scripts/check-doc-drift.py                   # 二十八项全查
 .venv/bin/python scripts/check-doc-drift.py -v                # 详细输出（打印解析结果与实测统计）
 .venv/bin/python scripts/check-doc-drift.py --ci              # CI 模式（只输出 文件:描述，退出码 2）
 .venv/bin/python scripts/check-doc-drift.py --with-test-count # 附带 pytest 收集，核对「测试用例」与 test-coverage.md 计数表
