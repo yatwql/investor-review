@@ -1,7 +1,7 @@
 # 投资复盘助手 — 实现计划
 
 > 文档版本：0.18.2-dev
-> **编号源**：`plan-next = 258`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-251，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`plan-next = 259`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-251，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
@@ -57,16 +57,23 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 
 **结果**：`report/market_value` 内部改为按属性调用 `core/trading_calendar`，`fetcher/price` 与 `report/_holding_detail_rows`、`report/excel_module_loader` 直连 core；测试 patch 点统一迁到 `core.trading_calendar` 单点（22 个测试文件、136 处）；例外表与「存量分层例外」表删除该行，`check-import-surface --ci` 零命中。
 
-#### `plan-257` 报告生成编排函数拆分（进行中）
+#### `plan-257` ✅ 报告生成编排函数拆分
 
-**现状**：`report/excel_generator.generate_excel_report` 单函数 479 行、分支 92；`report/_generation_full._generate_report_full` 410 行、
-`report/html_writer.write_html_report` 357 行。文件行数未触红线，故未入门禁，但改动一处需通读全函数。
-**动作**：按页签族提取子函数（明细/汇总/分析/LLM 四组），入参收敛为装配好的上下文对象，保持产物逐字节不变。
-**验收**：拆分前后产物 SHA 同输入一致；P0/P1 门禁全绿。
+**动机**：`report/excel_generator.generate_excel_report` 479 行 / 92 分支、`_generation_full._generate_report_full` 410 行、
+`report/html_writer.write_html_report` 357 行——文件行数未触红线，但改动一处需通读全函数。
+**做法**：按页签族与阶段提取子函数，逻辑逐行搬运、产物不变；产出阶段入参收敛为上下文对象。
+**结果**：
 
-**进展（本轮）**：`report/excel_generator.generate_excel_report` 479 行 / 92 分支 → **216 行 / 20 分支**，按职责提取 6 个子函数（行动建议兜底 / 市场情绪 / 景气度诊断 / 可选明细页签 / 环比对比摘要 / 收尾保存），逻辑逐行搬运、产物不变（`test_excel_generator` 26 用例全绿）。
-**剩余**：`_generate_report_full`（410 → **304 行 / 17 分支**：拆出行业资金流向、LLM+新闻阶段、双端产出与收尾三块）与 `write_html_report`（357 → **312 行 / 6 分支**：拆出三面板视图、数据源状态装配、渲染前置上下文 `_prepare_render_context`）。两者剩下的主体是 `_render_template` 的 80 个关键字实参与 50+ 入参，继续切需改渲染契约（`_render_template` 收单个上下文对象、调用方逐层下传），属独立议题，收益在可读性而非行数。
-**存量超长函数（>150 行，非本次范围）**：`analysis/schedule_replay.run_schedule_replay`（335）、`llm/generators.generate_debate_procon`（312）、`cli/_parser._build_parser`（277）、`report/_orchestrator_data.prepare_report_data`（271）——按需另行切分。
+| 函数 | 拆分前 | 拆分后 | 拆出的子函数 |
+|:---|:---|:---|:---|
+| `generate_excel_report` | 479 行 / 92 分支 | **216 行 / 20 分支** | 行动建议兜底 / 市场情绪 / 景气度诊断 / 可选明细页签 / 环比对比摘要 / 收尾保存 |
+| `_generate_report_full` | 410 行 / 47 分支 | **304 行 / 17 分支** | 行业资金流向（三态降级登记）/ LLM+新闻阶段（`_LlmStageResult`）/ 双端产出与收尾（`_FullEmitContext`） |
+| `write_html_report` | 357 行 / 10 分支 | **312 行 / 6 分支** | 三面板视图装配 / 数据源状态装配（`_DataSourceBundle`）/ 渲染前置上下文（`_RenderContext`） |
+
+**验收**：产物同输入对拍不变（`test_excel_generator` / `report` 2926 用例全绿）；P0/P1 门禁全绿。
+**边界**：拆分止于当前粒度——剩余主体是 `_render_template` 的 80 个关键字实参与 50+ 入参，更深一层需改渲染契约（见 `plan-258`），收益在可读性而非行数。
+**存量超长函数（非本项范围）**：`analysis/schedule_replay.run_schedule_replay`（335）、`llm/generators.generate_debate_procon`（312）、
+`cli/_parser._build_parser`（277）、`report/_orchestrator_data.prepare_report_data`（271）——按需另立。
 
 ### P2 — 下一阶段就绪（满足条件即开工）
 
@@ -118,6 +125,16 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 **已定调**：估值分位/因子目录信号按「已回测未通过」「样本不足」**归档**（三态标注照常呈现；真实 PE/PB 口径不入管线；`scripts/eval-decision-quality.py` 保留，供样本累积后一次性复跑，日常不排期）；独立章节形态 B 不启用；LLM 章维持解读层。
 **长期观察（不排期，触发条件满足时再评估）**：① R8 纪律规则重构——前置 V5 成熟样本 ≥100（现 2 条）；② V7 相关性约束启用——前置样本期 ≥250 交易日（现 146）；③ 讨论稿优先级 6 与 V4/V6/V7 模型 A/B（人工采样，不入自动化）。以上任一前置达成前，资源投向其他任务。
 **事实位**：轮次明细、验收记录与回测读数见设计稿 [`investment-decision-basis-design.md`](../plan/investment-decision-basis-design.md) §4/§5 及[归档讨论稿](../archive/v0.16.x/investment-decision-quality/investment-decision-quality.md) §8.1；本表不复述。
+
+#### `plan-258` 深层渲染契约收敛（`_render_template` 收上下文对象）
+
+**现状**：`report/html_writer._render_template` 声明 80 个关键字形参并原样转发给 Jinja 渲染；`write_html_report` 有 50+ 入参，
+两侧都是长参数表。`plan-257` 已把编排逻辑切完，剩下的纯粹是「参数搬运」。
+**动作（条件性）**：`_render_template` 改为接收单个 `_RenderContext` 上下文对象（内部 `render(**vars(ctx))`），
+`write_html_report` 的入参分族收敛为该上下文，再逐层下传到调用方；渲染契约（模板变量键集合）由新增守卫用例锁死，
+`report_template.html` 不改。
+**为何暂不做**：触碰模板变量装配面 + 10 余个调用方，须按字节对拍产物；收益是可读性而非缺陷风险，等下次确有「改渲染入参」需求时一并做，避免为拆而拆。
+**验收**：模板变量键集合与拆分前完全一致（守卫用例比对）；同输入产物 SHA 一致；P0/P1 门禁全绿。
 
 #### `plan-254` 不动作建议命中率的真机读数（等样本成熟）
 
