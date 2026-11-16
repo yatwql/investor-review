@@ -1967,6 +1967,30 @@
       });
   }
 
+  /* ── 字段错误态（DESIGN.md：.has-error 行 + .field-error 行内原因）── */
+  function markRowError(row, err) {
+    if (!row) { return; }
+    row.classList.add('has-error');
+    var msg = (err && err.message) || '保存失败，请检查输入';
+    var hint = row.querySelector('.field-error');
+    if (!hint) {
+      hint = document.createElement('div');
+      hint.className = 'field-error';
+      hint.setAttribute('role', 'alert');
+      row.appendChild(hint);
+    }
+    hint.textContent = msg;
+  }
+
+  function clearRowError(row) {
+    if (!row) { return; }
+    row.classList.remove('has-error');
+    var hint = row.querySelector('.field-error');
+    if (hint) {
+      hint.textContent = '';
+    }
+  }
+
   function onPathSave(e) {
     var btn = e.target;
     var row = btn.closest('.config-path-row');
@@ -1983,12 +2007,16 @@
         input.value = data.value;
         status.textContent = data.backup ? '已保存（已备份）' : '已保存';
         status.className = 'config-row-status status-ok';
+        clearRowError(row);
       })
       .catch(function (err) {
         // 显式保存失败：保留用户输入供直接重试（契约 §4.5「保留输入值 + 错误区提示」），
-        // 仅反映状态样式——回滚只用于即时保存类（勾选/单选）
+        // 仅反映状态样式——回滚只用于即时保存类（勾选/单选）。
+        // 字段错误态（DESIGN.md Components 矩阵）：行挂 .has-error（输入框红边）+
+        // 行内 .field-error 说明原因，下次保存时清掉。
         status.textContent = '保存失败';
         status.className = 'config-row-status status-error';
+        markRowError(row, err);
         showGroupError(group, err);
       })
       .then(function () {

@@ -1,14 +1,15 @@
-/* chart-init.js — 6 张核心 Chart.js 图表 + 3 张组合演进图表初始化。
+/* chart-init.js — 12 张 Chart.js 图表初始化（核心 / 演进 / 纪律回放 / 风险子图）。
  *
- * 核心 6 图读取模板内联 chart-data（chart_datasets）；组合演进 3 图
- * 读取独立内联数据段 #evolution-chart-data（evolution_data 契约 dict）。
+ * 数据集键契约（chart_data_builder.DATASET_KEYS 8 键）：portfolio_line / drawdown /
+ * category_doughnut / industry_bar / penetration_bar / excess_rolling / corr_rolling /
+ * radar —— 均读模板内联 #chart-data；组合演进 3 图读 #evolution-chart-data，
+ * 调仓纪律回放读 #schedule-replay-chart-data（各自 evolution_data / schedule_replay 契约）。
  * 隔离：每图独立 try/catch，单图失败仅 console.warn。
  * 守卫：Chart 引擎（chart.min.js）或 ChartCommon（chart-common.js）缺失
  * → 全部跳过；canvas 不存在（模块隐藏）→ 跳过该图。
  * ES5 保守语法。打印快照降级见 chart-print.js。
- * 键名契约（§4.11 ）：portfolio_line / drawdown / category_doughnut /
- * industry_bar / penetration_bar / radar；evolution_total / evolution_hhi /
- * evolution_top（组合演进扩展）。
+ * 键名契约：见上（8 数据集键 + evolution_total / evolution_hhi / evolution_top /
+ * schedule_replay 四张扩展图）。
  */
 
 (function () {

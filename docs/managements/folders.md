@@ -18,8 +18,8 @@
 | 测试用例 | — | — | 13,865 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 15 | 7,069 | 含 README.md；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 14 | 6,832 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 223 | 74,898 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 14,397 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 223 | 74,899 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 14,398 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 200 | 58,789 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 9 | ~1616 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + TUI 交互改进（议题 + 第一/二批实施方案） + PanWatch 借鉴分析（含评估政策单源化与 LLM 复盘契约两份设计） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -367,7 +367,7 @@ investor-review/
 │   │   │   ├── cost_position.py      #   持仓成本区间位置数据契约（复用行情历史链取数 + 编排装配/可见性/单元格文案/口径脚注）
 │   │   │   ├── holdings_detail_sheet.py # 持仓明细与分类 Excel 页签（区块①市值明细 + 区块②分类汇总）
 │   │   │   ├── _holdings_detail_blocks.py   #   页签分区块写入器（市值/分类区块 + 行值与格式辅助）
-│   │   │   ├── chart_data_builder.py #   Chart.js 6 图数据集预处理器
+│   │   │   ├── chart_data_builder.py #   Chart.js 数据集预处理器（8 键 + 演进/回放专用段）
 │   │   │   ├── fund_performance.py   #   基金业绩分析（排名/回撤/超额收益）
 │   │   │   ├── _fund_rating.py         #   评级内核（评级判定/超额修正/收益率与排名格式化）
 │   │   │   ├── fund_candidate.py     #   候选基金比较（基金业绩分析章候选比较子表数据构建，candidate_compare 默认关）
@@ -560,11 +560,11 @@ investor-review/
 │   │   ├── chart-config.js           #   Chart.js 全局配置（主题色/动画关闭/DPR 限制）
 │   │   ├── chart-export.js           #   单图导出 PNG/CSV 按钮（.chart-box 注入组容器；PNG 2x 分辨率 / CSV 屏显数据本地 Blob 下载）
 │   │   ├── chart-common.js           #   Chart.js 公共初始化 helper（trackChart/lineOptions/doughnutOptions，chart-init 与 What-if 页共用）
-│   │   ├── chart-init.js             #   9 张图初始化（6 核心 + 3 演进；单图异常隔离 + degraded 虚线）
+│   │   ├── chart-init.js             #   12 张图初始化（核心 8 / 演进 3 / 纪律回放 1；单图异常隔离 + degraded 虚线）
 │   │   ├── toc.js                    #   左侧目录 TOC（折叠/展开 + IntersectionObserver 滚动高亮，离线自包含）
 │   │   ├── fold.js                   #   正文大块折叠（锚点/打印自动展开 + 图表 resize 兕底，beforeprint 捕获阶段先于图表快照）
 │   │   ├── theme.js                   #   主题切换（深/浅色 + localStorage 持久化 + Chart.js 重绘 + 打印浅色协调）
-│   │   ├── test-chart.html           #   独立调试页：6 图渲染/降级/离线场景自检（Chart.js 升级验证载体）
+│   │   ├── test-chart.html           #   独立调试页：12 图渲染/降级/离线场景自检（Chart.js 升级验证载体）
 │   │   ├── README.md                 #   资产说明 + Chart.js 版本号记录（升级指引：替换引擎后先在此页验证）
 │   │   ├── architecture.svg          #   README 首屏主图：三渠道→引擎→双报告
 │   │   ├── owl-mascot.svg            #   README 吉祥物「守望」猫头鹰插画（夜间守望/智慧顾问/全景视野定位隐喻）
@@ -1048,7 +1048,7 @@ investor-review/
 │       │   │   ├── test_section_type_flag_consistency.py # 章节 type ↔ board_flags ↔ 写入器装配键一致性守卫
 │       │   │   ├── test_section_visibility.py    #   章节两层可见性（单契约乐观 + 多契约 data_flag_any OR 悲观）
 │       │   │   ├── test_category_edge.py          #   分类边缘场景
-│       │   │   ├── test_chart_data_builder.py     #   Chart.js 6 图数据集预处理器测试
+│       │   │   ├── test_chart_data_builder.py     #   Chart.js 数据集预处理器测试
 │       │   │   ├── test_chart_data_builder_edge.py #   图表数据预处理器边缘场景（行业归"其他"等）
 │       │   │   ├── test_data_integrity.py         #   数据完整性测试
 │       │   │   ├── test_data_quality_edge.py      #   数据质量边缘场景

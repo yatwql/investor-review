@@ -10,6 +10,7 @@
 
 ### 变更
 
+- **静态资源自查整改**：`test-chart.html` 调试页补到 12 图（原仅 6 图，演进 3 / 纪律回放 / 超额 / 相关性四类未覆盖，Chart.js 升级验收会漏图）并把自检基数改为派生；`chart-init.js` 头注与 `folders.md`、`src/static/README.md` 的「6 图 / 9 张图」口径统一为 12 图（8 数据集键 + 4 扩展图）；Web 字段错误态接线——显式保存失败时行挂 `.has-error` + `.field-error` 原因（DESIGN.md 组件矩阵此前只有 CSS 定义、无代码使用）；`src/static/README.md` 补第 4 类资产（文档配图与品牌资产）。
 - **自审清理**：合并后删除重复访问器 `is_enable_industry_beta`（行业 Beta 一律走 `is_enable_factor_catalog`）、`_add_comparison_index` 的死参数；`how-to-config.md` 给 7 项「内置恒开、不上面板」的开关补标注，`requirements.md` 区块三归属同步到合并后的开关。
 - **4 项默认开的关键开关转内置**：`fund_purchase_limit`（申购状态列）、`cost_position`（成本区间位置）、`market_temperature`（市场温度）、`summary_highlights`（首页执行摘要卡）改为**内置恒开、不上面板**（数据缺失仍逐项静默隐列/省略，`features.json` 仍可覆写关闭）；`[S]` 面板 18 → 14 项。
 - **开关合并：风格与因子区块**：`industry_beta` 并入 `factor_catalog`（同属「风格与因子分析」章、共用一份风格回归数据），合并后单开关控制「行业 Beta 子表 + 因子目录」两块，功能开关 27 → 26 项；`features.json` 里残留的 `industry_beta` 键按未登记开关告警并回落到默认值，不影响启动。另为配置读写路径补上目录创建/文件读取的失败日志（原样抛出，语义不变）。
