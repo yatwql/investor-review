@@ -413,12 +413,12 @@ Web 模式全链路可复跑冒烟验证（上传→生成→进度→产物，F
    含「可见性规则总览」表 `type` 行双向对账（文档 type 集合 ↔ 注册表 type 集合）——只看行数不够：type 集合漂移时
    行数可能恰好相等而表内写的是不存在的 type 名称，故须按集合双向比对
 2. 章节数量断言（`页签编号 1~N` / `默认顺序（N 项` / `返回 result（N 项` / `N 个报告章节`）↔ 注册表章节数
-3. 功能开关表（`how-to-config.md` 四组区段）↔ `feature_switch_registry`（成员/默认值/无表外键）
+3. 功能开关表（`how-to-config.md` 八组区段）↔ `feature_switch_registry`（成员/默认值/无表外键）
 4. 开关分组计数断言（八组连写、`<组名>（N 项`、`共 N 项开关`、旧三组名残留检测）↔ 分组计数
 5. 开关默认值断言（`` `flag` `` 后紧随「默认开/关」）↔ 注册表默认值
 6. 配置标量默认值表（`how-to-config.md`）↔ `_DEFAULT_CONFIG`
 7. LLM 默认参数表（`llm-technical.md`）↔ `_DEFAULT_LLM_SETTINGS` + 缓存 TTL 注册表
-8. TUI 两面板编号与分组边界（`how-to-use-tui-menu.md`）：`[S]` 五组编号 ↔ `features.panel_option_numbers`、`[C]` 章节与 `7.1`/`7.2` 子项编号 ↔ 章节注册表，块标题区间与 features 键名映射逐项对账（实现见 `_doc_drift/_format_panels.py`）
+8. TUI 两面板编号与分组边界（`how-to-use-tui-menu.md`）：`[S]` 六组编号 ↔ `features.panel_option_numbers`、`[C]` 章节与 `7.1`/`7.2` 子项编号 ↔ 章节注册表，块标题区间与 features 键名映射逐项对账（实现见 `_doc_drift/_format_panels.py`）
 9. 目录树（`folders.md`）↔ 文件系统实测（`src/`、`scripts/`、`docs/{managements,manuals,plan}`）；同父目录 `vN.N.x/` 版本目录块按版本号升序
 10. 项目统计表（`folders.md`）↔ 实测文件数/行数（加 `--with-test-count` 再核「测试用例」行）
 11. 测试覆盖计数表（`test-coverage.md`）↔ `scripts/test-collect-coverage.py` 快照（仅 `--with-test-count`）

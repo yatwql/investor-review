@@ -10,6 +10,7 @@
 
 ### 变更
 
+- **文档核对**：`requirements.md`（`[S]` 六组补「交互与追问」、报产物开关改「八组」、行业 Beta 归属合并后的 `factor_catalog`）、`technical.md`（`[S]` 六组、数据字典 `industry_beta` 归属）、`DESIGN-TUI.md`（`[S]` 六组）、`scripts-reference.md`（八组区段 / 六组编号）、`how-to-config.md`（前六组在 `[S]`）、`how-to-config-reference.md`（Web 分组表按实际 14 编号重写、补交互与追问与内置恒开行、「附」节移入目录并归位到 S 之后）、`how-to-use-tui-menu.md` 与 `how-to-config-llm.md`（`[S]` 六组）、`testplan.md`（T22~T24 从日期场景表移出，新立「1.9 业务增强场景」并按编号排序；Web 配置分块口径改为按域派生）。
 - **静态资源自查整改**：`test-chart.html` 调试页补到 12 图（原仅 6 图，演进 3 / 纪律回放 / 超额 / 相关性四类未覆盖，Chart.js 升级验收会漏图）并把自检基数改为派生；`chart-init.js` 头注与 `folders.md`、`src/static/README.md` 的「6 图 / 9 张图」口径统一为 12 图（8 数据集键 + 4 扩展图）；Web 字段错误态接线——显式保存失败时行挂 `.has-error` + `.field-error` 原因（DESIGN.md 组件矩阵此前只有 CSS 定义、无代码使用）；`src/static/README.md` 补第 4 类资产（文档配图与品牌资产）。
 - **自审清理**：合并后删除重复访问器 `is_enable_industry_beta`（行业 Beta 一律走 `is_enable_factor_catalog`）、`_add_comparison_index` 的死参数；`how-to-config.md` 给 7 项「内置恒开、不上面板」的开关补标注，`requirements.md` 区块三归属同步到合并后的开关。
 - **4 项默认开的关键开关转内置**：`fund_purchase_limit`（申购状态列）、`cost_position`（成本区间位置）、`market_temperature`（市场温度）、`summary_highlights`（首页执行摘要卡）改为**内置恒开、不上面板**（数据缺失仍逐项静默隐列/省略，`features.json` 仍可覆写关闭）；`[S]` 面板 18 → 14 项。

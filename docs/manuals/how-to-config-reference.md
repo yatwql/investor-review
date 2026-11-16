@@ -4,7 +4,7 @@
 
 ## 目录
 
-[A. 路径与文件](#a-路径与文件) · [B. 报告章节可见性](#b-报告章节可见性) · [C. 数据源与提供商](#c-数据源与提供商) · [E. 行为调优](#e-行为调优) · [F. 业绩基准与无风险利率](#f-业绩基准与无风险利率) · [G. 组合历史走势与持仓快照](#g-组合历史走势与持仓快照) · [H. 业绩评价配置](#h-业绩评价配置) · [I. 再平衡配置](#i-再平衡配置) · [J. 交易纪律配置](#j-交易纪律配置) · [K. 流动性配置](#k-流动性配置) · [L. 匿名化配置](#l-匿名化配置) · [M. 批量并行调度](#m-批量并行调度) · [O. 缓存分组](#o-缓存分组) · [P. 机器本地状态（非 config.json）](#p-机器本地状态非-configjson) · [Q. Web 模式配置编辑](#q-web-模式配置编辑) · [R. 任务完成通知（notify）](#r-任务完成通知notify) · [S. 日志配置（logger.json）](#s-日志配置loggerjson) · [与菜单命令的对应关系](#与菜单命令的对应关系)
+[A. 路径与文件](#a-路径与文件) · [B. 报告章节可见性](#b-报告章节可见性) · [C. 数据源与提供商](#c-数据源与提供商) · [E. 行为调优](#e-行为调优) · [F. 业绩基准与无风险利率](#f-业绩基准与无风险利率) · [G. 组合历史走势与持仓快照](#g-组合历史走势与持仓快照) · [H. 业绩评价配置](#h-业绩评价配置) · [I. 再平衡配置](#i-再平衡配置) · [J. 交易纪律配置](#j-交易纪律配置) · [K. 流动性配置](#k-流动性配置) · [L. 匿名化配置](#l-匿名化配置) · [M. 批量并行调度](#m-批量并行调度) · [O. 缓存分组](#o-缓存分组) · [P. 机器本地状态（非 config.json）](#p-机器本地状态非-configjson) · [Q. Web 模式配置编辑](#q-web-模式配置编辑) · [R. 任务完成通知（notify）](#r-任务完成通知notify) · [S. 日志配置（logger.json）](#s-日志配置loggerjson) · [附：集中度/相关性约束配置](#附集中度相关性约束配置constraints) · [与菜单命令的对应关系](#与菜单命令的对应关系)
 
 ## A. 路径与文件
 
@@ -368,23 +368,6 @@ TUI 主菜单 `[C]`「配置报告章节显隐」把**所有会决定「哪一�
 
 ---
 
-## 附：集中度/相关性约束配置（`constraints`）
-
-功能开关 `portfolio_constraints`（默认关）开启后生效，**只标注不阻断动作**：超限只影响
-报告判断依据块的「集中度约束」小节与决策账本的 `constrained` 标记，不改建议清单、不改提示词。
-三道上限各自独立，缺省 `null` 表示未配置（不拦截）：
-
-| 字段 | 默认值 | 说明 |
-|:-----|:------:|:-----|
-| `industry_max_pct` | `30.0` | 行业权重上限（百分数）；开关打开即按 30% 生效，设 `null` 才关闭该项；行业分类复用既有穿透分类，缺数据记「未评估」 |
-| `correlation_max` | `null` | 两两相关系数上限；显式配置才启用 |
-| `correlation_min_window_days` | `250` | 相关性样本窗口门槛（交易日）；不足时该行记「未评估」不拦截（短样本相关性不稳定） |
-
-> 单品种上限不在此段配置：沿用 `rebalance.threshold`（与再平衡信号、判断依据风险预算同源），
-> 避免两处上限口径漂移。
-
----
-
 ## K. 流动性配置
 
 ### redemption_limits 场外基金赎回上限
@@ -518,11 +501,13 @@ Web 模式（浏览器界面）提供「配置编辑」面板，可修改的配�
 |:--|:--|:--|
 | 路径与文件 | `holdings_dir` / `holdings_filename` / `output_dir` | `[G]` → `H` / `F` / `O` |
 | 报告章节 | `enable_fund_deep_analysis` / `enable_news` / `enable_history` / `enable_portfolio_evolution` / `enable_action` | `[C]` 1~5 |
-| 持仓与交易 | `cost_lots`（默认关）/ `fund_purchase_limit` / `cost_position` / `risk_adjusted_excess`（默认关）/ `whatif_trade_cost`（默认关） | `[S]` 1-5 |
-| 市场与估值 | `valuation_percentile`（默认关）/ `market_temperature` / `crisis_replay`（默认关）/ `prosperity_framework` | `[S]` 6-9 |
-| 基金与风格 | `factor_catalog` / `industry_beta` / `candidate_compare`（默认开；自动项：配置候选池即生效，不占编号） | `[S]` 10-11 |
-| 事件与摘要 | `event_window_impact`（默认关）/ `market_sentiment`（默认关）/ `summary_highlights`（默认开） | `[S]` 12-14 |
-| 机制与质量 | `llm_research_contract`（默认关）/ `portfolio_constraints`（默认关）/ `decision_reflection`（默认关）/ `report_qa`（默认关、实验）/ `deterministic_signal`；`decision_basis`（默认开，行动建议章内「判断依据」块）与 `module_quality_gate`（默认开，LLM 输出评级）属内置常开，不占编号 | `[S]` 15-18 |
+| 持仓与交易 | `portfolio_constraints`（默认关）/ `cost_lots`（默认关）/ `whatif_trade_cost`（默认关） | `[S]` 1-3 |
+| 市场与估值 | `valuation_percentile`（默认关）/ `risk_adjusted_excess`（默认关）/ `crisis_replay`（默认关）/ `prosperity_framework` | `[S]` 4-7 |
+| 基金与风格 | `factor_catalog`（默认关；行业 Beta 子表已并入此开关）/ `candidate_compare`（默认开；自动项：配置候选池即生效，不占编号） | `[S]` 8 |
+| 事件与摘要 | `event_window_impact`（默认关）/ `market_sentiment`（默认关） | `[S]` 9-10 |
+| 机制与质量 | `llm_research_contract`（默认关）/ `decision_reflection`（默认关、实验）/ `deterministic_signal`（默认开）；`decision_basis`（默认开，行动建议章内「判断依据」）与 `module_quality_gate`（默认开，LLM 输出评级）为内置恒开 | `[S]` 11-13 |
+| 交互与追问 | `report_qa`（默认关、实验；报告页内对话式追问入口） | `[S]` 14 |
+| 内置恒开（不占编号） | `market_temperature` / `fund_purchase_limit` / `cost_position` / `summary_highlights` / `candidate_compare`（仅 `features.json` 可覆写） | — |
 | 独立章节与回放 | `rebalance_schedule_replay`（默认关）/ `holding_change_review`（默认关）/ `stock_fundamentals`（默认关）；`whatif_trade_cost`（默认关）已归持仓与交易组 | `[C]` 整章块（`whatif_trade_cost` 在 `[S]` 5） |
 | 章节内选项 | `llm_debate_procon`（默认关）/ `llm_debate_conditional` | `[C]` 7.1 / 7.2（智囊团复盘子项） |
 | 持仓匿名化 | `anonymization.mode`（off / code_display / full_anonymous / summary） | `[G]` → `A` |
@@ -600,6 +585,23 @@ Web 模式（浏览器界面）提供「配置编辑」面板，可修改的配�
 > - `version` 不符 → 拒绝加载并提示删除后重新生成（不做旧结构转换）。
 > - 日志目录不可写 → 启动告警并降级为仅控制台输出，主流程继续。
 
+
+## 附：集中度/相关性约束配置（`constraints`）
+
+功能开关 `portfolio_constraints`（默认关）开启后生效，**只标注不阻断动作**：超限只影响
+报告判断依据块的「集中度约束」小节与决策账本的 `constrained` 标记，不改建议清单、不改提示词。
+三道上限各自独立，缺省 `null` 表示未配置（不拦截）：
+
+| 字段 | 默认值 | 说明 |
+|:-----|:------:|:-----|
+| `industry_max_pct` | `30.0` | 行业权重上限（百分数）；开关打开即按 30% 生效，设 `null` 才关闭该项；行业分类复用既有穿透分类，缺数据记「未评估」 |
+| `correlation_max` | `null` | 两两相关系数上限；显式配置才启用 |
+| `correlation_min_window_days` | `250` | 相关性样本窗口门槛（交易日）；不足时该行记「未评估」不拦截（短样本相关性不稳定） |
+
+> 单品种上限不在此段配置：沿用 `rebalance.threshold`（与再平衡信号、判断依据风险预算同源），
+> 避免两处上限口径漂移。
+
+---
 
 ## 与菜单命令的对应关系
 

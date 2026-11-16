@@ -2273,7 +2273,7 @@ report/ 渲染                   # 模板 context 传递（C14）→ 风格表 +
 
 ##### 区块三：行业 Beta 子表
 
-组合对主要行业指数的敏感性分析（功能开关 `industry_beta` 默认关，`analysis/industry_beta.py`）：
+组合对主要行业指数的敏感性分析（功能开关 `factor_catalog` 默认关，与因子目录同开关；实现见 `analysis/industry_beta.py`）：
 
 ```
 持仓 A 股明细 → batch_fetch_industry_data → 行业市值聚合（暴露占比）
@@ -3545,7 +3545,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `fund_flow` | 资金流水与资金加权收益 | 「投资分析汇总」/「持仓明细与分类」章 + 输入扩展 | 成本/现金流 | 功能开关 `cost_lots`（默认关；有交易/分红流水走精确计算，无流水触发快照近似，可选 `holdings_start_date` 开近似年化） |
 | `cost_lots` | 成本流水（成本分档 + XIRR + 分红累计） | 「投资分析汇总」/「持仓明细与分类」章 | 成本/现金流 | 功能开关 `cost_lots`（默认关；无流水时由 `build_approximate_fund_flow_data` 快照近似兜底） |
 | `holdings_start_date` | 组合建仓日期（可选，近似年化基准） | 输入扩展 | 成本/现金流 | 顶层配置键 `holdings_start_date`（YYYY-MM-DD，默认空=不计算近似年化，仅成本分档近似） |
-| `industry_beta` | 行业 Beta 暴露 | 风格与因子分析 | 风险/暴露 | 功能开关 `industry_beta`（默认关） |
+| `industry_beta` | 行业 Beta 暴露（`style_factor_data` 子键） | 风格与因子分析 | 风险/暴露 | 功能开关 `factor_catalog`（默认关；与因子目录同开关） |
 | `crisis_annotation` | 危机区间标注 | 组合历史走势与回撤 | 风险/暴露 | 始终渲染（样本不足时占位，R-TAIL 强制） |
 | `crisis_replay` | 危机区间双层回放 | 组合历史走势与回撤 | 报告输出 | 功能开关 `crisis_replay`（默认关；指数层覆盖全部静态危机区间，组合层仅子块扩展窗内区间，窗外行标「组合窗口外」） |
 | `risk_adjusted_excess` | 风险调整超额与基准对照 | 组合历史走势与回撤 | 报告输出 | 功能开关 `risk_adjusted_excess`（默认关；第五区块 IR/TE/年化超额 + 12/24 月胜率 + 滚动 250 日超额） |
