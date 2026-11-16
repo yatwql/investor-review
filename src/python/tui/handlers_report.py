@@ -9,7 +9,7 @@ from src.python.core.logger import setup_logger
 from src.python.core.registry import get_llm_module_names
 from src.python.llm.cost_forecast import budget_status, forecast_run_cost, forecast_summary_lines
 from src.python.report import orchestrator
-from src.python.report.progress import TuiProgressReporter
+from src.python.tui.progress import TuiProgressReporter
 from src.python.tui.tui_handlers import (
     finish_report,
     prepare_holdings,

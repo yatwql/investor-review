@@ -217,7 +217,7 @@ def _run_cache_update(group_name: str, update_fn, print_fn, action_name: str) ->
     if holdings is None:
         return
 
-    from src.python.report.progress import TuiProgressReporter
+    from src.python.tui.progress import TuiProgressReporter
 
     reporter = TuiProgressReporter()
     try:
@@ -246,7 +246,7 @@ def _cmd_update_position_cache() -> None:
 def _cmd_cleanup_cache() -> None:
     """清理过期缓存文件。"""
     from src.python.cache.operations import cleanup_cache
-    from src.python.report.progress import TuiProgressReporter
+    from src.python.tui.progress import TuiProgressReporter
 
     reporter = TuiProgressReporter()
     cleanup_cache(reporter)  # 完成后直接回面板：短反馈不设按键闸门（契约 Feedback §闸门白名单）
@@ -255,7 +255,7 @@ def _cmd_cleanup_cache() -> None:
 def _render_cache_stats() -> None:
     """渲染缓存与状态统计（缓存管理子菜单首屏：只读，不等待按键）。"""
     from src.python.cache.operations import get_cache_stats
-    from src.python.report.progress import TuiProgressReporter
+    from src.python.tui.progress import TuiProgressReporter
 
     reporter = TuiProgressReporter()
     stats = get_cache_stats(reporter)

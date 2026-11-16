@@ -140,7 +140,7 @@ def test_unparsable_exception_table_is_finding(surface, monkeypatch, tmp_path):
 def test_layer_inversion_detected(surface, tmp_path):
     """三层反向依赖均报 layer-inversion：analysis→report/llm、fetcher→report/analysis、providers→report/analysis。"""
     root = tmp_path / "py"
-    for layer in ("analysis", "fetcher", "providers", "report", "llm", "core"):
+    for layer in ("analysis", "fetcher", "providers", "report", "llm", "core", "tui", "web"):
         (root / layer).mkdir(parents=True)
     (root / "analysis" / "a1.py").write_text(
         "from src.python.report.data_status import get_tracker\n", encoding="utf-8"
@@ -152,11 +152,16 @@ def test_layer_inversion_detected(surface, tmp_path):
     (root / "providers" / "p1.py").write_text(
         "from src.python.report.data_status import mark_data_used\n", encoding="utf-8"
     )
+    # 报告/llm 层不得反向依赖交互层（tui/web/cli）的格式化与状态条实现
+    (root / "report" / "r1.py").write_text("from src.python.tui.live_status import LiveStatusBar\n", encoding="utf-8")
+    (root / "llm" / "l1.py").write_text("from src.python.web.progress import WebProgressReporter\n", encoding="utf-8")
     findings = surface.scan_layer_inversion(root)
     assert any("[layer-inversion]" in f and "a1.py" in f and "report.data_status" in f for f in findings)
     assert any("[layer-inversion]" in f and "a2.py" in f and "llm.skeleton" in f for f in findings)
     assert any("[layer-inversion]" in f and "f1.py" in f and "analysis.fee_schedule_model" in f for f in findings)
     assert any("[layer-inversion]" in f and "p1.py" in f and "report.data_status" in f for f in findings)
+    assert any("[layer-inversion]" in f and "r1.py" in f and "tui.live_status" in f for f in findings)
+    assert any("[layer-inversion]" in f and "l1.py" in f and "web.progress" in f for f in findings)
 
 
 def test_layer_inversion_core_import_allowed(surface, tmp_path):

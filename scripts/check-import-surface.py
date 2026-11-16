@@ -219,13 +219,16 @@ _LAYER_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("analysis", ("report", "llm")),
     ("fetcher", ("report", "llm", "analysis")),
     ("providers", ("report", "llm", "analysis")),
+    # 交互层（`tui`/`web`/`cli`）在报告层之上：报告侧不得反向依赖它们的格式化与状态条实现
+    ("report", ("tui", "web", "cli")),
+    ("llm", ("tui", "web", "cli")),
 )
 
 
 def scan_layer_inversion(root: Path = PY_ROOT, exceptions=None) -> list[str]:
     """layer-inversion：下层不得 import 上层模块（规则见 :data:`_LAYER_RULES`）。
 
-    分层纪律：`core` → `fetcher`/`providers` → `analysis` → `report`/`llm`/`ui`，
+    分层纪律：`core` → `fetcher`/`providers` → `analysis` → `report`/`llm` → `tui`/`web`/`cli`，
     上层单向依赖下层。取数层（fetcher/providers）反向依赖 `report/`/`llm/`/`analysis/`
     与纯计算层（analysis）反向依赖 `report/`/`llm/` 同属越界；两侧共用的业务约束
     （观测登记面、派生原语）应下沉 `core/`（例：`core/recommendation_policy.py`、

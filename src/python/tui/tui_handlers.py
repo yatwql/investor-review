@@ -17,7 +17,7 @@ from src.python.core.num_utils import format_size
 from src.python.llm.pricing import format_costs
 from src.python.core.logger import setup_logger
 from src.python.core.reader import get_xlsx_info, list_xlsx_files, read_holdings_with_flows, require_holdings
-from src.python.report.progress import TuiProgressReporter
+from src.python.tui.progress import TuiProgressReporter
 from src.python.tui.error_tail import emit_error
 from src.python.tui.tui_keys import PromptCancelledError, input_choice
 from src.python.tui.tui_menu import MENU_ITEMS, get_config_cache, refresh_config

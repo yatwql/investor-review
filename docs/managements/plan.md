@@ -66,6 +66,7 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 
 **进展（本轮）**：`report/excel_generator.generate_excel_report` 479 行 / 92 分支 → **216 行 / 20 分支**，按职责提取 6 个子函数（行动建议兜底 / 市场情绪 / 景气度诊断 / 可选明细页签 / 环比对比摘要 / 收尾保存），逻辑逐行搬运、产物不变（`test_excel_generator` 26 用例全绿）。
 **剩余**：`_generate_report_full`（410 → 304 行 / 17 分支：拆出行业资金流向、LLM+新闻阶段、双端产出与收尾三块）与 `write_html_report`（357 → 333 行：拆出面板视图与数据源状态装配）；二者主体已是「装配调用序列」，进一步切分收益递减，如需继续按 `_render_template` 入参收敛为上下文对象处理。
+**存量超长函数（>150 行，非本次范围）**：`analysis/schedule_replay.run_schedule_replay`（335）、`llm/generators.generate_debate_procon`（312）、`cli/_parser._build_parser`（277）、`report/_orchestrator_data.prepare_report_data`（271）——按需另行切分。
 
 ### P2 — 下一阶段就绪（满足条件即开工）
 

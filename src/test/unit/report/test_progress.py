@@ -25,10 +25,10 @@ from src.python.report.cli_progress import CliProgressReporter
 from src.python.report.progress import (
     ProgressReporter,
     SilentProgressReporter,
-    TuiProgressReporter,
     Timer,
     timing_records,
 )
+from src.python.tui.progress import TuiProgressReporter
 import pytest
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report]

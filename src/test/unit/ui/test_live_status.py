@@ -161,7 +161,7 @@ class TestReporterLiveWiring:
     """报告器接线：非 TTY 下 live=True 与不启用时逐行输出一致（管道等价前提）。"""
 
     def test_non_tty_output_identical_to_plain_mode(self, capsys):
-        from src.python.report.progress import TuiProgressReporter
+        from src.python.tui.progress import TuiProgressReporter
 
         plain = TuiProgressReporter()
         plain.info("正在获取行情")
@@ -182,7 +182,7 @@ class TestReporterLiveWiring:
 
     def test_close_is_idempotent(self):
         """收尾与异常路径都可能调 close：重复调用不抛错。"""
-        from src.python.report.progress import TuiProgressReporter
+        from src.python.tui.progress import TuiProgressReporter
 
         reporter = TuiProgressReporter(live=True)
         reporter.close()
