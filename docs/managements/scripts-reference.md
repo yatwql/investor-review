@@ -859,12 +859,11 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 类型错误里混着真实缺陷（`cost_first` 单价键读错导致策略静默退化、上下文管理器 `__exit__`
 声明 `bool` 使 `result` 可能未绑定、配置段 `None` 直接下标、CI 区间 `None` 参与乘法），
-但项目此前没有任何类型门禁——只能靠偶发人工扫描发现。本守护把「产品代码零 ERROR 级诊断」
-变成可回归的约束：
+这类缺陷靠偶发人工扫描不可靠，本守护把「产品代码零 ERROR 级诊断」变成可回归的约束：
 
 1. **受检域**：`src/python` + `scripts`（`[tool.pyright] include`）——产品代码与入口/守护脚本
-   的类型错误同样是缺陷；`scripts/` 的历史噪声已清零（50 处：流对象 `reconfigure`、
-   平台桩 `ctypes.windll`/`msvcrt`、动态 target 的 `build_parser`、AST 节点 `lineno` 等）。
+   的类型错误同样是缺陷；`scripts/` 需处理的已知模式为流对象 `reconfigure`、平台桩
+   `ctypes.windll`/`msvcrt`、动态 target 的 `build_parser`、AST 节点 `lineno` 等。
    `src/test` 刻意排除——单测天然大量 mock/行内 dict，静态噪音远多于缺陷收益，其正确性由
    pytest 运行时守卫。
 2. **判据**：只计 `ERROR` 级诊断（pyright 默认级别即可，不自造阈值）；`WARNING`/`INFORMATION`

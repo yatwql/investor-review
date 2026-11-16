@@ -1442,8 +1442,8 @@ investor-review/
 │   ├── check-script-contract.py  #   scripts 顶层脚本契约机检（退出码声明 ⊆ {0,2} + check-* add_common_args CLI 面 + 文本 I/O 显式 encoding + 脚本↔测试覆盖，四条规则+白名单——已在守护清单内，钩子随 scripts/ 变更触发）
 │   ├── probe-date-bombs.py      #   时间炸弹经验筛查（绝对日期回移 N 年后跑测试，rot-suspect 需人工判读；不入门禁）
 │   ├── eval-dedup-threshold.py #   新闻去重阈值校准 + 锚点压缩（保留期同生产）
-│   ├── eval-decision-quality.py #   投资决策质量回测入口（五阶段 CLI + 原面 re-export；实现在 _eval_decision_quality/）
-│   ├── _eval_decision_quality/       #   决策质量回测内部实现包（入口仅留 CLI 与原面 re-export）
+│   ├── eval-decision-quality.py #   投资决策质量回测入口（五阶段 CLI + 门面 re-export；实现在 _eval_decision_quality/）
+│   ├── _eval_decision_quality/       #   决策质量回测内部实现包（入口仅留 CLI 与门面 re-export）
 │   │   ├── __init__.py               #       子包标记
 │   │   ├── primitives.py             #       预注册常量 + 账本读取 + 纯计算原语（前向收盘/秩相关/三分位/判定）
 │   │   ├── stages.py                 #       五阶段：视界命中率 / 因子 IC / 估值两口径 / 止损口径 / 相关性↔回撤
@@ -1458,9 +1458,9 @@ investor-review/
 │   ├── check-import-surface.py      #   导入面契约检查（兼容注释/私有 __all__/跨包私有导入/动态导入字面量 + 例外表自审（字段齐全/到期/失效）；已在守护清单内，钩子随 src/python/ 变更触发）
 │   ├── check-types.py              #   pyright 类型错误守护（受检域 src/python；规则基线在 pyproject.toml [tool.pyright]，src/test 刻意不入域；退出码 0/1 环境缺失/2——已在守护清单内，钩子随 src/python/ 或 pyproject.toml 变更触发）
 │   ├── _import_surface_exceptions.json # 导入面检查例外表（owner/reason/expiry/replacement）
-│   ├── eval-factor-zoo.py           #   因子动物园目录评测入口（CLI + 原面 re-export；因子五族目录冻结/字段可得/信号相关/耗时基线/判定汇总，实现在 _eval_factor_zoo/ 包，产物落 docs/tmp/）
-│   ├── _eval_factor_zoo/                 #   因子目录评测内部实现包（入口 eval-factor-zoo.py 仅留 CLI 与原面 re-export）
-│   │   ├── __init__.py              #       子包标记（原面 re-export）
+│   ├── eval-factor-zoo.py           #   因子动物园目录评测入口（CLI + 门面 re-export；因子五族目录冻结/字段可得/信号相关/耗时基线/判定汇总，实现在 _eval_factor_zoo/ 包，产物落 docs/tmp/）
+│   ├── _eval_factor_zoo/                 #   因子目录评测内部实现包（入口 eval-factor-zoo.py 仅留 CLI 与门面 re-export）
+│   │   ├── __init__.py              #       子包标记（门面 re-export）
 │   │   ├── catalog.py               #       预注册判定口径与冻结因子目录（门槛常量 + 五族×5 目录 + 冻结校验）
 │   │   ├── probe.py                 #       股票池与字段可得性探测（穿透池只读复用 + 逐因子可得性探测）
 │   │   ├── metrics.py               #       指标 A/B/C 计算与三态判定（可得率/信号增量相关/耗时比）
@@ -1469,7 +1469,7 @@ investor-review/
 │   ├── eval-llm-hallucination.py #   LLM 幻觉率采样 CLI（标准持仓集+事实校验器验证；实现在 _eval_halluc_sampler/）
 │   ├── eval-llm-budget.py             #   LLM 表达预算校准入口（冻结样本 × 预算档位 × 模式矩阵；实现在 _eval_llm_budget/，产物落 docs/tmp/）
 │   ├── _eval_llm_budget/              #   eval-llm-budget 内部实现包（预算文案/提示词替换/样本/度量/编排/报告）
-│   │   ├── __init__.py              #       子包标记（原面 re-export）
+│   │   ├── __init__.py              #       子包标记（门面 re-export）
 │   │   ├── budget.py                #       预算档位与分节上界文案（比例之和守卫）
 │   │   ├── prompts.py               #       提示词常量与特性开关的临时替换（退出还原）
 │   │   ├── sample.py                #       冻结输入样本（持仓快照 → 明细/分类/合计）
@@ -1504,7 +1504,7 @@ investor-review/
 │   │   ├── xlsx_frame.py             #       Excel 页签 → HTML 表格网格 → PNG（显示值换算 / 合并区 / 列宽收敛）
 │   │   └── cdp_shot.mjs              #       CDP 截图脚本（Node ≥22 内置 WebSocket；导航→替换→滚动→截视口）
 │   ├── _doc_drift/                   #   文档漂移检查内部实现包（入口 check-doc-drift.py 仅留 CLI 与编排）
-│   │   ├── __init__.py               #       子包标记（并注入仓库根到 sys.path；原面 re-export）
+│   │   ├── __init__.py               #       子包标记（并注入仓库根到 sys.path；门面 re-export）
 │   │   ├── _shared.py                #       共享设施（文档路径常量 / 扫描面 / 表格与区间解析 / 统计原语）
 │   │   ├── _format.py                #       文档格式族检查（章节表 / 开关表 / 默认值 / TTL / 测试覆盖计数）
 │   │   ├── _format_panels.py         #       面板编号族检查（[C] 章节显隐与 [S] 内容组的编号派生校验）
@@ -1513,8 +1513,8 @@ investor-review/
 │   │   ├── _menu_blocks.py          #       手册菜单块检查（双手册主菜单 code block ↔ MENU_ITEMS 键集合/标签头）
 │   │   ├── _requirements_menu.py    #       需求菜单表检查（键集合/分组/组内顺序 ↔ MENU_GROUPS）
 │   │   └── _guards.py                #       守护清单同源校验（developer-guide P0/P2 ↔ ci.yml guards ↔ CLAUDE/testplan 四处清单一致）
-│   ├── _traces_code/                 #   check-code-traces 内部实现包（入口保留 CLI 与原面 re-export）
-│   │   ├── __init__.py               #       子包标记（原面 re-export）
+│   ├── _traces_code/                 #   check-code-traces 内部实现包（入口保留 CLI 与门面 re-export）
+│   │   ├── __init__.py               #       子包标记（门面 re-export）
 │   │   ├── config.py                 #       扫描域配置（仓库根/扫描目录/跳过文件/工具自身与规则载体识别）
 │   │   ├── patterns.py               #       匹配模式表（历史痕迹/标识符/暗号；只管「匹配什么」，共享叙述词表引用 _traces_common）
 │   │   ├── exemptions.py             #       豁免表（章节/轮次共享豁免 + 代码侧行级/魔法编号豁免与判定函数）
@@ -1523,8 +1523,8 @@ investor-review/
 │   │   ├── layers.py                 #       core 反向依赖 AST 守卫
 │   │   ├── logging_discipline.py     #       日志统一 AST 守卫（print() 仅限交互呈现层白名单）
 │   │   └── config_defaults.py        #       配置默认值单源守卫（与默认表同值的字面量兜底检出）
-│   ├── _traces_doc/                  #   check-doc-traces 扫描后端包（入口薄 CLI + 原面 re-export）
-│   │   ├── __init__.py               #       子包标记（原面 re-export）
+│   ├── _traces_doc/                  #   check-doc-traces 扫描后端包（入口薄 CLI + 门面 re-export）
+│   │   ├── __init__.py               #       子包标记（门面 re-export）
 │   │   ├── patterns.py               #       文档痕迹模式表与行级豁免（含目录树行专属补强）
 │   │   ├── bundle.py                 #       模式子集与并集预筛（编译镜像 + 按域取子集 + 树行拼表，lru 缓存）
 │   │   ├── deleted_refs.py           #       已删除函数残留（git 历史 def × 当前 def 差集；浅克隆告警不假绿）
@@ -1536,7 +1536,7 @@ investor-review/
 │   │   ├── sector_flow.py            #       行业资金流向双通道可用性探测（主=东财 push2 / 备=同花顺，只读取数）
 │   │   └── push2.py                  #       东方财富 push2 连通性诊断（区分网络拦截/程序缺陷/WAF 拦指纹）
 │   ├── _eval_halluc_sampler/              #   eval-llm-hallucination 内部实现包（入口仅留 CLI 与编排）
-│   │   ├── __init__.py               #       子包标记（原面 re-export）
+│   │   ├── __init__.py               #       子包标记（门面 re-export）
 │   │   ├── holdings.py               #       品种分类 / 组合核心数值 / 标准数据集加载
 │   │   ├── llm_call.py               #       HTTP 客户端工厂 / 模块映射 / prompt 构建与真实调用
 │   │   ├── fact_check.py             #       事实校验（独立检查器精准分类）
@@ -1574,10 +1574,10 @@ investor-review/
 │   │   ├── checklib.py               #       检查脚本共享设施（统一 CLI 契约 / 输出 / 路径 / 文档区间解析 / 结论缓存）
 │   │   └── traces_common.py          #       代码注释域与用户文档域共用的历史叙述正则单一来源
 │   ├── _guardrails/                  #   设计护栏规则声明包（入口 check-style-guardrails.py 只留判定与渲染）
-│   │   ├── __init__.py               #       包标记（原面 re-export）
+│   │   ├── __init__.py               #       包标记（门面 re-export）
 │   │   └── rules.py                  #       检查域/圆角·字阶·间距档位/正则/存量豁免表（纯声明，无 I/O）
 │   ├── _perf_report/                 #   性能基准报告渲染包（入口 test-perf-report.py 只留采样与门禁判定）
-│   │   ├── __init__.py               #       包标记（原面 re-export）
+│   │   ├── __init__.py               #       包标记（门面 re-export）
 │   │   └── report.py                 #       报告 Markdown 组装 + 达标判定 + PerfSample 样本规模契约
 │   ├── _release/                     #   发布编排内部实现包（入口 release.py 只保留路径常量/env 投影/薄包装/main）
 │   │   ├── __init__.py               #       子包标记（拆分纪律说明：下沉模块只收显式参数）
@@ -1823,7 +1823,7 @@ investor-review/
 │   │   │   │   └── feature-switch-grouping-redesign.md # 作用域四分组 + 生命周期 experimental 字段解耦（守护先行/四迭代）
 │   │   │   ├── feeder-fund-penetration/ # 联接基金季报按构造为空、兜底返回陈年快照致 QDII 穿透失真；取数阶梯与代理底层暴露修正
 │   │   │   │   └── feeder-penetration-and-holdings-fetch-design.md # 联接基金穿透取数：阶梯次序修正、目标 ETF 代理底层暴露
-│   │   │   ├── financial-indicator-source/ # 财报全文此前仅用于摘要、基本面结构化指标缺主备；扩展为可降级的基本面数据源
+│   │   │   ├── financial-indicator-source/ # 基本面结构化指标数据源设计（财报全文降级取数 + 主备链路）
 │   │   │   │   └── financial-indicator-source-design.md # 基本面数据源主备：标准字段契约、全文解析支路、估值分位（TTM）、底座门禁、LLM 注入
 │   │   │   ├── report-followup-qa/ #   报告对话式追问设计归档（qa 独立子包设计）
 │   │   │   │   └── report-followup-qa-design.md # 报告对话式追问设计（上下文从报告 HTML 提取/会话服务/报告页区块/TUI [Q] 入口/转正路径）
@@ -1878,7 +1878,7 @@ investor-review/
 │   │   │   │   └── holding-cost-position-design.md # 成本区间位置：指标定义、数据来源与降级、呈现位置候选、口径注记、边界与测试要点
 │   │   │   ├── llm-cost-optimization/       # 实际计费模型与峰谷口径下的成本实测画像与优化取舍
 │   │   │   │   └── llm-cost-optimization.md # LLM 计费模型与峰谷口径的优化取舍：实测画像、行动清单（计费口径、闲时调度、模型映射、output_brief 机制）
-│   │   │   ├── perf-observability/          # 运行时台账归因能力补齐（原阶段粒度过粗：8 个阶段名、LLM 单桶占 91%）
+│   │   │   ├── perf-observability/          # 运行时台账归因能力（阶段名 + LLM 分模块桶，支撑耗时归因）
 │   │   │   │   └── perf-observability-design.md # 运行时台账观测面扩充：阶段细分、计数、上下文维度、对比与门禁
 │   │   │   ├── report-browser-verification/ # 报告产物跨环境可读性验收（自包含/断网/打印/窄屏/微信 X5）
 │   │   │   │   └── report-browser-verification.md # 报告产物可读性验收：六项分为可自动化与人工两类，含逐项实测结论与复跑命令

@@ -503,7 +503,7 @@ Web 模式（浏览器界面）提供「配置编辑」面板，可修改的配�
 | 报告章节 | `enable_fund_deep_analysis` / `enable_news` / `enable_history` / `enable_portfolio_evolution` / `enable_action` | `[C]` 1~5 |
 | 持仓与交易 | `portfolio_constraints`（默认关）/ `cost_lots`（默认关）/ `whatif_trade_cost`（默认关） | `[S]` 1-3 |
 | 市场与估值 | `valuation_percentile`（默认关）/ `risk_adjusted_excess`（默认关）/ `crisis_replay`（默认关）/ `prosperity_framework` | `[S]` 4-7 |
-| 基金与风格 | `factor_catalog`（默认关；行业 Beta 子表已并入此开关）/ `candidate_compare`（默认开；自动项：配置候选池即生效，不占编号） | `[S]` 8 |
+| 基金与风格 | `factor_catalog`（默认关；控行业 Beta 子表与因子目录两块）/ `candidate_compare`（默认开；自动项：配置候选池即生效，不占编号） | `[S]` 8 |
 | 事件与摘要 | `event_window_impact`（默认关）/ `market_sentiment`（默认关） | `[S]` 9-10 |
 | 机制与质量 | `llm_research_contract`（默认关）/ `decision_reflection`（默认关、实验）/ `deterministic_signal`（默认开）；`decision_basis`（默认开，行动建议章内「判断依据」）与 `module_quality_gate`（默认开，LLM 输出评级）为内置恒开 | `[S]` 11-13 |
 | 交互与追问 | `report_qa`（默认关、实验；报告页内对话式追问入口） | `[S]` 14 |

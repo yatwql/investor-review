@@ -52,7 +52,7 @@
 
 ## Typography — 字阶表
 
-- **字体栈**（两面已统一 `--font-stack` 同值）：`"PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, -apple-system, sans-serif`。
+- **字体栈**（两面 `--font-stack` 同值）：`"PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, -apple-system, sans-serif`。
 - **目标字阶**（两模板均取 8 档 token；图标 >24px 豁免）：
 
 | 类别 | 字号 | 行高 | 用途 |

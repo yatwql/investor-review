@@ -442,7 +442,7 @@ while True:
 
 | 按键 | 行为 |
 |:-----|:-----|
-| ↑ / ↓ | `nav`（`NavState`）在 MENU_ITEMS 上循环移动（`panel_runtime` 单源回绕，等价原 `(sel ± 1) % len`） |
+| ↑ / ↓ | `nav`（`NavState`）在 MENU_ITEMS 上循环移动（`panel_runtime` 单源回绕） |
 | Enter | `execute_item(sel)` 执行当前选中项 |
 | 字母/数字（A-Z/0-9） | `index_by_key(key.upper())` 直达并执行对应快捷键菜单项 |
 | Ctrl+C | `exit_app()` 退出 |
@@ -1360,7 +1360,7 @@ get_ttl(data_type)
 
 **盘中敏感性由注册表声明**（`DataModuleDef.market_ttl`，当前只有 `price`/`index` = 30s）：这是数据属性而非用户偏好——价格/指数分钟级变化，盘中必须短 TTL 才能避免把盘中价当收盘价（否则"本日盈亏/快照环比"系统性偏离），而非行情数据（新闻 900s、情绪 3600s 等）不得因盘中被降频、白打上游。`config.json → market_hour_aware` 已移除（无对应实现，写入即被忽略，不再有识别/告警分支）。
 
-**报告模板样式写法（架构约束）**：`src/static/tmpl/` 是 Jinja2 模板，**不得把 Jinja 表达式写进 CSS 值位置**（`style="…{{ }}…"` / `{% %}`）——CSS 解析器对花括号一律判语法错，且颜色/顺序会因此分裂成两份事实（内联值 + class/token）。三条替代口径：颜色→语义 class（`profit_class`/`price_type_class` 出类名（原 `profit_color`/`price_type_color` 内联颜色过滤器已下线），色值只在 token 与工具类）、章节顺序→模板 DOM 顺序（include 顺序 = `_REPORT_SECTION_DEFAULT`）＋用户自定义 `report_section_order` 时由`html_writer._inject_section_order_css()` 服务端注入 `#sec-x{order:N}` 规则（占位 `<!--SECTION_ORDER_CSS-->`，不经 Jinja）、数据驱动几何量→HTML/SVG 属性（如分布条 `<svg width="{{ pct }}%">`）。守卫：`test_html_report_structure` 的模板静态扫描 + 渲染产物断言 + DOM 顺序/编号断言。
+**报告模板样式写法（架构约束）**：`src/static/tmpl/` 是 Jinja2 模板，**不得把 Jinja 表达式写进 CSS 值位置**（`style="…{{ }}…"` / `{% %}`）——CSS 解析器对花括号一律判语法错，且颜色/顺序会因此分裂成两份事实（内联值 + class/token）。三条替代口径：颜色→语义 class（`profit_class`/`price_type_class` 出类名（色值经 CSS class 输出），色值只在 token 与工具类）、章节顺序→模板 DOM 顺序（include 顺序 = `_REPORT_SECTION_DEFAULT`）＋用户自定义 `report_section_order` 时由`html_writer._inject_section_order_css()` 服务端注入 `#sec-x{order:N}` 规则（占位 `<!--SECTION_ORDER_CSS-->`，不经 Jinja）、数据驱动几何量→HTML/SVG 属性（如分布条 `<svg width="{{ pct }}%">`）。守卫：`test_html_report_structure` 的模板静态扫描 + 渲染产物断言 + DOM 顺序/编号断言。
 
 **盘中覆盖可见**：若用户同时配了 `cache_ttl.{type}` 而该类型盘中敏感，`get_ttl` 会打一条 INFO（每类型一次）说明"盘中以 `market_hour_ttl` 为准，`cache_ttl` 仅盘后生效"——把静默失效变成可观测。
 
@@ -2876,7 +2876,7 @@ llm/skeleton.py            # 摘要注入 expert_review 提示词（开关门控
 
 **要求**：provider 链路失败的降级事件必须带可读展示名与具体成因。只写 `failure_type` 短标识（`transport` / `empty` / `invalid`）时，用户在「数据源可用性矩阵」里看到的是 `tencent: transport`——既不知道是哪个源的展示名，也不知道具体为什么失败。
 
-**修复**：新增 `fetcher/chain.FailureDiagnostics`（采集「展示名(原因)」条目，`summary()` 渲染为 `腾讯财经(连接超时)；新浪财经(返回空)`，单条原因按 `_REASON_MAX_LEN` 截断），由 `fetcher/{price,fund,industry,index}.py` 在调用链路时构造并随 `DegradationEvent.detail.message` 透传；`report/data_source_matrix._failure_entry()` 渲染时**优先取该人类可读原因**，无原因时回落原 `failure_type` 短标识。
+**实现**：`fetcher/chain.FailureDiagnostics`（采集「展示名(原因)」条目，`summary()` 渲染为 `腾讯财经(连接超时)；新浪财经(返回空)`，单条原因按 `_REASON_MAX_LEN` 截断），由 `fetcher/{price,fund,industry,index}.py` 在调用链路时构造并随 `DegradationEvent.detail.message` 透传；`report/data_source_matrix._failure_entry()` 渲染时**优先取该人类可读原因**，无原因时回落原 `failure_type` 短标识。
 
 **向后兼容**：`DegradationTracker.record()` / `_record_unsafe()` 新增 `message` 参数默认 `None` → `detail` 保持 `None` → 矩阵输出与改动前**逐字相同**，由显式测试锁定。复用既有 `detail` 字典而非新增字段，与聚合路径（`record_aggregated()` 亦把 `message` 放在 `detail` 内）形状一致，`get_log()` 无需改动。
 
@@ -3512,7 +3512,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `cache_validate` | 缓存载荷准入判据（`fetch_with_fallback` 参数：载荷未通过判据即视为未命中、清缓存重取） | 资产穿透TOP10 | 数据获取 | 无（链路原语） |
 | `financial_report_digest` | 持仓个股财报摘要（持仓基本面章区块二：A 股标的取最新年报章节原文摘要；数据源 DataSinking，需用户自备 key） | 持仓基本面 | 数据获取 | 功能开关 `stock_fundamentals`（默认关） |
 | `financial_indicator` | 财务指标（数据域 + 持仓基本面章区块一：上市公司单报告期结构化指标 + 质量档 + 年度趋势 + 当前 PE/PB） | 持仓基本面 | 数据获取 | 功能开关 `stock_fundamentals`（默认关） |
-| `stock_fundamentals` | 个股基本面独立章（单一开关控持仓基本面两块：财务指标 + A 股财报章节摘要；原 `financial_indicator`/`financial_report_digest` 两开关并入，旧键读写迁移并告警） | 持仓基本面 | 报告输出 | 功能开关 `stock_fundamentals`（默认关，独立章节与回放组） |
+| `stock_fundamentals` | 个股基本面独立章（单一开关控持仓基本面两块：财务指标 + A 股财报章节摘要） | 持仓基本面 | 报告输出 | 功能开关 `stock_fundamentals`（默认关，独立章节与回放组） |
 | `financial_indicator_data` | 财务指标数据契约（C19：available/reason/rows/failures/entry_count） | 持仓基本面 | 数据获取 | 无（契约） |
 | `fund_purchase_limit` | 基金申购限购状态列（持仓明细两端——Excel 市值明细/分类汇总两区块末列 + HTML 市值明细/持仓分类表条件列：申购状态 + 日限额/下一开放日，天天基金渠道口径；数据不可用静默隐列） | 持仓明细与分类 | 数据获取 | 功能开关 `fund_purchase_limit`（默认开） |
 | `purchase_status_data` | 申购限购状态数据契约（C19：available/reason/rows/fetched_at/source） | 持仓明细与分类 | 数据获取 | 无（契约） |
@@ -3554,7 +3554,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `tail_risk` | 尾部风险 | 组合历史走势与回撤 | 风险/暴露 | 始终渲染（样本不足时占位，R-TAIL 强制） |
 | `monthly_returns` | 月度收益日历 | 组合历史走势与回撤 | 监控 | 历史数据可用时渲染（样本不足不出区块，as-if 口径、双口径并排预留） |
 | `snapshot_diff` | 快照差异 | 组合演进 | 监控 | 随 `enable_portfolio_evolution` |
-| `data_quality` | 数据质量仪表盘 | 数据源可用性矩阵 | 监控 | 内置恒开（开关已移除） |
+| `data_quality` | 数据质量仪表盘 | 数据源可用性矩阵 | 监控 | 内置恒开（无开关） |
 | `snapshot_namespace` | 快照隔离命名空间（试算域 `web` / 共享主目录） | 快照存储/Web 输入 | 输入隔离 | 无（run 级参数） |
 | `web_input_mode` | Web 输入模式（试算/正式） | Web 输入 | 输入隔离 | 无（run 级参数 `mode`） |
 | `use_existing` | 直接用正式持仓文件 | Web 输入 | 输入隔离 | 无（run 级参数） |
@@ -3624,7 +3624,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `scenario_mandate` | 情景段方向约束口径选择（默认一句收敛：动手条件 + 「不操作」及所缺数据，两情景路径共用；`decision_basis` 关闭走回退强制方向口径；回退口径经 `scenario_mandate_cache_suffix` 以 `_ms` 后缀换键，两套文本常量共存一版） | LLM 生成 | LLM 生成 | 随 `decision_basis` |
 | `build_structured_header_instruction` | 决策头结构化契约构建（提示词侧追加 `决策头：…` 行，与解析器口径锁定） | 行动建议 | 监控 | 已内置（指纹与缓存键均不带决策头后缀） |
 | `decision_header` | 决策词归一解析器（标签优先/长词优先/否定守卫/复合词左边界/二义不猜） | 行动建议 | 监控 | 已内置（A 通道无开关） |
-| `deterministic_signal` | 确定性信号模块（实时注入 + 跨期沉淀双面：温度/分位/尾部风险预消化信号行 + 确定性评级账本沉淀，内置五类、因子目录随实验开关追加第 6 类；原 `signal_pre_digest`/`signal_ledger` 两开关合并转正） | LLM 生成 | LLM 生成 | 开关 `deterministic_signal`（默认开，机制与诊断组） |
+| `deterministic_signal` | 确定性信号模块（实时注入 + 跨期沉淀双面：温度/分位/尾部风险预消化信号行 + 确定性评级账本沉淀，内置五类、因子目录随实验开关追加第 6 类） | LLM 生成 | LLM 生成 | 开关 `deterministic_signal`（默认开，机制与诊断组） |
 | `prompts_signals` | 信号预消化提示词块（开关判定收敛于缓存后缀函数） | LLM 生成 | LLM 生成 | 随 `deterministic_signal` |
 | `signal_ledger` | 确定性数值信号沉淀（各信号类型评级登记 + live/demo 来源标签，排行榜默认 live_only） | LLM 生成 | 监控 | 随 `deterministic_signal` |
 | `signal_record` | 确定性信号登记适配器（唯一持有语义词表映射，`core/` 不依赖 `analysis/`） | LLM 生成 | 监控 | 随 `deterministic_signal` |
@@ -3665,7 +3665,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `llm_debate_conditional` | 辩论-条件推理（上涨 / 下跌 / 震荡情景注入） | 智囊团深度复盘 | LLM 注入 | 功能开关（默认开，分析增强组；与正反辩论相邻） |
 | `concentration_qa` | 集中度问答段（辩论流程内建：单品种占比超 `debate.concentration_qa.threshold` 时白脸/黑脸/综合各附集中度量化评估；原实验开关 `llm_debate_qa_concentration` 已撤销并入） | 智囊团深度复盘 | LLM 注入 | 无独立开关（随 `llm_debate_procon` 流程内建） |
 
-> **子功能并入说明**：以下语义已并入其他功能，不作为独立标识符参与本表校验——`dividend_flow`（分红现金流，并入 `fund_flow`）、`holding_diagnosis`（品种覆盖诊断，并入 `data_quality`）。
+> **不单独成标识的语义**：以下语义由其他功能承载，不作为独立标识符参与本表校验——`dividend_flow`（分红现金流，并入 `fund_flow`）、`holding_diagnosis`（品种覆盖诊断，并入 `data_quality`）。
 
 | `prosperity_framework` | 景气度框架诊断（六维评分卡：景气方向/ROE 低位弹性/全球视野与比较优势/流动性/集中度与周期拼接/业绩与回撤印证；缺数据维度标记需核实、不计分） | 行动建议（章内嵌块） | 调仓 | 分析增强开关 `prosperity_framework`（默认开） |
 | `market_sentiment` | 市场情绪与持仓热点（行动建议章内嵌块：龙虎榜/连板梯队 ∩ 持仓与穿透标的；功能开关，默认关） | 行动建议（章内嵌块） | 报告输出 | 功能开关 `market_sentiment`（默认关） |
@@ -3932,12 +3932,12 @@ web/ (Web 服务层，薄入口)
 | `get_llm_config` / `validate_config` / LLM 默认值 | `config/_llm_settings.py`、`config/_validation.py`、`config/_llm_settings_defaults.py` | `config/__init__.py` | llm / web / tui / analysis | 公开函数保留；私有实现按域导入 |
 | `get_cache_path` / `get/set/clear` | `cache/_paths.py`、`cache/_store.py` | `cache/__init__.py` | core / 报告 / 渠道 | 仅公开入口跨包；`_io`/`_store` 私有 |
 | `is_a_share_code` 等资产判定 | `core/code_utils.py` | — | analysis / fetcher / report | 判定与派生量分离；派生量走 `core/code_symbols.py` |
-| 派生符号（交易所前缀/代码归一） | `core/code_symbols.py` | 原 `code_utils` 转发已删除 | fetcher / providers / report | 调用方直接导入 owner |
+| 派生符号（交易所前缀/代码归一） | `core/code_symbols.py` | 唯一 owner（调用方直接导入，不经转发面） | fetcher / providers / report | 调用方直接导入 owner |
 | 日志与缓存自检探针 | `core/doctor_logs.py` | `core/doctor.py` 仅入口调用 | cli / tui / web | 私有探针不再经 `doctor` 转发 |
 | 缓存刷新族 | `cache/_cache_refresh.py` | `cache/operations.py` 编排入口 | tui / cli / web | 刷新函数由编排层内部导入；测试直接 patch owner |
 | 量化指标算法 | `analysis/metrics_returns.py`、`analysis/metrics_risk.py` | `analysis/metrics.py` 聚合 `compute_all_metrics` | report / analysis | 公开聚合保留；私有 `_t_cdf` 等走 `_math_utils` |
 | 景气度输入/权重 | `analysis/prosperity_inputs.py` | `analysis/prosperity_scoring.py` 评分 | report / analysis | 模块名去下划线，跨包直接导入 |
-| provider 共享原语/失败原因 | `providers/utils.py` | 原 `providers/utils.py` 已改名 | fetcher / providers | `set/take/clear_last_reason` 经公开模块 |
+| provider 共享原语/失败原因 | `providers/utils.py` | 唯一 owner（公开模块） | fetcher / providers | `set/take/clear_last_reason` 经公开模块 |
 | 基金评级 / 持仓区块 / HTML 状态 | `report/_fund_rating.py`、`report/_holdings_detail_blocks.py`、`report/html_writer_status.py` | `report/fund_performance.py` 等入口 | report / tui | 私有实现只在报告包内使用；测试 patch owner |
 | LLM 响应解析 | `llm/_api_responses.py` | `llm/api_base.py` 公共 API | llm / report | 公共常量/函数保留；内部 helper 直接导入 owner |
 | Web 生成 / 健康路由 | `web/run_generation.py`、`web/handlers_health.py` | `web/handlers.py` 仅路由聚合 | web / tests | 测试 patch 指向 owner；门面不再转出私有实现 |
