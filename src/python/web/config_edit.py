@@ -79,7 +79,7 @@ def _llm_providers_surface() -> dict:
 
 
 #: 域 → 块（块顺序即渲染顺序）。域与块的划分见 `docs/archive/v0.15.x/web-config/config-web-design.md` §3.3；
-#: `features.<组键>` 里只放 `[S]` 面板的五组「章内内容」开关——独立整章走章节注册表块；
+#: `features.<组键>` 里只放 `[S]` 面板的六组「章内内容」开关——独立整章走章节注册表块；
 #: 章节注册表的 `artifact` 分块位已无条目（What-if 交易成本对比归持仓与交易组），故不单列块。
 _DOMAIN_BLOCKS: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
@@ -106,7 +106,7 @@ _BLOCK_TITLES: dict[str, str] = {
     "reference": "参考信息",
 }
 
-#: 五组「章内内容」开关所在的面板（`[S]`）；独立整章另立块
+#: 六组「章内内容」开关所在的面板（`[S]`）；独立整章另立块
 _CONTENT_PANEL = "[S]"
 
 
@@ -132,7 +132,7 @@ def _block_domains() -> list[dict]:
         PANEL_GROUPS,
     )
 
-    # `[S]` 的五组即「章内内容」开关；按域再分：四组内容域 + 一组呈现与机制域
+    # `[S]` 的六组即「章内内容」开关；按域再分：四组内容域 + 一组呈现与机制域
     content_groups = [g for g in PANEL_GROUPS[_CONTENT_PANEL] if GROUP_DOMAIN[g] == "report_content"]
     mechanic_groups = [g for g in PANEL_GROUPS[_CONTENT_PANEL] if GROUP_DOMAIN[g] != "report_content"]
     domains: list[dict] = []

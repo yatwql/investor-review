@@ -12,7 +12,7 @@
 全部开关在 :data:`feature_switch_registry` 一处登记（显示名/说明/作用域分组/
 默认值/产物影响/实验身份），TUI 面板、Web 配置面板、CLI 取值域与文档清单一律
 由它派生——渠道层不得另写开关清单。分组（持仓与交易 / 市场与估值 / 基金与
-风格 / 事件与摘要 / 机制与质量 / 独立章节与回放 / 章节内选项）
+风格 / 事件与摘要 / 机制与质量 / 交互与追问 / 独立章节与回放 / 章节内选项）
 表达**作用域**——「开了长出什么」，是面板主分类轴；
 **生命周期**是独立字段 ``experimental``：``--experiment`` 取值域与页脚实验自述
 只看该字段，不看分组。「转正」= 把 ``experimental`` 置 False 摘除实验身份；
@@ -51,6 +51,7 @@ from ._feature_registry import (
     GROUP_LABELS,
     GROUP_MARKET,
     GROUP_MECHANISM,
+    GROUP_INTERACTION,
     GROUP_ORDER,
     GROUP_PORTFOLIO,
     GROUP_STANDALONE,
@@ -80,6 +81,7 @@ FEATURES_FILE = os.path.join(PROJECT_ROOT, "data/config/features.json")
 #   GROUP_FUND_STYLE     —— 基金与风格：候选比较 / 行业 Beta / 因子目录
 #   GROUP_EVENT_SUMMARY  —— 事件与摘要：事件窗 / 情绪热点 / 数据质量 / 本期要点
 #   GROUP_MECHANISM      —— 机制与质量：提示词注入 / 输出评级
+#   GROUP_INTERACTION    —— 交互与追问：报告页内追问入口
 #   GROUP_STANDALONE     —— 独立章节与回放：新增整页签或多期回放
 #   GROUP_CHAPTER_OPTIONS—— 章节内选项：由 [C] 作为章节子项渲染（辩论两项）
 # **生命周期是另一根轴**：``FeatureSwitchDef.experimental``（末位默认 False 字段）。
@@ -327,6 +329,7 @@ __all__ = [
     "GROUP_FUND_STYLE",
     "GROUP_LABELS",
     "GROUP_MECHANISM",
+    "GROUP_INTERACTION",
     "GROUP_ORDER",
     "GROUP_STANDALONE",
     "FeatureSwitchDef",

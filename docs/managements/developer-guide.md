@@ -1393,6 +1393,7 @@ DataModuleDef("我的 LLM 分析", "llm_my_analysis",
 | `GROUP_EVENT_SUMMARY` | 事件窗 / 情绪热点 / 数据质量 / 本期要点 | 混合 | `False` | 📰 事件与摘要 |
 | `GROUP_PRESENTATION` | 只改呈现与追问入口 | `True` | 实验项 `True` | 🧭 呈现与交互 |
 | `GROUP_MECHANISM` | 提示词注入 / 输出评级 | 机制项 `True`、实验项 `False` | 实验项 `True` | ⚙ 机制与质量 |
+| `GROUP_INTERACTION` | 交互与追问（报告页内追问入口，`[S]` 面板独立成组） | 与内容开关同面板展示，但作用域是交互入口而非报告产物 |
 | `GROUP_STANDALONE` | 新增整页签或多期回放 | `False` | `False` | 📑 独立章节与回放 |
 | `GROUP_CHAPTER_OPTIONS` | 不独立上屏，由 `[C]` 作章节子项渲染 | `False` | `False` | 🧩 章节内选项 |
 

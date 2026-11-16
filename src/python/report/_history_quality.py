@@ -8,6 +8,7 @@ from datetime import datetime
 from src.python.core.degradation import (
     TERMINAL_STALENESS_CONSEQUENCE as _TERMINAL_STALENESS_CONSEQUENCE,
 )
+from src.python.core.num_utils import finite_or
 
 logger = logging.getLogger("invest")
 
@@ -72,7 +73,7 @@ def terminal_staleness_asset_line(asset: dict) -> str:
     """单只滞后标的的明细行（标的 / 最新净值日 / 滞后交易日数 / 占组合比）。"""
     return (
         f"{asset.get('label', '?')}：最新净值日 {asset.get('last_date', '?')}"
-        f"（滞后 {asset.get('lag_trading_days', 0)} 个交易日，占 {float(asset.get('weight_pct') or 0):.1f}%）"
+        f"（滞后 {asset.get('lag_trading_days', 0)} 个交易日，占 {finite_or(asset.get('weight_pct')):.1f}%）"
     )
 
 
@@ -105,7 +106,7 @@ def _detect_terminal_staleness(
         if not series:
             continue
         last_bar = series[-1]
-        observed.append((label, code, str(last_bar.get("date", "")), float(last_bar.get("value") or 0.0)))
+        observed.append((label, code, str(last_bar.get("date", "")), finite_or(last_bar.get("value"))))
     if not observed:
         return None
 

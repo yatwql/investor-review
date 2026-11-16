@@ -324,7 +324,7 @@ def _crisis_index_days() -> int:
     except (KeyError, TypeError, ValueError):
         return _CRISIS_INDEX_DAYS_MAX
     span = (_date.today() - earliest).days
-    return max(0, min(_CRISIS_INDEX_DAYS_MAX, int(span * 252 / 365) + 60))
+    return max(0, min(_CRISIS_INDEX_DAYS_MAX, int(float(span) * 252 / 365) + 60))
 
 
 def latest_quotes_from_detail_rows(rows: list | None) -> dict[str, tuple[float, str]]:
@@ -348,7 +348,7 @@ def latest_quotes_from_detail_rows(rows: list | None) -> dict[str, tuple[float, 
         nav_date = str(detail_value(row, "nav_date", "") or "").strip()
         if not code or not nav_date or not isinstance(price, (int, float)) or price <= 0:
             continue
-        quotes[code] = (float(price), nav_date)
+        quotes[code] = (float(price), nav_date)  # isinstance 已限定数值型
     return quotes
 
 

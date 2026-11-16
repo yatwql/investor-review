@@ -714,11 +714,11 @@ class TestHistoryAugmentedSwitches:
     """风险调整超额（risk_adjusted_excess）/ 危机回放（crisis_replay）注册断言。"""
 
     def test_registered_in_report_scope_groups_default_off(self):
-        """注册于报告产物作用域（持仓与交易 / 市场与估值等组）、出厂默认关、声明影响报告产物、标签说明非空。"""
+        """注册于报告产物作用域（市场与估值等组）、出厂默认关、声明影响报告产物、标签说明非空。"""
         from src.python.config import features
 
         expected_group = {
-            "risk_adjusted_excess": features.GROUP_PORTFOLIO,
+            "risk_adjusted_excess": features.GROUP_MARKET,
             "crisis_replay": features.GROUP_MARKET,
         }
         for flag, group in expected_group.items():

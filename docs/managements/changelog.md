@@ -10,6 +10,7 @@
 
 ### 变更
 
+- **开关面板归位与文案收敛**：`portfolio_constraints` 归「持仓与交易」、`risk_adjusted_excess` 归「市场与估值」、`report_qa` 独立成新组「🎛 交互与追问」（原混在机制组）；组名去掉括号清单，开关说明统一为「影响面 → 动作 → 缺失时行为」三段式并压到 45 字内；`llm_research_contract` 说明点明作用于 `[C]` 自检复盘章。`[S]` 由五组扩为六组，19 项编号随之重排。
 - **HTML 写出继续拆分**：`write_html_report` 357 → **312 行 / 6 分支**（原 10），新增 `_prepare_render_context` 把「章节序号/可见性 + 数据源状态 + 因子名映射 + 代码掩码」四类渲染前置量收成 `_RenderContext`，主流程只留装配调用。
 - **分层纠偏：TUI 进度报告器归位**：`TuiProgressReporter` 从 `report/progress.py` 迁至 `tui/progress.py`，消除「报告层 → 交互层」反向依赖；`layer-inversion` 规则同步扩到 `report/llm → tui/web/cli`（补对应用例），报告层此后只保留渠道无关的 `ProgressReporter`/`AnnouncingProgressReporter`。
 - **66h 自审整改**：删除 `write_html_report` 的死参数 `sector_flow`（无调用方传入、函数体未使用）；`DegradationTracker.record_aggregated` 的 `codes` 参数落地进事件明细（前 20 条，供定位失败标的）；去掉产出阶段重复的 `metrics` 别名；测试里的样本密钥/缓存键字面量改为拼接构造与语义命名，避免被密钥扫描器误报。
