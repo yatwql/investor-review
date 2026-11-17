@@ -54,14 +54,13 @@ class TestPortfolioFeeEstimation:
         assert "持仓数据不足" in result["warning"]
 
     def test_reports_no_data_when_total_mv_not_positive(self):
-        assert portfolio_fee_estimation([{"name": "货币基金", "code": "000001", "market_value": 10.0}], 0.0)[
-            "has_data"
-        ] is False
+        assert (
+            portfolio_fee_estimation([{"name": "货币基金", "code": "000001", "market_value": 10.0}], 0.0)["has_data"]
+            is False
+        )
 
     def test_all_zero_market_values_reports_no_data(self):
-        result = portfolio_fee_estimation(
-            [{"name": "某债券", "code": "000002", "market_value": 0.0}], 1000.0
-        )
+        result = portfolio_fee_estimation([{"name": "某债券", "code": "000002", "market_value": 0.0}], 1000.0)
         assert result["has_data"] is False
         assert "市值均为零" in result["warning"]
 
@@ -86,16 +85,12 @@ class TestPortfolioFeeEstimation:
         assert [row["品种名称"] for row in result["fee_breakdown"]] == ["某某货币基金"]
 
     def test_unknown_type_raises_warning_with_default_rate(self):
-        result = portfolio_fee_estimation(
-            [{"name": "奇怪品种", "code": "????", "market_value": 1000.0}], 1000.0
-        )
+        result = portfolio_fee_estimation([{"name": "奇怪品种", "code": "????", "market_value": 1000.0}], 1000.0)
         assert result["fee_rate"] == pytest.approx(_DEFAULT_RATE, abs=1e-9)
         assert "默认费率" in result["warning"]
 
     def test_known_types_produce_no_warning(self):
-        result = portfolio_fee_estimation(
-            [{"name": "某某货币基金", "code": "000001", "market_value": 1000.0}], 1000.0
-        )
+        result = portfolio_fee_estimation([{"name": "某某货币基金", "code": "000001", "market_value": 1000.0}], 1000.0)
         assert result["warning"] is None
 
     def test_name_falls_back_to_code_in_label(self):

@@ -14,12 +14,12 @@
 | 架构图示 | SVG | 4 | 396 | `src/static/` README 架构图（architecture 三渠道→引擎→双报告、llm-chain Provider 链式分发、capabilities 九大功能域总览、owl-mascot 吉祥物猫头鹰「守望」）+ 截图 7 张 PNG（报告实景 `report-overview`/`report-toc`/`report-charts` + 界面实景 `tui-menu`/`web-workbench`/`web-config`/`cli-report`，不计入本行） |
 | 辅助脚本 | Python | 148 | 30,794 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评测与因子目录评测、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、视觉资产（社交预览图/架构图体检）、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
 | 源代码合计 | — | 623 | 159,192 | 主程序 + 模板 + 脚本 + SVG |
-| 测试代码 | Python | 749 | 204,507 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
-| 测试用例 | — | — | 13,959 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
+| 测试代码 | Python | 752 | 204,856 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
+| 测试用例 | — | — | 14,009 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 15 | 7,081 | 含 README.md；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 14 | 6,844 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 223 | 75,037 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 14,445 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 223 | 75,038 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 14,446 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 200 | 58,880 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 9 | ~1616 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + TUI 交互改进（议题 + 第一/二批实施方案） + PanWatch 借鉴分析（含评估政策单源化与 LLM 复盘契约两份设计） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -703,6 +703,7 @@ investor-review/
 │       │   │   ├── test_market_temperature_edge.py # 市场温度边缘场景（样本边界/恒平序列/极端波动）
 │       │   │   ├── test_metrics.py            #   量化指标计算测试
 │       │   │   ├── test_metrics_edge.py       #   量化指标边缘场景
+│       │   │   ├── test_metrics_risk.py       #   风险度量（HHI 归一/胜率分桶/换手/风险贡献排序求和/年化波动率/Beta 与置信区间）
 │       │   │   ├── test_monthly_returns.py     #   月度收益日历聚合（月收益算式/截窗基线/inception/统计/口径字段）
 │       │   │   ├── test_valuation_percentile.py #  估值分位纯计算层（收盘价提取/分位解析解/三档刻度）
 │       │   │   ├── test_valuation_percentile_edge.py # 估值分位边缘场景（样本边界/恒平/极端值）
@@ -753,6 +754,7 @@ investor-review/
 │       │   │   ├── test_config_llm_providers_priority.py#   多链线路优先级写入测试（置换校验/归一化/注释保留/备份/回退）
 │       │   │   ├── test_config_llm_multi_edge.py #   LLM 多配置边缘场景
 │       │   │   ├── test_config_validation.py     #   配置校验函数测试
+│       │   │   ├── test_feature_registry.py   #   开关注册表派生一致性（分组/域/面板覆盖与编号连续/默认值单源/实验项派生）
 │       │   │   ├── test_json_patch.py         #   含注释 JSON 编辑引擎（缩进探测/注释与字符串感知边界/替换与追加删除后仍可解析）
 │       │   │   ├── test_json_patch_edge.py    #   编辑引擎异常输入（括号不平衡/未闭合注释/单行对象/CRLF/无法插入报错）
 │       │   │   ├── test_chapter_registry.py   #   报告章节注册表结构测试（四块划分/编号派生/来源注册表同源/写键可达）
@@ -1000,7 +1002,8 @@ investor-review/
 │       │   │   ├── test_news_dedup_perf.py #   去重比较成本（多重集上界预筛/比较串缓存与完整 ratio 判定等价）
 │       │   │   ├── test_news_dedup.py       #   新闻去重实现分片（标题判定算法/锚点写入去重/追加写与保留期）
 │       │   │   ├── test_news_sources.py       #   新闻源注册测试
-│       │   │   ├── test_news_dedup_compact.py #   锚点维护压缩（保留每组最新/备份 .bak/环境变量关闭/阈值下 noop）
+│       │   │   ├── test_news_dedup_tables.py   # 去重词表不变量（模板词/反向词对/事件词组结构与判定语义）
+│       │   │   ├── test_news_dedup_compact.py  #   锚点维护压缩（保留每组最新/备份 .bak/环境变量关闭/阈值下 noop）
 │       │   │   ├── test_sina_news.py          #   新浪新闻源测试
 │       │   │   └── test_wallstreetcn_news.py  #   华尔街见闻新闻源测试
 │       │   ├── providers/           #   数据源提供商单元测试

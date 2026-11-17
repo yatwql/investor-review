@@ -7,7 +7,7 @@
 
 ## 概述
 
-在办 17 项：P1 3 项（**plan-238**、**plan-239**、**plan-259**）、P2 4 项（**plan-92**、**plan-252**、**plan-253**、**plan-261**）、P3 9 项（**plan-70**、**plan-233**、**plan-243**、**plan-254**、**plan-255**、**plan-258**、**plan-263**、**plan-264**、**plan-265**）、P4 1 项（**plan-55**）。命名与实现纪律见 `CLAUDE.md`（单一事实位，本表不重复）。
+在办 16 项：P1 3 项（**plan-238**、**plan-239**、**plan-259**）、P2 3 项（**plan-92**、**plan-252**、**plan-253**）、P3 9 项（**plan-70**、**plan-233**、**plan-243**、**plan-254**、**plan-255**、**plan-258**、**plan-263**、**plan-264**、**plan-265**）、P4 1 项（**plan-55**）。命名与实现纪律见 `CLAUDE.md`（单一事实位，本表不重复）。
 
 ---
 
@@ -57,13 +57,6 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 ### P2 — 下一阶段就绪（满足条件即开工）
 
 入选标准：价值明确、成本可控，条件满足即开工。
-
-#### `plan-261` 零直测模块补测（高风险纯函数优先）
-
-**现状**：全仓 427 个模块中 15 个无任何测试文件直接引用（约 4.1k 行），其中 `config/_json_patch`（在 JSON 原文上做正则文本补丁，最易碎）、`providers/_news_dedup_tables`、`config/_feature_registry`、`analysis/metrics_risk`、`analysis/_fee_estimation`、`llm/fact_checker/_ranking` 属纯函数或高频路径。
-**动作**：按风险排序补直测——① `_json_patch`：嵌套/数组/转义字符串/空值/注释夹杂/无目标键/末位逗号/缩进探测（tab 与 4 空格）/CRLF；② `_news_dedup_tables` + `_fee_estimation`：纯表查询与费率归类边界；③ `metrics_risk` / `_feature_registry`：口径与注册表一致性；每批单独提交，不与功能变更混提。
-**验收**：batch 内每个模块至少一个直测文件，`check-test-redundancy --ci` 与全量 `unit` 全绿。
-**进度**：batch 1 完成——`_json_patch`（34 + 10 条，期间修 `rf-1159`/`rf-1160`/`rf-1161` 三个写回缺陷）、`_fee_estimation`（18 条）；batch 2 待做——`_news_dedup_tables` / `metrics_risk` / `_feature_registry`。
 
 #### `plan-92` Excel 缺可视化辅助
 
@@ -173,6 +166,11 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 **约束与红线**：① 不作为用户可选对话模型（不生成文本）；② 不做「生成 + 判定」双供应商级联；③ 语料冻结产物落 `docs/tmp/`，仅脱敏样例可入库；④ 类型化通道故障不得拖垮生成链（熔断实例分离）；⑤ 新增配置键按开关注册表纪律登记，默认值保持 `chat`。
 
 ### 已完成（待发布归档）
+
+#### `plan-261` 零直测模块补测（高风险纯函数优先）
+
+**结果**：按风险排序的两批共 5 个模块补齐直测——① `config/_json_patch`（`test_json_patch.py` 34 条 + `_edge.py` 10 条，期间修 `rf-1159`/`rf-1160`/`rf-1161` 三个写回缺陷）；② `analysis/_fee_estimation`（18 条）、`analysis/metrics_risk`（29 条）、`config/_feature_registry`（15 条，只断言结构关系不写死开关条数）、`providers/_news_dedup_tables`（7 条词表不变量 + 判定语义）。
+**残余**：剩余模块经模块名检索未命中，但行为由门面用例覆盖（如 `analysis/prosperity_scoring` 经 `prosperity_framework` 用例、`llm/_hallucination_filter` 经辩论用例）；这批不单独立项，后续改动扫到的模块就地补测。
 
 #### `plan-260` 实验项转正判据自动裁决 + 到期提醒
 

@@ -118,7 +118,7 @@ class TestFindValueEnd:
         assert text[_find_value_end(text, 0)] == ","
 
     def test_last_scalar_stops_at_object_close(self):
-        text = '2\n  }'
+        text = "2\n  }"
         assert text[_find_value_end(text, 0) :].lstrip().startswith("}")
 
     def test_brackets_inside_string_do_not_end_value(self):
@@ -130,7 +130,7 @@ class TestFindValueEnd:
 
     def test_comment_inside_structure_is_skipped(self):
         text = '[1, // 注释里的 ]\n 2], "k": 1'
-        assert text[: _find_value_end(text, 0)] == '[1, // 注释里的 ]\n 2]'
+        assert text[: _find_value_end(text, 0)] == "[1, // 注释里的 ]\n 2]"
 
     def test_start_past_end_returns_start(self):
         assert _find_value_end("{}", 9) == 9
@@ -163,12 +163,12 @@ class TestUpdateJsonRawText:
     def test_dict_block_uses_file_indent(self):
         out = _update_json_raw_text(_TWO_SPACE, loads(_TWO_SPACE), {"opts": {"y": {"z": 3}}})
         assert loads(out)["opts"] == {"y": {"z": 3}}
-        assert "\n    \"y\"" in out, "缩进单位应沿用文件的 2 空格"
+        assert '\n    "y"' in out, "缩进单位应沿用文件的 2 空格"
 
     def test_four_space_file_stays_four_space(self):
         raw = '{\n    "opts": {\n        "x": 1\n    },\n    "tail": "end"\n}\n'
         out = _update_json_raw_text(raw, loads(raw), {"opts": {"k": {"n": 1}}})
-        assert "\n        \"k\"" in out, "容器→容器替换的缩进单位应沿用文件的 4 空格"
+        assert '\n        "k"' in out, "容器→容器替换的缩进单位应沿用文件的 4 空格"
         assert loads(out)["opts"] == {"k": {"n": 1}}
 
     def test_scalar_to_object_stays_valid_json(self):
