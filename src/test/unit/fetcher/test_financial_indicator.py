@@ -538,7 +538,9 @@ class TestSingleFetchReusesSeriesCache:
         from src.python.fetcher import financial_indicator as fi
 
         cached = [{"report_period": "2026-06-30", "roe": 0.17}, {"report_period": "2025-12-31"}]
-        monkeypatch.setattr(fi, "cache_get", lambda key, ttl=None: cached if key.startswith(fi.HISTORY_PREFIX) else None)
+        monkeypatch.setattr(
+            fi, "cache_get", lambda key, ttl=None: cached if key.startswith(fi.HISTORY_PREFIX) else None
+        )
 
         def _no_network(*_args, **_kwargs):
             raise AssertionError("多期缓存命中时不得回源")

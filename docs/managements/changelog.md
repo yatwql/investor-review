@@ -20,6 +20,8 @@
 
 - **守护项命中台账与统计**：`checklib.report()` 每次运行追加 `logs/guard-hits.jsonl`（`check-doc-drift` 另给子项粒度），新增 `probe-guard-hits.py` 输出「运行次数/命中次数/处置（保留/建议降频/样本不足）」表；不改守护启用状态与 CI 阻塞语义（`plan-265`）。
 
+- **守护命中台账体积治理**：`record_guard_run` 超 4MB 截断为最近 5000 行（原子替换、失败静默），避免每次守护运行追加导致的长期膨胀（`rf-1162`）。
+
 ## 归档
 
 - [`archived_changelog.0.18.x.md`](../archive/v0.18.x/archived_changelog.0.18.x.md) — v0.18.0 ~ v0.18.3（2026-11-12 ~ 2026-11-17）

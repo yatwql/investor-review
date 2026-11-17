@@ -56,3 +56,31 @@ class TestRecordGuardRun:
         lines = ledger.read_text(encoding="utf-8").splitlines()
         assert [json.loads(line)["findings"] for line in lines] == [1, 0]
         assert "file:desc" in capsys.readouterr().out
+
+
+class TestLedgerGrowth:
+    def test_oversized_ledger_is_trimmed_keeping_recent_lines(self, tmp_path, monkeypatch):
+        """台账超过体积上限 → 只保留最近 `_GUARD_HITS_KEEP_LINES` 行（防无界增长）。"""
+        fresh = _load_checklib()
+        ledger = tmp_path / "hits.jsonl"
+        ledger.write_text(
+            "".join(json.dumps({"script": f"old-{i}", "findings": 0}) + "\n" for i in range(50)), encoding="utf-8"
+        )
+        monkeypatch.setenv("INVEST_GUARD_HITS_LEDGER", str(ledger))
+        monkeypatch.setattr(fresh, "_GUARD_HITS_MAX_BYTES", 1)
+        monkeypatch.setattr(fresh, "_GUARD_HITS_KEEP_LINES", 5)
+
+        fresh.record_guard_run(0)
+
+        lines = ledger.read_text(encoding="utf-8").splitlines()
+        assert len(lines) == 6, "最近 5 行 + 本次追加"
+        assert json.loads(lines[-1])["findings"] == 0
+        assert not ledger.with_name(ledger.name + ".tmp").exists(), "临时文件不得残留"
+
+    def test_small_ledger_is_appended_not_rewritten(self, tmp_path, monkeypatch):
+        fresh = _load_checklib()
+        ledger = tmp_path / "hits.jsonl"
+        ledger.write_text(json.dumps({"script": "a", "findings": 0}) + "\n", encoding="utf-8")
+        monkeypatch.setenv("INVEST_GUARD_HITS_LEDGER", str(ledger))
+        fresh.record_guard_run(3)
+        assert len(ledger.read_text(encoding="utf-8").splitlines()) == 2

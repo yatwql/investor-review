@@ -104,7 +104,7 @@
 
 ## 检查脚本的公共部分
 
-**命中台账（`logs/guard-hits.jsonl`）**：每个检查脚本调用 `_shared.checklib.report()` 时都会追加一行运行记录（`timestamp` / `script` / `findings` / `details`），`check-doc-drift` 另在 `details` 里给出「子项 → finding 数」。台账只供 `probe-guard-hits.py` 统计「哪项守护真的拦过东西」，**不参与任何判定**；写入尽力而为、失败静默，路径可用环境变量 `INVEST_GUARD_HITS_LEDGER` 覆盖（测试与 CI 隔离用），`logs/` 不入库。
+**命中台账（`logs/guard-hits.jsonl`）**：每个检查脚本调用 `_shared.checklib.report()` 时都会追加一行运行记录（`timestamp` / `script` / `findings` / `details`），`check-doc-drift` 另在 `details` 里给出「子项 → finding 数」。台账只供 `probe-guard-hits.py` 统计「哪项守护真的拦过东西」，**不参与任何判定**；写入尽力而为、失败静默，路径可用环境变量 `INVEST_GUARD_HITS_LEDGER` 覆盖（测试与 CI 隔离用），`logs/` 不入库。台账按体积治理：超过 4MB 即截断为最近 5000 行（原子替换、失败静默），近期分布统计不受影响。
 
 以下四块适用于所有检查脚本，条目里只写各自的差异。
 

@@ -36,6 +36,24 @@ REPO_ROOT: Path = Path(__file__).resolve().parents[2]  # scripts/_shared/ → �
 GUARD_HITS_LEDGER: Path = REPO_ROOT / "logs" / "guard-hits.jsonl"
 _GUARD_HITS_ENV = "INVEST_GUARD_HITS_LEDGER"
 
+#: 台账体积上限与保留行数：每份提交都会追加几十行，无上限会长期膨胀到几十 MB；
+#: 超限时只保留最近 ``_GUARD_HITS_KEEP_LINES`` 行（本工具只做近期分布统计，历史无价值）。
+_GUARD_HITS_MAX_BYTES = 4 * 1024 * 1024
+_GUARD_HITS_KEEP_LINES = 5000
+
+
+def _trim_guard_ledger(target: Path) -> None:
+    """台账超限时截断为最近若干行（尽力而为，失败静默——与写入同口径）。"""
+    try:
+        if target.stat().st_size <= _GUARD_HITS_MAX_BYTES:
+            return
+        kept = target.read_text(encoding="utf-8").splitlines()[-_GUARD_HITS_KEEP_LINES:]
+        staging = target.with_name(target.name + ".tmp")
+        staging.write_text("\n".join(kept) + "\n", encoding="utf-8")
+        os.replace(staging, target)
+    except Exception:  # noqa: BLE001 — 台账非关键
+        return
+
 
 def record_guard_run(finding_count: int, details: dict[str, int] | None = None) -> None:
     """把一次守护运行追加进命中台账（尽力而为：任何异常静默忽略，绝不影响退出码）。
@@ -46,6 +64,7 @@ def record_guard_run(finding_count: int, details: dict[str, int] | None = None) 
     try:
         target = Path(os.environ.get(_GUARD_HITS_ENV) or GUARD_HITS_LEDGER)
         target.parent.mkdir(parents=True, exist_ok=True)
+        _trim_guard_ledger(target)
         record = {
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
             "script": Path(sys.argv[0]).name if sys.argv and sys.argv[0] else "unknown",
