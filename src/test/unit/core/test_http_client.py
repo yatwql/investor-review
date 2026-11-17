@@ -11,6 +11,8 @@
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 import threading
 import time
 import unittest
@@ -214,9 +216,11 @@ class TestTransportFactory:
 
         marker = object()
         with patch("src.python.core.http_client.httpx.Client") as mock_client_class:
-            with hc.use_transport_factory(lambda: marker):
+            with hc.use_transport_factory(lambda: cast(Any, marker)):
                 hc.make_http_client(timeout=7.0)
-            _, kwargs = mock_client_class.call_args
+            call = mock_client_class.call_args
+        assert call is not None
+        _, kwargs = call
         assert kwargs["transport"] is marker
         assert kwargs["timeout"] == 7.0
 
@@ -236,9 +240,11 @@ class TestTransportFactory:
 
         explicit = object()
         with patch("src.python.core.http_client.httpx.Client") as mock_client_class:
-            with hc.use_transport_factory(lambda: object()):
+            with hc.use_transport_factory(lambda: cast(Any, object())):
                 hc.make_http_client(transport=explicit)
-            _, kwargs = mock_client_class.call_args
+            call = mock_client_class.call_args
+        assert call is not None
+        _, kwargs = call
         assert kwargs["transport"] is explicit
 
     def test_factory_restored_after_block(self):

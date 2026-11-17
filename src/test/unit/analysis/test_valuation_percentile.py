@@ -88,7 +88,9 @@ class TestPricePercentile:
     def test_low_end(self):
         """最低价 → 分位 ~1%（含自身）。"""
         closes = [float(i) for i in range(1, 101)]
-        assert abs(price_percentile(closes, current=1.0) - 1.0) < 0.5
+        low_end = price_percentile(closes, current=1.0)
+        assert low_end is not None
+        assert abs(low_end - 1.0) < 0.5
 
     def test_high_end(self):
         """最高价 → 分位 100%。"""
@@ -181,7 +183,7 @@ class TestDisclosureDate:
         assert disclosure_date("2025-02-29") is None
         assert disclosure_date("2025-12-31日") is None
         assert disclosure_date("") is None
-        assert disclosure_date(None) is None
+        assert disclosure_date(None) is None  # type: ignore[arg-type]  # 防御性入参：非 str 应返回 None
 
 
 class TestTtmEps:
