@@ -1,5 +1,5 @@
 # 投资复盘助手 - 自我审查问题记录
-> 文档版本：0.18.3-dev
+> 文档版本：0.18.3
 > **编号源**：`rf-next = 1159`（新增问题提出后更新为 +1；已用最大 rf-1158，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
@@ -63,15 +63,10 @@
 
 > 本表为本开发周期已修条目的**摘要行**（详情见 `changelog.md` 对应段）；发布时由 `release.py prepare` 的 archive 步原表搬入版本归档并在此留占位。
 
-| # | 问题 | 修复 |
-| --- | --- | --- |
-| **rf-1154** | 「自查发现问题先登记台账」纪律只有人工执行，无机器兜底：本轮 0.18.2 周期把 10 项修复直接改完、台账零条目，直到 `release.py gate` 的归档前置断言才暴露，返工补录整批 rf 行 | `check-doc-drift` 新增第 29 项「自审修复须先登记」：本周期 changelog 出现「自审/自查/整改/审计/核对」类条目而台账「开发期已修复」表零 rf 行时报 finding（只判零条这一确定形态），配 3 条用例；另修台账头部编号源陈旧值（「已用最大 rf-1135」→ 实际值） |
-| **rf-1157** | `report/_html_render_context._prepare_render_context` 有 30 个关键字入参，新增派生量须同时改定义、调用点、上下文字段三处，位置对错只能靠阅读 | 入参按来源域收为两组 dataclass（`_VisibilityInputs` 21 字段 / `_DataSourceInputs` 9 字段）+ `details`，签名 30 → 3；`_build_data_source_bundle` 同收为单组入参；`write_html_report` 调用点改按域构造；配「可见性域按位序 + 关键字透传」用例（11 条全绿） |
-| **rf-1155** | 近 83 小时内新增/改动的静默降级处无任何日志痕迹（`report/decision_book.py` 两处、`llm/session.py` 两处、`report/_html_render_context.py` 因子名回退、`providers/utils.py`、`providers/eastmoney_industry.py`）——降级语义对，但线上出问题无法从日志定位到具体环节 | 逐处补 `logger.debug(..., exc_info=True)`（降级行为与返回值一字不改）；`decision_book.py` 另建模块 logger（原本无 `logging` 导入） |
-| **rf-1156** | `report/_html_render_context.py`（渲染前置装配抽取）无任何直测文件——装配契约（哪三个视图槽位、四元组位序、因子名降级）只能从 `write_html_report` 的用例间间接推断，改装配即无人拦截 | 新增 `src/test/unit/report/test_html_render_context.py`：三层装配各一组阶段契约用例（面板视图缺席→`None` 且槽位互不牵连 / 数据源四元组位序与转发入参 / 上下文四类派生量装齐 + `details` 优先于 `holdings` + 因子名导入失败降级升 debug） |
+（本版开发期已修复项已随 v0.18.3 发布迁入归档档案）
 
 ### 归档档案
-- [`archived_review-findings.0.18.x.md`](../archive/v0.18.x/archived_review-findings.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-16）
+- [`archived_review-findings.0.18.x.md`](../archive/v0.18.x/archived_review-findings.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-17）
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-10）
 - [`archived_review-findings.0.16.x.md`](../archive/v0.16.x/archived_review-findings.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-11-03）
 - [`archived_review-findings.0.15.x.md`](../archive/v0.15.x/archived_review-findings.0.15.x.md) — v0.15.x（2026-10-24 ~ 2026-10-25）
