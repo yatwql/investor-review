@@ -173,9 +173,7 @@ class TestEntityFirstGate:
         long_title = "净利润同比增长目标价上调至 480 元"
         assert rules._overlap_of_norms(short, long_title) == 0, "本用例前提：零实体重叠"
         computed: list[int] = []
-        monkeypatch.setattr(
-            dedup_mod, "_ratio_of_norms_bounded", lambda a, b, t: computed.append(1) or 0.0
-        )
+        monkeypatch.setattr(dedup_mod, "_ratio_of_norms_bounded", lambda a, b, t: computed.append(1) or 0.0)
 
         kept = _dedup_by_title(
             [

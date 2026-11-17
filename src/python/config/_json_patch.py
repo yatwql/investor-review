@@ -120,19 +120,14 @@ def _replace_value_block(text: str, key: str, new_val: dict | list, open_ch: str
             block_lines.append(" " * base_indent + line)
     block_text = "\n".join(block_lines)
 
-    # 从开括号开始逐字符查找匹配的闭括号
-    depth = 0
-    pos = match.end() - 1  # 开括号的位置
-    while pos < len(text):
-        ch = text[pos]
-        if ch == open_ch:
-            depth += 1
-        elif ch == close_ch:
-            depth -= 1
-            if depth == 0:
-                return text[: match.start()] + f'"{key}": {block_text}' + text[pos + 1 :]
-        pos += 1
-    return text  # 括号不平衡，放弃替换
+    # 从开括号开始定位匹配的闭括号（复用注释/字符串感知的标量边界原语：
+    # 若在本函数内自己数括号，字符串里的 ``]``/``}`` 会被当成结构符，
+    # 导致区块被提前截断、写出非法 JSON）。
+    open_pos = match.end() - 1
+    end = _find_value_end(text, open_pos)
+    if end <= open_pos or text[end - 1] != close_ch:
+        return text  # 括号不平衡，放弃替换
+    return text[: match.start()] + f'"{key}": {block_text}' + text[end:]
 
 
 def _replace_dict_block(text: str, key: str, new_val: dict) -> str:
@@ -196,12 +191,19 @@ def _find_top_level_value_span(raw: str, key: str) -> tuple[int, int] | None:
                     j += 1
                     break
                 j += 1
-            if depth == 1 and json.loads(raw[i:j]) == key:
-                k = _skip_ws_and_comments(raw, j)
-                if k < n and raw[k] == ":":
-                    vs = _skip_ws_and_comments(raw, k + 1)
-                    ve = _find_value_end(raw, vs)
-                    return vs, ve
+            if depth == 1:
+                try:
+                    is_target_key = json.loads(raw[i:j]) == key
+                except ValueError:
+                    # 人工编辑过的配置可能让字符串片段不可解析（转义残缺/形写错）；
+                    # 此时只当它不是目标键继续扫，不让整次 patch 抛异常。
+                    is_target_key = False
+                if is_target_key:
+                    k = _skip_ws_and_comments(raw, j)
+                    if k < n and raw[k] == ":":
+                        vs = _skip_ws_and_comments(raw, k + 1)
+                        ve = _find_value_end(raw, vs)
+                        return vs, ve
             i = j
             continue
         if ch in "{[":
@@ -361,15 +363,17 @@ def _patch_config_key(raw: str, key: str, new_value_text: str) -> str:
     if top_close is None:
         raise ValueError(f"config.json 无法定位顶层对象闭合位置，无法插入键 {key!r}")
     key_text = json.dumps(key, ensure_ascii=False)
+    # 换行符沿用文件现有风格：CRLF 文件里插入 LF 会让同一文件混用两种行尾
+    newline = "\r\n" if "\r\n" in raw else "\n"
     before = raw[:top_close]
     if before.rstrip().endswith("{"):
         # 空对象 { } → 直接写入成员
-        new_raw = before + f"\n  {key_text}: {new_value_text}\n" + raw[top_close:]
+        new_raw = before + f"{newline}  {key_text}: {new_value_text}{newline}" + raw[top_close:]
     else:
         # 顶层最后一个成员后补逗号 + 换行 + 新键（逗号紧跟最后成员闭合符）
         stripped = before.rstrip()
         tail = before[len(stripped) :]
-        new_raw = stripped + f",\n  {key_text}: {new_value_text}" + tail + raw[top_close:]
+        new_raw = stripped + f",{newline}  {key_text}: {new_value_text}" + tail + raw[top_close:]
     return new_raw
 
 
@@ -389,7 +393,15 @@ def _remove_top_level_key(raw: str, key: str, vs: int, ve: int) -> str:
     key_text = json.dumps(key, ensure_ascii=False)
     ks = raw.rfind(key_text, 0, vs)
     line_start = raw.rfind("\n", 0, ks)
-    entry_start = line_start + 1 if line_start != -1 else 0
+    if line_start == -1:
+        # 单行（压缩）对象：没有行结构可用，按「上一个分隔符之后」截取条目，
+        # 不得回退到 0（那会把整行对象删光，剩一个孤立的 }）。
+        prev_sep = max(raw.rfind(",", 0, ks), raw.rfind("{", 0, ks))
+        entry_start = prev_sep + 1
+        if raw[ve : ve + 1] == ",":
+            return raw[:entry_start] + raw[ve + 1 :].lstrip(" \t")
+        return _drop_trailing_member_comma(raw[:entry_start] + raw[ve:])
+    entry_start = line_start + 1
     if raw[ve : ve + 1] == ",":
         # 中间键：逗号跟在值后，删除整个条目行（含逗号、行尾注释、换行）
         next_nl = raw.find("\n", ve)
@@ -403,15 +415,17 @@ def _remove_top_level_key(raw: str, key: str, vs: int, ve: int) -> str:
         value_end -= 1
     next_nl = raw.find("\n", value_end)
     entry_end = (next_nl + 1) if next_nl != -1 else value_end
-    new_raw = raw[:entry_start] + raw[entry_end:]
-    # 清理被删键前一成员（删除后成为顶层末位成员）的行尾尾随逗号。
-    # 不依赖删除前后的索引映射，直接定位顶层闭合 } 检查末位成员是否残留逗号。
-    close_brace = _find_top_level_close_brace(new_raw)
+    return _drop_trailing_member_comma(raw[:entry_start] + raw[entry_end:])
+
+
+def _drop_trailing_member_comma(raw: str) -> str:
+    """删除顶层末位成员后清理残留的行尾逗号（否则对象变成非法 JSON）。"""
+    close_brace = _find_top_level_close_brace(raw)
     if close_brace is None:
-        return new_raw
-    before = new_raw[:close_brace]
+        return raw
+    before = raw[:close_brace]
     stripped = before.rstrip()
     if stripped.endswith(","):
         tail = before[len(stripped) :]
-        new_raw = stripped[:-1] + tail + new_raw[close_brace:]
-    return new_raw
+        return stripped[:-1] + tail + raw[close_brace:]
+    return raw

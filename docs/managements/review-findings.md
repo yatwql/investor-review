@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.18.4-dev
-> **编号源**：`rf-next = 1159`（新增问题提出后更新为 +1；已用最大 rf-1158，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1162`（新增问题提出后更新为 +1；已用最大 rf-1161，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -62,6 +62,9 @@
 ### 开发期已修复（0.18.4-dev）
 
 > 本表为本开发周期已修条目的**摘要行**（详情见 `changelog.md` 对应段）；发布时由 `release.py prepare` 的 archive 步原表搬入版本归档并在此留占位。
+| **rf-1159** | `config/_json_patch._replace_value_block` 的括号平衡扫描不跳过字符串与注释——数组/对象成员里含 `]` 或 `}`（如标题、正则、模板片段）时区块被提前截断，写出非法 JSON（`_find_value_end` 早已正确处理这类形态，两处口径不一致） | 改为复用 `_find_value_end`（注释/字符串感知），`end-1` 必须是目标闭括号否则原样返回；配 `test_array_with_bracket_in_string_replaced_intact` 与 `_find_value_end` 两条例外用例 |
+| **rf-1160** | `config/_json_patch._find_top_level_value_span` 对每个字符串片段直接 `json.loads`，人工改坏的转义（如 `"a"b"`）会抛 `JSONDecodeError` 中断整个 patch——配置损坏时不是降级找键，而是崩在写回路径 | 片段解析失败视为「不是目标键」继续扫描（`try/except ValueError`），失败仍返回 `None`→调用方走「找不到键」语义；配合法转义键与损坏转义两条用例 |
+| **rf-1161** | `config/_json_patch` 两处版式假设过强：① `_remove_top_level_key` 对单行（压缩）对象 `entry_start` 回退到 0，删掉整行对象只剩 `}`；② `_patch_config_key` 追加键时硬编码 LF，CRLF 文件变成混行尾 | ① 无行结构时按「上一个分隔符之后」截取条目；② 换行符沿用文件现有风格（有 `\r\n` 则用 `\r\n`）；尾逗号清理抽成 `_drop_trailing_member_comma` 供两路共用 |
 
 ### 归档档案
 - [`archived_review-findings.0.18.x.md`](../archive/v0.18.x/archived_review-findings.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-17）

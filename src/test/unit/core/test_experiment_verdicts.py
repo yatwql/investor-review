@@ -112,7 +112,10 @@ class TestReportQaVerdict:
     def test_promote_when_all_telemetry_checks_pass(self, monkeypatch):
         self._patch_summary(
             monkeypatch,
-            checks=[{"name": "提问量", "passed": True, "actual": 40}, {"name": "无回答占比", "passed": True, "actual": 0.05}],
+            checks=[
+                {"name": "提问量", "passed": True, "actual": 40},
+                {"name": "无回答占比", "passed": True, "actual": 0.05},
+            ],
             idle_attempts=25,
         )
         verdict = _by_flag("report_qa")
@@ -149,9 +152,7 @@ class TestRendering:
             lambda *a, **k: {"directional_total": verdicts_mod.PROMOTE_DIRECTIONAL_SAMPLE, "alpha_mean": 0.02},
         )
         verdict = _by_flag("decision_reflection")
-        (line,) = [
-            item for item in format_verdict_lines([verdict]) if "decision_reflection" in item
-        ]
+        (line,) = [item for item in format_verdict_lines([verdict]) if "decision_reflection" in item]
         for check in verdict["checks"]:
             assert check["name"] in line
             assert str(check["actual"]) in line

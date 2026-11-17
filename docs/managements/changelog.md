@@ -12,6 +12,7 @@
 （本次发布内容见下方归档索引）
 - **新闻去重比较成本**：`_dedup_by_title` 改为「两层候选索引给候选超集 → 逐对判定」，不再全量扫已保留项（`plan-262`）；判定结果逐条不变（保留集合 SHA 对拍一致），实测比较对 −45%、耗时 2.8×；唯一可见差异为锚点语料不再收录实体零重叠对。
 - **实验项裁决自动汇编**：新增 `core/experiment_verdicts.py`（项清单由注册表派生，四态：可转正/继续观察/撤销候选/无读数），`doctor` 新增「实验项裁决」行与「已达判据 → 请按计划裁决」提醒行；不改开关不摘 `experimental`（`plan-260`）。
+- **零直测模块补测（batch 1）**：`config/_json_patch.py`（含注释 JSON 编辑引擎）与 `analysis/_fee_estimation.py` 首次补齐直测（`test_json_patch.py` 34 条 + `test_json_patch_edge.py` 10 条 + `test_fee_estimation.py` 18 条）；补测过程中修掉三个写回缺陷（`rf-1159`/`rf-1160`/`rf-1161`），`plan-261` 余下模块（`_news_dedup_tables` / `metrics_risk` / `_feature_registry`）待下一批。
 
 ## 归档
 

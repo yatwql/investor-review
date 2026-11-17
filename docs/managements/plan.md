@@ -63,6 +63,7 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 **现状**：全仓 427 个模块中 15 个无任何测试文件直接引用（约 4.1k 行），其中 `config/_json_patch`（在 JSON 原文上做正则文本补丁，最易碎）、`providers/_news_dedup_tables`、`config/_feature_registry`、`analysis/metrics_risk`、`analysis/_fee_estimation`、`llm/fact_checker/_ranking` 属纯函数或高频路径。
 **动作**：按风险排序补直测——① `_json_patch`：嵌套/数组/转义字符串/空值/注释夹杂/无目标键/末位逗号/缩进探测（tab 与 4 空格）/CRLF；② `_news_dedup_tables` + `_fee_estimation`：纯表查询与费率归类边界；③ `metrics_risk` / `_feature_registry`：口径与注册表一致性；每批单独提交，不与功能变更混提。
 **验收**：batch 内每个模块至少一个直测文件，`check-test-redundancy --ci` 与全量 `unit` 全绿。
+**进度**：batch 1 完成——`_json_patch`（34 + 10 条，期间修 `rf-1159`/`rf-1160`/`rf-1161` 三个写回缺陷）、`_fee_estimation`（18 条）；batch 2 待做——`_news_dedup_tables` / `metrics_risk` / `_feature_registry`。
 
 #### `plan-92` Excel 缺可视化辅助
 
