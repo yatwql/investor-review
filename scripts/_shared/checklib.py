@@ -6,10 +6,11 @@
     HIGH/ORIGIN/VERSION=1、仅 LOW=3，其允许码集见 `check-script-contract.py` 白名单）
   - 通过时打印 `[OK] …`；失败时逐条 `[ERR] file:desc`（或 `--ci` 下仅 `file:desc`）+ `[!] 发现 N 处…`
 
-本模块提供**无副作用的原语**（例外有二：结论缓存 `conclusion_cache_*`——仅在调用方
+本模块提供**无副作用的原语**（例外有三：结论缓存 `conclusion_cache_*`——仅在调用方
 显式调用时读写，写入原子、失败静默，见文末章节；**stdio 编码收敛**——import 即把
 非 UTF-8 的 stdout/stderr 收敛到 UTF-8，防 Windows 重定向落盘后回放乱码，见
-`_force_utf8_stream`）；脚本以
+`_force_utf8_stream`；**守护命中台账**——`report()` 每次追加一行到 `logs/guard-hits.jsonl`，
+尽力而为、失败静默，供 `probe-guard-hits.py` 统计，见 `record_guard_run`）；脚本以
 ``sys.path.insert(0, str(Path(__file__).resolve().parent))`` 后 ``from _shared.checklib import …`` 引用
 （`pyproject.toml` 对 `scripts/*.py` 声明了 E402 豁免，理由即此）。
 """
@@ -23,11 +24,39 @@ import json
 import os
 import re
 import sys
+import time
 from collections.abc import Sequence
 from pathlib import Path
 
 #: 仓库根目录（`scripts/` 的上一级）
 REPO_ROOT: Path = Path(__file__).resolve().parents[2]  # scripts/_shared/ → 仓库根
+
+#: 守护命中台账（每次 `report()` 追加一行；`logs/` 不入库）。供 `probe-guard-hits.py`
+#: 统计「哪项守护真的拦过东西」——环境变量可覆盖路径（测试/CI 隔离用）。
+GUARD_HITS_LEDGER: Path = REPO_ROOT / "logs" / "guard-hits.jsonl"
+_GUARD_HITS_ENV = "INVEST_GUARD_HITS_LEDGER"
+
+
+def record_guard_run(finding_count: int, details: dict[str, int] | None = None) -> None:
+    """把一次守护运行追加进命中台账（尽力而为：任何异常静默忽略，绝不影响退出码）。
+
+    记录形态：``{"timestamp", "script", "findings", "details"}``；``details`` 为可选的
+    「子项 → finding 数」映射（当前 `check-doc-drift` 提供，其余脚本只记脚本级）。
+    """
+    try:
+        target = Path(os.environ.get(_GUARD_HITS_ENV) or GUARD_HITS_LEDGER)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        record = {
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "script": Path(sys.argv[0]).name if sys.argv and sys.argv[0] else "unknown",
+            "findings": int(finding_count),
+            "details": dict(details or {}),
+        }
+        with target.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except Exception:  # noqa: BLE001 — 台账非关键，绝不影响检查结论
+        return
+
 
 # 文档树基础路径（单源上收：文档移动/改名时各检查脚本零改动；
 # 各脚本的受检清单与豁免策略仍归各自持有，此处只提供路径锚点）
@@ -104,6 +133,7 @@ def report(
     *,
     ci: bool = False,
     fail_message: str | None = None,
+    details: dict[str, int] | None = None,
 ) -> int:
     """按统一契约打印结论并返回退出码（0 = 通过，2 = 有 finding）。
 
@@ -116,6 +146,7 @@ def report(
     Returns:
         退出码（0 或 2），调用方 `sys.exit(...)` 即可。
     """
+    record_guard_run(len(findings), details)
     if not findings:
         print(ok_message)
         return 0
