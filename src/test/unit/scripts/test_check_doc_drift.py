@@ -523,3 +523,37 @@ class TestArchiveLayout:
         (ver / "archived_plan.0.17.x.md").write_text("x", encoding="utf-8")
         (ver / "stage-split-contracts" / "html-writer-stage-contract.md").write_text("x", encoding="utf-8")
         assert check_archive_layout(root) == []
+
+
+class TestAuditLogged:
+    """自审修复须先登记台账：本周期 changelog 有整改类条目而 rf 表为空即报。"""
+
+    CHANGELOG = (
+        "# 变更日志\n\n"
+        "## [9.9.9-dev] - 开发中（未发布）\n\n"
+        "### 变更\n\n"
+        "- **自审整改**：修了三处口径漂移\n"
+        "- **新功能**：加了一只面板\n"
+    )
+    FINDINGS_EMPTY = "### 开发期已修复（9.9.9-dev）\n\n> 占位说明\n"
+    FINDINGS_FILLED = (
+        "### 开发期已修复（9.9.9-dev）\n\n| # | 问题 | 修复 |\n| --- | --- | --- |\n| **rf-9001** | 口径漂移 | 校正 |\n"
+    )
+
+    def test_audit_bullet_without_rf_row_reported(self):
+        from scripts._doc_drift._ledger import check_audit_logged
+
+        findings = check_audit_logged(self.CHANGELOG, self.FINDINGS_EMPTY)
+        assert len(findings) == 1
+        assert "自审" in findings[0] and "rf 条目" in findings[0]
+
+    def test_audit_bullet_with_rf_row_passes(self):
+        from scripts._doc_drift._ledger import check_audit_logged
+
+        assert check_audit_logged(self.CHANGELOG, self.FINDINGS_FILLED) == []
+
+    def test_no_audit_bullet_passes(self):
+        from scripts._doc_drift._ledger import check_audit_logged
+
+        changelog = "## [9.9.9-dev] - 开发中（未发布）\n\n- **新功能**：只加功能\n"
+        assert check_audit_logged(changelog, self.FINDINGS_EMPTY) == []

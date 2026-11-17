@@ -1,8 +1,8 @@
 # 变更日志归档 — v0.18.x
 
-> 归档时间：2026-11-16（v0.18.2 发布并入；已并入 3 段：v0.18.0（11-12）、v0.18.1（11-15）、v0.18.2（11-16））
+> 归档时间：2026-11-17（v0.18.3 发布并入；已并入 4 段：v0.18.0（11-12）、v0.18.1（11-15）、v0.18.2（11-16）、v0.18.3（11-17））
 > 原始文件：`docs/managements/changelog.md`
-> 涵盖版本：v0.18.0 ~ v0.18.2（2026-11-12 ~ 2026-11-16）
+> 涵盖版本：v0.18.0 ~ v0.18.3（2026-11-12 ~ 2026-11-17）
 > 归档内容：由 `release.py prepare` 自动迁入各发布段
 
 ---
@@ -94,3 +94,13 @@
 - **报告编排继续拆分**：`_generate_report_full` 410 → 304 行 / 17 分支（行业资金流向、LLM+新闻阶段、双端产出与收尾三块各自成函数，产出阶段入参收敛为上下文对象）；`write_html_report` 357 → 333 行（面板视图、数据源状态装配拆出）。
 - **自审条目索引**：本版自审明细见 [`archived_review-findings.0.18.x.md`](../archive/v0.18.x/archived_review-findings.0.18.x.md)——`rf-1144` 分层门禁扩到 cache/config、`rf-1145` 渲染前置装配下沉、`rf-1146` 字段错误态接线、`rf-1147` 文件膨胀登记重写、`rf-1148` 调试页补到 12 图、`rf-1149` 归档布局校验、`rf-1150` 设计契约去复盘痕迹、`rf-1151` 文档口径校正、`rf-1152` 缓存判读口径、`rf-1153` 集成用例改从 owner 导入。
 - **架构：降级观测面下沉 core**：`report/data_status.py` 迁为 `core/degradation.py`（取数层 `fetcher/`、纯计算层 `analysis/` 在失败当刻即可登记降级事件，不再反向依赖报告层）；`report/_history_quality` 的滞后后果句改为引用 core 单一文案源。`check-import-surface` 的 `layer-inversion` 规则同步扩到 `fetcher → report/llm/analysis` 与 `providers → report/llm/analysis`，存量越界经例外表登记（含到期日与收敛方向），技术设计「存量分层例外」表同步重写。
+
+## [0.18.3] - 2026-11-17
+
+### 变更
+
+- **纪律补机检：自审修复须先登记台账**：`check-doc-drift` 新增第 29 项——本周期 changelog 出现「自审/自查/整改/审计/核对」类条目、而 `review-findings`「开发期已修复」表零 rf 行时报 finding，把「改了代码没立 rf」的漏登从发布时提前到提交阶段（配合 3 条用例，对应 `rf-1154`）；另修台账头部编号源「已用最大 rf-1135」的陈旧值（实际 1153）。
+- **降级可观测：静默 fallback 补日志**：近 83 小时窗口内 6 处按设计降级但无日志痕迹的 `except` 补 `logger.debug(exc_info=True)`（决策书注册表/匿名化模式、会话用量埋点、渲染因子名映射、push2 限流观测），降级行为与返回值不变，只在排障时能追到环节（`rf-1155`）。
+- **渲染前置装配补阶段契约用例**：`report/_html_render_context.py` 先前面板视图/数据源状态/渲染上下文三层装配无直测，新增 `test_html_render_context.py`（10 条：缺席降级、四元组位序与转发入参、`details` 优先于 `holdings`、因子名导入失败升 debug）（`rf-1156`）。
+- **评审台账清理**：删除 P2/P3 两处重复的空表头。
+- **渲染前置装配入参按来源域分组**：`_prepare_render_context` 的 30 个关键字入参收为两组 dataclass（`_VisibilityInputs` / `_DataSourceInputs`）加 `details`，签名降至 3；`_build_data_source_bundle` 同收为单组入参，`write_html_report` 调用点改按域构造——改派生量的入参不再靠位置对齐，只需在所属组里加字段（`rf-1157`）。

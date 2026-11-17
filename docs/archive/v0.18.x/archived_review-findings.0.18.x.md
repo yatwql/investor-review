@@ -1,8 +1,8 @@
 # 自审记录归档 — v0.18.x
 
-> 归档时间：2026-11-12（v0.18.0 发布，本系列首批已修复批次并入）；2026-11-12 v0.18.0 本批原表搬运；2026-11-15 v0.18.1 本批原表搬运；2026-11-16 v0.18.2 本批原表搬运
+> 归档时间：2026-11-12（v0.18.0 发布，本系列首批已修复批次并入）；2026-11-12 v0.18.0 本批原表搬运；2026-11-15 v0.18.1 本批原表搬运；2026-11-16 v0.18.2 本批原表搬运；2026-11-17 v0.18.3 本批原表搬运
 > 原始文件：`docs/managements/review-findings.md`
-> 涵盖版本：v0.18.x 已修复项（按发布版号批次，v0.18.0 → ）（含 v0.18.2）
+> 涵盖版本：v0.18.x 已修复项（按发布版号批次，v0.18.0 → ）（含 v0.18.3）
 > 归档内容：台账表格经 `release.py prepare` 整块搬运（无损）；表外散文留主台账
 
 ---
@@ -51,3 +51,14 @@
 | **rf-1151** | 用户/管理文档多处口径过期：`[S]` 仍写五组、Web 配置编号 1-5/6-9/10-11/12-14、Web 面板「10 块」、行业 Beta 仍挂已删除的 `industry_beta` 开关、进度抽象仍写 `report/progress.py` 里的 `TuiProgressReporter` | 逐份校正到实测（六组 14 项 / 16 块 / `factor_catalog` / `tui/progress.py`），`DESIGN.md` 护栏观察项数字改实测，features.json 示例改用上屏开关 |
 | **rf-1152** | 「缓存命中率 39%」与「`llm_news` 30 条全 miss」易被误判为缓存失效（实际是 TTL 到期与 refresh 组清空） | `datasource-reliability.md` §4.3 补判读口径：命中率按距上次运行间隔分层、真异常看同键重复未命中；说明 `llm_news_item_*` 属行情类缓存组会被整组清 |
 | **rf-1153** | `release.py verify` 只跑核心单元，未覆盖 integration 档：渲染前置装配下沉后 3 处集成用例仍从 `html_writer` 导入 `_compute_section_visibility`，本地全绿而 CI 三版本全红 | 用例改从 owner 模块（`html_writer_nav`）导入；收尾前本地跑全量 `src/test` 覆盖 integration 档 |
+
+## 已修复（0.18.3）
+
+> 完整复盘见 `changelog.md` 0.18.3 段；此处为台账原表搬运（无损），本批发布日 2026-11-17。
+
+| # | 问题 | 修复 |
+| --- | --- | --- |
+| **rf-1154** | 「自查发现问题先登记台账」纪律只有人工执行，无机器兜底：本轮 0.18.2 周期把 10 项修复直接改完、台账零条目，直到 `release.py gate` 的归档前置断言才暴露，返工补录整批 rf 行 | `check-doc-drift` 新增第 29 项「自审修复须先登记」：本周期 changelog 出现「自审/自查/整改/审计/核对」类条目而台账「开发期已修复」表零 rf 行时报 finding（只判零条这一确定形态），配 3 条用例；另修台账头部编号源陈旧值（「已用最大 rf-1135」→ 实际值） |
+| **rf-1157** | `report/_html_render_context._prepare_render_context` 有 30 个关键字入参，新增派生量须同时改定义、调用点、上下文字段三处，位置对错只能靠阅读 | 入参按来源域收为两组 dataclass（`_VisibilityInputs` 21 字段 / `_DataSourceInputs` 9 字段）+ `details`，签名 30 → 3；`_build_data_source_bundle` 同收为单组入参；`write_html_report` 调用点改按域构造；配「可见性域按位序 + 关键字透传」用例（11 条全绿） |
+| **rf-1155** | 近 83 小时内新增/改动的静默降级处无任何日志痕迹（`report/decision_book.py` 两处、`llm/session.py` 两处、`report/_html_render_context.py` 因子名回退、`providers/utils.py`、`providers/eastmoney_industry.py`）——降级语义对，但线上出问题无法从日志定位到具体环节 | 逐处补 `logger.debug(..., exc_info=True)`（降级行为与返回值一字不改）；`decision_book.py` 另建模块 logger（原本无 `logging` 导入） |
+| **rf-1156** | `report/_html_render_context.py`（渲染前置装配抽取）无任何直测文件——装配契约（哪三个视图槽位、四元组位序、因子名降级）只能从 `write_html_report` 的用例间间接推断，改装配即无人拦截 | 新增 `src/test/unit/report/test_html_render_context.py`：三层装配各一组阶段契约用例（面板视图缺席→`None` 且槽位互不牵连 / 数据源四元组位序与转发入参 / 上下文四类派生量装齐 + `details` 优先于 `holdings` + 因子名导入失败降级升 debug） |

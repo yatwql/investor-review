@@ -69,6 +69,7 @@ def _contract_metrics() -> dict[str, Any]:
 
         return contract_metrics()
     except Exception:  # 埋点不得影响用量统计
+        logger.debug("[session] 结构化契约指标读取失败，按空指标处理", exc_info=True)
         return {}
 
 
@@ -78,7 +79,8 @@ def _contract_metrics_line() -> str:
         from src.python.llm.research_contract import contract_metrics_line
 
         return contract_metrics_line(_contract_metrics())
-    except Exception:
+    except Exception:  # 埋点不得影响用量统计
+        logger.debug("[session] 结构化契约指标展示行生成失败，按空串处理", exc_info=True)
         return ""
 
 

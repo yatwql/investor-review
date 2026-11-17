@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
-> 文档版本：0.18.2
-> **编号源**：`rf-next = 1154`（新增问题提出后更新为 +1；已用最大 rf-1135，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> 文档版本：0.18.3
+> **编号源**：`rf-next = 1159`（新增问题提出后更新为 +1；已用最大 rf-1158，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -19,9 +19,6 @@
 | # | 问题 | 修复方向 |
 | --- | --- | --- |
 
-| # | 问题 | 修复方向 |
-| --- | --- | --- |
-
 ### P3 — 持续监控：兼容残留
 
 > **本节性质**：这是**已核销的盘点基线**，不是待办清单。下方表格为空 = 本轮没有兼容残留需要处理。
@@ -36,9 +33,6 @@
 | # | 问题 | 修复方向 |
 | --- | --- | --- |
 
-| # | 问题 | 修复方向 |
-| --- | --- | --- |
-
 ### P4 — 持续监控：文件膨胀登记
 
 行数与拆分优先级以 `scripts/check-file-length.py -v` 为准（口径见 `technical.md` C28），达警告线（主程序 700 / 脚本 600 / 测试 900）即登记。下表为存量监控项（红线：主程序 1000 / 测试 1200，触线必须拆分）：
@@ -46,7 +40,7 @@
 | 文件 | 现状与拆分方向 |
 |------|----------------|
 | `src/test/conftest.py` 1193 行（测试登记线 900） | fixture 族按域下沉（行情/LLM/网络/持久化各一模块），conftest 只留 autouse 与装配 |
-| `src/python/report/html_writer.py` 751 行（主程序登记线 700） | 渲染前置装配已下沉 `_html_render_context`；再涨按「模板渲染 / 后处理三段」继续切 |
+| `src/python/report/html_writer.py` 757 行（主程序登记线 700） | 渲染前置装配已下沉 `_html_render_context`（入参按来源域分组）；再涨按「模板渲染 / 后处理三段」继续切 |
 | `src/python/core/perf.py` 799 行 | 采集器与台账落盘可拆（`perf` 采集 / `perf_history` 读写两文件） |
 | `src/python/core/doctor.py` 769 行 | 检查项按域分文件（环境 / 配置 / 数据源 / 报告产物），入口只留编排 |
 | `src/python/llm/fact_checker/_numerical.py` 764 行 | 数值校验按规则族拆（金额 / 比率 / 计数），共享解析原语上提包内 `_common` |
@@ -65,14 +59,14 @@
 
 ## 已解决问题
 
-### 开发期已修复（0.18.2-dev）
+### 开发期已修复（0.18.3-dev）
 
 > 本表为本开发周期已修条目的**摘要行**（详情见 `changelog.md` 对应段）；发布时由 `release.py prepare` 的 archive 步原表搬入版本归档并在此留占位。
 
-（本版开发期已修复项已随 v0.18.2 发布迁入归档档案）
+（本版开发期已修复项已随 v0.18.3 发布迁入归档档案）
 
 ### 归档档案
-- [`archived_review-findings.0.18.x.md`](../archive/v0.18.x/archived_review-findings.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-16）
+- [`archived_review-findings.0.18.x.md`](../archive/v0.18.x/archived_review-findings.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-17）
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-10）
 - [`archived_review-findings.0.16.x.md`](../archive/v0.16.x/archived_review-findings.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-11-03）
 - [`archived_review-findings.0.15.x.md`](../archive/v0.15.x/archived_review-findings.0.15.x.md) — v0.15.x（2026-10-24 ~ 2026-10-25）

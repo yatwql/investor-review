@@ -12,7 +12,10 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
+
+logger = logging.getLogger("invest")
 
 __all__ = ["BLOCK_TITLE", "attach_decision_book", "build_decision_book"]
 
@@ -27,6 +30,7 @@ def _module_label(module_key: str) -> str:
 
         return get_llm_module_name(module_key)
     except Exception:  # 注册表不可用时回退键名，不阻断
+        logger.debug("[decision_book] 模块中文名不可用，回退键名 %s", module_key, exc_info=True)
         return module_key
 
 
@@ -48,7 +52,7 @@ def build_decision_book() -> dict[str, Any] | None:
             # Known Gap：证据 id 内的代码脱敏未实现 → 匿名化模式下不渲染，避免泄露真值
             return None
     except Exception:  # 配置不可读时按 off 处理（与其余报告口径一致）
-        pass
+        logger.debug("[decision_book] 匿名化模式读取失败，按 off 继续装配", exc_info=True)
 
     contracts = get_module_contracts()
     modules: list[dict[str, Any]] = []

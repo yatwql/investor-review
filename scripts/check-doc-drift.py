@@ -196,6 +196,7 @@ from _doc_drift import (  # noqa: E402,F401  # 原面 re-export（实现见 _doc
     _PLAN_DONE_HEADING_ID,
     _ARCHIVE_INDEX_PAIRS,
     check_archive_index,
+    check_audit_logged,
     check_archive_layout,
     check_migration_placeholders,
     check_ledger_order,
@@ -259,6 +260,7 @@ def run_checks(with_test_count: bool = False, docs: dict | None = None) -> list[
     findings += check_chain_table(docs[_RELIABILITY_MD])
     findings += check_archive_index()
     findings += check_archive_layout()
+    findings += check_audit_logged()
     findings += check_migration_placeholders()
     findings += check_ledger_order(docs)
     findings += check_management_partitions()
