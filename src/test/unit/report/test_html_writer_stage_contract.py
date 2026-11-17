@@ -115,8 +115,11 @@ def _run(*, raiser: str | None = None):
 
     captured: dict = {}
 
-    def _fake_template(**kwargs):
-        captured.update(kwargs)
+    def _fake_template(context):
+        # 模板变量由 `TemplateContext` 单一载体传递；字段名即模板变量名
+        from dataclasses import asdict
+
+        captured.update(asdict(context))
         return "RENDERED"
 
     patches += [
@@ -182,17 +185,19 @@ def test_each_renderer_output_binds_to_its_own_template_vars():
     for name, arity in RENDER_ARITY.items():
         assert any(_marker(name, i) in flat for i in range(arity)), f"{name} 的产物未进入模板上下文（漏绑或绑错）"
 
-    # 逐项抽查易串位的多元组：各字段必须落在契约指定的变量上
-    assert captured["a_indices_list"] == _marker("_render_index_section", 2)
-    assert captured["us_indices_list"] == _marker("_render_index_section", 3)
+    # 逐项抽查易串位的多元组：各字段必须落在契约指定的**模板变量**上
+    # （键名是模板变量名，不是装配函数参数名——`a_indices_list` → `a_indices`、
+    #  `cat_counts` → `categories`、`update_status_dict` → `update_status`）
+    assert captured["a_indices"] == _marker("_render_index_section", 2)
+    assert captured["us_indices"] == _marker("_render_index_section", 3)
     assert captured["penetration"] == _marker("_render_penetration_section", 0)
     assert captured["cat_data"] == _marker("_render_category_table", 0)
     assert captured["perf_data"] == _marker("_render_fund_performance_section", 0)
     assert captured["candidate_data"] == _marker("_render_fund_performance_section", 1)
     assert captured["accounts"] == _marker("_render_account_grouping", 0)
     assert captured["account_totals"] == _marker("_render_account_grouping", 1)
-    assert captured["cat_counts"] == _marker("_render_category_info", 0)
-    assert captured["update_status_dict"] == _marker("_render_category_info", 1)
+    assert captured["categories"] == _marker("_render_category_info", 0)
+    assert captured["update_status"] == _marker("_render_category_info", 1)
 
 
 def test_post_stage_names_recorded():

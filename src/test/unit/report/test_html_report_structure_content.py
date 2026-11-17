@@ -16,7 +16,7 @@ import unittest
 from pathlib import Path
 import pytest
 from src.python.core.constants import PROJECT_ROOT
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 from src.test.unit.report._html_report_fixtures import rendered_css
 from .test_html_report_structure import (
     _REPORT_SECTION_DEFAULT,
@@ -64,6 +64,7 @@ class TestHtmlTheme(unittest.TestCase):
         soup = self._render_theme_soup()
         btn = soup.select_one("button.theme-toggle-btn")
         self.assertIsNotNone(btn, "应存在 theme-toggle-btn 浮动切换按钮")
+        assert btn is not None
         self.assertEqual(btn.get("aria-label"), "切换深色模式", "按钮 aria-label 应描述主题切换")
         self.assertIsNotNone(btn.get("title"), "按钮应含 title 提示")
         self.assertIn("🌙", btn.get_text(), "浅色默认态按钮应显示 🌙 图标（可切深色）")
@@ -129,10 +130,11 @@ class TestSummaryDateTimeValueStyles(unittest.TestCase):
         """在投资分析汇总中按标签名找对应行的值单元格（第2列）内联 style。"""
         summary = self.soup.find(id="sec-summary")
         self.assertIsNotNone(summary, "未找到 #sec-summary")
+        assert summary is not None
         for tr in summary.select("table.kv-table tr"):
             tds = tr.find_all("td")
             if len(tds) == 2 and tds[0].get_text(strip=True) == label:
-                return tds[1].get("style", "")
+                return str(tds[1].get("style") or "")
         self.fail(f"未找到「{label}」行")
 
     def test_stat_time_value_bold(self):
@@ -166,6 +168,7 @@ class TestSummaryDateTimeValueStyles(unittest.TestCase):
     def test_kv_label_style_unaffected(self):
         """标签列不新增内联样式（仅值列加样式）。"""
         summary = self.soup.find(id="sec-summary")
+        assert summary is not None
         for tr in summary.select("table.kv-table tr"):
             tds = tr.find_all("td")
             if len(tds) == 2 and tds[0].get_text(strip=True) in ("统计时间", "所属交易日"):
@@ -183,7 +186,7 @@ class TestFooterExperimentalNotice(unittest.TestCase):
     控制台横幅；缺了这行，行动章「历史决策复盘」等实验产物会被误读为常驻功能。
     """
 
-    def _render_footer(self, enabled_experiments=None) -> BeautifulSoup:
+    def _render_footer(self, enabled_experiments=None) -> Tag:
         order = [dict(sec) for sec in _REPORT_SECTION_DEFAULT]
         numbers = {sec["key"]: sec["number"] for sec in order}
         sv_dict = {sec["key"]: True for sec in order}
@@ -192,6 +195,7 @@ class TestFooterExperimentalNotice(unittest.TestCase):
             data["enabled_experiments"] = enabled_experiments
         footer = _render_template(data).select_one(".report-footer")
         self.assertIsNotNone(footer, "页脚容器应存在")
+        assert isinstance(footer, Tag)
         return footer
 
     def test_lists_enabled_display_names(self):
@@ -223,13 +227,24 @@ class TestFooterExperimentalNotice(unittest.TestCase):
         self.assertIn(line, text, "HTML 页脚句式应与 Excel 落点一致")
 
     def test_writer_injects_context_variable(self):
-        """渲染上下文须注入该变量——漏传时模板判空而静默不显示，无任何报错。"""
+        """渲染上下文须注入该变量——漏传时模板判空而静默不显示，无任何报错。
+
+        模板变量由 `TemplateContext` 单一载体传递：契约分两层守——
+        字段必须在上下文 dataclass 里，且装配处（`write_html_report`）必须真的填值。
+        """
+        import dataclasses
         import inspect
 
         from src.python.report import html_writer
+        from src.python.report.html_template_context import TemplateContext
 
-        source = inspect.getsource(html_writer._render_template)
-        self.assertIn("enabled_experiments=", source, "_render_template 应将 enabled_experiments 载入模板上下文")
+        fields = {f.name for f in dataclasses.fields(TemplateContext)}
+        self.assertIn("enabled_experiments", fields, "模板上下文缺少 enabled_experiments 字段")
+        self.assertIn(
+            "enabled_experiments=",
+            inspect.getsource(html_writer.write_html_report),
+            "装配处必须给 enabled_experiments 填值",
+        )
 
 
 class TestChartCaptionContract(unittest.TestCase):

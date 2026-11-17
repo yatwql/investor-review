@@ -7,7 +7,7 @@
 
 ## 概述
 
-在办 11 项：P1 3 项（**plan-238**、**plan-239**、**plan-259**）、P2 1 项（**plan-92**）、P3 6 项（**plan-70**、**plan-233**、**plan-243**、**plan-254**、**plan-255**、**plan-258**、**plan-265**）、P4 1 项（**plan-55**）。命名与实现纪律见 `CLAUDE.md`（单一事实位，本表不重复）。
+在办 10 项：P1 3 项（**plan-238**、**plan-239**、**plan-259**）、P2 1 项（**plan-92**）、P3 5 项（**plan-70**、**plan-233**、**plan-243**、**plan-254**、**plan-255**、**plan-265**）、P4 1 项（**plan-55**）。命名与实现纪律见 `CLAUDE.md`（单一事实位，本表不重复）。
 
 ---
 
@@ -89,17 +89,6 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 **长期观察（不排期，触发条件满足时再评估）**：① R8 纪律规则重构——前置 V5 成熟样本 ≥100（现 2 条）；② V7 相关性约束启用——前置样本期 ≥250 交易日（现 146）；③ 讨论稿优先级 6 与 V4/V6/V7 模型 A/B（人工采样，不入自动化）。以上任一前置达成前，资源投向其他任务。
 **事实位**：轮次明细、验收记录与回测读数见设计稿 [`investment-decision-basis-design.md`](../plan/investment-decision-basis-design.md) §4/§5 及[归档讨论稿](../archive/v0.16.x/investment-decision-quality/investment-decision-quality.md) §8.1；本表不复述。
 
-#### `plan-258` 深层渲染契约收敛（`_render_template` 收上下文对象）
-
-**现状**：`report/html_writer._render_template` 声明 80 个关键字形参并原样转发给 Jinja 渲染；`write_html_report` 有 50+ 入参，
-两侧都是长参数表。`plan-257` 已把编排逻辑切完，剩下的纯粹是「参数搬运」。
-**动作（条件性）**：`_render_template` 改为接收单个 `_RenderContext` 上下文对象（内部 `render(**vars(ctx))`），
-`write_html_report` 的入参分族收敛为该上下文，再逐层下传到调用方；渲染契约（模板变量键集合）由新增守卫用例锁死，
-`report_template.html` 不改。
-**为何暂不做**：触碰模板变量装配面 + 10 余个调用方，须按字节对拍产物；收益是可读性而非缺陷风险，等下次确有「改渲染入参」需求时一并做，避免为拆而拆。
-**已备范式**：同文件链上的 `_prepare_render_context` 已按「来源域 → dataclass」分组把 30 个关键字入参收为 3 个（`rf-1157`），本项沿用同一分族口径即可，无需另立风格。
-**验收**：模板变量键集合与拆分前完全一致（守卫用例比对）；同输入产物 SHA 一致；P0/P1 门禁全绿。
-
 #### `plan-254` 不动作建议命中率的真机读数（等样本成熟）
 
 **前置**：账本内不动作类决策（`direction=0`，来源：LLM 表里的持有/观望/不操作行）已登记，当前 7 条；结算需报告日之后 ≥5 个交易日。
@@ -129,6 +118,12 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 **约束与红线**：① 不作为用户可选对话模型（不生成文本）；② 不做「生成 + 判定」双供应商级联；③ 语料冻结产物落 `docs/tmp/`，仅脱敏样例可入库；④ 类型化通道故障不得拖垮生成链（熔断实例分离）；⑤ 新增配置键按开关注册表纪律登记，默认值保持 `chat`。
 
 ### 已完成（待发布归档）
+
+#### `plan-258` 深层渲染契约收敛（`_render_template` 收上下文对象）
+
+**结果**：新增 `report/html_template_context.py::TemplateContext`（94 个字段 = 模板变量契约），`_render_template(context)` 收敛为「`render(**asdict(context))` + 章节顺序 CSS 注入」两行；81 个关键字形参与 94 行 `render(...)` 关键字表在 `write_html_report` 侧改为一次性装配（派生量就地算好），`html_writer.py` 760 → 596 行（退出 P4 膨胀登记）。模板文件零改动。
+**验收**：模板变量键集合与拆分前逐一对应（`test_html_template_context.py` 锁 94 字段集合 + 「渲染键 == 字段集合」）；同输入产物**逐字节一致**（freeze 时间与缓存统计后对拍 `write_html_report` 产物 SHA：`8d4736b7…` 拆分前后相同，358,960 字节）；`unit/report` 2944 项全绿。
+**额外收益**：模板变量拼错/漏传从「人眼核对 94 行」变成静态可查（字段存在性 + 装配处 grep 守卫）。
 
 #### `plan-252` 建议后验评估政策单源化 + 不动作类命中评估
 

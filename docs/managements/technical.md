@@ -1733,6 +1733,7 @@ verbose 模式的颜色按 **stderr 自己的流**判定：取 `core.ansi_colors
 |:-----|:-----|:------|
 | 编排器 | `html_writer.py` | 区块装配（`html_sections.assemble_sections`；穿透（含盈利预测/股息率附属取数）/基金业绩/风格等**取数已前置**到数据准备的「渲染前置取数」段并经 `_run_scope.run_memo` 复用，此处只做串拼装与缓存命中，计时点 `区块装配`）→ 面板视图装配（持仓变动/事件窗/纪律回放，计时点 `面板视图装配`）→ 渲染前置装配（委托 `_html_render_context`）→ 模板渲染 → 后处理表（资产内嵌/匿名化/落盘）→ 保存 |
 | 渲染前置装配 | `_html_render_context.py` | 渲染前一次性算好派生量并打包：面板视图三槽（契约缺席→`None`→区块隐藏）、数据源状态包（摘要四元组/历史状态/矩阵与说明表）、`_RenderContext`（可见性三元组 + 数据源状态 + 因子名映射 + 代码掩码）。入参按**来源域**分组（`_VisibilityInputs` / `_DataSourceInputs` 两组 dataclass + `details`），新增派生量只在所属组加字段，不靠调用点位置对齐；因子名映射等任一环失败按原语义降级（空映射/空集）升 debug 日志，不阻断渲染 |
+| 模板上下文 | `html_template_context.py` | Jinja 模板变量的唯一载体（dataclass，字段名即模板变量名，顺序即契约）：`_render_template(context)` 只做 `render(**asdict(context))` 与章节顺序 CSS 注入；装配侧（`write_html_report`）负责把派生量填进上下文。守卫：`test_html_template_context.py` 锁 94 个字段集合与「渲染键 == 字段集合」，`test_html_writer_stage_contract.py` 锁「装配产物绑到自己的模板变量」|
 | 区块装配 | `html_sections.py` | `SECTION_BUILDERS` 连续区段表 + `HtmlAssembly` 上下文；产物经 `SectionBindings`（NamedTuple）具名返回，顺序即契约 |
 | 数据构建器 | `html_builders.py` | 原始数据 → 结构化渲染对象 |
 | 渲染器 | `html_renderers.py` | Markdown→HTML 转换、格式处理 |
