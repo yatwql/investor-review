@@ -2,12 +2,19 @@
 
 `write_html_report` 需要的派生数据都在此一次备好（视图拼装 → 数据源状态 → 章节可见性与掩码），
 与模板渲染分开：这些量各自独立、可单测，混在写出函数里只会把它撑成一张长赋值表。
+
+入参按**来源域**分组（`_VisibilityInputs` / `_DataSourceInputs`）：组的边界即派生量的边界，
+新增一项可见性输入只需在组里加字段、不必同时改签名与调用点顺序；`details`（渲染点掩码的
+首选来源，缺席时回退 `data_source.holdings`）单独入参，因为它不是任一组的前置事实。
 """
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any
+
+logger = logging.getLogger("invest")
 
 
 def _build_panel_views(
@@ -41,6 +48,52 @@ def _build_panel_views(
 
 
 @dataclass
+class _VisibilityInputs:
+    """章节可见性装配的入参（章节序号 / 可见性 / LLM 模块禁用判定的全部前置事实）。
+
+    字段即 ``_compute_section_visibility`` 的入参面（除 ``order`` 外均原样透传）：
+    改签名时只需维护「组 → 调用点」一处映射，调用方不再逐参对齐位置。
+    """
+
+    order: list
+    manager_analysis: Any
+    overlap_matrix: Any
+    concentration_analysis: Any
+    style_analysis: Any
+    include_news: bool
+    llm_enabled_flag: bool
+    enable_llm: bool
+    enable_news: bool
+    enable_fund_deep_analysis: bool
+    enable_history: bool
+    enable_portfolio_evolution: bool
+    enable_action: bool
+    style_factor_data: Any
+    position_relationship_data: Any
+    evolution_data: Any
+    holding_change_data: Any
+    schedule_replay_data: Any
+    enable_fundamental_snapshot: bool
+    financial_report_digest_data: Any
+    financial_indicator_data: Any
+
+
+@dataclass
+class _DataSourceInputs:
+    """数据源状态装配的入参（摘要四元组 / 历史状态 / 可用性矩阵与说明表）。"""
+
+    a_indices: Any
+    us_indices: Any
+    penetration: Any
+    penetration_profit_ok: bool
+    penetration_dividend_ok: bool
+    perf_data: Any
+    holdings: list
+    cat_dividend_ok: bool
+    history_data: Any
+
+
+@dataclass
 class _DataSourceBundle:
     """数据状态摘要 + 历史走势状态 + 数据源可用性矩阵/说明表（渲染期一次性装配）。"""
 
@@ -50,37 +103,26 @@ class _DataSourceBundle:
     catalog: Any
 
 
-def _build_data_source_bundle(
-    *,
-    a_indices: Any,
-    us_indices: Any,
-    penetration: Any,
-    penetration_profit_ok: bool,
-    penetration_dividend_ok: bool,
-    perf_data: Any,
-    holdings: list,
-    cat_dividend_ok: bool,
-    history_data: Any,
-) -> _DataSourceBundle:
+def _build_data_source_bundle(inputs: _DataSourceInputs) -> _DataSourceBundle:
     """装配数据源状态摘要、历史走势数据状态与可用性矩阵（HTML 数据状态块消费）。"""
     from src.python.report.html_writer_status import _build_data_status_sections, _build_history_data_status
 
     # ── 10b) 数据源状态摘要 ──
     (data_status_summary, data_status_penetration, data_status_perf, data_status_category) = (
         _build_data_status_sections(
-            a_indices,
-            us_indices,
-            penetration,
-            penetration_profit_ok,
-            penetration_dividend_ok,
-            perf_data,
-            holdings,
-            cat_dividend_ok,
+            inputs.a_indices,
+            inputs.us_indices,
+            inputs.penetration,
+            inputs.penetration_profit_ok,
+            inputs.penetration_dividend_ok,
+            inputs.perf_data,
+            inputs.holdings,
+            inputs.cat_dividend_ok,
         )
     )
 
     # ── 10c) 组合历史走势数据状态 ──
-    data_status_history = _build_history_data_status(history_data)
+    data_status_history = _build_history_data_status(inputs.history_data)
 
     # ── 10d) 数据源可用性矩阵 ──
     from src.python.report.data_source_matrix import build_data_source_catalog, build_data_source_matrix
@@ -112,108 +154,80 @@ class _RenderContext:
 
 def _prepare_render_context(
     *,
-    order: list,
-    manager_analysis: Any,
-    overlap_matrix: Any,
-    concentration_analysis: Any,
-    style_analysis: Any,
-    include_news: bool,
-    llm_enabled_flag: bool,
-    enable_llm: bool,
-    enable_news: bool,
-    enable_fund_deep_analysis: bool,
-    enable_history: bool,
-    enable_portfolio_evolution: bool,
-    enable_action: bool,
-    style_factor_data: Any,
-    position_relationship_data: Any,
-    evolution_data: Any,
-    holding_change_data: Any,
-    schedule_replay_data: Any,
-    enable_fundamental_snapshot: bool,
-    financial_report_digest_data: Any,
-    financial_indicator_data: Any,
-    a_indices: Any,
-    us_indices: Any,
-    penetration: Any,
-    penetration_profit_ok: bool,
-    penetration_dividend_ok: bool,
-    perf_data: Any,
-    holdings: list,
-    cat_dividend_ok: bool,
-    history_data: Any,
-    details: Any,
+    visibility: _VisibilityInputs,
+    data_source: _DataSourceInputs,
+    details: Any = None,
 ) -> _RenderContext:
     """装配渲染前置上下文：章节序号/可见性、数据源状态、因子名映射、代码掩码。
 
     这些量都在「渲染之前」一次算好且互不依赖输出顺序，集中在此以免主流程被
     25+ 个装饰性赋值切碎；任一环节失败都按原语义降级（空映射/空集）。
+
+    Args:
+        visibility: 可见性域入参（章节序号 / 各开关 / 契约载体）。
+        data_source: 数据源域入参（指数 / 穿透 / 业绩 / 历史走势）。
+        details: 代码掩码的首选来源；``None`` 时回退 ``data_source.holdings``
+            （与掩码构造的历史口径一致：明细缺位时按持仓行折叠代码）。
+
+    Returns:
+        ``_RenderContext``：九项派生量一次装齐。
     """
     from src.python.report.html_writer_nav import _compute_section_visibility
 
     from src.python.llm.skeleton import get_llm_chapter_disabled
 
-    llm_module_disabled = get_llm_chapter_disabled() if enable_llm else None
+    llm_module_disabled = get_llm_chapter_disabled() if visibility.enable_llm else None
     section_numbers, section_visible_dict, _sv_fn = _compute_section_visibility(
-        order,
-        manager_analysis,
-        overlap_matrix,
-        concentration_analysis,
-        style_analysis,
-        include_news,
-        llm_enabled_flag,
+        visibility.order,
+        visibility.manager_analysis,
+        visibility.overlap_matrix,
+        visibility.concentration_analysis,
+        visibility.style_analysis,
+        visibility.include_news,
+        visibility.llm_enabled_flag,
         llm_module_disabled=llm_module_disabled,
-        enable_news=enable_news,
-        enable_fund_deep_analysis=enable_fund_deep_analysis,
-        enable_history=enable_history,
-        enable_portfolio_evolution=enable_portfolio_evolution,
-        enable_action=enable_action,
-        enable_llm=enable_llm,  # enable_llm is the board param for LLM
-        style_factor_data=style_factor_data,
-        position_relationship_data=position_relationship_data,
-        evolution_data=evolution_data,
-        holding_change_data=holding_change_data,
-        schedule_replay_data=schedule_replay_data,
-        enable_fundamental_snapshot=enable_fundamental_snapshot,
-        financial_report_digest_data=financial_report_digest_data,
-        financial_indicator_data=financial_indicator_data,
+        enable_news=visibility.enable_news,
+        enable_fund_deep_analysis=visibility.enable_fund_deep_analysis,
+        enable_history=visibility.enable_history,
+        enable_portfolio_evolution=visibility.enable_portfolio_evolution,
+        enable_action=visibility.enable_action,
+        enable_llm=visibility.enable_llm,
+        style_factor_data=visibility.style_factor_data,
+        position_relationship_data=visibility.position_relationship_data,
+        evolution_data=visibility.evolution_data,
+        holding_change_data=visibility.holding_change_data,
+        schedule_replay_data=visibility.schedule_replay_data,
+        enable_fundamental_snapshot=visibility.enable_fundamental_snapshot,
+        financial_report_digest_data=visibility.financial_report_digest_data,
+        financial_indicator_data=visibility.financial_indicator_data,
     )
 
-    _ds = _build_data_source_bundle(
-        a_indices=a_indices,
-        us_indices=us_indices,
-        penetration=penetration,
-        penetration_profit_ok=penetration_profit_ok,
-        penetration_dividend_ok=penetration_dividend_ok,
-        perf_data=perf_data,
-        holdings=holdings,
-        cat_dividend_ok=cat_dividend_ok,
-        history_data=history_data,
-    )
-    (data_status_summary, data_status_penetration, data_status_perf, data_status_category) = _ds.status
+    _ds = _build_data_source_bundle(data_source)
     data_status_history = _ds.history
     data_source_matrix, data_source_catalog = _ds.matrix, _ds.catalog
 
     # 因子中文名映射（单一数据源：analysis 层常量，经 context 传递）
     _factor_names: dict = {}
-    if style_factor_data:
+    if visibility.style_factor_data:
         try:
             from src.python.analysis.style_factor_regression import FACTOR_NAMES
 
             _factor_names = FACTOR_NAMES
-        except Exception:
+        except Exception:  # 因子名映射缺失只影响因子名回显，不阻断渲染
+            logger.debug("[html_context] 因子中文名映射不可用，按原样回显因子键", exc_info=True)
             _factor_names = {}
 
     # 匿名化：代码列渲染点掩码映射（真码 → 显示掩码）。渲染前一次性构造，
     # 经模板全局变量注入，各章节以 {{ x | anon_code }} 精确键控折叠代码。
     from src.python.config.anonymizer import build_code_display_map, get_anonymization_mode
 
-    _code_display_map = build_code_display_map(details if details is not None else holdings, get_anonymization_mode())
+    _mask_source = details if details is not None else data_source.holdings
+    _code_display_map = build_code_display_map(_mask_source, get_anonymization_mode())
     return _RenderContext(
         section_numbers=section_numbers,
         section_visible_dict=section_visible_dict,
         sv_fn=_sv_fn,
-        status=(data_status_summary, data_status_penetration, data_status_perf, data_status_category),
+        status=_ds.status,
         data_status_history=data_status_history,
         data_source_matrix=data_source_matrix,
         data_source_catalog=data_source_catalog,

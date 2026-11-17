@@ -191,7 +191,7 @@ def make_push2_request(code: str, retries: int = _MAX_RETRIES) -> dict | None:
 
             note_failure(f"push2 行情服务器断连（{type(e).__name__}）: {code}")
         except Exception:  # 观测失败不影响取数
-            pass
+            logger.debug("push2 断连观测登记失败 [%s]，已忽略", code, exc_info=True)
         return None
 
     try:
