@@ -8,22 +8,19 @@
 
 ## [0.18.4-dev] - 开发中（未发布）
 
+### 变更
 
-（本次发布内容见下方归档索引）
-- **新闻去重比较成本**：`_dedup_by_title` 改为「两层候选索引给候选超集 → 逐对判定」，不再全量扫已保留项（`plan-262`）；判定结果逐条不变（保留集合 SHA 对拍一致），实测比较对 −45%、耗时 2.8×；唯一可见差异为锚点语料不再收录实体零重叠对。
-- **实验项裁决自动汇编**：新增 `core/experiment_verdicts.py`（项清单由注册表派生，四态：可转正/继续观察/撤销候选/无读数），`doctor` 新增「实验项裁决」行与「已达判据 → 请按计划裁决」提醒行；不改开关不摘 `experimental`（`plan-260`）。
-- **零直测模块补测（batch 1）**：`config/_json_patch.py`（含注释 JSON 编辑引擎）与 `analysis/_fee_estimation.py` 首次补齐直测（`test_json_patch.py` 34 条 + `test_json_patch_edge.py` 10 条 + `test_fee_estimation.py` 18 条）；补测过程中修掉三个写回缺陷（`rf-1159`/`rf-1160`/`rf-1161`），`plan-261` 余下模块（`_news_dedup_tables` / `metrics_risk` / `_feature_registry`）待下一批。
-
-- **本轮降级清单汇总出口**：新增 `core/degradation.report_degradation_summary()`（按「源 + 失败类型」去重计数本轮降级，同时给出项数与次数）；报告「数据状态」块尾与 CLI 产物清单尾部同源输出一行，无降级时该行不出现（产物逐字节不变，`plan-263`）。
-
-- **缓存命中率：同事实单键**：`fetch_latest_indicator` 先复用多期缓存（`fin_indicator_hist_{code}` 头部即最新一期），不再让同一 code 走两条键各回源一次（`plan-264`）。
-
-- **守护项命中台账与统计**：`checklib.report()` 每次运行追加 `logs/guard-hits.jsonl`（`check-doc-drift` 另给子项粒度），新增 `probe-guard-hits.py` 输出「运行次数/命中次数/处置（保留/建议降频/样本不足）」表；不改守护启用状态与 CI 阻塞语义（`plan-265`）。
-
-- **守护命中台账体积治理**：`record_guard_run` 超 4MB 截断为最近 5000 行（原子替换、失败静默），避免每次守护运行追加导致的长期膨胀（`rf-1162`）。
-
-- **账本级原语单源**：新增 `core/ledger_common.py`（`feature_active` / `now_iso`），两个账本的 `is_active` / `_now_iso` 改为薄封装（`rf-1163`）。
-- **台账收口**：`plan-252`（评估政策单源 + 不动作类命中评估）与 `plan-253`（LLM 复盘结论结构化契约，P2 补证循环按门槛暂缓归 `plan-255`）已实施完成，移入已完成待归档。
+- **渲染前置装配入参按来源域分组**：`_prepare_render_context` 的 30 个关键字入参收为 `_VisibilityInputs` / `_DataSourceInputs` 两组 dataclass 加 `details`，签名降至 3，`_build_data_source_bundle` 同收为单组入参；配 `test_html_render_context.py` 11 条阶段契约用例（`rf-1157`、`rf-1156`）。
+- **降级可观测**：6 处按设计降级但无日志痕迹的 `except` 补 `logger.debug(exc_info=True)`，降级语义与返回值不变（`rf-1155`）。
+- **新闻去重比较成本**：`_dedup_by_title` 由两层候选索引给出候选超集（实体 bigram / 标题窗口），两层未命中的对不进入比较；判定结果逐条一致（保留集合 SHA 对拍相同），实测比较对 −45%、耗时 2.8×（`plan-262`）。
+- **实验项转正判据自动裁决**：新增 `core/experiment_verdicts.py`（项清单由注册表派生，四态结论：可转正 / 继续观察 / 撤销候选 / 无读数），`doctor` 新增「实验项裁决」行与「已达判据 → 请按计划裁决」提醒；不改开关、不摘 `experimental`（`plan-260`）。
+- **零直测模块补测**：`config/_json_patch`、`analysis/_fee_estimation`、`analysis/metrics_risk`、`config/_feature_registry`、`providers/_news_dedup_tables` 补齐直测（共 103 条）；补测期间修掉三个写回缺陷——区块括号平衡未跳过字符串/注释（`rf-1159`）、不可解析字符串切片让 patch 抛异常（`rf-1160`）、单行对象删除吞整行与 CRLF 文件混行尾（`rf-1161`）（`plan-261`）。
+- **本轮降级清单汇总出口**：新增 `core/degradation.report_degradation_summary()`（按「源 + 失败类型」去重计数，同时给出项数与次数），报告「数据状态」块尾与 CLI 产物清单尾部同源输出一行；无降级时不出该行，产物逐字节不变（`plan-263`）。
+- **缓存同事实单键**：`fetch_latest_indicator` 先复用多期缓存（`fin_indicator_hist_{code}` 头部即最新一期），同一 code 每轮少一次回源（`plan-264`）。
+- **守护命中台账与统计**：`checklib.report()` 每次运行追加 `logs/guard-hits.jsonl`（`check-doc-drift` 另给子项粒度），新增 `probe-guard-hits.py` 输出「运行次数 / 命中次数 / 处置（保留 / 建议降频 / 样本不足）」表，不改守护启用状态与 CI 阻塞语义；台账超 4MB 截断为最近 5000 行，防长期膨胀（`plan-265`、`rf-1162`）。
+- **账本级原语单源**：新增 `core/ledger_common.py`（`feature_active` 开关收敛判定 / `now_iso` 秒级时间戳），两个账本的同名函数改为薄封装，导入面与既有 patch 点不变（`rf-1163`）。
+- **台账收口**：`plan-252`（评估政策单源 + 不动作类命中评估）与 `plan-253`（LLM 复盘结论结构化契约，补证循环归 `plan-255` 裁决）迁入已完成待归档。
+- **文档触点**：`DESIGN.md` 登记「降级汇总行」口径（位置 / 句式 / 无降级不出行），`reports-instruction.md` 与 `how-to-use-cli-mode.md` 同步该行，`technical.md` 补渲染前置装配与账本原语模块行。
 
 ## 归档
 
