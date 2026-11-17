@@ -97,13 +97,13 @@ class TestPricePercentile:
 
 
 class TestTierFromPercentile:
-    def test_low(self):
+    def test_low_percentile_tier(self):
         assert tier_from_percentile(10.0) == "低估"
 
-    def test_fair(self):
+    def test_fair_percentile_tier(self):
         assert tier_from_percentile(50.0) == "合理"
 
-    def test_high(self):
+    def test_high_percentile_tier(self):
         assert tier_from_percentile(85.0) == "高估"
 
     def test_low_boundary_below(self):

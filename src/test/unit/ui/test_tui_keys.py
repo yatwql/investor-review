@@ -135,7 +135,7 @@ class TestGetKeyWindows(unittest.TestCase):
         self._mock_getch.return_value = b"\r"
         self.assertEqual(_get_key_windows(), KEY_ENTER)
 
-    def test_esc(self) -> None:
+    def test_esc_maps_to_key_esc(self) -> None:
         """ESC 键 → KEY_ESC（首页退出别名）。"""
         self._mock_getch.return_value = b"\x1b"
         self.assertEqual(_get_key_windows(), KEY_ESC)

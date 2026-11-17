@@ -64,7 +64,7 @@ class TestShouldVerify(unittest.TestCase):
         self.assertFalse(_should_verify())
 
     @patch("src.python.core.http_client.os.getenv")
-    def test_no(self, mock_getenv):
+    def test_env_no_returns_false(self, mock_getenv):
         """SSL_VERIFY=no → False。"""
         mock_getenv.return_value = "no"
         self.assertFalse(_should_verify())

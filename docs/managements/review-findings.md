@@ -67,6 +67,7 @@
 | **rf-1161** | `config/_json_patch` 两处版式假设过强：① `_remove_top_level_key` 对单行（压缩）对象 `entry_start` 回退到 0，删掉整行对象只剩 `}`；② `_patch_config_key` 追加键时硬编码 LF，CRLF 文件变成混行尾 | ① 无行结构时按「上一个分隔符之后」截取条目；② 换行符沿用文件现有风格（有 `\r\n` 则用 `\r\n`）；尾逗号清理抽成 `_drop_trailing_member_comma` 供两路共用 |
 | **rf-1162** | 守护命中台账（本版新增）只追加不设上限——每次守护运行写一行，单日实测已 121 行/18KB，长期会膨胀到几十 MB 且拖慢读取 | `record_guard_run` 追加前按体积上限（4MB）截断为最近 5000 行（临时文件 + `os.replace` 原子替换，失败静默同写入口径）；配「超限截断 / 未超限只追加」两用例 |
 | **rf-1163** | `core/decision_ledger.py` 与 `core/signal_ledger.py` 各自复制 `is_active()`（4 行）与 `_now_iso()`（1 行）——同名同体，改「开关收敛方式」或「时间戳精度」要动两处，漏一处就静默漂移（一个账本按秒、另一个按微秒） | 新增 `core/ledger_common.py`（`feature_active(flag)` + `now_iso()` 秒级 ISO），两个账本的 `is_active` / `_now_iso` 改为薄封装并保留原名（导入面与既有 patch 点不变）；配 `test_ledger_common.py` 8 条（委托判定 / 秒级格式 / 单调不降 / 两账本薄封装同口径） |
+| **rf-1164** | 4 处用例命名与断言语义不精确：`test_low` / `test_no` / `test_etf` / `test_esc` —— 名字只说输入的一半（low / no / etf / esc），不表达「期望结果是什么」，跨文件检索时无法判断该用例守的是哪条语义 | 改为「输入 + 期望」双段式：`test_low_percentile_tier` / `test_env_no_returns_false` / `test_pure_etf_hint_is_index` / `test_esc_maps_to_key_esc`；同批核对 22 组「常量归一后同体」用例，确认属按 provider/契约并行的覆盖（各自 mock 与固件不同），保留不合并 |
 
 ### 归档档案
 - [`archived_review-findings.0.18.x.md`](../archive/v0.18.x/archived_review-findings.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-17）
