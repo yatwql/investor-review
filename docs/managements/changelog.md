@@ -14,6 +14,8 @@
 - **实验项裁决自动汇编**：新增 `core/experiment_verdicts.py`（项清单由注册表派生，四态：可转正/继续观察/撤销候选/无读数），`doctor` 新增「实验项裁决」行与「已达判据 → 请按计划裁决」提醒行；不改开关不摘 `experimental`（`plan-260`）。
 - **零直测模块补测（batch 1）**：`config/_json_patch.py`（含注释 JSON 编辑引擎）与 `analysis/_fee_estimation.py` 首次补齐直测（`test_json_patch.py` 34 条 + `test_json_patch_edge.py` 10 条 + `test_fee_estimation.py` 18 条）；补测过程中修掉三个写回缺陷（`rf-1159`/`rf-1160`/`rf-1161`），`plan-261` 余下模块（`_news_dedup_tables` / `metrics_risk` / `_feature_registry`）待下一批。
 
+- **本轮降级清单汇总出口**：新增 `core/degradation.report_degradation_summary()`（按「源 + 失败类型」去重计数本轮降级，同时给出项数与次数）；报告「数据状态」块尾与 CLI 产物清单尾部同源输出一行，无降级时该行不出现（产物逐字节不变，`plan-263`）。
+
 ## 归档
 
 - [`archived_changelog.0.18.x.md`](../archive/v0.18.x/archived_changelog.0.18.x.md) — v0.18.0 ~ v0.18.3（2026-11-12 ~ 2026-11-17）

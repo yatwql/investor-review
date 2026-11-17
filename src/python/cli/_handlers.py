@@ -341,6 +341,12 @@ def _print_artifact_paths(config: dict, output_override: str | None) -> None:
     print(f"产物目录: {resolve_output_dir(config, output_override)}")
     for path in artifacts:
         print(f"  {path}")
+    # 本轮降级汇总（与报告数据状态块同源；无降级时不出该行）
+    from src.python.core.degradation import report_degradation_summary
+
+    degradation_line = str(report_degradation_summary().get("text") or "")
+    if degradation_line:
+        print(f"[!] {degradation_line}")
 
 
 def _collect_degradation_summary(max_items: int = 10) -> list[str]:

@@ -210,5 +210,6 @@
         </div>
 
         {{ render_data_status(data_status_summary) }}
+        {% if degradation_line %}<p class="note-caption">{{ degradation_line }}</p>{% endif %}
         {{ render_back_to_top() }}
     </div>

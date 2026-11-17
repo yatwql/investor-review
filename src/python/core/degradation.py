@@ -321,6 +321,40 @@ def degradation_summary(max_items: int = 10) -> list[str]:
     return lines
 
 
+def report_degradation_summary(max_items: int = 3) -> dict[str, Any]:
+    """本轮报告的降级汇总（按「源 + 失败类型」去重计数）。
+
+    口径：`begin_report()` 已把事件日志限定在「本轮」，故直接读日志即可；
+    同一源多次失败合并一行（否则 42 次未命中会变 42 行）。
+
+    Args:
+        max_items: 摘要行里最多列举几项（剩余以「等 N 项」概括）。
+
+    Returns:
+        ``{"count": 去重项数, "events": 原始事件数, "lines": [...], "text": 一行汇总}``；
+        无降级时 ``count == 0`` 且 ``text`` 为空串（调用方据此不输出该行）。
+        任何异常返回空汇总——摘要非关键，不拖垮报告。
+    """
+    try:
+        events = [e for e in get_tracker().get_log() if e.get("degraded")]
+    except Exception:  # noqa: BLE001
+        return {"count": 0, "events": 0, "lines": [], "text": ""}
+    counter: dict[tuple[str, str], int] = {}
+    for event in events:
+        source_key = str(event.get("source_key") or "")
+        if not source_key:
+            continue
+        key = (source_key, str(event.get("failure_type") or "降级"))
+        counter[key] = counter.get(key, 0) + 1
+    if not counter:
+        return {"count": 0, "events": 0, "lines": [], "text": ""}
+    ordered = sorted(counter.items(), key=lambda item: (-item[1], item[0]))
+    lines = [f"{source}（{failure_type}）×{times}" for (source, failure_type), times in ordered]
+    spoiled = f"等 {len(lines)} 项" if len(lines) > max_items else ""
+    text = f"本轮降级：{len(lines)} 项 / {sum(counter.values())} 次（{'；'.join(lines[:max_items])}）{spoiled}"
+    return {"count": len(lines), "events": sum(counter.values()), "lines": lines, "text": text}
+
+
 # ── 降级阈值控制 ──────────────────────────────
 
 
