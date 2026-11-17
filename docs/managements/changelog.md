@@ -22,6 +22,9 @@
 
 - **守护命中台账体积治理**：`record_guard_run` 超 4MB 截断为最近 5000 行（原子替换、失败静默），避免每次守护运行追加导致的长期膨胀（`rf-1162`）。
 
+- **账本级原语单源**：新增 `core/ledger_common.py`（`feature_active` / `now_iso`），两个账本的 `is_active` / `_now_iso` 改为薄封装（`rf-1163`）。
+- **台账收口**：`plan-252`（评估政策单源 + 不动作类命中评估）与 `plan-253`（LLM 复盘结论结构化契约，P2 补证循环按门槛暂缓归 `plan-255`）已实施完成，移入已完成待归档。
+
 ## 归档
 
 - [`archived_changelog.0.18.x.md`](../archive/v0.18.x/archived_changelog.0.18.x.md) — v0.18.0 ~ v0.18.3（2026-11-12 ~ 2026-11-17）
