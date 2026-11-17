@@ -68,6 +68,14 @@ def fetch_latest_indicator(code: str) -> dict[str, Any] | None:
     code = str(code or "").strip()
     if not is_a_share_code(code):
         return None
+    # 同一轮报告常先取多期序列（`report/financial_indicator.py`）再逐 code 取单期
+    # （基金 ROE 估算 / 因子目录探测），两种缓存键不同——不复用就让同一 code 回源两次
+    # （实测 `fin_indicator` 未命中数居本轮之首）。多期按报告期降序，头部即最新一期。
+    series_cached = cache_get(f"{HISTORY_PREFIX}{code}", get_ttl("fin_indicator"))
+    if isinstance(series_cached, list) and series_cached:
+        head = series_cached[0]
+        if isinstance(head, dict):
+            return head
     provider_map, transform_map = adapter_chain_slots(DOMAIN_FINANCIAL_INDICATOR)
     cache_key = f"fin_indicator_{code}"
     record = fetch_with_fallback(

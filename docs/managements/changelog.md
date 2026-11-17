@@ -16,6 +16,8 @@
 
 - **本轮降级清单汇总出口**：新增 `core/degradation.report_degradation_summary()`（按「源 + 失败类型」去重计数本轮降级，同时给出项数与次数）；报告「数据状态」块尾与 CLI 产物清单尾部同源输出一行，无降级时该行不出现（产物逐字节不变，`plan-263`）。
 
+- **缓存命中率：同事实单键**：`fetch_latest_indicator` 先复用多期缓存（`fin_indicator_hist_{code}` 头部即最新一期），不再让同一 code 走两条键各回源一次（`plan-264`）。
+
 ## 归档
 
 - [`archived_changelog.0.18.x.md`](../archive/v0.18.x/archived_changelog.0.18.x.md) — v0.18.0 ~ v0.18.3（2026-11-12 ~ 2026-11-17）

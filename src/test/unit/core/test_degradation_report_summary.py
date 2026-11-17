@@ -83,7 +83,9 @@ class TestReportWiring:
     def test_render_context_carries_the_summary_line(self, monkeypatch):
 
         monkeypatch.setattr(
-            degradation_mod, "report_degradation_summary", lambda *a, **k: {"count": 1, "events": 2, "lines": [], "text": "本轮降级：1 项 / 2 次"}
+            degradation_mod,
+            "report_degradation_summary",
+            lambda *a, **k: {"count": 1, "events": 2, "lines": [], "text": "本轮降级：1 项 / 2 次"},
         )
         from src.test.unit.report.test_html_render_context import _data_source, _prepare, _visibility, deps  # noqa: F401
 
@@ -104,7 +106,9 @@ class TestChannelOutlets:
 
         monkeypatch.setattr("src.python.core.artifacts.collect_artifacts", lambda *a, **k: ["/tmp/report.html"])
         monkeypatch.setattr(
-            degradation_mod, "report_degradation_summary", lambda *a, **k: {"count": 0, "events": 0, "lines": [], "text": ""}
+            degradation_mod,
+            "report_degradation_summary",
+            lambda *a, **k: {"count": 0, "events": 0, "lines": [], "text": ""},
         )
         _handlers._print_artifact_paths({}, None)
         assert "本轮降级" not in capsys.readouterr().out
