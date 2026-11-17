@@ -42,7 +42,7 @@
 | `src/test/conftest.py` 1193 行（测试登记线 900） | fixture 族按域下沉（行情/LLM/网络/持久化各一模块），conftest 只留 autouse 与装配 |
 | `src/python/report/html_writer.py` 757 行（主程序登记线 700） | 渲染前置装配已下沉 `_html_render_context`（入参按来源域分组）；再涨按「模板渲染 / 后处理三段」继续切 |
 | `src/python/core/perf.py` 799 行 | 采集器与台账落盘可拆（`perf` 采集 / `perf_history` 读写两文件） |
-| `src/python/core/doctor.py` 769 行 | 检查项按域分文件（环境 / 配置 / 数据源 / 报告产物），入口只留编排 |
+| `src/python/core/doctor.py` 788 行 | 检查项按域分文件（环境 / 配置 / 数据源 / 报告产物），入口只留编排 |
 | `src/python/llm/fact_checker/_numerical.py` 764 行 | 数值校验按规则族拆（金额 / 比率 / 计数），共享解析原语上提包内 `_common` |
 | `src/python/tui/handlers_config.py` 743 行 | 配置面板按域拆（内容选项 / 全局设置 / 目录与文件名） |
 | `scripts/_doc_drift/_format.py` 742 行 | 格式化规则按文档类型拆（章节 / 表格 / 树 / 统计） |

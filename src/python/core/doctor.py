@@ -480,6 +480,24 @@ def _check_report_qa_usage() -> list[dict[str, Any]]:
     return [_item(GROUP_FEATURES, "报告追问效果", True, "\n".join(lines))]
 
 
+def _check_experiment_verdicts() -> list[dict[str, Any]]:
+    """实验项转正/撤销裁决（信息性，不影响自检结论）。
+
+    项清单由 `experimental_flags()` 派生，判据逐条上屏；达资格的项另出提醒行——
+    转正/撤销都是人工变更（不改开关、不摘 `experimental`）。
+    """
+    try:
+        from src.python.core.experiment_verdicts import action_notices, collect_verdicts, format_verdict_lines
+
+        verdicts = collect_verdicts()
+        lines = format_verdict_lines(verdicts)
+        notices = action_notices(verdicts)
+    except Exception as exc:  # noqa: BLE001
+        return [_item(GROUP_FEATURES, "实验项裁决", False, f"读取失败: {type(exc).__name__}: {exc}")]
+    message = "\n".join(lines + notices) if lines or notices else "无可裁决的实验项"
+    return [_item(GROUP_FEATURES, "实验项裁决", True, message)]
+
+
 def _check_review_ledger_overview() -> list[dict[str, Any]]:
     """复盘账本与实验功能使用统计的只读概览（信息性，不影响自检结论）。
 
@@ -722,6 +740,7 @@ def run_doctor_checks(*, include_network: bool = True, max_timeout: float = 8.0)
     results.extend(_check_experimental_features())
     results.extend(_check_eval_status())
     results.extend(_check_report_qa_usage())
+    results.extend(_check_experiment_verdicts())
     results.extend(_check_review_ledger_overview())
     results.extend(_check_source_adapters())
     results.extend(_check_datasource_credentials())
