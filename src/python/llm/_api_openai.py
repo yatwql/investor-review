@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 from src.python.llm.api_base import call_llm_with_retry
 from src.python.llm._api_responses import _check_openai_truncation
-from src.python.llm.api import (
+from src.python.llm.api_base import (
     _DEFAULT_OPENAI_MODEL,
 )
 

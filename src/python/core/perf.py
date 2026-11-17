@@ -193,8 +193,9 @@ class _LogCounterHandler(logging.Handler):
                 self._collector.note_error(str(record.getMessage()))
             else:
                 self._collector.count("warnings")
-        except Exception:
-            pass
+        except Exception:  # 收集器内部故障不得反噬日志系统
+            # 用 logging 自己的异常出口（不在此处再调 logger，避免 emit → log → emit 自激）
+            self.handleError(record)
 
 
 @dataclass

@@ -3648,7 +3648,8 @@ make_http_client(timeout=10.0) → httpx.Client
 | `completion_notify` | 任务完成通知（CLI/Web 报告收尾按 `notify` 配置分发 webhook/邮件/桌面三通道事件——失败必发、成功需 `on_success`；无配置静默跳过；单通道失败隔离、永不抛出不改退出码；webhook URL 日志只记域名；降级摘要单源 `core/degradation.degradation_summary()`） | 诊断 | 报告 | 随 `notify` 配置节 |
 | `degradation_summary` | 通知降级摘要单源（数据状态跟踪器事件日志 → 摘要行，最新在前按源去重；CLI/Web 收尾共用，渠道层不再各自镜像） | 诊断 | 报告 | 随 `notify` 配置节 |
 | `report_degradation_summary` | 本轮降级汇总出口（跟踪器本轮事件按「源 + 失败类型」去重计数 → `{count, events, lines, text}`；报告数据状态块尾与 CLI 产物清单尾部同源消费，无降级时 `text` 为空串故不出该行） | 诊断 | 报告 | 已内置 |
-| `doctor` | 系统自检（环境/配置/目录/日志与缓存/功能开关/数据源适配/数据源凭据/数据源八组，失败项附可执行建议，自身永不抛异常） | 诊断 | 诊断 | 恒上屏（无开关） |
+| `doctor` | 系统自检（环境/配置/目录/日志与缓存/功能开关/数据源适配/数据源凭据/数据源八组，失败项附可执行建议，自身永不抛异常） | 诊断 | 诊断
+| `doctor_common` | 自检基座（分组名常量 + 结果构造器 `_item`）：`doctor` 与 `doctor_logs` 共用，避免两者互相 import 成环；依赖单向 `doctor_common ← doctor_logs ← doctor` | 诊断 | 诊断 | 已内置 | | 恒上屏（无开关） |
 | `datasource_fields` | 数据域标准字段记录（`schemas/datasource_fields.py`，类型注解即缺省语义） | 数据源适配 | 数据获取 | 随 `adapter_chain_slots` |
 | `source_adapter` | 数据源适配契约（`SourceAdapter` 基类 + 注册表 + 自检报告 `survey_adapters`） | 数据源适配 | 数据获取 | 已内置（适配契约） |
 | `quote_adapters` | 行情域适配器（腾讯/新浪/东方财富三源） | 数据源适配 | 数据获取 | 已内置（适配契约） |

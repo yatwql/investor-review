@@ -21,6 +21,7 @@
 - **账本级原语单源**：新增 `core/ledger_common.py`（`feature_active` 开关收敛判定 / `now_iso` 秒级时间戳），两个账本的同名函数改为薄封装，导入面与既有 patch 点不变（`rf-1163`）。
 - **台账收口**：`plan-252`（评估政策单源 + 不动作类命中评估）与 `plan-253`（LLM 复盘结论结构化契约，补证循环归 `plan-255` 裁决）迁入已完成待归档。
 - **去重性能的收尾核实**：profile 显示剩余成本在候选对的双向相似度计算；两条候选优化（窗口专属跳过重叠 / 单向 ratio 提前退出）实测分别 0 收益与 0.05% 命中，均不采纳，结论写回 `plan-262` 条目（进一步加速须改判定口径）。
+- **消除两处循环 import**：新增 `core/doctor_common.py`（分组常量 + `_item`）供 `doctor`/`doctor_logs` 共用；provider 默认模型与 Extended Thinking 装配迁入 `llm/api_base.py`，`_api_*` 与门面改为单向取用；新增依赖图机检 `test_module_graph.py`（顶层 import 无环），当前环数 0（`rf-1165`）。
 - **深层渲染契约收敛**：新增 `TemplateContext` 承载 94 个模板变量，`_render_template` 收敛为 `render(**asdict(ctx))` + 章节顺序 CSS 注入；81 个关键字形参与 94 行关键字表收为装配侧一次赋值，`html_writer.py` 760 → 596 行并退出膨胀登记；同输入产物 SHA 逐字节一致（`plan-258`）。
 - **测试用例审计**：全量 13061 条用例核对（冗余/无效/分类/命名四个维度）——机检十类问题为零；4 处命名补足期望结果（`rf-1164`），22 组「常量归一后同体」确认属按 provider/契约的并行覆盖，保留不合并。
 - **文档触点**：`DESIGN.md` 登记「降级汇总行」口径（位置 / 句式 / 无降级不出行），`reports-instruction.md` 与 `how-to-use-cli-mode.md` 同步该行，`technical.md` 补渲染前置装配与账本原语模块行。

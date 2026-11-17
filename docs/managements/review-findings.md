@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.18.4-dev
-> **编号源**：`rf-next = 1165`（新增问题提出后更新为 +1；已用最大 rf-1164，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1166`（新增问题提出后更新为 +1；已用最大 rf-1165，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -40,8 +40,8 @@
 | 文件 | 现状与拆分方向 |
 |------|----------------|
 | `src/test/conftest.py` 1193 行（测试登记线 900） | fixture 族按域下沉（行情/LLM/网络/持久化各一模块），conftest 只留 autouse 与装配 |
-| `src/python/core/perf.py` 799 行 | 采集器与台账落盘可拆（`perf` 采集 / `perf_history` 读写两文件） |
-| `src/python/core/doctor.py` 788 行 | 检查项按域分文件（环境 / 配置 / 数据源 / 报告产物），入口只留编排 |
+| `src/python/core/perf.py` 800 行 | 采集器与台账落盘可拆（`perf` 采集 / `perf_history` 读写两文件） |
+| `src/python/core/doctor.py` 787 行 | 检查项按域分文件（环境 / 配置 / 数据源 / 报告产物），入口只留编排 |
 | `src/python/llm/fact_checker/_numerical.py` 764 行 | 数值校验按规则族拆（金额 / 比率 / 计数），共享解析原语上提包内 `_common` |
 | `src/python/tui/handlers_config.py` 743 行 | 配置面板按域拆（内容选项 / 全局设置 / 目录与文件名） |
 | `scripts/_doc_drift/_format.py` 742 行 | 格式化规则按文档类型拆（章节 / 表格 / 树 / 统计） |
@@ -67,6 +67,7 @@
 | **rf-1162** | 守护命中台账（本版新增）只追加不设上限——每次守护运行写一行，单日实测已 121 行/18KB，长期会膨胀到几十 MB 且拖慢读取 | `record_guard_run` 追加前按体积上限（4MB）截断为最近 5000 行（临时文件 + `os.replace` 原子替换，失败静默同写入口径）；配「超限截断 / 未超限只追加」两用例 |
 | **rf-1163** | `core/decision_ledger.py` 与 `core/signal_ledger.py` 各自复制 `is_active()`（4 行）与 `_now_iso()`（1 行）——同名同体，改「开关收敛方式」或「时间戳精度」要动两处，漏一处就静默漂移（一个账本按秒、另一个按微秒） | 新增 `core/ledger_common.py`（`feature_active(flag)` + `now_iso()` 秒级 ISO），两个账本的 `is_active` / `_now_iso` 改为薄封装并保留原名（导入面与既有 patch 点不变）；配 `test_ledger_common.py` 8 条（委托判定 / 秒级格式 / 单调不降 / 两账本薄封装同口径） |
 | **rf-1164** | 4 处用例命名与断言语义不精确：`test_low` / `test_no` / `test_etf` / `test_esc` —— 名字只说输入的一半（low / no / etf / esc），不表达「期望结果是什么」，跨文件检索时无法判断该用例守的是哪条语义 | 改为「输入 + 期望」双段式：`test_low_percentile_tier` / `test_env_no_returns_false` / `test_pure_etf_hint_is_index` / `test_esc_maps_to_key_esc`；同批核对 22 组「常量归一后同体」用例，确认属按 provider/契约并行的覆盖（各自 mock 与固件不同），保留不合并 |
+| **rf-1165** | 两处模块级循环 import：`core/doctor ↔ core/doctor_logs`（后者反向取 `GROUP_*`/`_item`）、`llm/api ↔ llm/_api_*`（子模块反向取默认模型与 Extended Thinking 装配）——靠「先定义、末尾延迟 import」勉强可用，改一行定义位置即 ImportError，且依赖方向读不出来 | 共用面下沉基座：新增 `core/doctor_common.py`（分组常量 + `_item`），provider 默认模型与 `_resolve_thinking_budget` / `configure_extended_thinking` 迁入 `llm/api_base.py`（门面与子模块双向取用改为单向）；依赖图机检 `test_module_graph.py`（顶层 import 无环 + 基座不反向依赖）落地，当前环数 0 |
 
 ### 归档档案
 - [`archived_review-findings.0.18.x.md`](../archive/v0.18.x/archived_review-findings.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-17）

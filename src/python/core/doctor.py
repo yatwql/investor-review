@@ -32,15 +32,21 @@ from typing import Any
 from src.python.core.ansi_colors import RAW_CODES
 from src.python.core.constants import APP_NAME, APP_VERSION, PROJECT_ROOT
 
+# 分组常量与结果构造器下沉 `doctor_common`：`doctor_logs` 的探针实现需要它们，
+# 放在本文件会让两个模块互相 import（环）；下沉后依赖单向：doctor_common ← doctor_logs ← doctor。
+from src.python.core.doctor_common import (  # noqa: E402
+    GROUP_ADAPTER,
+    GROUP_CONFIG,
+    GROUP_CREDENTIAL,
+    GROUP_DIRS,
+    GROUP_ENV,
+    GROUP_FEATURES,
+    GROUP_LOG_CACHE,
+    GROUP_NETWORK,
+    _item,
+)
+
 # 自检分组顺序（渲染时按此顺序输出，便于稳定对比两次自检结果）
-GROUP_ENV = "环境"
-GROUP_CONFIG = "配置"
-GROUP_DIRS = "目录"
-GROUP_FEATURES = "功能开关"
-GROUP_ADAPTER = "数据源适配"
-GROUP_CREDENTIAL = "数据源凭据"
-GROUP_NETWORK = "数据源"
-GROUP_LOG_CACHE = "日志与缓存"
 
 GROUP_ORDER = [
     GROUP_ENV,
@@ -115,13 +121,6 @@ _LOGS_DIR = os.path.join(PROJECT_ROOT, "logs")
 _DEFAULT_OUTPUT_DIR = os.path.join(PROJECT_ROOT, "reports")
 
 
-def _item(group: str, label: str, ok: bool, message: str, *, hint: str = "") -> dict[str, Any]:
-    """构造一条自检结果。
-
-    Args:
-        hint: 可选的可执行修复建议（「错误即 UX」——不只报错，还告诉用户怎么办）
-    """
-    return {"group": group, "label": label, "ok": ok, "message": message, "hint": hint}
 
 
 def _check_python_version() -> dict[str, Any]:
