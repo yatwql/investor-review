@@ -173,7 +173,7 @@ A: 项目内置 CLI 命令行模式（`.venv/bin/python -m src.python.cli`），
 A: 这是**修复后的已知问题**：`requirements.txt` 含中文注释但无 UTF-8 BOM，在中文 Windows（cp936 locale）+ pip ≤24.x 上，pip 按「BOM → 编码声明 → 系统区域编码」次序解码需求文件时回退到 GBK 导致。按优先级任选其一：
 
 1. **首选**：`git pull` 拉取最新代码后重跑 `launch.ps1`——BOM 已修复，且 `requirements.txt` 内容变化会自动触发重装依赖；
-2. **升级 pip**：`.venv\Scripts\python.exe -m pip install -U pip`（pip ≥25 起默认按 UTF-8 解析需求清单，不受系统 locale 影响，修复前拉取的代码也不再受影响）；
+2. **升级 pip**：`.venv\Scripts\python.exe -m pip install -U pip`（pip ≥25 起默认按 UTF-8 解析需求清单，不受系统 locale 影响）；
 3. **临时应急**：PowerShell 先执行 `$env:PYTHONUTF8=1` 再运行 `launch.ps1`（仅当前窗口生效）。
 
 补充：仓库已新增 CI `portability` 门禁（旧 pip + 非 UTF-8 locale 真实解析 `requirements.txt`，以及「任何未显式指定 `encoding=` 的读写立即失败」的 PEP 597 严格档），同类缺陷不会再进入代码库。
@@ -747,7 +747,7 @@ A: 每个模块的重算原因都记在运行台账里（perf 的 `llm.recompute
 
 **Q: 升级程序版本需要清空缓存吗？**
 
-A: 通常不需要。缓存文件与程序版本解耦，TTL 过期后自动失效。仅当版本更新说明中特别标注"缓存结构变更"时才需手动清理。升级后若遇到异常数据，可先在菜单 `[3]` 缓存管理中输入 `3` 清理过期缓存。
+A: 通常不需要。缓存键带结构版本后缀，程序升级后旧结构缓存自然对不上（等价于全部失效、按需重建），过期条目另由 TTL 清扫。升级后若遇到异常数据，可先在菜单 `[3]` 缓存管理中输入 `3` 清理过期缓存。
 
 **Q: 缓存文件占用磁盘空间太大怎么办？**
 

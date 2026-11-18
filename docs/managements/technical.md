@@ -1284,7 +1284,14 @@ fetch_index_data(code)
 
 #### 2.4.4 akshare 接口名兼容（逻辑名 → 候选链）
 
-**问题**：akshare 会在小版本里**就地重命名**导出接口且不保留别名（已观测四个：交易日历 `tool_trade_date_hist_sina` → `calendar_trade_date_hist_sina`、同花顺行业资金流 `stock_fund_flow_industry` → `stock_fund_flow_industry_ths`、央视新闻 `news_cctv` → `alternative_news_cctv`、板块资金流排行 `stock_sector_fund_flow_rank` → `stock_fund_flow_sector_rank_em`）。依赖声明是区间（`akshare>=1.16,<2.0`），所以同一份代码要同时跑在新旧名字上：**只写旧名**时，依赖解析到改名后版本的机器上该取数以 `AttributeError` 被降级吞掉——数据源静默变空，报告照出、只是少了数据，且日志里只留一条普通告警（实测 CI 上交易日历与行业资金流两条链路整条失效而本机全程无感）。
+**问题**：akshare 会在小版本里**就地重命名**导出接口且不保留别名，而依赖声明是区间（`akshare>=1.16,<2.0`），同一份代码要跑在不同接口名的版本上：只写单一名字时，名字不存在的那侧以 `AttributeError` 被降级吞掉——数据源静默变空，报告照出、只是少了数据，日志里也只留一条普通告警。当前受影响的接口（旧名 → 改名后）在兼容表里登记为：
+
+| 取数 | 旧名 | 改名后 |
+|:--|:--|:--|
+| 交易日历 | `tool_trade_date_hist_sina` | `calendar_trade_date_hist_sina` |
+| 同花顺行业资金流 | `stock_fund_flow_industry` | `stock_fund_flow_industry_ths` |
+| 央视新闻 | `news_cctv` | `alternative_news_cctv` |
+| 板块资金流排行 | `stock_sector_fund_flow_rank` | `stock_fund_flow_sector_rank_em` |
 
 **判定**：接口名解析收在 `core/akshare_compat.py`——调用方只写**逻辑名**，`resolve(akshare, 逻辑名)` 按 `_ALIASES` 候选链取**第一个存在且可调用**的接口（旧名在前：两名字并存时行为不变）；候选链全缺时抛 `AttributeError` 并点名试过的全部名字，作为「又改名了」的可诊断信号。
 
@@ -2320,7 +2327,7 @@ report/ 渲染                   # 模板 context 传递（C14）→ 风格表 +
 
 次序本身就是隔离手段：无年份兜底被压到第 3 跳、且联接基金在第 2 跳即返回，故它无法遮蔽联接基金。**取数层不做时效判定**——陈旧判据唯一归属 `report/holdings_freshness.py`（`is_stale_report` / `STALE_QUARTERS`），复制到取数层即「判据复制」，两者日后必然漂移；第 3 跳的陈年报告照常上送，由报告层时效闸门裁决并标注「报告期 X，距今 N 个完整季度」。
 
-**联接基金穿透（内置恒开，无功能开关）**：ETF 联接基金的资产就是目标 ETF、本身不持有股票，故其季报股票表按构造为空（按构造只有占位空内容，不是取数失败）——修复前它在报告里恒为「持仓不可用」，QDII 联接基金因此拿不到任何底层暴露。穿透做法：目标 ETF 由基金主页面锚点**动态解析**（`parse_feeder_target_etf`，不维护「联接基金 → 目标 ETF」映射表，基金公司更换标的 ETF 时锚点随页面同步更新），再由 `fetcher/fund.py::with_feeder_penetration` 以目标 ETF 的持仓与报告期代理该基金的底层暴露，并在结果中记 `feeder_penetration = {target_code, target_name}` 供报告层标注来源。两处要点：①**幂等**——该函数在单条取数与批量两个接缝都调用，因为批量路径的 `execute_with_cache_check` 缓存命中时会跳过任务、穿透若只在网络路径做则热缓存下静默失效，故以「已带 `feeder_penetration` 即原样返回」保证重复调用无副作用；②**结构深度恒为 1**——只有名称含「联接」的基金才产出 `feeder_target_code`，而 ETF 名称不含「联接」，故目标基金永不产出新的目标，无需运行时深度计数。联动判定复用既有 `core/code_utils.py::is_index_link_by_name`（不新增第二份「是否联接」关键词表）；锚点两重区分（标签须止于「ETF」`(?!联)` + 目标须为场内代码）用于排除常规 ETF 页的**反向**链接（回指其场外联接基金）。归因口径为 **100%（不折算持有比例）**——联接基金约 95% 投向目标 ETF，未折算会轻微高估底层权重，报告中标「穿透自目标 ETF `XXXXXX`（未折算持有比例）」把该已知偏差公开；折算需解析联接基金自身的基金投资明细，当前无对应取数通道。
+**联接基金穿透（内置恒开，无功能开关）**：ETF 联接基金的资产就是目标 ETF、本身不持有股票，故其季报股票表按构造为空（按构造只有占位空内容，不是取数失败）——不做穿透时该基金只能报「持仓不可用」，拿不到任何底层暴露。穿透做法：目标 ETF 由基金主页面锚点**动态解析**（`parse_feeder_target_etf`，不维护「联接基金 → 目标 ETF」映射表，基金公司更换标的 ETF 时锚点随页面同步更新），再由 `fetcher/fund.py::with_feeder_penetration` 以目标 ETF 的持仓与报告期代理该基金的底层暴露，并在结果中记 `feeder_penetration = {target_code, target_name}` 供报告层标注来源。两处要点：①**幂等**——该函数在单条取数与批量两个接缝都调用，因为批量路径的 `execute_with_cache_check` 缓存命中时会跳过任务、穿透若只在网络路径做则热缓存下静默失效，故以「已带 `feeder_penetration` 即原样返回」保证重复调用无副作用；②**结构深度恒为 1**——只有名称含「联接」的基金才产出 `feeder_target_code`，而 ETF 名称不含「联接」，故目标基金永不产出新的目标，无需运行时深度计数。联动判定复用既有 `core/code_utils.py::is_index_link_by_name`（不新增第二份「是否联接」关键词表）；锚点两重区分（标签须止于「ETF」`(?!联)` + 目标须为场内代码）用于排除常规 ETF 页的**反向**链接（回指其场外联接基金）。归因口径为 **100%（不折算持有比例）**——联接基金约 95% 投向目标 ETF，未折算会轻微高估底层权重，报告中标「穿透自目标 ETF `XXXXXX`（未折算持有比例）」把该已知偏差公开；折算需解析联接基金自身的基金投资明细，当前无对应取数通道。
 
 
 **板块分类（双层策略）**：
@@ -2493,7 +2500,7 @@ _dedup_by_title(items)
      → 滑动窗口取连续 2 字，跳过含占位符的窗口
 ```
 
-**STOP 词列表**（334 个，含财报/回购/指数/预警/地震/目标价/货币单位/通用业务词等模板词，不参与实体判定）。模板词在提取**前**被整体掩码替换（`_mask_stop`），杜绝跨词边界 bigram（"累计回购" → `□□`，不再产生"计回/购股"）泄漏——此前不同公司同类新闻天然共享 3-6 bigram（如"美的集团累计回购A股股份" vs "中远海控累计回购A股股份" bg=5 被误合并）。
+**STOP 词列表**（334 个，含财报/回购/指数/预警/地震/目标价/货币单位/通用业务词等模板词，不参与实体判定）。模板词在提取**前**被整体掩码替换（`_mask_stop`），杜绝跨词边界 bigram（"累计回购" → `□□`，不再产生"计回/购股"）泄漏——模板词共有的 bigram 因此不参与实体判定，不同公司的同类新闻不会因为共用「累计回购」这类片段而被误合并。
 
 **示例**：标题"英伟达Blackwell AI芯片发布" → 英数 token：`{"blackwell", "ai"}`（blackwell ≥4 字符另插 `_tk:blackwell`）；中文 bigram：掩码"发布"后 → 英伟、伟达、芯片、片发 → **实体集合：`{"blackwell", "ai", "_tk:blackwell", "英伟", "伟达", "芯片", "片发"}`**
 
@@ -2952,7 +2959,7 @@ llm/skeleton.py            # 摘要注入 expert_review 提示词（开关门控
 
 ---
 
-**LLM 模块结果行的级别口径（单源）**：每轮每模块只打一条结果行，分四级——成功 `INFO 生成完成`；开关关闭 `INFO 未生成（开关关闭）`；总时间预算到点 `INFO 未生成（总时间预算跳过）`；**其余一律 `ERROR 生成失败（<可读原因>）`** 并附「报告对应章节将降级/占位」。判据取 `llm/failure_reasons.py` 的 `LLM_MODULE_FAILURE`（dict 形态取 `final_status`、str 形态直接用），可读文案取同模块 `FAIL_REASON_LABELS` / `describe_failure_reason()`——报告模块状态（`report/llm_module_info.py` 的 `_DISPLAY_REASON` 即同一对象）与日志因此不会出现两套措辞。过去「provider 全挂」与「用户关了开关」「预算跳过」都打成 `INFO 生成失败（跳过）`，事后无法区分内容缺失的原因；`llm/skeleton.py` 的失败行同时补齐模块名与原因（此前只有缓存键）。
+**LLM 模块结果行的级别口径（单源）**：每轮每模块只打一条结果行，分四级——成功 `INFO 生成完成`；开关关闭 `INFO 未生成（开关关闭）`；总时间预算到点 `INFO 未生成（总时间预算跳过）`；**其余一律 `ERROR 生成失败（<可读原因>）`** 并附「报告对应章节将降级/占位」。判据取 `llm/failure_reasons.py` 的 `LLM_MODULE_FAILURE`（dict 形态取 `final_status`、str 形态直接用），可读文案取同模块 `FAIL_REASON_LABELS` / `describe_failure_reason()`——报告模块状态（`report/llm_module_info.py` 的 `_DISPLAY_REASON` 即同一对象）与日志因此不会出现两套措辞。四级口径把「provider 全挂」「用户关了开关」「预算跳过」区分开，内容缺失的原因事后可读；`llm/skeleton.py` 的失败行同时给出模块名与原因，不只缓存键。
 
 ### 4.18 决策跨期反思闭环
 

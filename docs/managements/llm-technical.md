@@ -901,7 +901,7 @@ penetrated_assets ──→ extract_stable_penetration()
 
 **辩论三键（`debate_procon_fingerprint` / `debate_synthesis_fingerprint`）**：辩论模式绕过标准预检，其键族 `llm_debate_*` 与标准键不同，故**仅写侧**使用、不进 `MODULE_FINGERPRINT_BUILDERS`。其输入口径同样以辩论提示词实际包含的段落为准——含基础持仓 + 竞争语境块 + 量化指标 + 辩论增强后缀 + `pipeline_data` 派生的【环比变化】【数据质量降级】两段（白脸/黑脸复用 `_build_expert_review_prompt`，这两段随其进入提示词）+ 统一 prompt 附录四块（申购限购 / 持仓变动复盘 / 事件窗分歧例 / 调仓纪律回放，非空才并入——白脸/黑脸经 `generate_llm_module` → skeleton 追加附录，仅附录内容变化时也须换键，否则回放带旧附录上下文的旧输出；空串不追加 part，键与引入前逐字节一致），**刻意不并入** `history_data` 与教训/信号摘要/结构化决策头后缀（辩论提示词不含这些段落，并入只会让白脸/黑脸/综合三次昂贵调用每份报告必 miss）。
 
-**辩论综合键（`debate_synthesis_fingerprint`）**：取「辩论基础指纹 + **综合提示词全文**」。综合提示词 = 白脸/黑脸**全文** + 条件推理情景段（`debate.conditional.scenarios` 驱动）+ 集中度问答段（`debate.concentration_qa.threshold` 驱动，内建段落），由 `_build_debate_synthesis_prompt()` 一次性渲染。既然提示词就是这三者的函数，键直接取该渲染结果，无需逐项枚举入哈希的来源、也就不会漏项。此前本键另起一套：截取 pro/con **前 200 字符**摘要 + 开关位字母后缀，两处后果——正文差异落在 200 字符之后时键不动，仅改 config（情景名/描述、集中度阈值）而开关位不变时键同样不动；两种情形都命中按旧正文/旧配置生成的综合结论且不报错。
+**辩论综合键（`debate_synthesis_fingerprint`）**：取「辩论基础指纹 + **综合提示词全文**」。综合提示词 = 白脸/黑脸**全文** + 条件推理情景段（`debate.conditional.scenarios` 驱动）+ 集中度问答段（`debate.concentration_qa.threshold` 驱动，内建段落），由 `_build_debate_synthesis_prompt()` 一次性渲染。既然提示词就是这三者的函数，键直接取该渲染结果：不逐项枚举入哈希的来源，正文任意位置变化都会换键，改 config（情景名/描述、集中度阈值）同样换键——不截断、不拼开关位后缀，避免「正文差异在截断点之后、或只改了配置」时键不动而命中按另一份输入生成的综合结论。
 
 **数据质量段的成本口径**：该段纳入指纹（不纳入的三个前提均不成立）——① 事件集是**本进程内**的降级日志（`DegradationTracker._events` 只存内存、不落盘，且每份报告入口经 `begin_report()` 清空），该块因而是**本次运行的数据源画像**而非「一日累计」；② 该块已是聚合结果（仅失败源与计数，无时间戳/消息/`detail`）；③ 本模块指纹本就含 `total_today_profit`，交易日内持仓一有盈亏变化即换键，24h TTL 从不是真实驻留期。故纳入的边际额外失效接近零，而收益是消除一类**静默的错误结论**：源恢复后重出报告不再复用故障期间缓存的健康判断（详见 `review-findings.md` 已解决区）。
 
