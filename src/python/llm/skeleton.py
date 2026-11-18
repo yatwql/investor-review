@@ -203,6 +203,35 @@ def _finalize_and_cache(
     return (html, False)
 
 
+def _merge_usage(first: dict | None, second: dict | None) -> dict | None:
+    """累加两次真实调用的 usage（嵌套 dict 逐层合并）。
+
+    截断重试是**第二次真实计费调用**：两次的 token 都已花掉。只取后者的用量会让
+    台账按一半计（模块被截断时低估近 2 倍），故按键相加；缺失一侧时直接用另一侧。
+
+    Args:
+        first: 首次（被截断的）调用 usage
+        second: 重试调用 usage
+
+    Returns:
+        合并后的 usage；两侧皆空时为 None
+    """
+    if not first:
+        return second
+    if not second:
+        return first
+    merged: dict = dict(first)
+    for key, value in second.items():
+        old = merged.get(key)
+        if isinstance(old, dict) and isinstance(value, dict):
+            merged[key] = _merge_usage(old, value)
+        elif isinstance(old, (int, float)) and isinstance(value, (int, float)):
+            merged[key] = old + value
+        else:
+            merged[key] = value
+    return merged
+
+
 def _handle_truncation(
     result: str | None,
     usage: dict | None,
@@ -219,7 +248,8 @@ def _handle_truncation(
     """检测截断并自动增大 max_tokens 重试。
 
     Returns:
-        (result, usage) — 重试后的结果与用量，或原结果与用量（未截断时）
+        (result, usage) — 重试后的结果与**两次调用的合计用量**，或原结果与用量
+        （未截断时）。重试失败时仍返回合计用量：首次调用的花费已经发生。
     """
     if not result or TRUNCATION_MARKER not in result:
         return result, usage
@@ -246,8 +276,8 @@ def _handle_truncation(
                 new_max,
                 config_field or "max_tokens",
             )
-        return result2, usage2
-    return result, None
+        return result2, _merge_usage(usage, usage2)
+    return result, usage
 
 
 def _build_provider_cache_key(

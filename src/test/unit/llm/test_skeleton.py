@@ -134,6 +134,63 @@ class TestHandleTruncation(unittest.TestCase):
         self.assertIn("max_tokens_global_macro：当前 4096 → 已试 6144", text)
         self.assertIn("请手动增大 llm_settings.json 的 max_tokens_global_macro", text)
 
+    def test_retry_merges_usage_of_both_calls(self):
+        """截断重试是第二次真实计费调用 → 用量必须为两次之和，不能只留后者。"""
+        from unittest.mock import patch
+
+        from src.python.llm._api_responses import TRUNCATION_MARKER
+        from src.python.llm.skeleton import _handle_truncation
+
+        truncated = f"<p>{TRUNCATION_MARKER}</p>"
+        first_usage = {"input_tokens": 100, "output_tokens": 2048}
+        retry_usage = {"input_tokens": 100, "output_tokens": 3000}
+        with patch("src.python.llm.skeleton.call_llm", return_value=("<p>完整内容</p>", retry_usage, {})):
+            _result, usage = _handle_truncation(
+                truncated,
+                first_usage,
+                2048,
+                "sys",
+                "usr",
+                {},
+                60,
+                None,
+                "max_tokens_self_review",
+                None,
+                "",
+            )
+        assert usage is not None
+        self.assertEqual(usage["input_tokens"], 200)
+        self.assertEqual(usage["output_tokens"], 5048)
+        # 首次 usage 不被就地改写（调用方可能仍持有同一对象）
+        self.assertEqual(first_usage["output_tokens"], 2048)
+
+    def test_failed_retry_keeps_first_call_usage(self):
+        """重试彻底失败时仍要保留首次调用的用量（钱已花掉，不能记成 0）。"""
+        from unittest.mock import patch
+
+        from src.python.llm._api_responses import TRUNCATION_MARKER
+        from src.python.llm.skeleton import _handle_truncation
+
+        truncated = f"<p>{TRUNCATION_MARKER}</p>"
+        first_usage = {"input_tokens": 40, "output_tokens": 2048}
+        with patch("src.python.llm.skeleton.call_llm", return_value=(None, None, {})):
+            result, usage = _handle_truncation(
+                truncated,
+                first_usage,
+                2048,
+                "sys",
+                "usr",
+                {},
+                60,
+                None,
+                "max_tokens_self_review",
+                None,
+                "",
+            )
+        self.assertEqual(result, truncated)
+        assert usage is not None
+        self.assertEqual(usage["output_tokens"], 2048)
+
 
 class TestHandleCacheHit(unittest.TestCase):
     """_handle_cache_hit — 缓存命中处理（通过 _generate_llm_content 间接测试）。

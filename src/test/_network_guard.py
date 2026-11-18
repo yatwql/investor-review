@@ -143,6 +143,10 @@ def apply_offline_stubs(monkeypatch: Any) -> None:
 
     import httpx
 
+    # 子进程取数（core/v8_subprocess）拿不到本进程的 socket 桩：显式告知离线，
+    # 否则测试会绕过守卫发起真实网络请求。
+    monkeypatch.setenv("INVEST_SUBPROCESS_NETWORK_OFFLINE", "1")
+
     from src.python.core import retry, throttle, trading_calendar
     from src.python.fetcher import chain
     from src.python.providers import akshare_extras

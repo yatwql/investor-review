@@ -36,7 +36,8 @@ class TestParamViolationTable:
         assert repr(invalid) in message
         bounds = LLM_PARAM_RANGES[param]
         if isinstance(bounds[0], str):
-            assert " / ".join(bounds) in message
+            enum_text = " / ".join(str(item) for item in bounds)
+            assert enum_text in message
         else:
             assert f"[{bounds[0]}, {bounds[1]}]" in message
 
@@ -84,6 +85,31 @@ class TestLoadSanitize:
         assert doc["runtime"]["debate_limits"]["call_timeout_override_sec"] == 90
         assert len(issues) == 7
         assert all("已回落出厂默认" in issue for issue in issues)
+
+    def test_below_default_max_tokens_kept_but_flagged(self):
+        """max_tokens 合法但低于出厂默认 → 不改值，但给出「当前 / 默认 / 代价」提示。
+
+        偏低会导致满编持仓下触顶截断，而截断会自动放大重生成一次（多一次计费调用），
+        加载时不说，就等于把额外费用与「内容不完整」的根因藏起来。
+        """
+        from src.python.config._llm_settings_defaults import get_llm_setting_default
+
+        factory = get_llm_setting_default("max_tokens_self_review")
+        assert isinstance(factory, int)
+        doc = {"schema_version": 2, "modules": {"self_review": {"enabled": True, "max_tokens": factory // 4}}}
+        sanitized, issues = sanitize_document(doc, _DEFAULTS_NESTED)
+
+        assert sanitized["modules"]["self_review"]["max_tokens"] == factory // 4  # 合法值不被回落
+        assert len(issues) == 1
+        assert f"当前 {factory // 4}" in issues[0]
+        assert f"出厂默认 {factory}" in issues[0]
+        assert "多一次计费调用" in issues[0]
+
+    def test_at_or_above_default_max_tokens_not_flagged(self):
+        """max_tokens ≥ 出厂默认（含不配置）→ 不产生提示，避免噪声稀释真告警。"""
+        doc = {"schema_version": 2, "modules": {"self_review": {"enabled": True, "temperature": 0.3}}}
+        _sanitized, issues = sanitize_document(doc, _DEFAULTS_NESTED)
+        assert issues == []
 
     def test_original_document_not_mutated(self):
         original = self._doc()

@@ -230,7 +230,9 @@ class TestFooterExperimentalNotice(unittest.TestCase):
         """渲染上下文须注入该变量——漏传时模板判空而静默不显示，无任何报错。
 
         模板变量由 `TemplateContext` 单一载体传递：契约分两层守——
-        字段必须在上下文 dataclass 里，且装配处（`write_html_report`）必须真的填值。
+        字段必须在上下文 dataclass 里，且**构造 TemplateContext 的那一处**必须真的填值。
+        装配点按「源码里含 `TemplateContext(` 的那个模块成员」动态定位（生成逻辑拆分搬动
+        函数时不至于把断言指向一个早已不装配上下文的空壳），定位不到即报错。
         """
         import dataclasses
         import inspect
@@ -240,9 +242,14 @@ class TestFooterExperimentalNotice(unittest.TestCase):
 
         fields = {f.name for f in dataclasses.fields(TemplateContext)}
         self.assertIn("enabled_experiments", fields, "模板上下文缺少 enabled_experiments 字段")
-        self.assertIn(
-            "enabled_experiments=",
-            inspect.getsource(html_writer.write_html_report),
+        assembly_sources = [
+            inspect.getsource(member)
+            for name, member in inspect.getmembers(html_writer, inspect.isfunction)
+            if "TemplateContext(" in inspect.getsource(member)
+        ]
+        self.assertTrue(assembly_sources, "模块内找不到构造 TemplateContext 的装配处")
+        self.assertTrue(
+            any("enabled_experiments=" in source for source in assembly_sources),
             "装配处必须给 enabled_experiments 填值",
         )
 

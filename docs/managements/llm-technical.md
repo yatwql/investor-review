@@ -1,7 +1,7 @@
 # LLM 集成层技术设计
 
 > **文档定位**：本文是 `technical.md` 的 LLM 分部（规则层），只给 LLM 集成层架构、契约与判据；运行/调试/发布等操作流程见 `developer-guide.md`，脚本参数见 `scripts-reference.md`，需求口径见 `requirements.md`。
-> 文档版本：0.18.4
+> 文档版本：0.18.5
 
 本文档是 `technical.md` 的 LLM 集成层专项技术设计补充，对应 `technical.md` §5（LLM 集成层概要设计）。
 `technical.md` §5 提供 LLM 层的总体架构、模块清单、调用链概览、多 Provider 链模式概要及关键机制速览；
@@ -167,7 +167,7 @@ skeleton.py:generate_llm_content()
 | `_debate_router.py` | 编排层 | 辩论模式**槽位替换**：把 `expert_review` 换成 pro→con→synthesis 串行组合（键名不变），两级回退（synthesis 失败 → pro+con 拼接；pro/con 失败或异常 → 回退普通生成并清空辩论信息） | `install_debate_route()` |
 | `_llm_context_blocks.py` | 编排层 | 六类上下文块的**单次渲染/提取**落点（竞争语境块、数据质量详细状态块渲染一次；申购限购 / 持仓变动复盘 / 事件窗分歧例 / 调仓纪律回放引用四块从契约提取同一实例），收成不可变快照 `LlmContextBlocks`，由调用方把**同一实例**分别交指纹与提示词（`is` 身份断言守护） | `build_context_blocks()` / `extract_*_block()` |
 | `_llm_post_pass.py` | 运行作用域 | 生成后一遍的顺序落点：逐模块事实锚定（含缓存回写与摘要拼接，缓存命中跳过排名校验）→ 生成后自检 → 跨模块收益率核对（副产物落运行作用域载体）；自检输入经 `review_text()` 剥掉用量页脚与校验产物段 | `anchor_fact_checks()` / `apply_generation_post_pass()` |
-| `generators.py` | 生成层 | 生成门面（按生成器域拆分）：辩论模式 pro/con/synthesis 生成 + `generate_self_review()`（生成后自检）+ `generate_holding_change_review()` 门面（实现于 `holding_change_review.py`）+ 单例四函数门面再导出 | 各 `generate_*()` |
+| `generators.py` | 生成层 | 生成门面（按生成器域拆分）：辩论模式 pro/con/synthesis 生成（白脸/黑脸共用 `_run_debate_side`、综合走 `_run_debate_synthesis`、运行参数由 `_resolve_debate_runtime` 解析）+ `generate_self_review()`（生成后自检）+ `generate_holding_change_review()` 门面（实现于 `holding_change_review.py`）+ 单例四函数门面再导出 | 各 `generate_*()` |
 | `generators_singletons.py` | 生成层 | 单例生成函数（global_macro / expert_review / health_check / penetration_deep，自 generators 按生成器域下沉；**测试 patch 以本模块为解析点**——`generate_llm_module` 等 seam 名在本域内解析） | 各 `generate_*()` |
 | `research_contract.py` | 运行作用域 | LLM 复盘结构化契约的解析/校验/载体：契约头（`主张契约：` + 一行 JSON）复用决策头的括号扫描解析；按证据索引校验「证据存在 / 每条≥1 条 / 失效条件必填 / 主张≤6 条」并给出模块级判决（ready/revise/evidence_needed/reject，模型自证 ready 不被采信）；**纯解析零 I/O**，校验失败只标注「未验证」不阻断报告。开关 `llm_research_contract`（默认关，关闭时提示词与产物逐字节不变） | `parse_contract()` / `validate_contract()` / `get_module_contracts()` |
 | `research_contract.contract_metrics` | 运行作用域 | 结构化契约埋点聚合（模块数 / 主张条数 / 校验错误数 / 判决分布 / 证据索引条数与字符数），经 `format_session_usage()` 进「LLM API 用量」页签一行（HTML/Excel 同源文案；开关关闭或无契约时不出行为空串） | `contract_metrics()` / `contract_metrics_line()` |

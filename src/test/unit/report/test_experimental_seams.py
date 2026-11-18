@@ -467,14 +467,12 @@ class TestHoldingChangeMount:
 class TestFacadeWiringOrder:
     """挂载点接线守卫 —— ``_SEAM_ORDER`` 全部挂载点被调用，且相对次序与顺序约束一致。"""
 
-    def _seam_call_order(self) -> list[str]:
-        source = (Path(PROJECT_ROOT) / "src" / "python" / "report" / "_generation_full.py").read_text(encoding="utf-8")
-        tree = ast.parse(source)
-        fn = next(
-            node
-            for node in ast.walk(tree)
-            if isinstance(node, ast.FunctionDef) and node.name == "_generate_report_full"
-        )
+    def _source(self) -> str:
+        return (Path(PROJECT_ROOT) / "src" / "python" / "report" / "_generation_full.py").read_text(encoding="utf-8")
+
+    def _seams_in(self, tree: ast.Module, fn_name: str) -> list[str]:
+        """该函数内挂载点调用（源码行序）。"""
+        fn = next(node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == fn_name)
         calls = [
             (node.lineno, node.func.id)
             for node in ast.walk(fn)
@@ -482,6 +480,50 @@ class TestFacadeWiringOrder:
         ]
         calls.sort()
         return [name for _, name in calls]
+
+    def _seam_call_order(self) -> list[str]:
+        """按**真实执行次序**串挂载点：以主编排的调用顺序为准，阶段函数就地展开。
+
+        挂载点已随长函数拆分散进多个阶段函数（`_capture_full_snapshot_stage` / 主编排 /
+        `_postprocess_llm_output`），单纯按函数定义顺序或按同一函数内行序都会与执行次序
+        脱节——故沿主编排的调用序列展开：调用阶段函数即插入其内部挂载点，直接调用挂载点
+        则就地记一笔。新增阶段函数无需改本表，挪动调用位置即被守住。
+        """
+        tree = ast.parse(self._source())
+        fns = {node.name: node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)}
+        stages = {name for name in fns if name != "_generate_report_full" and self._seams_in(tree, name)}
+        main = fns["_generate_report_full"]
+        calls = sorted(
+            (node for node in ast.walk(main) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)),
+            key=lambda node: node.lineno,
+        )
+        order: list[str] = []
+        for call in calls:
+            name = call.func.id
+            if name in stages:
+                order.extend(self._seams_in(tree, name))
+            elif name in _SEAM_ORDER:
+                order.append(name)
+        return order
+
+    def test_snapshot_stage_precedes_llm_stage(self):
+        """快照阶段（变动复盘/纪律回放注入）必须早于 LLM 阶段执行。
+
+        「结算先于 LLM 拉取」这条顺序约束原本靠「同一个函数里源码行序」保证；阶段拆成
+        两个函数后，行序管不到了，改由主编排里的**调用顺序**守——阶段被调换即失败。
+        """
+        tree = ast.parse(self._source())
+        main = next(
+            node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == "_generate_report_full"
+        )
+        call_lines = {
+            node.func.id: node.lineno
+            for node in ast.walk(main)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+        }
+        assert "_capture_full_snapshot_stage" in call_lines, "主编排未调用快照阶段"
+        assert "_run_llm_stage" in call_lines, "主编排未调用 LLM 阶段"
+        assert call_lines["_capture_full_snapshot_stage"] < call_lines["_run_llm_stage"]
 
     def test_all_seams_wired_in_documented_order(self):
         """``_SEAM_ORDER`` 全部挂载点均已接线，且次序满足「结算先于 LLM 拉取」等顺序约束。"""

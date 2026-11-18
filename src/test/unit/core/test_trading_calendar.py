@@ -10,7 +10,6 @@
 
 from __future__ import annotations
 
-import sys
 from unittest.mock import patch
 
 import pytest
@@ -18,6 +17,16 @@ import pytest
 from src.python.core.trading_calendar import count_trading_days_elapsed
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_core]
+
+def _patch_v8_failure(monkeypatch) -> None:
+    """把 akshare 日历取数桩成「子进程不可用」（主链路现走 core.v8_subprocess）。"""
+    from src.python.core import v8_subprocess
+
+    def _boom(func, kwargs=None, **kw):
+        raise v8_subprocess.V8SourceError("source_failed", "offline stub")
+
+    monkeypatch.setattr(v8_subprocess, "run_akshare_v8", _boom)
+
 
 # 测试日历（2026 年 9-10 月片段）：09-16 ~ 09-25 与 10-01 ~ 10-07 为假期
 _TEST_CALENDAR = {
@@ -99,6 +108,53 @@ class TestCalendarUnavailableFallback:
             assert count_trading_days_elapsed("2026-09-11", "2026-09-12") == 0
 
 
+class TestAkshareCalendarViaSubprocess:
+    """akshare 交易日历必须经 run_akshare_v8 在子进程取数。
+
+    `tool_trade_date_hist_sina` 内部建 py_mini_racer(V8) 上下文；在主进程内无论怎么
+    调度都会段错误/退出死锁（原生崩溃，`try/except` 无法兜底），故只在子进程跑。
+    """
+
+    def test_calendar_uses_subprocess_helper(self, monkeypatch):
+        from src.python.core import trading_calendar as tc
+        from src.python.core import v8_subprocess
+
+        called: list[str] = []
+
+        def _fake_run(func, kwargs=None, **kw):
+            called.append(func)
+            return [{"trade_date": "2026-09-17"}, {"trade_date": "2026-09-18"}]
+
+        monkeypatch.setattr(v8_subprocess, "run_akshare_v8", _fake_run)
+        monkeypatch.setattr(tc.cache, "get", lambda *a, **k: None)
+        monkeypatch.setattr(tc.cache, "set", lambda *a, **k: None)
+        monkeypatch.setattr(tc, "_calendar_memo_lookup", lambda: None)
+        monkeypatch.setattr(tc, "_calendar_memo_store", lambda dates: None)
+
+        assert tc._get_trading_calendar() == {"2026-09-17", "2026-09-18"}
+        assert called == ["tool_trade_date_hist_sina"]
+
+    def test_subprocess_failure_falls_back(self, monkeypatch):
+        """子进程取数失败（源不可用）→ 走既有兜底链，不把异常抛给调用方。"""
+        from src.python.core import trading_calendar as tc
+        from src.python.core import v8_subprocess
+
+        def _boom(func, kwargs=None, **kw):
+            raise v8_subprocess.V8SourceError("timeout", "子进程超过 90s 未返回")
+
+        monkeypatch.setattr(v8_subprocess, "run_akshare_v8", _boom)
+        monkeypatch.setattr(tc.cache, "get", lambda *a, **k: None)
+        monkeypatch.setattr(tc.cache, "set", lambda *a, **k: None)
+        monkeypatch.setattr(tc, "_calendar_memo_lookup", lambda: None)
+        monkeypatch.setattr(tc, "_calendar_memo_store", lambda dates: None)
+        original = tc._TRADING_DAYS_FALLBACK
+        tc.register_trading_days_fallback(lambda: {"item": [{"date": "2026-09-17"}]})
+        try:
+            assert tc._get_trading_calendar() == {"2026-09-17"}
+        finally:
+            tc._TRADING_DAYS_FALLBACK = original
+
+
 class TestHithinkCalendarFallback:
     """akshare 不可用 → 同花顺官方近一年交易日序列兜底（需 key；再失败才走简易判断）。"""
 
@@ -108,7 +164,7 @@ class TestHithinkCalendarFallback:
         monkeypatch.setattr(tc.cache, "get", lambda *a, **k: None)
         written: list = []
         monkeypatch.setattr(tc.cache, "set", lambda key, value: written.append((key, value)))
-        monkeypatch.setitem(sys.modules, "akshare", None)  # import akshare 触发 ImportError
+        _patch_v8_failure(monkeypatch)
         # 兜底经注册钩子注入（core 不反向 import providers）
         original = tc._TRADING_DAYS_FALLBACK
         tc.register_trading_days_fallback(lambda: {"item": [{"date": "2026-09-17"}, {"date": "2026-09-18"}]})
@@ -125,7 +181,8 @@ class TestHithinkCalendarFallback:
 
         monkeypatch.setattr(tc.cache, "get", lambda *a, **k: None)
         monkeypatch.setattr(tc.cache, "set", lambda *a, **k: None)
-        monkeypatch.setitem(sys.modules, "akshare", None)
+        _patch_v8_failure(monkeypatch)
+
         monkeypatch.setattr(hithink, "fetch_trading_days", lambda: None)
         assert tc._get_trading_calendar() == set()
 
@@ -137,7 +194,7 @@ class TestFallbackRegistration:
         from src.python.core import trading_calendar as tc
 
         monkeypatch.setattr(tc.cache, "get", lambda *a, **k: None)
-        monkeypatch.setitem(sys.modules, "akshare", None)  # 阻断主链路（兜底已卸除）
+        _patch_v8_failure(monkeypatch)
         original = tc._TRADING_DAYS_FALLBACK
         tc._TRADING_DAYS_FALLBACK = None
         try:
@@ -150,7 +207,8 @@ class TestFallbackRegistration:
         from src.python.core import trading_calendar as tc
 
         monkeypatch.setattr(tc.cache, "get", lambda *a, **k: None)
-        monkeypatch.setitem(sys.modules, "akshare", None)
+        _patch_v8_failure(monkeypatch)
+
         original = tc._TRADING_DAYS_FALLBACK
         tc.register_trading_days_fallback(lambda: (_ for _ in ()).throw(RuntimeError("down")))
         try:
@@ -167,7 +225,8 @@ class TestElapsedTradingDaysWithNaturalFallback:
         from src.python.core import trading_calendar as tc
 
         monkeypatch.setattr(tc.cache, "get", lambda *a, **k: None)
-        monkeypatch.setitem(sys.modules, "akshare", None)
+        _patch_v8_failure(monkeypatch)
+
         original = tc._TRADING_DAYS_FALLBACK
         tc._TRADING_DAYS_FALLBACK = None
         try:
@@ -275,8 +334,13 @@ class TestCalendarFailureCooldown:
         """akshare 与兜底源同时不可用（真实失败态）。"""
         from unittest.mock import patch as _patch
 
+        from src.python.core import v8_subprocess
+
+        def _boom(func, kwargs=None, **kw):
+            raise v8_subprocess.V8SourceError("source_failed", "offline stub")
+
         return [
-            _patch.dict(sys.modules, {"akshare": None}),
+            _patch.object(v8_subprocess, "run_akshare_v8", _boom),
             _patch("src.python.core.trading_calendar._TRADING_DAYS_FALLBACK", None),
             _patch("src.python.core.trading_calendar.cache.get", return_value=None),
         ]

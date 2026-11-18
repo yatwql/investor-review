@@ -245,12 +245,12 @@ def _write_industry_beta_block(
     """写入三、行业 Beta 子表区块，返回下一行起始行号。
 
     编排层 `style_factor_data.industry_beta` 子键：
-      - None（开关 功能开关 `industry_beta` 关闭）→ 区块不渲染；
+      - None（开关 `factor_catalog` 或基金深度分析关闭）→ 区块不渲染；
       - available=False（push2 行业分类 / 指数 K 线不足）→ 标题 + "数据不足"占位，
         Beta 子表不渲染，不阻塞该章其余内容（§1.4.5）。
     """
     if industry_beta is None:
-        logger.info("风格与因子分析·行业 Beta：开关关闭，区块不渲染")
+        logger.info("风格与因子分析·行业 Beta：章节/开关键关闭，区块不渲染")
         return row
 
     write_block_title(ws, row, "三、行业 Beta（组合对各行业指数敏感性）", ncols=ncols)

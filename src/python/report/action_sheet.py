@@ -103,40 +103,8 @@ def _write_sub_block(
 _TITLE_DECISION_BASIS = "判断依据"
 
 
-def _write_decision_basis_block(
-    ws: Worksheet,
-    row: int,
-    data: dict[str, Any] | None,
-    ncols: int,
-) -> int:
-    """写入行动页签顶部的「判断依据」子块（形态 A；开关关闭/键缺席 → 原样返回）。
-
-    空态写「数据不可用：<原因>」（Data States 口径）；后续按信号清单/置信度/
-    风险预算/纪律/结算摘要五节填充。
-
-    Returns:
-        子块结束行号（未写入时为入参 row）。
-    """
-    if not data or not data.get("enabled"):
-        return row
-    row += 1
-    row = write_block_title(ws, row, _TITLE_DECISION_BASIS)
-    row += 1
-    # 章首摘要：优先写契约的 headline 三行（与 HTML 章首同源同文）；
-    # 只有旧契约（无 headline 键）才回落单行 summary
-    headline = [str(line).strip() for line in (data.get("headline") or []) if str(line).strip()]
-    if headline:
-        for line in headline:
-            ws.cell(row=row, column=1, value=line).font = _FONT_SUMMARY_LINE
-            row += 1
-    else:
-        summary = str(data.get("summary") or "").strip()
-        if summary:
-            ws.cell(row=row, column=1, value=summary).font = _FONT_ACCENT
-            row += 1
-    if not data.get("available"):
-        row = write_data_row(ws, row, [f"数据不可用：{data.get('reason') or '原因未知'}"] + [""] * (ncols - 1))
-        return row
+def _write_basis_signals(ws: Worksheet, row: int, data: dict[str, Any], ncols: int) -> int:
+    """子节「信号清单」：逐信号一行（方向/口径·样本/回测样本/标注）+ 可信度小结。"""
     # 信号清单 + 信号可信度（risk_budget/discipline/settlement 后续轮次填充）
     # 内节标题不走 write_block_title：它是判断依据块的子节，不是注册区块
     row += 1
@@ -177,6 +145,11 @@ def _write_decision_basis_block(
         [f"信号可信度：{confidence.get('level_label') or '暂不可判'} —— {confidence.get('detail') or ''}"]
         + [""] * (ncols - 1),
     )
+    return row
+
+
+def _write_basis_risk_budget(ws: Worksheet, row: int, data: dict[str, Any], ncols: int) -> int:
+    """子节「风险预算」：上限 vs 现状（只摆事实；超限后的动作见再平衡信号子块）。"""
     # 风险预算（上限 vs 现状三行；只摆事实，超限后的动作见「再平衡信号」子块）
     risk_budget = data.get("risk_budget") or {}
     row += 1
@@ -207,6 +180,11 @@ def _write_decision_basis_block(
             row,
             [f"风险预算数据不可用：{risk_budget.get('reason') or '原因未知'}"] + [""] * (ncols - 1),
         )
+    return row
+
+
+def _write_basis_discipline(ws: Worksheet, row: int, data: dict[str, Any], ncols: int) -> int:
+    """子节「纪律明细」：触发条 + 距阈值 + 阶段化执行口径（只读复用纪律引擎结果）。"""
     # 纪律明细（触发条 + 距阈值 + 阶段化执行口径；只读复用纪律引擎结果）
     discipline = data.get("discipline") or {}
     row += 1
@@ -246,6 +224,11 @@ def _write_decision_basis_block(
             ]
             + [""] * (ncols - 1),
         )
+    return row
+
+
+def _write_basis_settlement(ws: Worksheet, row: int, data: dict[str, Any], ncols: int) -> int:
+    """子节「结算摘要」及其后续块：批次结算 / 历史表现 / 不动作判定 / 决策书 / 集中度约束。"""
     # 结算摘要（最近 5 批 × 多视界；未到期显式标注，收益与超额同为百分数）
     # 决策书在渲染期补挂（判断依据块装配早于 LLM 契约落载体）
     from src.python.report.decision_book import attach_decision_book
@@ -723,4 +706,47 @@ def _write_prosperity_block(ws, row: int, data: dict[str, Any], ncols: int) -> i
         )
     for text in (data.get("unverified") or []) + (data.get("notes") or []):
         row = write_data_row(ws, row, [f"* {text}", "", "", "", ""])
+    return row
+
+def _write_decision_basis_block(
+    ws: Worksheet,
+    row: int,
+    data: dict[str, Any] | None,
+    ncols: int,
+) -> int:
+    """写入行动页签顶部的「判断依据」子块（形态 A；开关关闭/键缺席 → 原样返回）。
+
+    空态写「数据不可用：<原因>」（Data States 口径）；后续按信号清单/置信度/
+    风险预算/纪律/结算摘要五节填充。
+
+    Returns:
+        子块结束行号（未写入时为入参 row）。
+    """
+    if not data or not data.get("enabled"):
+        return row
+    row += 1
+    row = write_block_title(ws, row, _TITLE_DECISION_BASIS)
+    row += 1
+    # 章首摘要：优先写契约的 headline 三行（与 HTML 章首同源同文）；
+    # 只有旧契约（无 headline 键）才回落单行 summary
+    headline = [str(line).strip() for line in (data.get("headline") or []) if str(line).strip()]
+    if headline:
+        for line in headline:
+            ws.cell(row=row, column=1, value=line).font = _FONT_SUMMARY_LINE
+            row += 1
+    else:
+        summary = str(data.get("summary") or "").strip()
+        if summary:
+            ws.cell(row=row, column=1, value=summary).font = _FONT_ACCENT
+            row += 1
+    if not data.get("available"):
+        row = write_data_row(ws, row, [f"数据不可用：{data.get('reason') or '原因未知'}"] + [""] * (ncols - 1))
+        return row
+    row = _write_basis_signals(ws, row, data, ncols)
+
+    row = _write_basis_risk_budget(ws, row, data, ncols)
+
+    row = _write_basis_discipline(ws, row, data, ncols)
+
+    row = _write_basis_settlement(ws, row, data, ncols)
     return row

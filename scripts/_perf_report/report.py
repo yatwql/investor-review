@@ -10,6 +10,10 @@ from datetime import datetime
 #: 性能基准目标秒数（报告达标判定与 --gate 退出码共用口径）
 _TARGET_SECONDS = 60
 
+#: full 模式全链路耗时上限（秒）。比 basic 宽：它含数据准备/新闻关联/穿透/
+#: 双输出等整条链路，且 LLM 已在基准里 mock，故该值只验收本地计算部分。
+_TARGET_FULL_SECONDS = 300
+
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _REPORT_OUTPUT_DIR = os.path.join(_PROJECT_ROOT, "docs", "tmp")
 _PERF_REPORT_PATH = os.path.join(_REPORT_OUTPUT_DIR, "better-investment-performance-test-report.md")
@@ -56,8 +60,9 @@ def write_perf_report(timings: dict[str, float], phase1: PerfSample, phase3: Per
     basic_time = timings.get("phase1_basic_excel", 0)
     both_time = timings.get("phase2_both_html_excel", 0)
     stress_time = timings.get("phase3_stress_large", 0)
+    full_time = timings.get("phase4_full_pipeline", 0)
     data_gen = timings.get("data_generation", 0)
-    total = round(basic_time + both_time + stress_time, 2)
+    total = round(basic_time + both_time + stress_time + full_time, 2)
 
     lines = [
         "# 端到端性能测试报告",
@@ -66,8 +71,8 @@ def write_perf_report(timings: dict[str, float], phase1: PerfSample, phase3: Per
         "",
         f"- **测试时间**: {_test_time_text()}",
         f"- **持仓规模**: Phase1/2: {_size_text(phase1)}，Phase3: {_size_text(phase3)}",
-        "- **测试模式**: basic（仅 Excel）/ both（Excel+HTML）",
-        "- **性能目标**: basic 模式 ≤ 60s",
+        "- **测试模式**: basic（仅 Excel）/ both（Excel+HTML）/ full（全链路，LLM mock）",
+        f"- **性能目标**: basic 模式 ≤ {_TARGET_SECONDS}s，full 全链路 ≤ {_TARGET_FULL_SECONDS}s",
         "",
         "## 各阶段耗时",
         "",
@@ -77,7 +82,8 @@ def write_perf_report(timings: dict[str, float], phase1: PerfSample, phase3: Per
         f"| Phase 1: basic Excel | {basic_time:.2f}s | {_verdict(basic_time)} | 仅 Excel 生成，不含数据获取/LLM |",
         f"| Phase 2: both HTML+Excel | {both_time:.2f}s | — | HTML + Excel 双输出，不含 LLM |",
         f"| Phase 3: {phase3.holdings}品种压力测试 | {stress_time:.2f}s | — | 大持仓场景下的 Excel 生成 |",
-        f"| **合计** | **{total:.2f}s** | — | 三个阶段串联总耗时 |",
+        f"| Phase 4: full 全链路 | {full_time:.2f}s | {_verdict(full_time, _TARGET_FULL_SECONDS)} | 数据准备+新闻+穿透+双输出，LLM 已 mock |",
+        f"| **合计** | **{total:.2f}s** | — | 四个阶段串联总耗时 |",
         "",
         "## 性能基准结论",
         "",
@@ -92,6 +98,12 @@ def write_perf_report(timings: dict[str, float], phase1: PerfSample, phase3: Per
         "",
         "### 大持仓压力测试（Phase 3）",
         f"{_size_text(phase3)}basic Excel 生成耗时 **{stress_time:.2f}s**。",
+        "",
+        "### full 全链路（Phase 4）",
+        f"**{_verdict(full_time, _TARGET_FULL_SECONDS)}**。",
+        f"数据准备 + 新闻关联 + 穿透 + Excel/HTML 双输出耗时 **{full_time:.2f}s**，"
+        f"{'达到' if full_time <= _TARGET_FULL_SECONDS else '未达到'}目标 {_TARGET_FULL_SECONDS}s"
+        "（LLM 调用已 mock，不含模型延迟）。",
         "",
         "## 环境",
         "",

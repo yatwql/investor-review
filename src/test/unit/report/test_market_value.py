@@ -24,7 +24,6 @@ from datetime import datetime
 from unittest.mock import patch
 
 
-from src.python.core import trading_calendar
 from src.python.core.models import Holding
 from src.python.report import market_value as mv
 import pytest
@@ -789,43 +788,49 @@ class TestTradingCalendarConcurrency(unittest.TestCase):
     """
 
     def test_concurrent_calls_serialize_akshare(self):
-        import sys
+        """并发取日历：缓存未命中分支被模块级锁串行化，只触发一次子进程取数。
+
+        日历走 `core.v8_subprocess.run_akshare_v8`（V8 在子进程，主进程不再直接调
+        akshare）；本条守的是「多线程同时撞未命中 → 只有拿锁者取数，其余命中 memo」，
+        否则同一缓存键会被并发探源成多次子进程启动。
+        """
         import threading
-        import types
 
         from src.python.cache import clear as cache_clear
+        from src.python.core import trading_calendar as tc
+        from src.python.core import v8_subprocess
 
-        # 缓存隔离：确保所有线程都走到 akshare 未命中分支
-        cache_clear(trading_calendar._TRADING_CALENDAR_CACHE_KEY)
+        cache_clear(tc._TRADING_CALENDAR_CACHE_KEY)
+        tc._reset_calendar_memo()
 
-        # ── 注入 fake akshare：统计 tool_trade_date_hist_sina 回调并发深度 ──
-        depth = {"active": 0, "max_active": 0}
+        depth = {"active": 0, "max_active": 0, "calls": 0}
         counter_lock = threading.Lock()
 
-        def fake_tool_trade_date_hist_sina():
+        def fake_run(func, kwargs=None, **kw):
             with counter_lock:
+                depth["calls"] += 1
                 depth["active"] += 1
                 depth["max_active"] = max(depth["max_active"], depth["active"])
-            # 锁外持有，构造并发窗口：无串行化时多线程能观察到 max_active > 1
             try:
-                return _FakeCalendarDf(["2026-08-03", "2026-08-04", "2026-08-05"])
+                return [{"trade_date": "2026-08-03"}, {"trade_date": "2026-08-04"}, {"trade_date": "2026-08-05"}]
             finally:
                 with counter_lock:
                     depth["active"] -= 1
-
-        fake_akshare = types.ModuleType("akshare")
-        fake_akshare.tool_trade_date_hist_sina = fake_tool_trade_date_hist_sina
 
         results: list = []
         errors: list = []
 
         def worker():
             try:
-                results.append(trading_calendar._get_trading_calendar())
+                results.append(tc._get_trading_calendar())
             except Exception as exc:
                 errors.append(exc)
 
-        with patch.dict(sys.modules, {"akshare": fake_akshare}):
+        with (
+            patch.object(v8_subprocess, "run_akshare_v8", side_effect=fake_run),
+            patch.object(tc.cache, "get", return_value=None),
+            patch.object(tc.cache, "set"),
+        ):
             threads = [threading.Thread(target=worker) for _ in range(4)]
             for t in threads:
                 t.start()
@@ -837,8 +842,9 @@ class TestTradingCalendarConcurrency(unittest.TestCase):
         expected = {"2026-08-03", "2026-08-04", "2026-08-05"}
         for r in results:
             self.assertEqual(r, expected)
-        # 核心断言：akshare(V8) 回调被串行化，最大并发深度为 1
+        # 核心断言：取数被串行化（并发深度 1），且锁内二次检查使取数只发生一次
         self.assertEqual(depth["max_active"], 1)
+        self.assertEqual(depth["calls"], 1)
 
 
 if __name__ == "__main__":

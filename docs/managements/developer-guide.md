@@ -1,6 +1,6 @@
 # 开发者指南
 
-> 文档版本：0.18.4
+> 文档版本：0.18.5
 
 ## 概述
 
@@ -997,6 +997,8 @@ INVEST_LOG_CONSOLE_LEVEL=DEBUG ...                                              
 
 非法值回落 INFO 并提示一次。**默认不开 DEBUG** 的原因：日志审计（近一周 107,625 行）显示 DEBUG 占 91%，其中「市场时段」67%、缓存命中 17%，真实告警被埋在噪声里，10MB 轮转只能留约 6 天。
 
+**触到 V8 的第三方调用必须走 `core/v8_subprocess.py`**：akshare 的若干接口（交易日历、同花顺资金流）内部就地建 `py_mini_racer.MiniRacer()`，而 V8 平台的初始化是进程级、与线程绑定的——实测三种崩法都拦不住也不可捕获：两条线程先后 init V8 → 段错误；上下文在别的线程被 GC 回收 → 段错误；上下文活到进程退出期被主线程回收 → `close()` 去 join 已结束线程的事件循环，退出死锁。**主进程内没有安全调度方式**（专用线程、全局锁、就地 `gc.collect()` 都实测留活口），故一律放子进程：接口名进 `_ALLOWED_FUNCTIONS` 白名单，调用方用 `run_akshare_v8(...)` 取 records，超时/崩溃按源不可用降级；`src/test/unit/core/test_v8_call_sites.py` 扫描主进程内的 `ak.<name>` 调用点并与 akshare 源码比对，漏接即红。另注意：父进程的 socket 桩不跨进程，测试/基准须设 `INVEST_SUBPROCESS_NETWORK_OFFLINE=1` 让子进程也离线。
+
 **重复装配的日志走折叠原语**：同一份报告会在多个阶段重复装配同一批数据（行业批量、事件窗契约、新闻关联），这些点用 `core/log_dedupe.py::log_throttled(logger, key, fmt, *args)`，同 key 在 60s 窗口内只上屏第一行、重复降到 DEBUG（窗口外即下一次报告照常上屏）。**不要**自己写「首次才打」的布尔标记——那样长驻进程第二次报告就再也看不到该行；也不要把窗口调到远超单份报告的耗时，否则连续生成的报告会被误折叠。
 
 **非真实运行的日志/缓存隔离**（演示截屏、性能基准）：
@@ -1113,7 +1115,7 @@ INVEST_CACHE_DIR=docs/tmp/screenshots/demo/data/cache \    # 缓存改落（不�
 | 关注点 | 工具 | 说明 |
 |:-------|:-----|:-----|
 | 单次运行时各阶段耗时 | `perf_history.jsonl` + `scripts/perf-history.py` | 每次运行落一条（含 status/阶段/品种数），`perf-history` 出趋势表、P95/P99、离群归因；「并发预算」段看档位/预算/峰值/缩容，判断慢是否来自并发收敛 |
-| 端到端报告耗时门禁 | `scripts/test-perf-report.py --gate` | 主动压测 mock 管线，basic ≤60s（CI `perf-gate` job 阻塞） |
+| 端到端报告耗时门禁 | `scripts/test-perf-report.py --gate` | 主动压测 mock 管线，basic ≤60s + full 全链路（LLM 已 mock）≤300s（CI `perf-gate` job 阻塞） |
 | 阶段级耗时 | `PerfCollector.stage_progress` / `reporter.print_timing_summary()` | TUI 报告收尾会打印耗时排行；数据准备按 `行情与明细/穿透/因子暴露/行业 Beta/相关性矩阵/…` 逐子项计时 |
 | 写盘停顿 | `core/perf.warn_slow_write`（阈值 5s） | 落盘超阈即 WARNING，带产物大小与路径；告警按段分流——`HTML 模板渲染 渲染偏慢` 指向模板内逐行循环/过滤器，`HTML 页面写入 落盘偏慢` 才指向磁盘/挂载（实测 0.98MB 产物落盘仅 0.003s，慢的几乎总是渲染/编译） |
 | HTML 生成细分 | `perf_history` 的 `breakdown["HTML 生成"]` | `页面写入`（总值）+ `图表数据装配` / `区块装配` / `面板视图装配` / `模板渲染` / `资产内嵌` / `匿名化` / `落盘`（细分）；慢的通常是 **`区块装配`**（`html_sections.assemble_sections`：穿透 / 基金业绩 / 基金风格 / 财务指标等取数都在这一窗口内，实测 1.4s ~ 6.8s 双峰，落差全在取数冷热），`面板视图装配`（持仓变动/事件窗/纪律回放三视图串拼装）与 `模板渲染` 都在 0.0x s 量级——先用 `区块装配` 对账「这轮是不是在取数」，不要默认指向 jinja |
@@ -1562,6 +1564,8 @@ registry 的测试在 `src/test/unit/core/test_registry.py`，验证 TTL 默认�
 
 ## 版本发布流程
 
+> **plan.md「已完成（待发布归档）」区的节头必须带完成标记**（`✅` / `❌` / 已完成 / 已落地 / 已实现 / 已交付）：归档步只认这些标记，缺标记的节**不会**被搬进计划归档，也不会有任何提示（实测曾一整批 9 项静默漏档）。`release.py prepare`（及单跑的 `archive`）现已在归档前兜底：发现缺标记即中止并点名 `plan-N`，报错里给出可照抄的写法。
+
 发布版本时，按以下六步顺序执行：
 
 > 可用 `scripts/release.py` 分步编排（发布流程的可执行封装，每步独立可审阅、失败即停）：`check`（预检）→ `archive-init`（**仅新小版本首发需要**：三份归档 + 目录树块 + 三处索引行一次建齐，幂等）→ `prepare`（版本全链、changelog 发布段归档**并自动重写归档头部「涵盖版本 / 归档时间」（区间与并入记录由归档内各发布段标题派生，无需人工维护）与主文件指针的版本号/日期/归档文件名**、一致性 `--fix`，收尾自动 `doc-drift --sync`）→ `refresh` + `evolution --release`（数据刷新——纯文档变更〔仅 `.md`/图片〕自动跳过 bench+collect，`--force-refresh` 强制；演进快照，evolution 收尾同样自动 sync）→ `gate`（P2 门禁：verify 与 regression 并行；若 `refresh` 的 bench **实跑过 `unit`** 且代码指纹未变，则复用该次结果替代 verify（`unit` 是 verify 的严格超集，由标记不变量保证），否则实跑；守护清单并行且并发度随核数收敛 ≤4 路；`--with-portability` 加跑 portability 探针；全绿后写「版本+代码指纹」通过戳——**指纹 = `CODE_PATHS` 下文件内容的 sha256（与是否已提交无关）**：gate 打戳时 prepare 的改动尚未提交、publish 提交后再算，两者仍相等）→ `publish --title`（**代码指纹与 gate 戳一致时复用 P1 verify**；提交前按钩子同源参数 `--sync --ci --with-test-count` 同步统计快照——只跑 `--sync` 时 `test-coverage.md` 收集计数不被校验，会「本地通过、钩子仍红」白跑一轮；同步失败即中止 + release 提交 + P1 verify + `--no-ff` 合并 + tag）→ `devbump`（切开发版 + 默认 `git push origin dev`（`--no-push` 跳过），并清空上一版迁档占位节）；bench 默认只测发布子集四档（`--full-bench` 全量；`--bench-jobs N` 调整采集并行度，改变并行度会改变耗时口径，环境表需同并行度可比），采集顺序为「场景档先、长尾档后」（`regression → integration → unit → dev-verify`）——`--fail-fast` 只取消尚未启动的档，长尾档压后才能让场景失败立刻中止；每命令耗时、执行环境（provider/model/thinking）与 agent 会话 token 累计入 `logs/release.jsonl` 台账，失败命令另写 `failure`（失败步 / 退出码 / 报告目录 / 失败用例名 / 输出尾部）；`check` 会预演 changelog 派生（只算不写），publish 在 gate 戳指纹不一致时点名 gate 后改动的代码文件并说明将实跑 P1 verify，提交/合并/tag/推送分段计时入账（发布墙钟、token 成本与执行模型均可跳版本对拍）；rf/plan/docs-plan 归档迁移的**机械部分已由 `prepare` 自动完成**（含 plan.md「当前迭代」概述行按剩余任务重算在办项数与 P1~P4 分档编号；人工只复核条目归属与设计文件判定，见下方步骤③），`gate` 会断言该版本台账已迁完、changelog 归档段非空，未迁/为空则前置中止；`prepare` 不跨版本发布（`--version` 与开发链推导值不一致时立即中止并给四步指引）；**分层纪律**：归档迁移或任何涉及管理文档/代码注释的改动完成后，进 `gate` 前先跑秒级便宜守护（至少 `check-doc-traces --ci` + `check-doc-links --ci`，改动面大时守护清单全跑）——守护发现前置，避免 P2 门禁的全量 regression 因文档级 finding 白跑第二轮。下列手动命令为底层口径，脚本失败时按手动步骤排查。**publish 的 release 提交仍走 pre-commit 钩子全量守护**（不跳过）：与 gate 重复约 2~6s，换取「自动化提交也不旁路守护」的兜底——实测收益小于风险，故不做跳过。
@@ -1663,7 +1667,7 @@ CI 有 5 类 job（`test` 按 Python 3.11/3.12/3.13 跑三份矩阵 / `guards` /
 | `test` ×3 | 本地绿、CI 红 | **仓库状态相关断言**（见下） | `git stash` 后跑，或 `git clean -xdf` 后重跑 |
 | `guards` | 单守护非零退出 | 守护名 + finding 行 | 本地跑同名 `--ci` |
 | `portability` | `EncodingWarning`/`UnicodeDecodeError` | 哪个文件的哪次 IO | `scripts/test-runner.py --mode portability`（等价复现两道探针；单看编码档可 `PYTHONWARNDEFAULTENCODING=1 pytest src/test/unit -q`） |
-| `perf-gate` | basic 模式 >60s | 阶段耗时排行 | `scripts/test-perf-report.py --gate` |
+| `perf-gate` | basic 模式 >60s 或 full 全链路 >300s | 阶段耗时排行 | `scripts/test-perf-report.py --gate` |
 | `format` | `ruff format --check` 有差异（**非阻塞**） | 文件列表 | `ruff format .` |
 
 **「本地绿、CI 红」的三类常见根因**（都踩过）：

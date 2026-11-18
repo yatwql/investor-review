@@ -35,6 +35,23 @@ class _FakeFlowDF:
         return list(enumerate(self._rows))
 
 
+
+def _patch_ths_records(rows: list[dict] | None = None, *, raises: bool = False):
+    """把同花顺通道的 V8 子进程取数桩成固定 records（或源不可用）。
+
+    同花顺行业资金流经 `core.v8_subprocess.run_akshare_v8` 在子进程取数（主进程内建
+    V8 上下文会段错误/退出死锁），故通道测试要么给 records、要么给 V8SourceError。
+    """
+    from src.python.core import v8_subprocess
+
+    def _fake(func, kwargs=None, **kw):
+        if raises:
+            raise v8_subprocess.V8SourceError("source_failed", "offline stub")
+        return [dict(r) for r in (rows or [])]
+
+    return patch.object(v8_subprocess, "run_akshare_v8", side_effect=_fake)
+
+
 _EM_ROW = {
     "名称": "银行",
     "今日涨跌幅": 1.2,
@@ -123,15 +140,15 @@ class TestSectorFundFlowFailureMemo(unittest.TestCase):
 
     def test_second_call_skips_fetch_after_connection_failure(self) -> None:
         with (
-            patch.object(ae, "ak", MagicMock()),
             patch.object(ae, "run_with_timeout", return_value=None) as fetch,
+            _patch_ths_records(raises=True) as _ths,
             patch.object(ae, "cache_get", return_value=None),
             patch.object(ae, "_compute_index_fingerprint", return_value="fp"),
         ):
             assert ae.get_sector_fund_flow() == []
-            assert fetch.call_count == len(ae._SECTOR_FLOW_CHANNELS), "两通道各试一次"
+            assert fetch.call_count + _ths.call_count == len(ae._SECTOR_FLOW_CHANNELS), "两通道各试一次"
             assert ae.get_sector_fund_flow() == []
-            assert fetch.call_count == len(ae._SECTOR_FLOW_CHANNELS), "失败负缓存期内不得再次取数"
+            assert fetch.call_count + _ths.call_count == len(ae._SECTOR_FLOW_CHANNELS), "失败负缓存期内不得再次取数"
         assert ae.sector_flow_failure() == "connection"
 
     def test_success_after_failure_memo_expiry_refetches(self) -> None:
@@ -191,8 +208,8 @@ class TestSectorFlowCrossProcessFallback(unittest.TestCase):
     def test_failure_is_written_to_disk_for_next_process(self) -> None:
         """取数失败 → 写跨进程负缓存（否则下个进程再撞一次）。"""
         with (
-            patch.object(ae, "ak", MagicMock()),
             patch.object(ae, "run_with_timeout", return_value=None),
+            _patch_ths_records(raises=True),
             patch.object(ae, "cache_get", return_value=None),
             patch.object(ae, "cache_set") as cache_set,
             patch.object(ae, "_compute_index_fingerprint", return_value="fp"),
@@ -260,10 +277,9 @@ class TestSectorFlowChannelFallback(unittest.TestCase):
         ae._SECTOR_FLOW_FAILURE = ""
 
     def test_primary_failure_falls_back_to_secondary(self) -> None:
-        ths_df = _FakeFlowDF([_THS_ROW])
         with (
-            patch.object(ae, "ak", MagicMock()),
-            patch.object(ae, "run_with_timeout", side_effect=[None, ths_df]),
+            patch.object(ae, "run_with_timeout", return_value=None),
+            _patch_ths_records([_THS_ROW]),
             patch.object(ae, "cache_get", return_value=None),
             patch.object(ae, "cache_set"),
             patch.object(ae, "cache_clear"),
@@ -278,10 +294,7 @@ class TestSectorFlowChannelFallback(unittest.TestCase):
 
     def test_secondary_pct_is_none_when_turnover_zero(self) -> None:
         row = dict(_THS_ROW, **{"流入资金": 0.0, "流出资金": 0.0})
-        with (
-            patch.object(ae, "ak", MagicMock()),
-            patch.object(ae, "run_with_timeout", return_value=_FakeFlowDF([row])),
-        ):
+        with _patch_ths_records([row]):
             result = ae._fetch_sector_flow_ths_industry()
         assert result[0]["main_net_inflow_pct"] is None, "分母不可用宁留空，不编造 0"
 
@@ -301,20 +314,19 @@ class TestSectorFlowChannelFallback(unittest.TestCase):
 
     def test_primary_negative_cache_does_not_block_secondary(self) -> None:
         """主通道在负缓存窗口内 !== 全部通道都不可用。"""
-        ths_df = _FakeFlowDF([_THS_ROW])
-
         def _fake_get(key, _ttl):
             return {"em_push2": "connection"} if key == ae._SECTOR_FLOW_NEG_KEY else None
 
         with (
-            patch.object(ae, "ak", MagicMock()),
-            patch.object(ae, "run_with_timeout", return_value=ths_df) as fetch,
+            _patch_ths_records([_THS_ROW]) as ths,
+            patch.object(ae, "run_with_timeout", return_value=None) as fetch,
             patch.object(ae, "cache_get", side_effect=_fake_get),
             patch.object(ae, "cache_set"),
             patch.object(ae, "_compute_index_fingerprint", return_value="fp"),
         ):
             result = ae.get_sector_fund_flow()
-        assert fetch.call_count == 1, "主通道被跳过后只应调用备用通道一次"
+        assert ths.call_count == 1, "主通道被跳过后只应调用备用通道一次"
+        assert fetch.call_count == 0, "主通道在负缓存窗口内不应再取数"
         assert [r["name"] for r in result] == ["半导体"]
 
 
@@ -333,8 +345,8 @@ class TestSectorFlowDegradedState(unittest.TestCase):
 
     def test_no_baseline_when_source_fails_without_history(self) -> None:
         with (
-            patch.object(ae, "ak", MagicMock()),
             patch.object(ae, "run_with_timeout", return_value=None),
+            _patch_ths_records(raises=True),
             patch.object(ae, "cache_get", return_value=None),
             patch.object(ae, "cache_set"),
             patch.object(ae, "_compute_index_fingerprint", return_value="fp"),

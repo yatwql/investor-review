@@ -377,7 +377,7 @@ LLM 分析结果默认缓存，避免重复调用 API 浪费费用：
 | API 调用失败（网络错误/超时） | 显示占位："（本节内容生成失败）" | WARNING |
 | 返回空内容（无文本块，如思考耗尽 max_tokens 预算） | 关闭 thinking 同 Provider 重试一次；仍失败才切换下一 Provider | WARNING |
 | 返回空字符串（内容被过滤） | 追加安抚指令重试一次，仍失败则切换 Provider | WARNING |
-| 输出被截断（含 `... [TRUNCATED] ...`） | 自动增大 `max_tokens` 1.5× 重试一次，仍截断则记录日志提示用户手动调大 | WARNING |
+| 输出被截断（含 `... [TRUNCATED] ...`） | 自动增大 `max_tokens` 1.5× 重试一次（**两次调用都计费**，成本台账按两次合计记），仍截断则记录日志提示用户手动调大 | WARNING |
 
 ---
 

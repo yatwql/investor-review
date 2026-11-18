@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
-> 文档版本：0.18.4
-> **编号源**：`rf-next = 1167`（新增问题提出后更新为 +1；已用最大 rf-1166，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> 文档版本：0.18.5
+> **编号源**：`rf-next = 1178`（新增问题提出后更新为 +1；已用最大 rf-1177，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -39,31 +39,30 @@
 
 | 文件 | 现状与拆分方向 |
 |------|----------------|
-| `src/test/conftest.py` 1195 行（测试登记线 900） | fixture 族按域下沉（行情/LLM/网络/持久化各一模块），conftest 只留 autouse 与装配 |
-| `src/python/core/perf.py` 800 行 | 采集器与台账落盘可拆（`perf` 采集 / `perf_history` 读写两文件） |
+| `src/test/conftest.py` 1199 行（测试登记线 900） | fixture 族按域下沉（行情/LLM/网络/持久化各一模块），conftest 只留 autouse 与装配 |
+| `src/python/core/perf.py` 799 行 | 采集器与台账落盘可拆（`perf` 采集 / `perf_history` 读写两文件） |
 | `src/python/core/doctor.py` 787 行 | 检查项按域分文件（环境 / 配置 / 数据源 / 报告产物），入口只留编排 |
 | `src/python/llm/fact_checker/_numerical.py` 764 行 | 数值校验按规则族拆（金额 / 比率 / 计数），共享解析原语上提包内 `_common` |
 | `src/python/tui/handlers_config.py` 743 行 | 配置面板按域拆（内容选项 / 全局设置 / 目录与文件名） |
 | `scripts/_doc_drift/_format.py` 742 行 | 格式化规则按文档类型拆（章节 / 表格 / 树 / 统计） |
 | `src/python/core/degradation.py` 768 行 | 状态词与事件模型、登记面与持久化可拆两文件 |
-| `src/python/report/action_sheet.py` 726 行 | 行动页签内各块（建议表 / 判断依据 / 决策书 / 复盘）拆子模块 |
+| `src/python/report/action_sheet.py` 752 行 | 行动页签内各块（建议表 / 判断依据 / 决策书 / 复盘）拆子模块 |
 | `src/python/fetcher/financial_report.py` 719 行 | 按「索引 / 正文 / 全文定位」三阶下沉 |
-| `src/python/providers/akshare_extras.py` 714 行 | 按接口族拆（指数 / 行业 / 分红 / 盈利预测） |
+| `src/python/providers/akshare_extras.py` 716 行 | 按接口族拆（指数 / 行业 / 分红 / 盈利预测） |
 | `src/python/core/provider_registry.py` 710 行 | 熔断与会话缓存各自独立文件 |
-| `src/python/llm/skeleton.py` 847 行 | 模板数据与渲染逻辑可下沉 `llm/skeleton_*`（骨架模板 / 占位渲染） |
-| `src/python/cli/_handlers.py` 864 行 | 命令处理器按渠道分文件（generate/config/data 三簇），保持入口薄 |
+| `src/python/llm/skeleton.py` 877 行 | 模板数据与渲染逻辑可下沉 `llm/skeleton_*`（骨架模板 / 占位渲染） |
+| `src/python/cli/_handlers.py` 890 行 | 命令处理器按渠道分文件（generate/config/data 三簇），保持入口薄 |
 | `src/python/tui/handlers_holdings.py` 825 行 | 面板流程与输入采集高度耦合（共用 `_Session`），拆分收益低于风险，暂不拆 |
 | `src/static/tmpl/report_template.html` 277 行 | 样式已抽到 `partials/_report_styles.html`，各自单一关注点，均未触 1000 行 |
 | `src/static/tmpl/whatif_template.html` 543 行 | **不在行数守护域内**（`check-file-length` 只扫 `.py`）；样式已抽到 `partials/_whatif_styles.html` |
 
 ## 已解决问题
 
-### 开发期已修复（0.18.4-dev）
+### 开发期已修复（0.18.5-dev）
 
 > 本表为本开发周期已修条目的**摘要行**（详情见 `changelog.md` 对应段）；发布时由 `release.py prepare` 的 archive 步原表搬入版本归档并在此留占位。
 
-（本版开发期已修复项已随 v0.18.4 发布迁入归档档案）
-
+（本版开发期已修复项已随 v0.18.5 发布迁入归档档案）
 ### 归档档案
 - [`archived_review-findings.0.18.x.md`](../archive/v0.18.x/archived_review-findings.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-18）
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-10）

@@ -495,6 +495,44 @@ class TestPlanArchiveHeadingLevels:
         assert "#### `plan-201`" not in archive
 
 
+class TestUnmarkedCompletedSectionsBlockArchive:
+    """「已完成（待发布归档）」区里缺完成标记的节必须报错，不得静默留在主台账。
+
+    归档只认 `✅/❌/已完成/已落地/已实现/已交付`；漏标记的节既不进归档、也没人发现
+    （实测一整批 9 项都这样漏掉）。此处锁「静默漏档 → 发布期硬失败」这条兜底。
+    """
+
+    _MIXED = (
+        "# 计划\n\n### 已完成（待发布归档）\n\n"
+        "#### `plan-301` ✅ 已收口任务\n\n正文\n\n"
+        "#### `plan-302` 忘了标记的任务\n\n正文\n\n"
+        "### P4 — 实验候选\n\n#### `plan-303` 在办项\n"
+    )
+    _CLEAN = (
+        "# 计划\n\n### 已完成（待发布归档）\n\n"
+        "#### `plan-301` ✅ 已收口任务\n\n正文\n\n"
+        "#### `plan-302` 已完成：另一个收口表述\n\n正文\n"
+    )
+
+    def test_helper_reports_only_unmarked(self, rel):
+        assert rel.unmarked_completed_plan_sections(self._MIXED) == ["plan-302"]
+        assert rel.unmarked_completed_plan_sections(self._CLEAN) == []
+        assert rel.unmarked_completed_plan_sections("# 无已完成小节的计划\n") == []
+
+    def test_archive_refuses_and_names_the_offending_item(self, rel):
+        with pytest.raises(rel.ReleaseError) as excinfo:
+            rel.apply_plan_archive(self._MIXED, "> 涵盖版本：v0.14.x\n", "0.14.0", "2026-10-21")
+        message = str(excinfo.value)
+        assert "plan-302" in message
+        assert "✅" in message, "报错须给出可照抄的标记写法"
+
+    def test_archive_proceeds_when_every_section_is_marked(self, rel):
+        main, archive, moved = rel.apply_plan_archive(self._CLEAN, "> 涵盖版本：v0.14.x\n", "0.14.0", "2026-10-21")
+        assert moved == 2
+        assert "plan-301" not in main and "plan-302" not in main
+        assert "## `plan-301`" in archive
+
+
 class TestReleaseTokenAccounting:
     """发布台账 token 采集与统计：会话 JSONL 累计用量 → 台账字段 → 发布窗口增量。
 

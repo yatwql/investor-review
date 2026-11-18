@@ -127,6 +127,7 @@ from _release._ledger_archive import (  # noqa: E402, F401 — 台账变换纯�
     open_ids,
     pending_rf_rows,
     plan_completed_sections,
+    unmarked_completed_plan_sections,
     recompute_current_iteration,
     rewrite_doc_refs,
     rf_archive_status,

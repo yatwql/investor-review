@@ -7,13 +7,15 @@
 
 用法：
   python scripts/test-perf-report.py
-  python scripts/test-perf-report.py --gate          # 门禁模式：未达标退出码 2（供 CI 拦截）
+  python scripts/test-perf-report.py --gate          # 门禁模式：basic/full 任一超标退出码 2
 
 输出：
   docs/tmp/better-investment-performance-test-report.md
 
 目标：
   - basic 模式总耗时 < 60s
+  - full 模式全链路（LLM 已 mock）< 300s——覆盖数据准备/新闻/穿透/双输出，
+    basic 只盖 Excel 一段，full 档退化原先无门槛拦截
 
 定位说明：本脚本是**性能测试**（主动压测）——自造模拟持仓、外部数据源**全离线**
 （传输层按设计禁网，断网/冷缓存同样可复现），同条件可比，故适合做 CI 门禁（退化即回归）。运行历史查看（被动统计既有记录、
@@ -48,6 +50,7 @@ _PHASE3_STOCK_COUNT = 50  # Phase3 压力股票取样数（须 ≤ len(SAMPLE_ST
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享包（_perf_report）
 from _perf_report.report import (  # noqa: E402, F401 — 报告渲染下沉，原面 re-export
+    _TARGET_FULL_SECONDS,
     _TARGET_SECONDS,
     PerfSample,
     _size_text,
@@ -364,8 +367,13 @@ def _install_offline_network() -> None:
       58s 几乎全是这类等待）。全仓无 ``from time import ... sleep``，补丁模块
       属性即覆盖全部调用点。
     """
+    import os as _os
     import socket as _socket
     import time as _time
+
+    # 子进程取数（V8 类 akshare，见 core/v8_subprocess）不继承本进程 socket 桩：
+    # 用环境变量显式告知子进程「离线」，否则基准会偷偷发起真实网络请求。
+    _os.environ["INVEST_SUBPROCESS_NETWORK_OFFLINE"] = "1"
 
     def _blocked(*_args: object, **_kwargs: object) -> None:
         raise OSError("test-perf-report: 基准运行按设计禁网")
@@ -534,6 +542,44 @@ def run_perf_test() -> tuple[dict[str, float], PerfSample, PerfSample]:
     timings["phase3_stress_large"] = round(t_elapsed, 2)
     print(f"  [{t_elapsed:7.2f}s] {phase3_sample.holdings}品种 basic Excel 报告完成")
 
+    # ── Phase 4: full 模式全链路（LLM 已 mock） ──
+    # 目的：full 是实际使用最多的档位（数据准备 + 新闻 + 穿透 + 双输出），而
+    # basic 门禁只盖住 Excel 一段——full 档的退化（如数据准备从 24s 涨到 40s）
+    # 不会被任何门槛拦住。LLM 本身已 mock（网络与模型延迟不进基准），验收的是
+    # 全链路的**本地计算**部分，同条件可比。
+    print(f"\n[..] Phase 4: full 模式全链路 ({phase1_sample.holdings}品种, LLM 已 mock)...")
+    with (
+        patch("src.python.fetcher.index.fetch_indices", return_value={}),
+        patch("src.python.fetcher.index.fetch_us_indices", return_value={}),
+        patch("src.python.report.fund_performance.write_fund_performance_sheet"),
+        patch("src.python.fetcher.industry.batch_fetch_industry_data", return_value={}),
+        patch("src.python.fetcher.fund.fetch_fund_rankings", return_value=None),
+        patch(_LLM_MOCK_TARGET, return_value=_LLM_MOCK_VALUE),
+        # 行情/K线历史/交易日历离线桩（咽喉点说明见 _mock_quote 处）
+        patch("src.python.fetcher.price.fetch_market_data", new=_mock_quote),
+        patch("src.python.report.market_value.fetch_market_data", new=_mock_quote),
+        patch("src.python.core.trading_calendar._get_trading_calendar", new=_stub_trading_calendar),
+        patch("src.python.fetcher.chain.fetch_with_incremental_fallback", new=_mock_bars),
+        patch("src.python.fetcher.chain_incremental.fetch_with_incremental_fallback", new=_mock_bars),
+    ):
+        from src.python.report.orchestrator import generate_report as _generate_full
+
+        t_start = time.perf_counter()
+        full_result = _generate_full(
+            holdings,
+            config,
+            reporter,
+            report_type="full",
+            fetch_history=False,
+            output_dir=tmp_dir.name,
+            snapshot_namespace=_SNAPSHOT_NAMESPACE,
+        )
+        t_elapsed = time.perf_counter() - t_start
+
+    timings["phase4_full_pipeline"] = round(t_elapsed, 2)
+    print(f"  [{t_elapsed:7.2f}s] full 全链路报告完成")
+    print(f"  Excel OK: {full_result.excel_ok}, HTML OK: {full_result.html_ok}")
+
     # ── 清理 ──
     tmp_dir.cleanup()
 
@@ -564,11 +610,18 @@ def main() -> int:
     print(f"  [OK] 报告已写入: {report_path}")
 
     basic_time = timings.get("phase1_basic_excel", 0)
-    passed = basic_time <= _TARGET_SECONDS
-    if passed:
+    full_time = timings.get("phase4_full_pipeline", 0)
+    basic_passed = basic_time <= _TARGET_SECONDS
+    full_passed = full_time <= _TARGET_FULL_SECONDS
+    passed = basic_passed and full_passed
+    if basic_passed:
         print(f"\n[OK] basic 模式达标: {basic_time:.2f}s ≤ {_TARGET_SECONDS}s")
     else:
         print(f"\n[ERR] basic 模式未达标: {basic_time:.2f}s > {_TARGET_SECONDS}s")
+    if full_passed:
+        print(f"[OK] full 全链路达标: {full_time:.2f}s ≤ {_TARGET_FULL_SECONDS}s")
+    else:
+        print(f"[ERR] full 全链路未达标: {full_time:.2f}s > {_TARGET_FULL_SECONDS}s")
 
     print("=" * 60)
     if args.gate:
