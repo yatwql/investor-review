@@ -323,14 +323,16 @@ def fetch_index_history(code: str, days: int = 365) -> list[dict] | None:
 
     # 先查会话缓存（会话级复用）：缓存条目记为 ``(days, bars)``，**仅在缓存窗口不小于
     # 本次需求时复用**——否则「某调用者先用短窗口取过 → 后续要长窗口的调用者拿到更短
-    # 序列」（窗口缩水）；旧形态（裸列表）视为窗口未知，沿用既有行为
+    # 序列」（窗口缩水）。条目形态由写入侧固定为二元组；其它形态（脏条目/非本版本产物）
+    # 一律视为**未命中**并重新取数（不为旧形态留分支）。
     from src.python.core.provider_registry import NOT_FOUND, get_registry
 
     reg = get_registry()
     days = min(max(days, 5), 3650)
     cached = reg.session_cache_get("history_index", code)
-    if cached is not NOT_FOUND:
-        cached_days, cached_bars = cached if isinstance(cached, tuple) else (0, cached)
+    reuse_ok = isinstance(cached, tuple) and len(cached) == 2 and cached is not NOT_FOUND
+    if reuse_ok:
+        cached_days, cached_bars = cached
         # 复用判据（三者任一满足即视为已覆盖本次窗口）：
         #   ① 记下的请求窗口 ≥ 本次需求；
         #   ② 已存序列长度 ≥ 本次需求天数——日线是截至今日的连续序列，
@@ -338,12 +340,7 @@ def fetch_index_history(code: str, days: int = 365) -> list[dict] | None:
         #      此时再按 ① 重取只会在同一次运行内重复请求同一指数）；
         #   ③ 已存序列已达源单次上限——更长窗口也只会拿到同样长度。
         # 否则短窗口先取过的调用者会把后续长窗口调用者钉在更短序列上（窗口缩水）。
-        if (
-            cached_days == 0
-            or cached_days >= days
-            or len(cached_bars) >= days
-            or len(cached_bars) >= _SOURCE_HISTORY_CAP
-        ):
+        if cached_days >= days or len(cached_bars) >= days or len(cached_bars) >= _SOURCE_HISTORY_CAP:
             # 显式标注复用：调用方（如基准归一化）无论是否真取数都会打「获取完成」，
             # 不标这一行会让日志看起来像同一指数在一份报告里被取了多次
             logger.info("[index] %s 会话缓存复用（已有 %d 根，请求 %d 天）", code, len(cached_bars), days)

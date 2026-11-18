@@ -263,9 +263,6 @@ def _channel_failures() -> dict[str, str]:
         raw = cache_get(_SECTOR_FLOW_NEG_KEY, _SECTOR_FLOW_NEG_TTL)
     if isinstance(raw, dict):
         return {str(ch): str(kind) for ch, kind in raw.items() if ch in _SECTOR_FLOW_CHANNELS and kind}
-    if isinstance(raw, str) and raw:
-        # 旧形态（整源单一字符串）：等同“全部通道同源失败”，升级后不立即重撞一轮。
-        return {ch: raw for ch in _SECTOR_FLOW_CHANNELS}
     return {}
 
 

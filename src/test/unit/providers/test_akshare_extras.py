@@ -192,7 +192,8 @@ class TestSectorFlowCrossProcessFallback(unittest.TestCase):
         """其他进程刚失败过 → 本次直接降级，不取数。"""
 
         def _fake_get(key, ttl):
-            return "connection" if key == ae._SECTOR_FLOW_NEG_KEY else None
+            # 负缓存载荷形态唯一：{通道: 失败类型}（不保留整源单字符串形态）
+            return {ch: "connection" for ch in ae._SECTOR_FLOW_CHANNELS} if key == ae._SECTOR_FLOW_NEG_KEY else None
 
         with (
             patch.object(ae, "ak", MagicMock()),
@@ -203,6 +204,15 @@ class TestSectorFlowCrossProcessFallback(unittest.TestCase):
             assert ae.get_sector_fund_flow() == []
             fetch.assert_not_called()
         assert ae.sector_flow_failure() == "connection"
+
+    def test_legacy_single_string_negative_cache_is_ignored(self) -> None:
+        """负缓存只认 {通道: 失败类型} 形态；整源单字符串不再被当作「全通道失败」。"""
+
+        def _fake_get(key, ttl):
+            return "connection" if key == ae._SECTOR_FLOW_NEG_KEY else None
+
+        with patch.object(ae, "cache_get", side_effect=_fake_get):
+            assert ae._channel_failures() == {}, "非 dict 载荷按空处理，不得回退成全通道同源失败"
 
     def test_failure_is_written_to_disk_for_next_process(self) -> None:
         """取数失败 → 写跨进程负缓存（否则下个进程再撞一次）。"""

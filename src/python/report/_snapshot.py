@@ -85,7 +85,6 @@ def capture_snapshot(
     reporter: ProgressReporter,
     *,
     snapshot_namespace: str | None = None,
-    **extra,
 ) -> dict | None:
     """持仓快照创建 + 差异计算 + 保存 + 清理。
 
@@ -97,7 +96,6 @@ def capture_snapshot(
         snapshot_namespace: 快照隔离域（None=共享主目录；如 "web"=web 试算域），
             差异计算基于同域上一份**不同交易日**的快照（同一交易日多次运行跳过，
             见 ``load_comparison_baseline``）、保存与清理均在域内闭环
-        extra: 额外扩展字段（调用方 kwargs），透传到 pipeline_data
 
     Returns:
         pipeline_data 字典（含 diff），首次运行或异常时返回 None。
@@ -233,9 +231,6 @@ def capture_snapshot(
                 },
                 "data_degradation": _get_degradation_tracker().get_log(),
             }
-            # 透传额外扩展字段（调用方 kwargs，如测试注入 risk_metrics）
-            if extra:
-                pipeline_data.update(extra)
         reporter.ok("环比对比数据准备完成")
     except Exception:
         logger.info("[环比] 数据准备跳过（首次运行或异常）", exc_info=True)

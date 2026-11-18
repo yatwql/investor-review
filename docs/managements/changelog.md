@@ -16,6 +16,8 @@
 - **akshare 接口改名兼容**：新增 `core/akshare_compat.py`，四个被 akshare 就地改名的接口（交易日历 / 同花顺行业资金流 / 央视新闻 / 板块资金流排行）改按「逻辑名 → 候选链」解析（`resolve()` 取第一个存在的接口承办，新旧名并存时仍走旧名）；`core/v8_subprocess.py` 子进程同步按候选链解析。修复新版 akshare（CI 解析到 1.20.65）上三条取数链路以 `AttributeError` 静默降级、数据缺失而本机旧版全程无感的问题；配 10 条用例（含「调用点不得硬引旧名」契约）（`rf-1179`）。
 - **CI 转绿**：`test_v8_call_sites` 的「已知 V8 接口」断言改按候选链判定并补「合成模块」确定性用例（不再随 akshare 版本假红）；14 个漂移文件 `ruff format` 归位，全仓格式检查恢复零告警（`rf-1179`）。
 
+- **旧结构兼容残留清理**：`fetch_index_history` 的会话缓存只认 `(days, bars)`（裸列表脏条目改为未命中重取）、行业资金流通道失败负缓存只认 `{通道: 失败类型}`（整源单字符串不再回退成全通道失败）、`capture_snapshot` 删掉无调用方的 `**extra` 透传口；配 4 条回归用例（`rf-1180`）。
+
 ## 归档
 
 - [`archived_changelog.0.18.x.md`](../archive/v0.18.x/archived_changelog.0.18.x.md) — v0.18.0 ~ v0.18.5（2026-11-12 ~ 2026-11-18）

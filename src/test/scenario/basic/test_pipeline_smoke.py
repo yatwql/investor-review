@@ -56,33 +56,6 @@ class TestCheckpointSmoke:
         assert "risk_metrics" in result, "risk_metrics 字段缺失"
         assert result["risk_metrics"] == {}, "risk_metrics 初始应为空字典"
 
-    # ── Checkpoint 2 ─────────────────────────────────
-
-    @patch("src.python.report.history_snapshot.load_comparison_baseline")
-    @patch("src.python.report.history_snapshot.save")
-    @patch("src.python.report.history_snapshot.prune")
-    def test_capture_snapshot_extra_fields_wired(
-        self,
-        mock_prune: MagicMock,
-        mock_save: MagicMock,
-        mock_load: MagicMock,
-    ):
-        """capture_snapshot 签名支持 extra 参数。"""
-        from src.python.report._snapshot import capture_snapshot
-
-        mock_load.return_value = None
-
-        # 验证函数可调用、不抛出异常
-        result = capture_snapshot(
-            _SAMPLE_HOLDINGS,
-            self._mock_details(),
-            {},
-            self._mock_reporter(),
-            risk_metrics={"sharpe_ratio": 1.5},
-        )
-        # 首次运行无历史快照时 capture_snapshot 返回 None
-        assert result is None
-
     # ── Checkpoint 3 ─────────────────────────────────
 
     @patch("src.python.llm.generators_orchestrator.generate_all_llm")
