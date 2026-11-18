@@ -1,8 +1,8 @@
 # 变更日志归档 — v0.18.x
 
-> 归档时间：2026-11-18（v0.18.4 发布并入；已并入 5 段：v0.18.0（11-12）、v0.18.1（11-15）、v0.18.2（11-16）、v0.18.3（11-17）、v0.18.4（11-18））
+> 归档时间：2026-11-18（v0.18.5 发布并入；已并入 6 段：v0.18.0（11-12）、v0.18.1（11-15）、v0.18.2（11-16）、v0.18.3（11-17）、v0.18.4（11-18）、v0.18.5（11-18））
 > 原始文件：`docs/managements/changelog.md`
-> 涵盖版本：v0.18.0 ~ v0.18.4（2026-11-12 ~ 2026-11-18）
+> 涵盖版本：v0.18.0 ~ v0.18.5（2026-11-12 ~ 2026-11-18）
 > 归档内容：由 `release.py prepare` 自动迁入各发布段
 
 ---
@@ -125,3 +125,17 @@
 - **深层渲染契约收敛**：新增 `TemplateContext` 承载 94 个模板变量，`_render_template` 收敛为 `render(**asdict(ctx))` + 章节顺序 CSS 注入；81 个关键字形参与 94 行关键字表收为装配侧一次赋值，`html_writer.py` 760 → 596 行并退出膨胀登记；同输入产物 SHA 逐字节一致（`plan-258`）。
 - **测试用例审计**：全量 13061 条用例核对（冗余/无效/分类/命名四个维度）——机检十类问题为零；4 处命名补足期望结果（`rf-1164`），22 组「常量归一后同体」确认属按 provider/契约的并行覆盖，保留不合并。
 - **文档触点**：`DESIGN.md` 登记「降级汇总行」口径（位置 / 句式 / 无降级不出行），`reports-instruction.md` 与 `how-to-use-cli-mode.md` 同步该行，`technical.md` 补渲染前置装配与账本原语模块行。
+
+## [0.18.5] - 2026-11-18
+
+- **发布归档兜底**：`apply_plan_archive` 在归档前检查「已完成（待发布归档）」区是否有关闭标记，缺标记即中止并点名 `plan-N`（此前漏标记会被静默跳过、完成项永久留在主台账）；配 3 条用例（`rf-1167`）。
+- **LLM 成本台账纠正**：截断重试的两次真实计费调用用量改为**累加**（此前只留重试那次，被截断那次的花费凭空消失，重试彻底失败时更直接记为无用量）；配 2 条用例（`rf-1168`）。
+- **性能门禁补 full 档**：`test-perf-report.py` 新增 Phase 4（full 全链路，LLM 已 mock），门禁改为 basic ≤60s **且** full ≤300s 双口径，填补「只卡 Excel 一段、full 退化无门槛」的缺口（`rf-1169`）。
+- **max_tokens 偏低不再静默**：`llm_settings.json` 中 `max_tokens_*` 低于本版出厂默认时，加载期点名「当前值 / 默认值 / 代价（触顶会追加一次计费调用）」，不回落、不改写用户值；配 2 条用例（`rf-1170`）。
+- **静默降级补痕**：并发档位配置读失败（`core/concurrency.py`）、交易日历/阈值回落（`core/data_freshness.py`）、逐品种 K 线取数失败（`report/_report_factor_metrics.py`）不再无声（`rf-1171`）。
+- **125 小时变更审计**：三处 `-> Any` 标注为真实返回类型（`_RenderContext` / `ReportResult` / `list[dict] | None`）；辩论三段改用 `_DebateCall` 公共上下文（参数表 21/16 → 上下文 + 差异项）、会话缓存读写收敛 `_session_get`/`_session_put`（`rf-1176`）。
+- **长函数拆分（5 个全完成）**：`write_html_report` 349→185、`prepare_report_data` 270→176、`_generate_report_full` 303→191、`generate_debate_procon` 311→233（白脸黑脸重复实现收敛到 `_run_debate_side`）、`_write_decision_basis_block` 275→41；三处「按源码位置/条数断言」的守卫测试改为结构性定位（`rf-1174`）。
+- **去重（213 小时变更审计）**：`fetcher/fund.py` 两条会话缓存包装合并为 `_session_cached()`；`core/perf.py` 两条 JSONL 台账读取合并为 `_load_jsonl_records()`（`rf-1175`）。
+- **V8 崩溃/退出死锁修复**：akshare 的交易日历与同花顺资金流会在函数内建 `py_mini_racer(V8)` 上下文，主进程内无论专用线程/全局锁/就地回收都实测段错误或退出死锁（原生崩溃，`try/except` 拦不住）；新增 `core/v8_subprocess.py` 把这两类取数放进子进程（白名单 + JSON 契约 + 超时杀进程 + 离线开关），父进程只收 records 并按源不可用降级，配 12 条用例与离线契约（`rf-1173`）。
+- **持仓文件缺失提示可执行**：`_missing_holdings_hint()` 区分「目录不存在（旧配置残留，改 `holdings_dir`）」与「文件名对不上（目录现有 xlsx，改 `holdings_filename`）」两神情形；配 3 条用例（`rf-1172`）。
+- **全仓架构与设计契约核查**：5 处代码注释把开关门禁指向已合并的旧开关（`industry_beta` → `factor_catalog`、`financial_report_digest` / `financial_indicator` → `stock_fundamentals`），注释与真实判据相反（违背功能开关注册表唯一事实来源）；删除 `features.json` 中无消费者的 `industry_beta` 键（此前每次 `check-doc-drift` 都报未登记开关）；`action_section.html` 决策书 2px/6px 间距阶外值改为 8/4 与 4/8（设计护栏间距阶外值 1 → 0）；`technical.md` 渲染期全局禁令的例外补记静态注册表派生常量 `section_names`（`rf-1177`）。

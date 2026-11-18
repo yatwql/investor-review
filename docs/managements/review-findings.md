@@ -1,5 +1,5 @@
 # 投资复盘助手 - 自我审查问题记录
-> 文档版本：0.18.5-dev
+> 文档版本：0.18.5
 > **编号源**：`rf-next = 1178`（新增问题提出后更新为 +1；已用最大 rf-1177，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
@@ -61,23 +61,8 @@
 ### 开发期已修复（0.18.5-dev）
 
 > 本表为本开发周期已修条目的**摘要行**（详情见 `changelog.md` 对应段）；发布时由 `release.py prepare` 的 archive 步原表搬入版本归档并在此留占位。
-| **rf-1167** | `prepare` 的 plan 归档只认「完成标记」标题，而本周期 9 个已完成节写成 `` `plan-N` 标题 `` 无标记 → **静默漏档**：既不进 `archived_plan.*`、也不报错，靠发布时人工复核才捞出（否则这批完成项永久留在主台账） | 归档前兜底：新增 `unmarked_completed_plan_sections()`，`apply_plan_archive` 发现缺标记即抛 `ReleaseError` 并点名 `plan-N` + 给出可照抄写法；配 3 条用例（只报未标记 / 报错点名 / 全标记正常归档）；`developer-guide` 发布流程首段写明该硬约束 |
-| **rf-1168** | 截断重试丢首次调用用量：`_handle_truncation` 返回重试那次 `usage`，覆盖了被截断那次真实花费（截断模块可低估近 2 倍）；重试失败时 `return result, None` 连首次用量一并丢 → 成本台账少算 | 新增 `_merge_usage()`（按 key 递归累加，缺失一侧取另一侧），重试成功/失败均返回两次合计；配 2 条用例（合并求和且不改写首次对象 / 重试失败仍留首次用量） |
-| **rf-1169** | 性能门禁只卡 basic（Phase 1 Excel 一段），而实际使用最多的是 full 档（数据准备+新闻+穿透+双输出）——full 退化（数据准备中位 24s → 尾部 40s）无任何门槛拦截 | `test-perf-report.py` 新增 Phase 4（full 全链路，LLM 已 mock、其余离线桩同源）；`_perf_report/report.py` 增 `_TARGET_FULL_SECONDS`（300s，待 CI 基线收紧）与报告行/结论段；`--gate` 改为双口径任一超标即退出 2 |
-| **rf-1170** | `llm_settings.json` 里 `max_tokens_*` 低于本版出厂默认时静默生效（实例：`max_tokens_self_review=2048` vs 默认 8192）——满编持仓必然触顶，触顶会**自动放大重生成一次 = 多一次计费调用**，用户在报告里只看到 WARNING，根因无从追溯 | `_validation_llm` 新增 `_below_default_advisory()`：加载期点名「当前值 / 本版默认 / 代价」，合法值不回落不改写；配 2 条用例（低于默认保留原值并出提示 / ≥默认不产生提示噪声） |
-| **rf-1171** | 多处 `except Exception` 无任何日志的静默降级：`core/concurrency.py` 配置读失败 → 并发档位静默变 high；`core/data_freshness.py` 交易日历/阈值回落无痕；`report/_report_factor_metrics.py` 单品种 K 线失败与「真无数据」不可区分 | 逐处补日志（并发档位回落用 WARNING + exc_info，其余用 DEBUG + exc_info）；其余仅探针性质（doctor 健康检查等把失败当结果返回）不动 |
-| **rf-1172** | 持仓文件缺失只报「文件不存在（路径: X）」：目录本身不存在（旧机器/旧版本配置残留，本机曾实测指向一个已不存在的路径）与「目录在、文件名对不上」两种情形修法完全不同（改 `holdings_dir` 还是改 `holdings_filename`），原提示两者都说，用户会在错误的配置键上来回试 | 新增 `_missing_holdings_hint()` 分三种情形给可执行修法（目录不存在 → 点名 `holdings_dir` 且提示旧配置残留；目录在 → 列出该目录现有 xlsx 并点名 `holdings_filename`；空目录 → 提示放文件）；配 3 条用例 |
 
-| **rf-1173** | `test-perf-report.py`（及真实报告）本机必崩/挂死：`Segmentation fault`（退出 139）与退出期死锁。`-X faulthandler` 原栈先指向 akshare 财务指标链，实为**栈顶 `py_mini_racer.MiniRacer.__del__` → `dll.mr_free_context`**；`git stash` 后在 `HEAD` 上同样复现。逐层定位出三种崩法（两条线程先后 init V8 / 上下文跨线程 GC / 上下文活到退出期）——都是原生崩溃，`try/except` 与 pytest 一律拦不住；且实测**主进程内无论专用线程、全局锁、就地回收都留活口**（异常栈帧与第三方内部引用会把上下文留到下一次 GC） | 改为**子进程隔离**：新增 `core/v8_subprocess.py`（白名单接口 + JSON 契约 + 超时杀子进程 + 离线开关），`tool_trade_date_hist_sina`（交易日历）与 `stock_fund_flow_industry`（同花顺资金流备用通道）改走子进程，主进程只收 records；配 12 条用例（白名单/JSON 契约/子进程错误与超时降级/日历与资金流接线/主进程禁直调契约）与离线契约（基准与测试都把「子进程也离线」传下去，防止测试偷偷走真实网络）；基准连续两轮退出码 0 |
-
-| **rf-1175** | 近 213 小时变更审计发现两处结构性重复（同一套口径写了两份，改一处漏一处即口径分叉）：① `fetcher/fund.py` 的 `fetch_fund_rankings_cached` / `fetch_fund_holdings_cached` 是同一会话缓存包装的两份拷贝；② `core/perf.py` 的 `load_health_history` / `load_history` 是同一 JSONL 台账读取的两份拷贝 | ① 抽出 `_session_cached(namespace, code, fetch)`，两处各留一行调用（`NOT_FOUND` 命中语义与 `source="api"` 来源标注集中在一处）；② 抽出 `_load_jsonl_records(path, label)`（不存在→空 / `OSError` 不上抛 / 坏行 WARNING 三口径单源），两条台账共用。既有 fund/perf 用例全绿（2490 条） |
-
-| **rf-1174** | 近 213 小时变更审计：5 个超长函数到「改一处要通读全文」的程度（`write_html_report` 349 / `generate_debate_procon` 311 / `_generate_report_full` 303 / `_write_decision_basis_block` 275 / `prepare_report_data` 270 行） | 全部按阶段拆分，入口只留编排：`write_html_report` 349→185（`_prepare_page_state` + `_build_template_context`）；`prepare_report_data` 270→176（8 段数据准备各自成函数，perf span 与调用序不变）；`_generate_report_full` 303→191（数据准备/快照注入/峰值重建/LLM 后处理各自成阶段函数）；`generate_debate_procon` 311→233（白脸黑脸收敛到 `_run_debate_side` 消掉两份逐字重复、配置解析与综合段各自成函数、删掉随之失效的会话缓存闭包）；`_write_decision_basis_block` 275→41（信号/风险预算/纪律/结算四子节各自成函数）。三处按源码位置/条数断言的测试改为结构性定位（装配点动态查找、挂载点按主编排调用序展开、缓存键按「是否用共享常量」判定），使重构搬动函数时守卫仍成立 |
-
-| **rf-1176** | 近 125 小时变更审计（88 提交）：三处新函数用 `-> Any` 掩盖真实返回类型（`_prepare_page_state` 实为 `_RenderContext`、`_emit_full_reports` 实为 `ReportResult`、`_fetch_sector_flow` 实为 `list[dict] \| None`），类型检查因此对这三处的使用方全盲；辩论三段（白脸/黑脸/综合）参数表膨胀到 21/16 项、会话缓存读写同一段代码抄了三遍 | ① 三处标注真实返回类型（`_RenderContext` 直接导入，`ReportResult` 走 TYPE_CHECKING 前向引用）；② 引入 `_DebateCall`（模型/附录块/持仓口径/幻觉白名单/会话缓存一张表），三段签名降到「上下文 + 各自差异项」，附录块从三处签名里消失；③ 会话缓存读写收敛为 `_session_get` / `_session_put`。其余核对项无需改动：无可变默认参数、无 `except: pass`、无 TODO/FIXME、结构重复仅 1 组 5 行（薄包装属合理）、25 处新增 `print` 均在 TUI 进度与脚本/子进程输出侧；judge 用例全绿 |
-
-| **rf-1177** | 全仓架构约束与设计契约核查：5 处代码注释把开关门禁指向**已不存在或已合并的功能开关**（`industry_beta` / `financial_report_digest` / `financial_indicator`——三者已分别并入 `factor_catalog` / `stock_fundamentals`），注释与环境实际判据相反，排障会改错开关（违背功能开关注册表唯一事实来源）；`data/config/features.json` 残留无消费者的 `industry_beta` 键（每次 `check-doc-drift` 都报未登记开关）；`action_section.html` 决策书标题/列表用 2px/6px **间距阶外值**（DESIGN.md 禁新增阶外值） | ① 五处注释改为真实门禁开关（`factor_catalog` / `stock_fundamentals`），并补「基金深度分析关闭时同样返回 None」；② 删除 `features.json` 中无消费者的 `industry_beta` 键（已按「未登记键不生效」静默失效）；③ 间距改 8/4 与 4/8，`check-style-guardrails` 阶外值由 1 降为 0；④ `technical.md` 渲染期全局禁令的例外补记「由章节注册表现场派生的静态常量 `section_names`」（与 §4.4「单次会话不变的数据不受此限」对齐） |
-
+（本版开发期已修复项已随 v0.18.5 发布迁入归档档案）
 ### 归档档案
 - [`archived_review-findings.0.18.x.md`](../archive/v0.18.x/archived_review-findings.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-18）
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-10）
