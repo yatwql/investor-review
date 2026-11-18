@@ -846,11 +846,13 @@ def test_generate_global_macro_cached(self, mock_call):
 ### 5.4 Mock 交易日历 & 市场时段
 
 ```python
-# 交易日历 — akshare 在 _get_trading_calendar 内部以 "import akshare as ak" 导入
-# 不能在模块级 patch "src.python...ak"，需直接 patch 函数：
-@patch("akshare.tool_trade_date_hist_sina")
-def test_trading_calendar(self, mock_ak):
-    mock_ak.return_value = pd.DataFrame(...)
+# 交易日历 — akshare 的 tool_trade_date_hist_sina 内部建 py_mini_racer(V8) 上下文，
+# 主进程内无论怎么调度都会段错误/退出死锁，故取数统一在**子进程**执行
+# （core/v8_subprocess.run_akshare_v8）；测试桩要打在这个入口上，不是 akshare 函数：
+@patch("src.python.core.v8_subprocess.run_akshare_v8")
+def test_trading_calendar(self, mock_run):
+    mock_run.return_value = [{"trade_date": "2026-09-17"}]
+# 需要「源不可用」态时让它抛 V8SourceError（调用方按数据源不可用降级）
 
 # 市场时段 — market_hours 中 datetime.now 通过模块级引用
 # 标准写法（替代对全部代码搜索 datetime.now 的 patch 路径）：

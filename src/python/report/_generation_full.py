@@ -515,7 +515,6 @@ def _postprocess_llm_output(
 
     _record_llm_stage_counters(perf)
 
-
     return llm_content
 
 
@@ -593,7 +592,6 @@ def _generate_report_full(
 
     prep = _prepare_full_data_stage(holdings, config, reporter, transactions, perf)
 
-
     pipeline_data = _capture_full_snapshot_stage(
         holdings,
         prep,
@@ -604,7 +602,6 @@ def _generate_report_full(
         enable_portfolio_evolution=_enable_portfolio_evolution,
         enable_summary_highlights=_enable_summary_highlights,
     )
-
 
     # ── 3. 历史走势 + 全量量化指标 ──
     history_data, _metrics = _prepare_full_risk_metrics(
@@ -656,9 +653,7 @@ def _generate_report_full(
     )
     _llm_sink = _llm.llm_sink
 
-    llm_content = _postprocess_llm_output(
-        llm_content, prep, pipeline_data, reporter, perf, enable_llm=_enable_llm
-    )
+    llm_content = _postprocess_llm_output(llm_content, prep, pipeline_data, reporter, perf, enable_llm=_enable_llm)
 
     # 景气度框架诊断（实验性功能 prosperity_framework）：经实验挂载点接入。
     # full 路径 prep 已含穿透重仓（`penetrated_assets`），基本面与历史走势亦已就绪。
