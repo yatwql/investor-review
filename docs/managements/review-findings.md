@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.18.6-dev
-> **编号源**：`rf-next = 1185`（新增问题提出后更新为 +1；已用最大 rf-1184，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1186`（新增问题提出后更新为 +1；已用最大 rf-1185，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -46,7 +46,7 @@
 | `scripts/_doc_drift/_format.py` 742 行 | 格式化规则按文档类型拆（章节 / 表格 / 树 / 统计） |
 | `src/python/core/degradation.py` 768 行 | 状态词与事件模型、登记面与持久化可拆两文件 |
 | `src/python/report/action_sheet.py` 753 行 | 行动页签内各块（建议表 / 判断依据 / 决策书 / 复盘）拆子模块 |
-| `src/python/fetcher/financial_report.py` 719 行 | 按「索引 / 正文 / 全文定位」三阶下沉 |
+| `src/python/fetcher/financial_report.py` 725 行 | 按「索引 / 正文 / 全文定位」三阶下沉 |
 | `src/python/providers/akshare_extras.py` 718 行 | 按接口族拆（指数 / 行业 / 分红 / 盈利预测） |
 | `src/python/core/provider_registry.py` 710 行 | 熔断与会话缓存各自独立文件 |
 | `src/python/llm/skeleton.py` 877 行 | 模板数据与渲染逻辑可下沉 `llm/skeleton_*`（骨架模板 / 占位渲染） |
@@ -74,6 +74,8 @@
 | **rf-1183** | `src/test/conftest.py` 单文件 1199 行（顶到测试域 1200 行红线），且内容跨五类互不相关的职责——敏感路径隔离、33 个模块状态自动复位、cassette 回放、外网阻断、收集期校验混在一处，新增任一域都要在千行文件里定位。 | 按域拆为 `src/test/_conftest_{isolation,state_reset,cassette,network,hooks}.py`，入口只留标记注册与会话级兜底、把夹具/钩子显式 import 回来注册（pytest 只认入口命名空间，故 import 不可删）；`test_module_state_reset.py` 的复位接线判据改按 `conftest.py` + `_conftest_*.py` 全量汇总（glob 派生，新增实现模块自动纳入）；conftest.py 1199 → 176 行 |
 
 | **rf-1184** | 近 6 小时变更审计（13 提交）：conftest 拆分后 `src/test` 内的兄弟模块导入在编辑器/LSP 侧持续报「Import 无法解析」——`[tool.pyright]` 的 `exclude` 只把测试域移出受检程序，不静默打开文件时的解析诊断，每次改动都会在测试域刷出 5~7 条假红（命令行 pyright 与 `check-types.py` 均为 0 错）。其余核对无新增债务：窗口内无死私有函数（全仓 0）、无近重复函数（5 组同形对均为不同输入/不同 SUT 的并行覆盖）、拆分前后 conftest 的 53 个顶层函数零丢失零重复 | `pyproject.toml [tool.pyright]` 增 `ignore = ["src/test"]`（只静默诊断、不改受检域），并在 `scripts/check-types.py` 文档与 developer-guide 类型检查行同步说明该键的作用与边界 |
+
+| **rf-1185** | 实测报告（128.8s/11 持仓）日志分析出两处浪费：① 财报摘要 25.1s（数据准备 55%）里，`_locate_from_fulltext` 在全文**无任一偏好关键词**时退化为 `content[:max_chars]`（封面/目录/公司简介）——既把无关文本当摘要展示，又因「有正文」绕过 `SYMBOL_MISS` 负缓存，下一轮继续逐篇白探；② `portfolio_history` 把 `00` 前缀但名称不含基金关键词的场外基金（实测 `005827 易方达蓝筹精选`）按 A 股派给 K 线链，必空后才降级净值链，同一轮多处消费该代码即重复白试（每次 0.4~2s） | ① 全文阶只认关键词命中，无命中即返回空并落 DEBUG 说明，使该标的走「确定性缺失」负缓存；② 实例内记忆「已确认只能走净值链路」的代码集合，后续调用直接走净值链（首次仍保留既有优先序）；③ 配 2 条回归用例（无关键词全文判缺失 / 二次调用只走净值链），并同步 `technical.md` 的两阶取数口径 |
 
 ### 归档档案
 - [`archived_review-findings.0.18.x.md`](../archive/v0.18.x/archived_review-findings.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-18）

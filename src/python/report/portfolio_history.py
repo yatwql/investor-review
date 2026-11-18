@@ -82,6 +82,9 @@ class PortfolioHistoryCalculator:
         self._coverage_threshold = coverage_threshold if coverage_threshold is not None else 0.8
         # 基准指数配置：{代码: 名称}，空 dict 表示禁用
         self._benchmark_indices = benchmark_indices if benchmark_indices is not None else {}
+        # 已确认只能走基金净值链路的代码（本轮内忘了它跑过 K 线就会重复白试一次：
+        # 00 前缀的场外基金名称不一定含基金关键词，`is_a_share_stock` 会先派给股票链）
+        self._fund_only_codes: set[str] = set()
 
     def calculate_for_holding(
         self,
@@ -111,7 +114,11 @@ class PortfolioHistoryCalculator:
 
         # 路由：按代码类型确定数据源（使用 code_utils 统一入口）：
         # 00 前缀与场外基金重叠区优先按名称判为场外基金，避免取到同代码股票历史
-        if is_exchange_fund_code(code) or is_a_share_stock(name, code):
+        if code in self._fund_only_codes:
+            # 本轮已确认该代码走不通 K 线（场外基金与 00 前缀股票区间重叠），直接走净值链路
+            logger.info("[history]%s 已确认场外基金→基金净值链路", _tag)
+            bars = self._get_fund_history(code, days)
+        elif is_exchange_fund_code(code) or is_a_share_stock(name, code):
             bars = self._get_stock_history(code, days)
             # 降级：A 股/OTC 基金代码重叠区（00 开头），股票历史全空时尝试基金历史
             if not bars and is_otc_code_overlap(code):
@@ -119,6 +126,7 @@ class PortfolioHistoryCalculator:
                 bars = self._get_fund_history(code, days)
                 if bars:
                     logger.info("[history]%s 降级成功——通过基金净值链路获取到历史数据", _tag)
+                    self._fund_only_codes.add(code)
                 else:
                     logger.warning("[history]%s 降级也失败——基金净值链路亦无数据", _tag)
             elif not bars:

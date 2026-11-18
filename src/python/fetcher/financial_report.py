@@ -571,8 +571,10 @@ def _locate_from_fulltext(
     只出现在目录里的关键词会被跳过、继续试下一个偏好。
 
     Returns:
-        ``(片段, 命中的偏好关键词)``；未取到全文时 ``("", "")``；
-        全文里没有任一偏好关键词时退化为正文开头片段（关键词为空串）。
+        ``(片段, 命中的偏好关键词)``；未取到全文、或全文里没有任何偏好关键词时
+        均为 ``("", "")``。**不退化到正文开头**：开头是封面/目录/公司简介，
+        当摘要展示等于把无关文本当财报结论（且会让报告层以为本标的已有正文，
+        从而错过「确定性缺失」的负缓存）。
     """
     doc = _fetch_document(doc_id, "", source=source, meta=meta)
     content = str((doc or {}).get("content") or "")
@@ -581,8 +583,12 @@ def _locate_from_fulltext(
     excerpt, matched = locate_keyword_excerpt(content, preferences, max_chars)
     if excerpt:
         return excerpt, matched
-    # 全文里没有任一偏好关键词时退化为正文开头片段（关键词为空串）
-    return content[:max_chars], ""
+    logger.debug(
+        "[financial_report] 全文无任一偏好关键词，不作正文开头兜底：doc=%s 偏好=%s",
+        doc_id,
+        "/".join(preferences),
+    )
+    return "", ""
 
 
 def _attempt_candidates(

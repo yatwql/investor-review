@@ -3004,6 +3004,8 @@ llm/skeleton.py                 # 教训区块注入专家复盘提示词（开�
 
 **并发上界（两层）**：① **逐池**——`fetcher/batch.get_batch_worker_count` 按配置项与 `batch.max_total_workers`、本机 CPU 核数取小；② **进程级预算**——`core/concurrency.GOVERNOR` 让参与池（`BatchDispatcher` 与 `core.concurrency.worker_pool`）共享同一份预算，建池时从余额分配、不足则缩到至少 1 并 WARNING（不抢占已运行池），预算与峰值/缩容次数写入 `perf_history` 的 `counters.concurrency_budget/peak/clamps`。各模块取值仍是各自打磨值（基金 3 / 行业 8 / 财报 3 / akshare 2 / 指数 5 / 实时取价 8 / 基金风格 8 / 因子 6），弱机器可用配置下调；另有 `batch.profile` 一把总旋钮（high=100% / medium=50% / low=25%，借鉴 test-runner 的并行级别系数，只缩各池申请值、不改相对权重，默认 high=现状）；结构性固定池（新闻 5 源）不参与预算。基金费率扇出与季报探测对冲受 `fund_workers` 约束（对冲每基金最多 2 路，全局 ≤ `fund_workers × 2`）。**限速与配额护栏**：每次 HTTP 请求前经 `RateLimiter`（`core/throttle.py`）以「间隔 = 1/每秒上限」限速（免费档 3 请求/秒；付费档 31）；日配额计数存 `data/state/datasink_quota.json`，超限即停并告警。**免费档无批量端点、必然逐篇请求**，故限速必须落在 provider 每次请求前（批量调度器层挡不住单条调用）。并发取数由 `batch.datasink_workers` 控制（**默认 2**，免费档批量上限 ≤3），速率仍由 provider 兜底。
 
+**两阶取数口径**：章节阶（章节清单匹配 + 偏好名直取）全失败时走全文阶——整篇正文按偏好关键词定位片段，**仅命中关键词才采用**；全文无任一关键词即判本标的确定性缺失（不拿封面/目录/公司简介的正文开头当摘要，也不让报告层误以为已取到正文而绕过 `SYMBOL_MISS` 负缓存）。
+
 **降级与合规**：**传输级**失败（网络不可达/连接超时）经连接级重试（线性 1s/2s，共 3 次）后**上抛**，由链路计入同源重试与熔断；**代码级**结果（401/403/429 重试后仍非 200/非 JSON）返回空、不计传输级熔断。单标的失败进失败清单；`available=False` 时写占位。返回对象含披露平台归属字段 `source`，报告逐行标注（再分发时保留）。
 
 **缓存**：索引/章节清单 1 天、正文 30 天（`report` / `report_doc`）——索引是 symbol 级键，日频才能让**新披露最迟次日可见**；正文按 `doc_id` 不可变，月度复用不重复消耗配额。随菜单缓存命令与 TTL 管理。**数据契约** `financial_report_digest_data`（附录 H）；语义命名行见 §6.7。

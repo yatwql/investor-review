@@ -414,7 +414,9 @@ class TestCacheClearByPrefix(CacheTestBase):
         """匹配前缀的文件全部删除（条数由前置清单派生，不写死绝对值）。"""
         from src.python.cache import clear_by_prefix
 
-        expected = [f for f in os.listdir(self.cache_dir) if f.startswith("price_") and f.endswith((".json", ".json.gz"))]
+        expected = [
+            f for f in os.listdir(self.cache_dir) if f.startswith("price_") and f.endswith((".json", ".json.gz"))
+        ]
         count = clear_by_prefix("price_")
         self.assertEqual(count, len(expected))
         from src.python.cache._paths import _cache_path
@@ -440,7 +442,9 @@ class TestCacheClearByPrefix(CacheTestBase):
 
         from src.python.cache import clear_by_prefix
 
-        expected = [f for f in os.listdir(self.cache_dir) if f.startswith("price_") and f.endswith((".json", ".json.gz"))]
+        expected = [
+            f for f in os.listdir(self.cache_dir) if f.startswith("price_") and f.endswith((".json", ".json.gz"))
+        ]
         count = clear_by_prefix("price_")
         self.assertEqual(count, len(expected))
         self.assertTrue(os.path.exists(non_json))

@@ -334,8 +334,12 @@ class TestReportPeriodBacktrack:
         assert rec["summary"].startswith("董事会报告\n主要业务")
         assert "........" not in rec["summary"]
 
-    def test_fulltext_fallback_head_when_no_keyword(self, monkeypatch):
-        """全文里没有任何偏好关键词 → 退化为正文开头片段（仍有内容，不判失败）。"""
+    def test_fulltext_without_keyword_is_not_used_as_summary(self, monkeypatch):
+        """全文无任一偏好关键词 → 不拿正文开头当摘要（那是封面/目录/公司简介）。
+
+        回归：旧行为退化为 ``content[:max_chars]``，报告层会把封面文字当财报结论展示，
+        且因「拿到了正文」而错过本标的的确定性缺失负缓存（下一轮继续逐篇白探）。
+        """
         self._patch_index(monkeypatch, [{"id": 9, "report_period": "2025-12-31", "doc_type": "annual"}])
         monkeypatch.setattr(fr, "_fetch_sections", lambda doc_id, source=None: ["附件"])
         monkeypatch.setattr(
@@ -343,9 +347,12 @@ class TestReportPeriodBacktrack:
             "_fetch_document",
             lambda doc_id, section, **_kw: {"doc_id": doc_id, "content": "公司简介正文"} if section == "" else None,
         )
+        monkeypatch.setattr(fr, "_backup_candidates", lambda symbol, max_candidates: [])
         rec = fr.fetch_symbol_report("601398.SS", max_chars=10)
-        assert rec["summary"] == "公司简介正文"
-        assert rec["section_source"] == fr.SECTION_SOURCE_FULLTEXT
+        assert rec is None, "无关键词命中的全文不得当作摘要"
+        reason_record, reason = fr.fetch_symbol_report_detailed("601398.SS", max_chars=10)
+        assert reason_record is None
+        assert reason, "应给出可读的未取到原因（供契约失败清单展示）"
 
     def test_sections_hit_marks_section_source(self, monkeypatch):
         """章节阶命中时标记取用方式为 sections（排查时区分两阶）。"""
