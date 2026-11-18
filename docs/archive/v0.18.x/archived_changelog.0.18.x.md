@@ -1,8 +1,8 @@
 # 变更日志归档 — v0.18.x
 
-> 归档时间：2026-11-17（v0.18.3 发布并入；已并入 4 段：v0.18.0（11-12）、v0.18.1（11-15）、v0.18.2（11-16）、v0.18.3（11-17））
+> 归档时间：2026-11-18（v0.18.4 发布并入；已并入 5 段：v0.18.0（11-12）、v0.18.1（11-15）、v0.18.2（11-16）、v0.18.3（11-17）、v0.18.4（11-18））
 > 原始文件：`docs/managements/changelog.md`
-> 涵盖版本：v0.18.0 ~ v0.18.3（2026-11-12 ~ 2026-11-17）
+> 涵盖版本：v0.18.0 ~ v0.18.4（2026-11-12 ~ 2026-11-18）
 > 归档内容：由 `release.py prepare` 自动迁入各发布段
 
 ---
@@ -104,3 +104,24 @@
 - **渲染前置装配补阶段契约用例**：`report/_html_render_context.py` 先前面板视图/数据源状态/渲染上下文三层装配无直测，新增 `test_html_render_context.py`（10 条：缺席降级、四元组位序与转发入参、`details` 优先于 `holdings`、因子名导入失败升 debug）（`rf-1156`）。
 - **评审台账清理**：删除 P2/P3 两处重复的空表头。
 - **渲染前置装配入参按来源域分组**：`_prepare_render_context` 的 30 个关键字入参收为两组 dataclass（`_VisibilityInputs` / `_DataSourceInputs`）加 `details`，签名降至 3；`_build_data_source_bundle` 同收为单组入参，`write_html_report` 调用点改按域构造——改派生量的入参不再靠位置对齐，只需在所属组里加字段（`rf-1157`）。
+
+## [0.18.4] - 2026-11-18
+
+### 变更
+
+- **渲染前置装配入参按来源域分组**：`_prepare_render_context` 的 30 个关键字入参收为 `_VisibilityInputs` / `_DataSourceInputs` 两组 dataclass 加 `details`，签名降至 3，`_build_data_source_bundle` 同收为单组入参；配 `test_html_render_context.py` 11 条阶段契约用例（`rf-1157`、`rf-1156`）。
+- **降级可观测**：6 处按设计降级但无日志痕迹的 `except` 补 `logger.debug(exc_info=True)`，降级语义与返回值不变（`rf-1155`）。
+- **新闻去重比较成本**：`_dedup_by_title` 由两层候选索引给出候选超集（实体 bigram / 标题窗口），两层未命中的对不进入比较；判定结果逐条一致（保留集合 SHA 对拍相同），实测比较对 −45%、耗时 2.8×（`plan-262`）。
+- **实验项转正判据自动裁决**：新增 `core/experiment_verdicts.py`（项清单由注册表派生，四态结论：可转正 / 继续观察 / 撤销候选 / 无读数），`doctor` 新增「实验项裁决」行与「已达判据 → 请按计划裁决」提醒；不改开关、不摘 `experimental`（`plan-260`）。
+- **零直测模块补测**：`config/_json_patch`、`analysis/_fee_estimation`、`analysis/metrics_risk`、`config/_feature_registry`、`providers/_news_dedup_tables` 补齐直测（共 103 条）；补测期间修掉三个写回缺陷——区块括号平衡未跳过字符串/注释（`rf-1159`）、不可解析字符串切片让 patch 抛异常（`rf-1160`）、单行对象删除吞整行与 CRLF 文件混行尾（`rf-1161`）（`plan-261`）。
+- **本轮降级清单汇总出口**：新增 `core/degradation.report_degradation_summary()`（按「源 + 失败类型」去重计数，同时给出项数与次数），报告「数据状态」块尾与 CLI 产物清单尾部同源输出一行；无降级时不出该行，产物逐字节不变（`plan-263`）。
+- **缓存同事实单键**：`fetch_latest_indicator` 先复用多期缓存（`fin_indicator_hist_{code}` 头部即最新一期），同一 code 每轮少一次回源（`plan-264`）。
+- **守护命中台账与统计**：`checklib.report()` 每次运行追加 `logs/guard-hits.jsonl`（`check-doc-drift` 另给子项粒度），新增 `probe-guard-hits.py` 输出「运行次数 / 命中次数 / 处置（保留 / 建议降频 / 样本不足）」表，不改守护启用状态与 CI 阻塞语义；台账超 4MB 截断为最近 5000 行，防长期膨胀（`plan-265`、`rf-1162`）。
+- **账本级原语单源**：新增 `core/ledger_common.py`（`feature_active` 开关收敛判定 / `now_iso` 秒级时间戳），两个账本的同名函数改为薄封装，导入面与既有 patch 点不变（`rf-1163`）。
+- **台账收口**：`plan-252`（评估政策单源 + 不动作类命中评估）与 `plan-253`（LLM 复盘结论结构化契约，补证循环归 `plan-255` 裁决）迁入已完成待归档。
+- **去重性能的收尾核实**：profile 显示剩余成本在候选对的双向相似度计算；两条候选优化（窗口专属跳过重叠 / 单向 ratio 提前退出）实测分别 0 收益与 0.05% 命中，均不采纳，结论写回 `plan-262` 条目（进一步加速须改判定口径）。
+- **锚点语料治理**：测试侧隔离 `data/calibration/`（防测试标题污染校准语料）；校准工具按规则指纹只把当前时代样本纳入判定分布；锚点记录新增 `same_source` 字段（校准按源关系分桶）；清理 200 条测试残留行并按保留期压缩一次（87,540 → 66,847 行，原分片留 `.bak`）（`rf-1166`）。
+- **消除两处循环 import**：新增 `core/doctor_common.py`（分组常量 + `_item`）供 `doctor`/`doctor_logs` 共用；provider 默认模型与 Extended Thinking 装配迁入 `llm/api_base.py`，`_api_*` 与门面改为单向取用；新增依赖图机检 `test_module_graph.py`（顶层 import 无环），当前环数 0（`rf-1165`）。
+- **深层渲染契约收敛**：新增 `TemplateContext` 承载 94 个模板变量，`_render_template` 收敛为 `render(**asdict(ctx))` + 章节顺序 CSS 注入；81 个关键字形参与 94 行关键字表收为装配侧一次赋值，`html_writer.py` 760 → 596 行并退出膨胀登记；同输入产物 SHA 逐字节一致（`plan-258`）。
+- **测试用例审计**：全量 13061 条用例核对（冗余/无效/分类/命名四个维度）——机检十类问题为零；4 处命名补足期望结果（`rf-1164`），22 组「常量归一后同体」确认属按 provider/契约的并行覆盖，保留不合并。
+- **文档触点**：`DESIGN.md` 登记「降级汇总行」口径（位置 / 句式 / 无降级不出行），`reports-instruction.md` 与 `how-to-use-cli-mode.md` 同步该行，`technical.md` 补渲染前置装配与账本原语模块行。

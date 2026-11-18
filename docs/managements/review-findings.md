@@ -1,5 +1,5 @@
 # 投资复盘助手 - 自我审查问题记录
-> 文档版本：0.18.4-dev
+> 文档版本：0.18.4
 > **编号源**：`rf-next = 1167`（新增问题提出后更新为 +1；已用最大 rf-1166，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
@@ -61,17 +61,11 @@
 ### 开发期已修复（0.18.4-dev）
 
 > 本表为本开发周期已修条目的**摘要行**（详情见 `changelog.md` 对应段）；发布时由 `release.py prepare` 的 archive 步原表搬入版本归档并在此留占位。
-| **rf-1159** | `config/_json_patch._replace_value_block` 的括号平衡扫描不跳过字符串与注释——数组/对象成员里含 `]` 或 `}`（如标题、正则、模板片段）时区块被提前截断，写出非法 JSON（`_find_value_end` 早已正确处理这类形态，两处口径不一致） | 改为复用 `_find_value_end`（注释/字符串感知），`end-1` 必须是目标闭括号否则原样返回；配 `test_array_with_bracket_in_string_replaced_intact` 与 `_find_value_end` 两条例外用例 |
-| **rf-1160** | `config/_json_patch._find_top_level_value_span` 对每个字符串片段直接 `json.loads`，人工改坏的转义（如 `"a"b"`）会抛 `JSONDecodeError` 中断整个 patch——配置损坏时不是降级找键，而是崩在写回路径 | 片段解析失败视为「不是目标键」继续扫描（`try/except ValueError`），失败仍返回 `None`→调用方走「找不到键」语义；配合法转义键与损坏转义两条用例 |
-| **rf-1161** | `config/_json_patch` 两处版式假设过强：① `_remove_top_level_key` 对单行（压缩）对象 `entry_start` 回退到 0，删掉整行对象只剩 `}`；② `_patch_config_key` 追加键时硬编码 LF，CRLF 文件变成混行尾 | ① 无行结构时按「上一个分隔符之后」截取条目；② 换行符沿用文件现有风格（有 `\r\n` 则用 `\r\n`）；尾逗号清理抽成 `_drop_trailing_member_comma` 供两路共用 |
-| **rf-1162** | 守护命中台账（本版新增）只追加不设上限——每次守护运行写一行，单日实测已 121 行/18KB，长期会膨胀到几十 MB 且拖慢读取 | `record_guard_run` 追加前按体积上限（4MB）截断为最近 5000 行（临时文件 + `os.replace` 原子替换，失败静默同写入口径）；配「超限截断 / 未超限只追加」两用例 |
-| **rf-1163** | `core/decision_ledger.py` 与 `core/signal_ledger.py` 各自复制 `is_active()`（4 行）与 `_now_iso()`（1 行）——同名同体，改「开关收敛方式」或「时间戳精度」要动两处，漏一处就静默漂移（一个账本按秒、另一个按微秒） | 新增 `core/ledger_common.py`（`feature_active(flag)` + `now_iso()` 秒级 ISO），两个账本的 `is_active` / `_now_iso` 改为薄封装并保留原名（导入面与既有 patch 点不变）；配 `test_ledger_common.py` 8 条（委托判定 / 秒级格式 / 单调不降 / 两账本薄封装同口径） |
-| **rf-1164** | 4 处用例命名与断言语义不精确：`test_low` / `test_no` / `test_etf` / `test_esc` —— 名字只说输入的一半（low / no / etf / esc），不表达「期望结果是什么」，跨文件检索时无法判断该用例守的是哪条语义 | 改为「输入 + 期望」双段式：`test_low_percentile_tier` / `test_env_no_returns_false` / `test_pure_etf_hint_is_index` / `test_esc_maps_to_key_esc`；同批核对 22 组「常量归一后同体」用例，确认属按 provider/契约并行的覆盖（各自 mock 与固件不同），保留不合并 |
-| **rf-1165** | 两处模块级循环 import：`core/doctor ↔ core/doctor_logs`（后者反向取 `GROUP_*`/`_item`）、`llm/api ↔ llm/_api_*`（子模块反向取默认模型与 Extended Thinking 装配）——靠「先定义、末尾延迟 import」勉强可用，改一行定义位置即 ImportError，且依赖方向读不出来 | 共用面下沉基座：新增 `core/doctor_common.py`（分组常量 + `_item`），provider 默认模型与 `_resolve_thinking_budget` / `configure_extended_thinking` 迁入 `llm/api_base.py`（门面与子模块双向取用改为单向）；依赖图机检 `test_module_graph.py`（顶层 import 无环 + 基座不反向依赖）落地，当前环数 0 |
-| **rf-1166** | 锚点语料（阈值校准数据）四项治理缺口：① 测试未隔离 `data/calibration/`，采集默认开 → 测试标题写进真实分片；② 校准工具把**三个规则时代**的样本混算（当前指纹仅占约三分之二）；③ 30 天保留期只在压缩触发时生效，近三成行超期；④ 规则名 `cross_*` 被同源对复用，记录无处表达源关系 | ① `_path_isolation` 重定向锚点基路径 + 隔离断言用例；② 校准工具按指纹只把当前时代样本纳入判定分布（旧样本仅计数对照），补 `test_analyze_only_buckets_current_era`；③ 清理残留行并按保留期压缩一次（87,540 → 66,847 行，3.5 → 2.6 MB，原分片留 `.bak`）；④ 锚点记录新增 `same_source` 字段（旧记录按源名反推，向后兼容），校准侧优先采用记录值 |
+
+（本版开发期已修复项已随 v0.18.4 发布迁入归档档案）
 
 ### 归档档案
-- [`archived_review-findings.0.18.x.md`](../archive/v0.18.x/archived_review-findings.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-17）
+- [`archived_review-findings.0.18.x.md`](../archive/v0.18.x/archived_review-findings.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-18）
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-10）
 - [`archived_review-findings.0.16.x.md`](../archive/v0.16.x/archived_review-findings.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-11-03）
 - [`archived_review-findings.0.15.x.md`](../archive/v0.15.x/archived_review-findings.0.15.x.md) — v0.15.x（2026-10-24 ~ 2026-10-25）
