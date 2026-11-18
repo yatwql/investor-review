@@ -578,26 +578,42 @@ def save_health_check_snapshot(
     logger.info("[health] 数据源健康检查结果已记录到 %s", _HEALTH_CHECK_FILE)
 
 
-def load_health_history(path: str | None = None) -> list[dict[str, Any]]:
-    """加载 datasource_health.jsonl，返回运行记录列表。"""
-    path = path or _HEALTH_CHECK_FILE
+def _load_jsonl_records(path: str, label: str) -> list[dict[str, Any]]:
+    """读取 JSONL 台账（逐行 json，坏行跳过并告警）。台账是旁路数据：读失败按空历史处理。
+
+    两个台账（性能历史 / 数据源健康历史）读取口径必须一致——含「文件不存在返回空」
+    「OSError 不向上抛（文件可能正被另一进程换名）」「坏行记 WARNING 不整体失败」。
+    此前两处各写一份，改一处漏一处会让两条台账的容错口径分叉。
+
+    Args:
+        path: JSONL 文件路径
+        label: 日志前缀标签（如 "perf" / "health"），只用于告警文案
+
+    Returns:
+        记录列表（按文件顺序；不存在或不可读时为空）
+    """
     if not os.path.isfile(path):
         return []
-    records: list[dict[str, Any]] = []
     try:
         with open(path, "r", encoding="utf-8") as f:
-            _raw_lines = f.readlines()
+            raw_lines = f.readlines()
     except OSError:
-        # 台账是旁路数据：读失败按空历史处理，不向上抛（文件可能正被另一进程换名）
         return []
-    for line in _raw_lines:
+    records: list[dict[str, Any]] = []
+    for line in raw_lines:
         line = line.strip()
-        if line:
-            try:
-                records.append(json.loads(line))
-            except json.JSONDecodeError:
-                logger.warning("[health] 忽略损坏行: %s", line[:80])
+        if not line:
+            continue
+        try:
+            records.append(json.loads(line))
+        except json.JSONDecodeError:
+            logger.warning("[%s] 忽略损坏行: %s", label, line[:80])
     return records
+
+
+def load_health_history(path: str | None = None) -> list[dict[str, Any]]:
+    """加载 datasource_health.jsonl，返回运行记录列表。"""
+    return _load_jsonl_records(path or _HEALTH_CHECK_FILE, "health")
 
 
 #: 健康历史读取失败的用户提示（CLI / TUI / Web 共用同一句）
@@ -649,24 +665,7 @@ def load_history(path: str | None = None) -> list[dict[str, Any]]:
     Returns:
         按时间升序排列的运行记录列表。
     """
-    path = path or _PERF_HISTORY_FILE
-    if not os.path.isfile(path):
-        return []
-    records: list[dict[str, Any]] = []
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            _raw_lines = f.readlines()
-    except OSError:
-        # 台账是旁路数据：读失败按空历史处理，不向上抛（文件可能正被另一进程换名）
-        return []
-    for line in _raw_lines:
-        line = line.strip()
-        if line:
-            try:
-                records.append(json.loads(line))
-            except json.JSONDecodeError:
-                logger.warning("[perf] 忽略损坏行: %s", line[:80])
-    return records
+    return _load_jsonl_records(path or _PERF_HISTORY_FILE, "perf")
 
 
 def module_cost_summary(days: int = 7, path: str | None = None) -> dict[str, dict[str, Any]]:

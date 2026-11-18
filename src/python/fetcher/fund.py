@@ -14,7 +14,7 @@ import os
 import re
 import threading
 from collections.abc import Callable
-from typing import Any
+from typing import Any, TypeAlias, cast
 
 from src.python.core.num_utils import safe_num
 
@@ -40,6 +40,9 @@ logger = logging.getLogger("invest")
 _FUND_PERF_CACHE_PREFIX = "fund_perf_"
 
 _ProviderFunc = Callable[..., dict[str, Any] | None]
+
+#: 基金取数结果的通用载荷（新增字段不改签名）
+_FundPayload: TypeAlias = "dict[str, Any] | None"
 
 _FUND_RANK_PROVIDERS: dict[str, tuple[str, _ProviderFunc]] = {
     "tiantian": ("天天基金", fetch_fund_rankings),
@@ -229,20 +232,38 @@ def with_feeder_penetration(code: str, result: dict[str, Any] | None) -> dict[st
     }
 
 
+def _session_cached(namespace: str, code: str, fetch: Callable[[str], _FundPayload]) -> _FundPayload:
+    """会话缓存包装：同一报告生成中同基金只取一次（Excel/HTML 双管线共用）。
+
+    两条基金取数（排名 / 持仓）此前各写一份同构包装，仅缓存命名空间与底层取数不同；
+    口径集中在处——含 `NOT_FOUND` 命中即返回（「取过且确实没有」不能被当成未命中重取）、
+    以及 `source="api"` 的来源标注（供数据使用矩阵统计）。
+
+    Args:
+        namespace: 会话缓存命名空间（`fund_rank` / `fund_hold`）
+        code: 基金代码
+        fetch: 底层取数函数（未命中时调用）
+
+    Returns:
+        缓存值或本次取数结果（可为 None，表示该基金无此数据）
+    """
+    from src.python.core.provider_registry import NOT_FOUND, get_registry
+
+    registry = get_registry()
+    cached = registry.session_cache_get(namespace, code)
+    if cached is not NOT_FOUND:
+        return cast(_FundPayload, cached)
+    result = fetch(code)
+    registry.session_cache_set(namespace, code, result, source="api")
+    return result
+
+
 def fetch_fund_rankings_cached(code: str) -> dict[str, Any] | None:
     """基金排名获取（含会话缓存），同一报告生成中同基金只获取一次。
 
     消除 Excel/HTML 双管线间重复的文件缓存读取。
     """
-    from src.python.core.provider_registry import NOT_FOUND, get_registry
-
-    registry = get_registry()
-    cached = registry.session_cache_get("fund_rank", code)
-    if cached is not NOT_FOUND:
-        return cached
-    result = fetch_fund_rankings(code)
-    registry.session_cache_set("fund_rank", code, result, source="api")
-    return result
+    return _session_cached("fund_rank", code, fetch_fund_rankings)
 
 
 # ═══════════════════════════════════════════════════════════
@@ -372,15 +393,7 @@ def fetch_fund_holdings_cached(code: str) -> dict[str, Any] | None:
 
     消除多个模块独立调用 fetch_fund_holdings 的冗余文件缓存读取。
     """
-    from src.python.core.provider_registry import NOT_FOUND, get_registry
-
-    registry = get_registry()
-    cached = registry.session_cache_get("fund_hold", code)
-    if cached is not NOT_FOUND:
-        return cached
-    result = fetch_fund_holdings(code)
-    registry.session_cache_set("fund_hold", code, result, source="api")
-    return result
+    return _session_cached("fund_hold", code, fetch_fund_holdings)
 
 
 # ═══════════════════════════════════════════════════════════

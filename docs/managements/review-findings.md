@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.18.5-dev
-> **编号源**：`rf-next = 1175`（新增问题提出后更新为 +1；已用最大 rf-1173，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1176`（新增问题提出后更新为 +1；已用最大 rf-1175，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -18,6 +18,7 @@
 
 | # | 问题 | 修复方向 |
 | --- | --- | --- |
+| rf-1174 | 近 213 小时变更审计（164 提交）：新增/大改的超长函数已到「改一处要通读全文」的程度——`report/html_writer.py::write_html_report` 349 行、`llm/generators.py::generate_debate_procon` 311 行、`report/_generation_full.py::_generate_report_full` 303 行、`report/action_sheet.py::_write_decision_basis_block` 275 行、`report/_orchestrator_data.py::prepare_report_data` 270 行。它们各自内部已是「取数 → 归一 → 渲染」多段串行，改动风险集中在无法单独测试的中段 | 按阶段切分为可单测的私有步骤（取数/归一/渲染各一段），入口只留编排；先拆 `write_html_report`（有模板契约测试可兜底）与 `prepare_report_data`（已有 13 个子 span 可作为切分边界） |
 
 ### P3 — 持续监控：兼容残留
 
@@ -40,7 +41,7 @@
 | 文件 | 现状与拆分方向 |
 |------|----------------|
 | `src/test/conftest.py` 1199 行（测试登记线 900） | fixture 族按域下沉（行情/LLM/网络/持久化各一模块），conftest 只留 autouse 与装配 |
-| `src/python/core/perf.py` 800 行 | 采集器与台账落盘可拆（`perf` 采集 / `perf_history` 读写两文件） |
+| `src/python/core/perf.py` 799 行 | 采集器与台账落盘可拆（`perf` 采集 / `perf_history` 读写两文件） |
 | `src/python/core/doctor.py` 787 行 | 检查项按域分文件（环境 / 配置 / 数据源 / 报告产物），入口只留编排 |
 | `src/python/llm/fact_checker/_numerical.py` 764 行 | 数值校验按规则族拆（金额 / 比率 / 计数），共享解析原语上提包内 `_common` |
 | `src/python/tui/handlers_config.py` 743 行 | 配置面板按域拆（内容选项 / 全局设置 / 目录与文件名） |
@@ -69,6 +70,8 @@
 | **rf-1172** | 持仓文件缺失只报「文件不存在（路径: X）」：目录本身不存在（旧机器/旧版本配置残留，本机曾实测指向一个已不存在的路径）与「目录在、文件名对不上」两种情形修法完全不同（改 `holdings_dir` 还是改 `holdings_filename`），原提示两者都说，用户会在错误的配置键上来回试 | 新增 `_missing_holdings_hint()` 分三种情形给可执行修法（目录不存在 → 点名 `holdings_dir` 且提示旧配置残留；目录在 → 列出该目录现有 xlsx 并点名 `holdings_filename`；空目录 → 提示放文件）；配 3 条用例 |
 
 | **rf-1173** | `test-perf-report.py`（及真实报告）本机必崩/挂死：`Segmentation fault`（退出 139）与退出期死锁。`-X faulthandler` 原栈先指向 akshare 财务指标链，实为**栈顶 `py_mini_racer.MiniRacer.__del__` → `dll.mr_free_context`**；`git stash` 后在 `HEAD` 上同样复现。逐层定位出三种崩法（两条线程先后 init V8 / 上下文跨线程 GC / 上下文活到退出期）——都是原生崩溃，`try/except` 与 pytest 一律拦不住；且实测**主进程内无论专用线程、全局锁、就地回收都留活口**（异常栈帧与第三方内部引用会把上下文留到下一次 GC） | 改为**子进程隔离**：新增 `core/v8_subprocess.py`（白名单接口 + JSON 契约 + 超时杀子进程 + 离线开关），`tool_trade_date_hist_sina`（交易日历）与 `stock_fund_flow_industry`（同花顺资金流备用通道）改走子进程，主进程只收 records；配 12 条用例（白名单/JSON 契约/子进程错误与超时降级/日历与资金流接线/主进程禁直调契约）与离线契约（基准与测试都把「子进程也离线」传下去，防止测试偷偷走真实网络）；基准连续两轮退出码 0 |
+
+| **rf-1175** | 近 213 小时变更审计发现两处结构性重复（同一套口径写了两份，改一处漏一处即口径分叉）：① `fetcher/fund.py` 的 `fetch_fund_rankings_cached` / `fetch_fund_holdings_cached` 是同一会话缓存包装的两份拷贝；② `core/perf.py` 的 `load_health_history` / `load_history` 是同一 JSONL 台账读取的两份拷贝 | ① 抽出 `_session_cached(namespace, code, fetch)`，两处各留一行调用（`NOT_FOUND` 命中语义与 `source="api"` 来源标注集中在一处）；② 抽出 `_load_jsonl_records(path, label)`（不存在→空 / `OSError` 不上抛 / 坏行 WARNING 三口径单源），两条台账共用。既有 fund/perf 用例全绿（2490 条） |
 
 ### 归档档案
 - [`archived_review-findings.0.18.x.md`](../archive/v0.18.x/archived_review-findings.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-18）
