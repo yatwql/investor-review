@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.18.5-dev
-> **编号源**：`rf-next = 1177`（新增问题提出后更新为 +1；已用最大 rf-1176，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1178`（新增问题提出后更新为 +1；已用最大 rf-1177，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -75,6 +75,8 @@
 | **rf-1174** | 近 213 小时变更审计：5 个超长函数到「改一处要通读全文」的程度（`write_html_report` 349 / `generate_debate_procon` 311 / `_generate_report_full` 303 / `_write_decision_basis_block` 275 / `prepare_report_data` 270 行） | 全部按阶段拆分，入口只留编排：`write_html_report` 349→185（`_prepare_page_state` + `_build_template_context`）；`prepare_report_data` 270→176（8 段数据准备各自成函数，perf span 与调用序不变）；`_generate_report_full` 303→191（数据准备/快照注入/峰值重建/LLM 后处理各自成阶段函数）；`generate_debate_procon` 311→233（白脸黑脸收敛到 `_run_debate_side` 消掉两份逐字重复、配置解析与综合段各自成函数、删掉随之失效的会话缓存闭包）；`_write_decision_basis_block` 275→41（信号/风险预算/纪律/结算四子节各自成函数）。三处按源码位置/条数断言的测试改为结构性定位（装配点动态查找、挂载点按主编排调用序展开、缓存键按「是否用共享常量」判定），使重构搬动函数时守卫仍成立 |
 
 | **rf-1176** | 近 125 小时变更审计（88 提交）：三处新函数用 `-> Any` 掩盖真实返回类型（`_prepare_page_state` 实为 `_RenderContext`、`_emit_full_reports` 实为 `ReportResult`、`_fetch_sector_flow` 实为 `list[dict] \| None`），类型检查因此对这三处的使用方全盲；辩论三段（白脸/黑脸/综合）参数表膨胀到 21/16 项、会话缓存读写同一段代码抄了三遍 | ① 三处标注真实返回类型（`_RenderContext` 直接导入，`ReportResult` 走 TYPE_CHECKING 前向引用）；② 引入 `_DebateCall`（模型/附录块/持仓口径/幻觉白名单/会话缓存一张表），三段签名降到「上下文 + 各自差异项」，附录块从三处签名里消失；③ 会话缓存读写收敛为 `_session_get` / `_session_put`。其余核对项无需改动：无可变默认参数、无 `except: pass`、无 TODO/FIXME、结构重复仅 1 组 5 行（薄包装属合理）、25 处新增 `print` 均在 TUI 进度与脚本/子进程输出侧；judge 用例全绿 |
+
+| **rf-1177** | 全仓架构约束与设计契约核查：5 处代码注释把开关门禁指向**已不存在或已合并的功能开关**（`industry_beta` / `financial_report_digest` / `financial_indicator`——三者已分别并入 `factor_catalog` / `stock_fundamentals`），注释与环境实际判据相反，排障会改错开关（违背功能开关注册表唯一事实来源）；`data/config/features.json` 残留无消费者的 `industry_beta` 键（每次 `check-doc-drift` 都报未登记开关）；`action_section.html` 决策书标题/列表用 2px/6px **间距阶外值**（DESIGN.md 禁新增阶外值） | ① 五处注释改为真实门禁开关（`factor_catalog` / `stock_fundamentals`），并补「基金深度分析关闭时同样返回 None」；② 删除 `features.json` 中无消费者的 `industry_beta` 键（已按「未登记键不生效」静默失效）；③ 间距改 8/4 与 4/8，`check-style-guardrails` 阶外值由 1 降为 0；④ `technical.md` 渲染期全局禁令的例外补记「由章节注册表现场派生的静态常量 `section_names`」（与 §4.4「单次会话不变的数据不受此限」对齐） |
 
 ### 归档档案
 - [`archived_review-findings.0.18.x.md`](../archive/v0.18.x/archived_review-findings.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-18）

@@ -166,7 +166,7 @@ def _compute_style_contracts(
 
     _t0 = time.perf_counter()
     if factor_exposure is not None:
-        # 行业 Beta 子表：功能开关 `industry_beta` 开关关闭时返回 None（区块隐藏）；
+        # 行业 Beta 子表：`factor_catalog` 或基金深度分析关闭时返回 None（区块隐藏）；
         # 开启但数据不足时 available=False（标题 + 占位，不阻塞本页签其余区块）
         factor_exposure["industry_beta"] = compute_industry_beta_data(holdings, details, config, reporter)
     _record_span(recorder, "行业 Beta", _t0)
@@ -236,7 +236,7 @@ def _compute_financial_contracts(
     """
     _t0 = time.perf_counter()
     # 持仓个股财报摘要（数据契约 financial_report_digest_data）：
-    # 功能开关 `financial_report_digest` 开启时计算（A 股标的取最新年报章节摘要）；
+    # 功能开关 `stock_fundamentals` 开启时计算（A 股标的取最新年报章节摘要）；
     # 关闭或无 key 时返回 None（章节隐藏/写占位）
     financial_report_digest_data = compute_financial_report_digest_data(holdings, penetrated_assets, config, reporter)
     # 两个契约各计一段：「财报摘要」是逐篇候选的网络探测（索引/章节清单/正文），
@@ -245,7 +245,7 @@ def _compute_financial_contracts(
     _record_span(recorder, "财报摘要", _t0)
 
     _t0 = time.perf_counter()
-    # 财务指标（数据契约 financial_indicator_data）：功能开关 `financial_indicator`
+    # 财务指标（数据契约 financial_indicator_data）：功能开关 `stock_fundamentals`
     # 开启时计算（A 股标的指标 + 质量档 + 趋势 + 当前 PE/PB）；关闭时返回 None（章节隐藏）
     financial_indicator_data = compute_financial_indicator_data(
         holdings, penetrated_assets, config, reporter, details=details

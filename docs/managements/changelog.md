@@ -20,7 +20,8 @@
 - **长函数拆分（5 个全完成）**：`write_html_report` 349→185、`prepare_report_data` 270→176、`_generate_report_full` 303→191、`generate_debate_procon` 311→233（白脸黑脸重复实现收敛到 `_run_debate_side`）、`_write_decision_basis_block` 275→41；三处「按源码位置/条数断言」的守卫测试改为结构性定位（`rf-1174`）。
 - **去重（213 小时变更审计）**：`fetcher/fund.py` 两条会话缓存包装合并为 `_session_cached()`；`core/perf.py` 两条 JSONL 台账读取合并为 `_load_jsonl_records()`（`rf-1175`）。
 - **V8 崩溃/退出死锁修复**：akshare 的交易日历与同花顺资金流会在函数内建 `py_mini_racer(V8)` 上下文，主进程内无论专用线程/全局锁/就地回收都实测段错误或退出死锁（原生崩溃，`try/except` 拦不住）；新增 `core/v8_subprocess.py` 把这两类取数放进子进程（白名单 + JSON 契约 + 超时杀进程 + 离线开关），父进程只收 records 并按源不可用降级，配 12 条用例与离线契约（`rf-1173`）。
-- **持仓文件缺失提示可执行**：`_missing_holdings_hint()` 区分「目录不存在（旧配置残留，改 `holdings_dir`）」与「文件名对不上（列出目录现有 xlsx，改 `holdings_filename`）」两神情形；配 3 条用例（`rf-1172`）。
+- **持仓文件缺失提示可执行**：`_missing_holdings_hint()` 区分「目录不存在（旧配置残留，改 `holdings_dir`）」与「文件名对不上（目录现有 xlsx，改 `holdings_filename`）」两神情形；配 3 条用例（`rf-1172`）。
+- **全仓架构与设计契约核查**：5 处代码注释把开关门禁指向已合并的旧开关（`industry_beta` → `factor_catalog`、`financial_report_digest` / `financial_indicator` → `stock_fundamentals`），注释与真实判据相反（违背功能开关注册表唯一事实来源）；删除 `features.json` 中无消费者的 `industry_beta` 键（此前每次 `check-doc-drift` 都报未登记开关）；`action_section.html` 决策书 2px/6px 间距阶外值改为 8/4 与 4/8（设计护栏间距阶外值 1 → 0）；`technical.md` 渲染期全局禁令的例外补记静态注册表派生常量 `section_names`（`rf-1177`）。
 
 ## 归档
 
