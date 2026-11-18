@@ -39,6 +39,7 @@ from src.python.report._html_render_context import (
     _build_panel_views,
     _DataSourceInputs,
     _prepare_render_context,
+    _RenderContext,
     _VisibilityInputs,
 )
 from src.python.report.html_writer_assets import _inline_js_assets
@@ -240,7 +241,7 @@ def _prepare_page_state(
     options: _RenderOptions,
     *,
     order: list[dict],
-) -> Any:
+) -> _RenderContext:
     """装配「章节可见性 + 数据状态 + 目录导航」的渲染态（纯字段映射，不取数）。
 
     输入分两族：**章节可见性**（开关态 + 各分析模块是否有数据）与**数据源状态**

@@ -137,24 +137,53 @@ def _resolve_debate_runtime(llm_config: dict | None) -> _DebateRuntime:
     )
 
 
+def _session_get(session_cache: dict | None, lock: Any, key: str) -> str | None:
+    """读辩论会话缓存（None = 未启用会话缓存；加锁只覆盖 dict 读写）。"""
+    if session_cache is None:
+        return None
+    with lock:
+        return session_cache.get(key)
+
+
+def _session_put(session_cache: dict | None, lock: Any, key: str, value: str) -> None:
+    """写辩论会话缓存（None = 未启用会话缓存，静默跳过）。"""
+    if session_cache is None:
+        return
+    with lock:
+        session_cache[key] = value
+
+
+class _DebateCall(NamedTuple):
+    """辩论三段的公共上下文（一次装好，避免每段各列十几个参数）。
+
+    pro / con / synthesis 共用同一套「模型、提示词附录块、持仓口径、幻觉过滤白名单、
+    会话缓存」，差异只在各自的 system prompt / user prompt / 缓存键。此前每段各列一遍
+    参数表，新增一个附录块要改三处签名 + 三处调用；集中成这一张表后只改这里。
+    """
+
+    llm_config: dict | None
+    http_client: httpx.Client | None
+    force: bool
+    blocks: dict[str, str]
+    max_tokens: int
+    timeout: Any
+    holdings_details: list[dict] | None
+    total_mv: float
+    total_cost: float
+    total_profit: float
+    valid_codes: set[str]
+    session_cache: dict | None
+    session_lock: Any
+
+
 def _run_debate_synthesis(
+    call: _DebateCall,
     *,
-    llm_config: dict | None,
     pro_text: str,
     con_text: str,
     enable_conditional: bool,
     industry_concentration: dict | None,
-    holdings_details: list[dict] | None,
-    total_mv: float,
     fp_inputs: Any,
-    valid_codes: set[str],
-    force: bool,
-    http_client: httpx.Client | None,
-    blocks: dict[str, str],
-    max_tokens: int,
-    timeout: Any,
-    session_cache: dict | None,
-    session_lock: Any,
 ) -> str | None:
     """辩论综合段：按「基础指纹 + 综合提示词全文」取键，跑综合并双写缓存。
 
@@ -171,18 +200,15 @@ def _run_debate_synthesis(
         enable_conditional=enable_conditional,
         include_concentration_qa=True,  # 内建段落：综合阶段始终携带集中度问答段
         industry_concentration=industry_concentration,
-        holdings_details=holdings_details,
-        total_mv=total_mv,
+        holdings_details=call.holdings_details,
+        total_mv=call.total_mv,
     )
     syn_fingerprint = debate_synthesis_fingerprint(fp_inputs, synthesis_user)
     cache_key = f"{CACHE_PREFIX_LLM}debate_synthesis_{syn_fingerprint}"
     session_key = f"debate_syn_{syn_fingerprint}"
-    synthesis_text: str | None = None
-    if session_cache is not None:
-        with session_lock:
-            synthesis_text = session_cache.get(session_key)
+    synthesis_text = _session_get(call.session_cache, call.session_lock, session_key)
 
-    if synthesis_text is None and not force:
+    if synthesis_text is None and not call.force:
         synthesis_text = cache_get(cache_key, get_cache_ttl_llm("debate_synthesis"))
 
     if synthesis_text is None:
@@ -193,58 +219,41 @@ def _run_debate_synthesis(
             True,  # 内建段落：综合 system prompt 始终携带集中度问答输出要求
         )
         synthesis_result = generate_llm_module(
-            llm_config,
+            call.llm_config,
             "expert_review",
-            force=force,
-            http_client=http_client,
+            force=call.force,
+            http_client=call.http_client,
             fingerprint_fn=lambda: f"{syn_fingerprint}_debate_syn",
-            purchase_constraint_block=blocks.get("purchase", ""),
-            holding_change_block=blocks.get("holding_change", ""),
-            event_impact_block=blocks.get("event_impact", ""),
-            schedule_replay_block=blocks.get("schedule_replay", ""),
+            purchase_constraint_block=call.blocks.get("purchase", ""),
+            holding_change_block=call.blocks.get("holding_change", ""),
+            event_impact_block=call.blocks.get("event_impact", ""),
+            schedule_replay_block=call.blocks.get("schedule_replay", ""),
             system_prompt_default=synthesis_system,
             prompt_builder=lambda: synthesis_user,
-            max_tokens_default=max_tokens,
-            max_tokens_override=max_tokens,
-            timeout_default=timeout,
+            max_tokens_default=call.max_tokens,
+            max_tokens_override=call.max_tokens,
+            timeout_default=call.timeout,
             output_brief_limit=300,
             system_prompt=synthesis_system,
             user_prompt=synthesis_user,
-            raw_filter_fn=lambda t: _filter_hallucinated_codes(t, valid_codes),
+            raw_filter_fn=lambda t: _filter_hallucinated_codes(t, call.valid_codes),
         )
         synthesis_text = synthesis_result[0] if synthesis_result and isinstance(synthesis_result, tuple) else None
         if synthesis_text:
             cache_set(cache_key, synthesis_text)
-            if session_cache is not None:
-                with session_lock:
-                    session_cache[session_key] = synthesis_text
+            _session_put(call.session_cache, call.session_lock, session_key, synthesis_text)
 
     return synthesis_text
 
 
 def _run_debate_side(
-    llm_config: dict | None,
+    call: _DebateCall,
     *,
     side: str,
     system_prompt: str,
     user_prompt: str,
     base_fingerprint: str,
     ttl_key: str,
-    http_client: httpx.Client | None,
-    force: bool,
-    purchase_constraint_block: str,
-    holding_change_block: str,
-    event_impact_block: str,
-    schedule_replay_block: str,
-    max_tokens: int,
-    timeout: float,
-    holdings_details: list[dict] | None,
-    total_mv: float,
-    total_cost: float,
-    total_profit: float,
-    valid_codes: set[str],
-    session_cache: dict | None,
-    session_lock: Any,
 ) -> str | None:
     """跑辩论的一方（白脸 / 黑脸）：会话缓存 → 文件缓存 → 生成 → 双写缓存。
 
@@ -257,45 +266,40 @@ def _run_debate_side(
     """
     cache_key = f"{CACHE_PREFIX_LLM}debate_{side}_{base_fingerprint}"
     session_key = f"debate_{side}_{base_fingerprint}"
-    text: str | None = None
-    if session_cache is not None:
-        with session_lock:
-            text = session_cache.get(session_key)
+    text = _session_get(call.session_cache, call.session_lock, session_key)
 
-    if text is None and not force:
+    if text is None and not call.force:
         text = cache_get(cache_key, get_cache_ttl_llm(ttl_key))
 
     if text is None:
         result = generate_llm_module(
-            llm_config,
+            call.llm_config,
             "expert_review",
-            force=force,
-            http_client=http_client,
+            force=call.force,
+            http_client=call.http_client,
             fingerprint_fn=lambda: f"{base_fingerprint}_debate_{side}",
-            purchase_constraint_block=purchase_constraint_block,
-            holding_change_block=holding_change_block,
-            event_impact_block=event_impact_block,
-            schedule_replay_block=schedule_replay_block,
+            purchase_constraint_block=call.blocks.get("purchase", ""),
+            holding_change_block=call.blocks.get("holding_change", ""),
+            event_impact_block=call.blocks.get("event_impact", ""),
+            schedule_replay_block=call.blocks.get("schedule_replay", ""),
             system_prompt_default=system_prompt,
             prompt_builder=lambda: user_prompt,
-            max_tokens_default=max_tokens,
-            max_tokens_override=max_tokens,
-            timeout_default=timeout,
+            max_tokens_default=call.max_tokens,
+            max_tokens_override=call.max_tokens,
+            timeout_default=call.timeout,
             output_brief_limit=300,
             system_prompt=system_prompt,
             user_prompt=user_prompt,
-            holdings_details=holdings_details,
-            total_mv=total_mv,
-            total_cost=total_cost,
-            total_profit=total_profit,
-            raw_filter_fn=lambda t: _filter_hallucinated_codes(t, valid_codes),
+            holdings_details=call.holdings_details,
+            total_mv=call.total_mv,
+            total_cost=call.total_cost,
+            total_profit=call.total_profit,
+            raw_filter_fn=lambda t: _filter_hallucinated_codes(t, call.valid_codes),
         )
         text = result[0] if result and isinstance(result, tuple) else None
         if text:
             cache_set(cache_key, text)
-            if session_cache is not None:
-                with session_lock:
-                    session_cache[session_key] = text
+            _session_put(call.session_cache, call.session_lock, session_key, text)
 
     return text
 
@@ -409,20 +413,17 @@ def generate_debate_procon(
                 if _c and str(_c).strip():
                     _valid_codes.add(str(_c).strip())
 
-    # ── Step 1: 白脸（Pro） ────────────────────────────
-    pro_text = _run_debate_side(
-        _lc,
-        side="pro",
-        system_prompt=_SYSTEM_DEBATE_PRO,
-        user_prompt=_user,
-        base_fingerprint=_fingerprint,
-        ttl_key="debate_pro",
+    # 三段（白脸/黑脸/综合）共用的调用上下文：模型、附录块、持仓口径、幻觉白名单、会话缓存
+    call = _DebateCall(
+        llm_config=_lc,
         http_client=http_client,
         force=force,
-        purchase_constraint_block=purchase_constraint_block,
-        holding_change_block=holding_change_block,
-        event_impact_block=event_impact_block,
-        schedule_replay_block=schedule_replay_block,
+        blocks={
+            "purchase": purchase_constraint_block,
+            "holding_change": holding_change_block,
+            "event_impact": event_impact_block,
+            "schedule_replay": schedule_replay_block,
+        },
         max_tokens=_max_tokens,
         timeout=_timeout,
         holdings_details=holdings_details,
@@ -432,6 +433,16 @@ def generate_debate_procon(
         valid_codes=_valid_codes,
         session_cache=session_cache,
         session_lock=_cache_lock,
+    )
+
+    # ── Step 1: 白脸（Pro） ────────────────────────────
+    pro_text = _run_debate_side(
+        call,
+        side="pro",
+        system_prompt=_SYSTEM_DEBATE_PRO,
+        user_prompt=_user,
+        base_fingerprint=_fingerprint,
+        ttl_key="debate_pro",
     )
 
     if not pro_text:
@@ -453,27 +464,12 @@ def generate_debate_procon(
 
     # ── Step 2: 黑脸（Con） ────────────────────────────
     con_text = _run_debate_side(
-        _lc,
+        call,
         side="con",
         system_prompt=_SYSTEM_DEBATE_CON,
         user_prompt=_user,
         base_fingerprint=_fingerprint,
         ttl_key="debate_con",
-        http_client=http_client,
-        force=force,
-        purchase_constraint_block=purchase_constraint_block,
-        holding_change_block=holding_change_block,
-        event_impact_block=event_impact_block,
-        schedule_replay_block=schedule_replay_block,
-        max_tokens=_max_tokens,
-        timeout=_timeout,
-        holdings_details=holdings_details,
-        total_mv=total_mv,
-        total_cost=total_cost,
-        total_profit=total_profit,
-        valid_codes=_valid_codes,
-        session_cache=session_cache,
-        session_lock=_cache_lock,
     )
 
     if not con_text:
@@ -495,27 +491,12 @@ def generate_debate_procon(
 
     # ── Step 3: 综合（Synthesis） ──────────────────────
     synthesis_text = _run_debate_synthesis(
-        llm_config=_lc,
+        call,
         pro_text=pro_text,
         con_text=con_text,
         enable_conditional=_enable_conditional,
         industry_concentration=_industry_conc,
-        holdings_details=holdings_details,
-        total_mv=total_mv,
         fp_inputs=_fp_inputs,
-        valid_codes=_valid_codes,
-        force=force,
-        http_client=http_client,
-        blocks={
-            "purchase": purchase_constraint_block,
-            "holding_change": holding_change_block,
-            "event_impact": event_impact_block,
-            "schedule_replay": schedule_replay_block,
-        },
-        max_tokens=_max_tokens,
-        timeout=_timeout,
-        session_cache=session_cache,
-        session_lock=_cache_lock,
     )
 
     if not synthesis_text:

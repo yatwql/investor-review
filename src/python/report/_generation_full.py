@@ -46,7 +46,7 @@ from src.python.report._report_helpers import (  # noqa: F401
 logger = logging.getLogger("invest")
 
 
-def _fetch_sector_flow(reporter: Any, perf: Any) -> Any:
+def _fetch_sector_flow(reporter: ProgressReporter, perf: PerfCollector) -> list[dict] | None:
     """取行业资金流向，并按「陈旧回退 / 空 / 异常」三态登记降级事件（失败不中断报告）。"""
     from src.python.fetcher.akshare import get_sector_fund_flow
 
@@ -204,7 +204,7 @@ class _FullEmitContext:
     enable_stock_fundamentals: bool
 
 
-def _emit_full_reports(ctx: _FullEmitContext) -> Any:
+def _emit_full_reports(ctx: _FullEmitContext) -> "ReportResult":
     """写市场情绪 → 成本流水 → HTML/Excel 双端产物，并收尾（perf / 运行边界 / 健康检查）。"""
     from src.python.report._report_aux_metrics import compute_market_sentiment_data
     from src.python.report._run_scope import finish_report_run
