@@ -245,6 +245,7 @@ llm/generators_orchestrator.py ──→ cache/（可选）
 | **报告** | 内容模块 | 各页签写入器 | `report/*.py` |
 | **LLM** | 智能分析 | 三类协议（claude / openai / gemini）调用与厂商模型路由（含 DeepSeek、Kimi 等走兼容端点的第三方厂商）、Provider Chain 策略路由、Multi-Provider 多链切换、fingerprint 指纹缓存、Extended Thinking、骨架流程、并行编排、费用估算 | `llm/` |
 | **贯穿** | 代码类型判定 | 资产识别原语 | `core/code_utils.py` |
+| **贯穿** | akshare 接口名兼容 | 逻辑名 → 候选链解析（跨版本改名的单一登记表） | `core/akshare_compat.py` |
 | **贯穿** | 交易时段判断 | A 股时段、午间休市 | `core/market_hours.py` |
 | **贯穿** | HTTP 客户端 | 统一工厂 | `core/http_client.py` |
 | **贯穿** | 性能收集 | PerfCollector 三路径计时 + 子阶段 `breakdown`（数据准备：行情与明细/指数获取/穿透/因子暴露/行业 Beta/相关性矩阵/覆盖与新鲜度/估值与温度/财报摘要/财务指标/申购与成本位置/明细装配与建议；LLM+新闻：新闻源抓取/去重与关联/锚点维护/事件窗装配/LLM 模块 span；HTML 生成：图表数据装配/页面写入总值 + 四个子步骤（模板渲染/资产内嵌/匿名化/落盘））；数据准备另记**缓存冷热**增量（`counters.prep_cache_hits` / `prep_cache_misses`，阶段前后快照相减——同一阶段耗时在冷/热两态差一个数量级，跨运行对拍必须先看这两个数）+ perf_history.jsonl 持久化 + 数据源健康历史聚合 `summarize_health_history()`；`counters` 除 warnings/errors 外含**事实校验自动修正计数**（`fact_fix_total` / `fact_fix_numeric` / `fact_fix_code` / `fact_fix:<模块>`，由 `llm/fact_checker` 线程安全累加、报告层 LLM 阶段前清零后汇入——修正次数是模型口径偏差的直接信号，单次只进日志时无法跨期对拍。**计数口径 = 新生成正文的修正**：命中轮次的正文已由回写（`skeleton.write_back_module_cache`）带去修正结果，故稳态运行该计数为 0，不是「模型变准了」；跨期对拍照样以首轮生成样本为准，`action_fix` 归零时需回看 `llm.cache_hits` 确认是命中轮）；`llm` 段除各模块 model/token/费用外记 **`duration_seconds`**（逐模块耗时；缓存命中记 0，统计口径只取非命中样本——关键路径分析的机读依据，span 只覆盖经 `_MODULE_FNS` 调度的模块）；另有 `llm_thinking_wait_ms`（thinking 并发槽串行等待累计——默认上限已为 2；配回 1 时据此量化串行代价）；控制台阶段汇总行附带**最慢三项子耗时**（`[perf] LLM+新闻: 94.3s（智囊团深度复盘 75.7s / …）`），日志本身即可归因，台账仍为机读事实位 | `core/perf.py` + `llm/fact_checker/_corrections.py` |
@@ -1280,6 +1281,19 @@ fetch_index_data(code)
 [↑ 回到顶部](#目录)
 
 ---
+
+#### 2.4.4 akshare 接口名兼容（逻辑名 → 候选链）
+
+**问题**：akshare 会在小版本里**就地重命名**导出接口且不保留别名（已观测四个：交易日历 `tool_trade_date_hist_sina` → `calendar_trade_date_hist_sina`、同花顺行业资金流 `stock_fund_flow_industry` → `stock_fund_flow_industry_ths`、央视新闻 `news_cctv` → `alternative_news_cctv`、板块资金流排行 `stock_sector_fund_flow_rank` → `stock_fund_flow_sector_rank_em`）。依赖声明是区间（`akshare>=1.16,<2.0`），所以同一份代码要同时跑在新旧名字上：**只写旧名**时，依赖解析到改名后版本的机器上该取数以 `AttributeError` 被降级吞掉——数据源静默变空，报告照出、只是少了数据，且日志里只留一条普通告警（实测 CI 上交易日历与行业资金流两条链路整条失效而本机全程无感）。
+
+**判定**：接口名解析收在 `core/akshare_compat.py`——调用方只写**逻辑名**，`resolve(akshare, 逻辑名)` 按 `_ALIASES` 候选链取**第一个存在且可调用**的接口（旧名在前：两名字并存时行为不变）；候选链全缺时抛 `AttributeError` 并点名试过的全部名字，作为「又改名了」的可诊断信号。
+
+**适用范围**：
+- 主进程直接调用的 akshare 封装（`providers/akshare_news.py`、`providers/akshare_extras.py`）一律经 `resolve()`；
+- 子进程隔离的 V8 类接口（§C30）白名单收**逻辑名**，子进程按同一候选链解析；
+- 回归面：`test_akshare_compat.py`（候选链/旧名优先/改名回落/调用点不得硬引旧名）+ `test_v8_call_sites.py`（按候选链判定的 V8 检测）。
+
+**不属本机制**：接口签名/返回格式变更（那是版本适配，按报错与 `pyproject.toml` 锁定版本处理）；第三方响应体形状变体（归 §2.5 适配契约与 §9.2 形状容错归属）。
 
 ## 3. 缓存层详细设计
 
@@ -3918,7 +3932,7 @@ web/ (Web 服务层，薄入口)
 | **C27** | **间隔节流唯一原语** — 凡「两次请求至少间隔多久」必须经 `core/throttle.py`（`RateLimiter` / `interval_delay` / 一次性等待 `wait_interval`），禁止自建「间隔 + 睡眠」与抖动算式 | 同一约束在数据层/调度层/LLM 层各写一份 → 抖动幅度与等待语义不一致；通用原语若住在某一上层模块，会被其他层反向依赖（层次倒置） | 数据源 qps 限速、`batch_rate_limit`、LLM 端点级节流（`pacing`） |
 | **C28** | **大文件红线体系（主程序/脚本/测试）** — 单文件行数按域执行固定红线：主程序（`src/python/`）> 1000 行、脚本（`scripts/` 递归含包内子模块）> 1000 行、测试（`src/test/`）> 1200 行即 finding；警戒区（`-v` 清单：主程序 700 / 脚本 600 / 测试 900，`__init__.py` 薄壳 200）为可选优化区间且即登记线，`-v` 另按「行数 × 近 90 天改动次数」输出拆分优先级；超限必须拆分，或在 `check-file-length` 的 `EXEMPTIONS` 登记并与 review-findings 挂账同步 | 行数无红线时文件无限膨胀（`scripts/` 未入守护域时 `eval-factor-zoo.py` 达 1595 行而无发现渠道）；阈值只写在文档不进守护脚本会改一处漏一处；无警戒区则只能在破线后才察觉，拆分时机失去观察缓冲 | 所有 py 源文件：`src/python/`、`scripts/`（含包内子模块）、`src/test/`；阈值与清单由 `scripts/check-file-length.py --ci` 单源强制（`_LIMIT_BY_KIND` / `_WARN_BY_KIND`），口径同步 developer-guide「文件膨胀阈值」表与 review-findings 文件膨胀登记表 |
 | **C29** | **TUI 分档只改版式不改语义** — `layout_tier` 的 wide/medium/narrow 分支只允许改**版式与密度**（列宽/盒线/折行/图例详略/重绘机制），不得改**按键语义、反馈有无、写路径可见性**：同一按键在各档必须产生相同的语义动作与可观察反馈（执行/退出/选中移动/单行提示），分档至多改变反馈的呈现方式 | 分档分支改语义曾三次造成用户可见缺陷：写路径窄屏不重绘（切换无结果）、方向键在窄屏解析漂移为孤 Esc（误退程序）、窄屏导航被整体删除（按键无反应）；语义随宽度漂移违反「同键同果」预期，且每档分支都是独立回归面 | `src/python/tui/` 全部 `layout_tier`/`narrow` 分支点（主循环、菜单渲染、各面板）；守护 = `test_tui_menu.py::TestTierSemanticParity`（同按键两档同语义/同反馈）+ `_print_hint` 单行反馈原语；**本次重构后**导航/派发控制流单源于 `tui/panel_runtime.py::panel_loop`——同一读键→导航→派发→反馈循环全列表面板共用一份实现，「同键同果」由构造性成立（分档只改 render 版式、不改派发），从「测试逐处兜底」升级为运行时单源** |
-| **C30** | **V8（py_mini_racer）类取数必须子进程隔离** — 凡「内部建 `py_mini_racer.MiniRacer` 上下文」的 akshare 接口（如 `tool_trade_date_hist_sina`、`stock_fund_flow_industry`），一律经 `core/v8_subprocess.py::run_akshare_v8`（白名单接口 + JSON 契约 + 超时杀子进程）在**子进程**取数，禁止在主进程内直接调用或在主进程内改线程/加锁调度 | V8 平台初始化是进程级且与线程绑定，主进程内三种崩法都拦不住：两条线程先后 init → 段错误；上下文在别的线程被 GC 回收 → 段错误；上下文活到退出期被主线程回收 → `close()` join 已结束线程、进程退出死锁。均属原生崩溃/死锁，`try/except`、pytest、全局锁、专用线程、就地 `gc.collect()` 实测都无法兜住，报告进程会直接崩或挂死 | 生产报告生成、CLI/TUI/Web 三端、性能基准；调用方一律用 `run_akshare_v8` 取 records、按 `V8SourceError` 降级；主进程内的 `ak.<name>` 直调由 `src/test/unit/core/test_v8_call_sites.py` 扫描拦截；子进程不继承父进程 socket 桩，测试/基准须设 `INVEST_SUBPROCESS_NETWORK_OFFLINE=1` |
+| **C30** | **V8（py_mini_racer）类取数必须子进程隔离** — 凡「内部建 `py_mini_racer.MiniRacer` 上下文」的 akshare 接口（如 `tool_trade_date_hist_sina`、`stock_fund_flow_industry`），一律经 `core/v8_subprocess.py::run_akshare_v8`（白名单收**逻辑名**，子进程按 `core/akshare_compat.py` 的候选链解析实际接口名 + JSON 契约 + 超时杀子进程）在**子进程**取数，禁止在主进程内直接调用或在主进程内改线程/加锁调度 | V8 平台初始化是进程级且与线程绑定，主进程内三种崩法都拦不住：两条线程先后 init → 段错误；上下文在别的线程被 GC 回收 → 段错误；上下文活到退出期被主线程回收 → `close()` join 已结束线程、进程退出死锁。均属原生崩溃/死锁，`try/except`、pytest、全局锁、专用线程、就地 `gc.collect()` 实测都无法兜住，报告进程会直接崩或挂死 | 生产报告生成、CLI/TUI/Web 三端、性能基准；调用方一律用 `run_akshare_v8` 取 records、按 `V8SourceError` 降级；主进程内的 `ak.<name>` 直调由 `src/test/unit/core/test_v8_call_sites.py` 扫描拦截；子进程不继承父进程 socket 桩，测试/基准须设 `INVEST_SUBPROCESS_NETWORK_OFFLINE=1` |
 
 > **C14 例外：env 初始化期注册（非渲染期）** — `_ENV.globals` 与模板过滤器仅允许在 `report/html_jinja_env.py` 的**工厂初始化期**（进程/工厂单次建立）注册为**无状态纯函数**（如 `profit_color`、`price_type_color`、`money`、`fmt_bps`、`dt`——只依赖入参生成 CSS 变量表达式/格式化文本）或**由章节注册表现场派生的静态常量**（`section_names`——全部取值来自 `_REPORT_SECTION_DEFAULT[].name`，不读配置、不随运行变化）。约束禁止的是**渲染期数据**（section 可见性、随每次运行变化的业务字典）写入全局；过滤器注册与 Jinja 环境构建属于模板基础设施装配，不构成渲染态状态污染（并发/多次渲染下各 `render()` 仍只经 context 传数据）。
 
