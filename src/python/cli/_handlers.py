@@ -62,6 +62,36 @@ def _show_llm_config_status_cli() -> None:
     logger.info("─" * 40)
 
 
+def _missing_holdings_hint(filepath: str) -> str:
+    """持仓文件缺失时的可执行提示（区分「目录不存在」与「文件名对不上」）。
+
+    两种缺失的修法完全不同：目录本身不存在通常是配置里的路径在本机不成立（换机、
+    换目录后未同步配置），光看一句「文件不存在」只会让人反复改文件名；目录在、
+    文件名不在则是改名/换文件的结果。因此分别点名应改哪个配置键，并把同目录
+    现有 xlsx 列出来。
+
+    Args:
+        filepath: resolve_holdings_path 解析出的目标路径
+
+    Returns:
+        拼在错误日志尾部的提示片段（以“——”开头）
+    """
+    from src.python.core.reader import list_xlsx_files
+
+    parent = os.path.dirname(filepath) or "."
+    if not os.path.isdir(parent):
+        return (
+            f"—— 目录 {parent} 本身不存在（路径在本机不成立，多为换机/换目录后配置未同步）；"
+            "请把 config.json 的 holdings_dir 改成本机实际目录（再核对 holdings_filename）"
+        )
+    candidates = [os.path.basename(p) for p in list_xlsx_files(parent)]
+    if candidates:
+        return (
+            f"—— 目录存在但无此文件；该目录现有：{', '.join(candidates[:5])}（请核对 config.json 的 holdings_filename）"
+        )
+    return f"—— 目录 {parent} 下没有任何 .xlsx 文件；请把持仓文件放进该目录或修正 config.json 的 holdings_dir"
+
+
 def _cli_resolve_holdings_file(config: dict) -> str | None:
     """CLI 模式定位持仓文件路径——跳过文件选择交互，通过 config 配置定位。
 
@@ -76,17 +106,13 @@ def _cli_resolve_holdings_file(config: dict) -> str | None:
     logger = logging.getLogger("invest")
 
     from src.python.config import resolve_holdings_path
+    from src.python.core.reader import list_xlsx_files
 
     filepath = resolve_holdings_path(config)
 
     if not os.path.exists(filepath):
-        logger.error(
-            "持仓文件不存在（路径: %s）—— 请检查 config.json 中 holdings_dir + holdings_filename 配置",
-            filepath,
-        )
+        logger.error("持仓文件不存在（路径: %s）%s", filepath, _missing_holdings_hint(filepath))
         return None
-
-    from src.python.core.reader import list_xlsx_files
 
     # 如果 holdings_filename 实际是一个目录，自动选第一个 xlsx 文件
     if os.path.isdir(filepath):

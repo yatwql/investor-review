@@ -1113,7 +1113,7 @@ INVEST_CACHE_DIR=docs/tmp/screenshots/demo/data/cache \    # 缓存改落（不�
 | 关注点 | 工具 | 说明 |
 |:-------|:-----|:-----|
 | 单次运行时各阶段耗时 | `perf_history.jsonl` + `scripts/perf-history.py` | 每次运行落一条（含 status/阶段/品种数），`perf-history` 出趋势表、P95/P99、离群归因；「并发预算」段看档位/预算/峰值/缩容，判断慢是否来自并发收敛 |
-| 端到端报告耗时门禁 | `scripts/test-perf-report.py --gate` | 主动压测 mock 管线，basic ≤60s（CI `perf-gate` job 阻塞） |
+| 端到端报告耗时门禁 | `scripts/test-perf-report.py --gate` | 主动压测 mock 管线，basic ≤60s + full 全链路（LLM 已 mock）≤300s（CI `perf-gate` job 阻塞） |
 | 阶段级耗时 | `PerfCollector.stage_progress` / `reporter.print_timing_summary()` | TUI 报告收尾会打印耗时排行；数据准备按 `行情与明细/穿透/因子暴露/行业 Beta/相关性矩阵/…` 逐子项计时 |
 | 写盘停顿 | `core/perf.warn_slow_write`（阈值 5s） | 落盘超阈即 WARNING，带产物大小与路径；告警按段分流——`HTML 模板渲染 渲染偏慢` 指向模板内逐行循环/过滤器，`HTML 页面写入 落盘偏慢` 才指向磁盘/挂载（实测 0.98MB 产物落盘仅 0.003s，慢的几乎总是渲染/编译） |
 | HTML 生成细分 | `perf_history` 的 `breakdown["HTML 生成"]` | `页面写入`（总值）+ `图表数据装配` / `区块装配` / `面板视图装配` / `模板渲染` / `资产内嵌` / `匿名化` / `落盘`（细分）；慢的通常是 **`区块装配`**（`html_sections.assemble_sections`：穿透 / 基金业绩 / 基金风格 / 财务指标等取数都在这一窗口内，实测 1.4s ~ 6.8s 双峰，落差全在取数冷热），`面板视图装配`（持仓变动/事件窗/纪律回放三视图串拼装）与 `模板渲染` 都在 0.0x s 量级——先用 `区块装配` 对账「这轮是不是在取数」，不要默认指向 jinja |
@@ -1665,7 +1665,7 @@ CI 有 5 类 job（`test` 按 Python 3.11/3.12/3.13 跑三份矩阵 / `guards` /
 | `test` ×3 | 本地绿、CI 红 | **仓库状态相关断言**（见下） | `git stash` 后跑，或 `git clean -xdf` 后重跑 |
 | `guards` | 单守护非零退出 | 守护名 + finding 行 | 本地跑同名 `--ci` |
 | `portability` | `EncodingWarning`/`UnicodeDecodeError` | 哪个文件的哪次 IO | `scripts/test-runner.py --mode portability`（等价复现两道探针；单看编码档可 `PYTHONWARNDEFAULTENCODING=1 pytest src/test/unit -q`） |
-| `perf-gate` | basic 模式 >60s | 阶段耗时排行 | `scripts/test-perf-report.py --gate` |
+| `perf-gate` | basic 模式 >60s 或 full 全链路 >300s | 阶段耗时排行 | `scripts/test-perf-report.py --gate` |
 | `format` | `ruff format --check` 有差异（**非阻塞**） | 文件列表 | `ruff format .` |
 
 **「本地绿、CI 红」的三类常见根因**（都踩过）：

@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.18.5-dev
-> **编号源**：`rf-next = 1168`（新增问题提出后更新为 +1；已用最大 rf-1167，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1174`（新增问题提出后更新为 +1；已用最大 rf-1173，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -18,6 +18,7 @@
 
 | # | 问题 | 修复方向 |
 | --- | --- | --- |
+| rf-1173 | `scripts/test-perf-report.py` 本机必崩：`Segmentation fault`（退出 139，`-X faulthandler` 定位在 `fetcher/financial_indicator.py:137` → `fetch_latest_indicator` → `source_adapter.fetch_raw`，工作线程内触发）；`git stash` 后在 `HEAD` 上同样复现，与本轮改动无关。后果：`perf-gate` 在本机完全跑不起来，性能改动无法本地验收（CI 环境未复现） | 先确认是否 akshare/pandas C 扩展在工作线程内的已知崩溃（取数入口串行化 / 主线程预导入 / 升级 akshare 三者择一验证）；有结论后在 `source_adapter` 层加「原生崩溃不可捕获」的文档说明与线程边界约束 |
 
 ### P3 — 持续监控：兼容残留
 
@@ -50,8 +51,8 @@
 | `src/python/fetcher/financial_report.py` 719 行 | 按「索引 / 正文 / 全文定位」三阶下沉 |
 | `src/python/providers/akshare_extras.py` 714 行 | 按接口族拆（指数 / 行业 / 分红 / 盈利预测） |
 | `src/python/core/provider_registry.py` 710 行 | 熔断与会话缓存各自独立文件 |
-| `src/python/llm/skeleton.py` 847 行 | 模板数据与渲染逻辑可下沉 `llm/skeleton_*`（骨架模板 / 占位渲染） |
-| `src/python/cli/_handlers.py` 864 行 | 命令处理器按渠道分文件（generate/config/data 三簇），保持入口薄 |
+| `src/python/llm/skeleton.py` 877 行 | 模板数据与渲染逻辑可下沉 `llm/skeleton_*`（骨架模板 / 占位渲染） |
+| `src/python/cli/_handlers.py` 890 行 | 命令处理器按渠道分文件（generate/config/data 三簇），保持入口薄 |
 | `src/python/tui/handlers_holdings.py` 825 行 | 面板流程与输入采集高度耦合（共用 `_Session`），拆分收益低于风险，暂不拆 |
 | `src/static/tmpl/report_template.html` 277 行 | 样式已抽到 `partials/_report_styles.html`，各自单一关注点，均未触 1000 行 |
 | `src/static/tmpl/whatif_template.html` 543 行 | **不在行数守护域内**（`check-file-length` 只扫 `.py`）；样式已抽到 `partials/_whatif_styles.html` |
@@ -62,6 +63,11 @@
 
 > 本表为本开发周期已修条目的**摘要行**（详情见 `changelog.md` 对应段）；发布时由 `release.py prepare` 的 archive 步原表搬入版本归档并在此留占位。
 | **rf-1167** | `prepare` 的 plan 归档只认「完成标记」标题，而本周期 9 个已完成节写成 `` `plan-N` 标题 `` 无标记 → **静默漏档**：既不进 `archived_plan.*`、也不报错，靠发布时人工复核才捞出（否则这批完成项永久留在主台账） | 归档前兜底：新增 `unmarked_completed_plan_sections()`，`apply_plan_archive` 发现缺标记即抛 `ReleaseError` 并点名 `plan-N` + 给出可照抄写法；配 3 条用例（只报未标记 / 报错点名 / 全标记正常归档）；`developer-guide` 发布流程首段写明该硬约束 |
+| **rf-1168** | 截断重试丢首次调用用量：`_handle_truncation` 返回重试那次 `usage`，覆盖了被截断那次真实花费（截断模块可低估近 2 倍）；重试失败时 `return result, None` 连首次用量一并丢 → 成本台账少算 | 新增 `_merge_usage()`（按 key 递归累加，缺失一侧取另一侧），重试成功/失败均返回两次合计；配 2 条用例（合并求和且不改写首次对象 / 重试失败仍留首次用量） |
+| **rf-1169** | 性能门禁只卡 basic（Phase 1 Excel 一段），而实际使用最多的是 full 档（数据准备+新闻+穿透+双输出）——full 退化（数据准备中位 24s → 尾部 40s）无任何门槛拦截 | `test-perf-report.py` 新增 Phase 4（full 全链路，LLM 已 mock、其余离线桩同源）；`_perf_report/report.py` 增 `_TARGET_FULL_SECONDS`（300s，待 CI 基线收紧）与报告行/结论段；`--gate` 改为双口径任一超标即退出 2 |
+| **rf-1170** | `llm_settings.json` 里 `max_tokens_*` 低于本版出厂默认时静默生效（实例：`max_tokens_self_review=2048` vs 默认 8192）——满编持仓必然触顶，触顶会**自动放大重生成一次 = 多一次计费调用**，用户在报告里只看到 WARNING，根因无从追溯 | `_validation_llm` 新增 `_below_default_advisory()`：加载期点名「当前值 / 本版默认 / 代价」，合法值不回落不改写；配 2 条用例（低于默认保留原值并出提示 / ≥默认不产生提示噪声） |
+| **rf-1171** | 多处 `except Exception` 无任何日志的静默降级：`core/concurrency.py` 配置读失败 → 并发档位静默变 high；`core/data_freshness.py` 交易日历/阈值回落无痕；`report/_report_factor_metrics.py` 单品种 K 线失败与「真无数据」不可区分 | 逐处补日志（并发档位回落用 WARNING + exc_info，其余用 DEBUG + exc_info）；其余仅探针性质（doctor 健康检查等把失败当结果返回）不动 |
+| **rf-1172** | 持仓文件缺失只报「文件不存在（路径: X）」：目录本身不存在（旧机器/旧版本配置残留，本机曾实测指向一个已不存在的路径）与「目录在、文件名对不上」两种情形修法完全不同（改 `holdings_dir` 还是改 `holdings_filename`），原提示两者都说，用户会在错误的配置键上来回试 | 新增 `_missing_holdings_hint()` 分三种情形给可执行修法（目录不存在 → 点名 `holdings_dir` 且提示旧配置残留；目录在 → 列出该目录现有 xlsx 并点名 `holdings_filename`；空目录 → 提示放文件）；配 3 条用例 |
 
 ### 归档档案
 - [`archived_review-findings.0.18.x.md`](../archive/v0.18.x/archived_review-findings.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-18）

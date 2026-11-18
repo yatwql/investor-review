@@ -12,6 +12,11 @@
 （本次发布内容见下方归档索引）
 
 - **发布归档兜底**：`apply_plan_archive` 在归档前检查「已完成（待发布归档）」区是否有关闭标记，缺标记即中止并点名 `plan-N`（此前漏标记会被静默跳过、完成项永久留在主台账）；配 3 条用例（`rf-1167`）。
+- **LLM 成本台账纠正**：截断重试的两次真实计费调用用量改为**累加**（此前只留重试那次，被截断那次的花费凭空消失，重试彻底失败时更直接记为无用量）；配 2 条用例（`rf-1168`）。
+- **性能门禁补 full 档**：`test-perf-report.py` 新增 Phase 4（full 全链路，LLM 已 mock），门禁改为 basic ≤60s **且** full ≤300s 双口径，填补「只卡 Excel 一段、full 退化无门槛」的缺口（`rf-1169`）。
+- **max_tokens 偏低不再静默**：`llm_settings.json` 中 `max_tokens_*` 低于本版出厂默认时，加载期点名「当前值 / 默认值 / 代价（触顶会追加一次计费调用）」，不回落、不改写用户值；配 2 条用例（`rf-1170`）。
+- **静默降级补痕**：并发档位配置读失败（`core/concurrency.py`）、交易日历/阈值回落（`core/data_freshness.py`）、逐品种 K 线取数失败（`report/_report_factor_metrics.py`）不再无声（`rf-1171`）。
+- **持仓文件缺失提示可执行**：`_missing_holdings_hint()` 区分「目录不存在（旧配置残留，改 `holdings_dir`）」与「文件名对不上（列出目录现有 xlsx，改 `holdings_filename`）」两神情形；配 3 条用例（`rf-1172`）。
 
 ## 归档
 

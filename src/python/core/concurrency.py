@@ -76,7 +76,8 @@ class ConcurrencyGovernor:
 
             raw = ((get_config() or {}).get("batch") or {}).get("profile", DEFAULT_PROFILE)
             profile = str(raw or "").strip().lower()
-        except Exception:
+        except Exception:  # 配置不可读不应阻断并发层，但必须留痕（否则档位静默变 high）
+            logger.warning("[并发] 读取 batch.profile 失败，回落默认档位 %s", DEFAULT_PROFILE, exc_info=True)
             return DEFAULT_PROFILE
         return profile if profile in PROFILE_FACTORS else DEFAULT_PROFILE
 

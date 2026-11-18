@@ -166,14 +166,16 @@ def compute_factor_exposure_data(
             for _fut, h in bar_futs.items():
                 try:
                     _bars = _fut.result()
-                except Exception:
+                except Exception:  # 单品种 K 线失败不阻断同类其余品种，但要留痕
+                    logger.debug("[factor] 持仓 K 线获取失败：%s %s", h.code, h.name, exc_info=True)
                     _bars = None
                 if _bars:
                     holdings_bars[h.code] = {"shares": float(h.shares), "bars": _bars}
             for _fut, f in idx_futs.items():
                 try:
                     factor_klines[f] = _fut.result() or []
-                except Exception:
+                except Exception:  # 因子空拉取计入 excluded 并降级判据，缺日志会看不出是异常还是真无数据
+                    logger.debug("[factor] 因子指数 K 线获取失败：%s", f, exc_info=True)
                     factor_klines[f] = []
 
         portfolio_returns = asif_portfolio_daily_returns(holdings_bars)
@@ -307,7 +309,8 @@ def compute_industry_beta_data(
                 h = _futs[_fut]
                 try:
                     _bars = _fut.result()
-                except Exception:
+                except Exception:  # 单品种失败不阻断其余，留痕以便区分「无数据」与「取数异常」
+                    logger.debug("[industry_beta] 持仓 K 线获取失败：%s %s", h.code, h.name, exc_info=True)
                     _bars = None
                 if _bars:
                     holdings_bars[h.code] = {"shares": float(h.shares), "bars": _bars}
@@ -335,7 +338,8 @@ def compute_industry_beta_data(
                     i = _futs[_fut]
                     try:
                         industry_klines[i] = _fut.result() or []
-                    except Exception:
+                    except Exception:  # 行业指数失败计入「无数据」，留痕区分异常与真无数据
+                        logger.debug("[industry_beta] 行业指数 K 线获取失败：%s", i, exc_info=True)
                         industry_klines[i] = []
 
         # ── 5. 纯计算：逐行业一元 OLS（复用 style_factor_regression 机制） ──

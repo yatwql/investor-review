@@ -142,6 +142,29 @@ def _module_default(defaults: dict, module: str, param: str) -> object:
     return current
 
 
+def _below_default_advisory(module: str, param: str, value: object, defaults: dict) -> str | None:
+    """max_tokens 合法但低于出厂默认时的提示（只提醒，不回落、不改值）。
+
+    偏低本身合法（用户主动压成本），但满编持仓下会触顶截断：触顶会**自动放大
+    max_tokens 重生成一次**（多一次计费调用），而报告里只看到 WARNING，不追溯
+    就当成「模型不稳定」。故在加载时点名「当前值 / 本版默认 / 代价」。
+
+    Returns:
+        提示文案；非 max_tokens、类型异常或不低于默认时返回 None。
+    """
+    if param != "max_tokens" or isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    factory = _module_default(defaults, module, param)
+    if isinstance(factory, bool) or not isinstance(factory, (int, float)):
+        return None
+    if value >= factory:
+        return None
+    return (
+        f"modules.{module}.max_tokens: 当前 {int(value)} 低于本版出厂默认 {int(factory)}，"
+        "满编持仓下易触顶截断（触顶会追加一次放大重生成 = 多一次计费调用）；确认是有意压低可忽略"
+    )
+
+
 def sanitize_document(document: dict, defaults: dict) -> tuple[dict, list[str]]:
     """加载路径：越界/类型错误的模块参数回落到出厂默认并登记告警文案。
 
@@ -171,6 +194,9 @@ def sanitize_document(document: dict, defaults: dict) -> tuple[dict, list[str]]:
         for param, value in checks:
             message = param_violation(param, value)
             if message is None:
+                advisory = _below_default_advisory(name, param, value, defaults)
+                if advisory:
+                    issues.append(advisory)
                 continue
             issues.append(f"modules.{name}.{param}: {message}；已回落出厂默认")
             fallback = _module_default(defaults, name, param)

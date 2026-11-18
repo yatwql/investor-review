@@ -1254,7 +1254,9 @@ curl 对照命令：`curl -s "https://push2.eastmoney.com/api/qt/stock/get?secid
 
 **实现分包**：报告渲染（Markdown 组装 / 达标判定 / `PerfSample` 样本规模契约）在 `_perf_report/report.py`，入口只留采样、离线桩与门禁判定——改报告版式只动 `_perf_report/`，改压测口径只动入口。
 
-**目标**：basic 模式总耗时 < 60s
+**目标**：basic 模式总耗时 < 60s；full 全链路（Phase 4，LLM 已 mock）< 300s
+
+**为何两个口径**：basic 只盖 Excel 一段，实际使用最多的是 full（数据准备 + 新闻 + 穿透 + 双输出）——只卡 basic 时 full 档的退化（如数据准备中位 24s → 尾部 40s）无任何门槛拦截。full 档预算取得宽（300s）是因为它含整条链路的本地计算且需在 CI 首次采集真实基线后收紧，目前作用是拦住量级级退化。
 
 **门禁归属**：本脚本是**性能测试**（主动压测，同条件可比），故承担 CI 性能门禁（`perf-gate` job）；运行历史查看（`perf-history.py`，样本不可控、不可复现）不用于门禁。
 

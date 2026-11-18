@@ -149,6 +149,7 @@ def _cached_trading_days(calendar: list | None = None) -> list[str]:
 
             return cached_trading_days()
         except Exception:  # 缓存不可用时按「无日历」处理，回落自然日阈值
+            logger.debug("[新鲜度] 读取已缓存交易日失败，按无日历处理（回落自然日阈值）", exc_info=True)
             calendar = None
     if not isinstance(calendar, list):
         return []
@@ -169,7 +170,10 @@ def header_stale_threshold_days(config: dict | None = None) -> int:
             if isinstance(tier, dict) and str(tier.get("stale_days", "")).strip().isdigit()
         ]
         return min(values) if values else _DEFAULT_T2_STALE_DAYS
-    except Exception:
+    except Exception:  # 配置不可读时用默认值，但降级事实要可观测
+        logger.warning(
+            "[新鲜度] 读取 degradation.stale_days 失败，回落默认阈值 %d 天", _DEFAULT_T2_STALE_DAYS, exc_info=True
+        )
         return _DEFAULT_T2_STALE_DAYS
 
 
