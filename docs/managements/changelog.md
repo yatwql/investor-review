@@ -22,6 +22,8 @@
 
 - **缓存测试去脆**：`test_cache_core.py` 的 `clear_by_prefix` 用例不再写死文件条数与固定长度 `side_effect`（并行档下会 `StopIteration` 假红），改为函数式副作用 + 由前置清单派生的结构断言（`rf-1182`）。
 
+- **conftest 拆分**：`src/test/conftest.py` 1199 → 176 行，夹具/钩子按域下沉 `src/test/_conftest_{isolation,state_reset,cassette,network,hooks}.py`，入口只留标记注册与会话级兜底并把实现 import 回来注册；复位接线契约测试改为汇总 `conftest.py` + 实现模块（`rf-1183`）。
+
 ## 归档
 
 - [`archived_changelog.0.18.x.md`](../archive/v0.18.x/archived_changelog.0.18.x.md) — v0.18.0 ~ v0.18.5（2026-11-12 ~ 2026-11-18）

@@ -14,12 +14,12 @@
 | 架构图示 | SVG | 4 | 396 | `src/static/` README 架构图（architecture 三渠道→引擎→双报告、llm-chain Provider 链式分发、capabilities 九大功能域总览、owl-mascot 吉祥物猫头鹰「守望」）+ 截图 7 张 PNG（报告实景 `report-overview`/`report-toc`/`report-charts` + 界面实景 `tui-menu`/`web-workbench`/`web-config`/`cli-report`，不计入本行） |
 | 辅助脚本 | Python | 149 | 31,222 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评测与因子目录评测、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、视觉资产（社交预览图/架构图体检）、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
 | 源代码合计 | — | 629 | 160,582 | 主程序 + 模板 + 脚本 + SVG |
-| 测试代码 | Python | 763 | 206,478 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
+| 测试代码 | Python | 768 | 206,595 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
 | 测试用例 | — | — | 14,100 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 15 | 7,088 | 含 README.md；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 14 | 6,851 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 223 | 75,173 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 14,458 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 223 | 75,181 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 14,466 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 200 | 59,003 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 9 | ~1616 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + TUI 交互改进（议题 + 第一/二批实施方案） + PanWatch 借鉴分析（含评估政策单源化与 LLM 复盘契约两份设计） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -624,6 +624,11 @@ investor-review/
 │   │
 │   └── test/                         # 测试套件
 │       ├── __init__.py               #   包标记（空文件）
+│       ├── _conftest_cassette.py      #   conftest 实现：数据源记录-回放（传输层注入点复位/声明式 cassette 回放与录制）
+│       ├── _conftest_hooks.py         #   conftest 实现：命令行选项 + 标记全集常量 + 收集期 edge/scenario/标记三向校验
+│       ├── _conftest_isolation.py     #   conftest 实现：敏感路径 / 报告输出 / 机器本地状态自动隔离
+│       ├── _conftest_network.py       #   conftest 实现：外网阻断与离线桩（offline_external_sources）
+│       ├── _conftest_state_reset.py   #   conftest 实现：各模块单例、缓存与开关状态的用例级自动复位
 │       ├── _network_guard.py         #   测试网络隔离原语（不可吞的断网错误 + offline_external_sources 离线桩）
 │       ├── _path_isolation.py        #   敏感路径隔离实现体（config/缓存/快照/输出目录重定向，供 conftest fixture 调用）
 │       ├── _relative_dates.py         #   测试用相对日期单源（锚点/日期串/时间戳回推，禁各文件自写一份）
@@ -631,7 +636,7 @@ investor-review/
 │       ├── _tui_flow.py              #   TUI 动线驱动骨架（击键数基线 + E2E 语义断言共用：喂键计数/打点/跑动线）
 │       ├── _market_clock.py          #   行情口径桶测试冻结器（档位 key/label 单源，避免各文件各写一份）
 │       ├── _holdings_fixture.py      #   持仓 xlsx 测试构造器（账户/流水页签与表头单源，编辑层/面板/边缘用例共用）
-│       ├── conftest.py               #   pytest 全局配置 + 标记注册
+│       ├── conftest.py               #   pytest 入口：标记注册 + 会话级兜底（夹具/钩子按域下沉 `_conftest_*.py` 后 import 回来注册）
 │       ├── helpers.py                #   测试辅助工具
 │       ├── data/                     #   测试数据集
 │       │   ├── cassettes/            #   数据源真实响应录制（git 跟踪，离线回放；刷新需 --run-live --record-cassettes）

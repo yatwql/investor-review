@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.18.6-dev
-> **编号源**：`rf-next = 1183`（新增问题提出后更新为 +1；已用最大 rf-1182，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1184`（新增问题提出后更新为 +1；已用最大 rf-1183，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -39,7 +39,6 @@
 
 | 文件 | 现状与拆分方向 |
 |------|----------------|
-| `src/test/conftest.py` 1199 行（测试登记线 900） | fixture 族按域下沉（行情/LLM/网络/持久化各一模块），conftest 只留 autouse 与装配 |
 | `src/python/core/perf.py` 799 行 | 采集器与台账落盘可拆（`perf` 采集 / `perf_history` 读写两文件） |
 | `src/python/core/doctor.py` 785 行 | 检查项按域分文件（环境 / 配置 / 数据源 / 报告产物），入口只留编排 |
 | `src/python/llm/fact_checker/_numerical.py` 764 行 | 数值校验按规则族拆（金额 / 比率 / 计数），共享解析原语上提包内 `_common` |
@@ -71,6 +70,8 @@
 | **rf-1181** | 近 8 小时变更审计（14 提交）：① `scripts/_release/_ledger_archive.py` 的 `split_section_table` / `extract_rf_table` 在迁档改为「逐块全搬」后已无生产调用方，只剩 3 条用例引用——死生产码靠测试续命，且用例断言的是内部辅助而非真实产出；② `core/akshare_compat.resolve` 的 `# type: ignore[no-any-return]` 在该返回注解下并不触发，属新增噪音；③ `core/v8_subprocess.py` 模块 docstring 把两个 V8 接口写成具体名，未标「逻辑名，实际名经候选链解析」，与同文件的 `_ALLOWED_FUNCTIONS` 注释口径不一 | ① 删除两个死辅助与 `release.py` 的再导出，3 条用例改写为断言 `apply_rf_archive` 的真实产出（表头/分隔行/非 rf 行随块搬入归档、占位台账零改动）；② 去掉多余的 `type: ignore`（类型检查仍零错）；③ docstring 补「逻辑名 + 候选链解析」口径 |
 
 | **rf-1182** | `test_cache_core.py` 的等值断言依赖缓存目录里的**实际文件条数**：`os.remove` 用固定长度 `side_effect=[OSError, None]`，并行档下目录里 `price_` 文件多于 2 个时第三次调用抛 `StopIteration`（本轮 dev-verify 即因此单点假红，单跑必过）；同文件另有三处 `len(os.listdir(...)) == 5` / `count == 2` 绝对值断言，属同类脆弱写法 | `os.remove` 改函数式 side_effect（首个失败、其余成功，不看文件数）；计数断言改为由前置清单派生（`count == len(expected)` / 前后条数不变 / `count == len(attempts)-1` 且 `len(attempts) >= 2`）——断言结构关系而非绝对值 |
+
+| **rf-1183** | `src/test/conftest.py` 单文件 1199 行（顶到测试域 1200 行红线），且内容跨五类互不相关的职责——敏感路径隔离、33 个模块状态自动复位、cassette 回放、外网阻断、收集期校验混在一处，新增任一域都要在千行文件里定位。 | 按域拆为 `src/test/_conftest_{isolation,state_reset,cassette,network,hooks}.py`，入口只留标记注册与会话级兜底、把夹具/钩子显式 import 回来注册（pytest 只认入口命名空间，故 import 不可删）；`test_module_state_reset.py` 的复位接线判据改按 `conftest.py` + `_conftest_*.py` 全量汇总（glob 派生，新增实现模块自动纳入）；conftest.py 1199 → 176 行 |
 
 ### 归档档案
 - [`archived_review-findings.0.18.x.md`](../archive/v0.18.x/archived_review-findings.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-18）
