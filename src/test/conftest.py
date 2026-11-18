@@ -1057,6 +1057,10 @@ def _block_external_network(monkeypatch, request):
     if request.node.get_closest_marker("live") is not None:
         return
 
+    # 子进程取数（core/v8_subprocess）不在本进程 socket 桩的覆盖范围内：
+    # 显式告知子进程「离线」，否则测试会绕过守卫发起真实网络请求。
+    monkeypatch.setenv("INVEST_SUBPROCESS_NETWORK_OFFLINE", "1")
+
     def _is_loopback(addr: object) -> bool:
         """目标地址是否回环（unix socket 路径、None 等非 IP 目标不算）。"""
         if not isinstance(addr, tuple) or len(addr) < 2:

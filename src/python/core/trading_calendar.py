@@ -174,7 +174,8 @@ def _get_trading_calendar() -> set[str]:
 
     线程安全：缓存未命中分支用模块级锁串行化 akshare(V8) 调用（见
     _TRADING_CALENDAR_AKSHARE_LOCK），避免并发初始化 py_mini_racer 触发
-    进程级 FATAL 崩溃。
+    进程级 FATAL 崩溃；取数本身经 `core.v8_subprocess.run_akshare_v8` 在**子进程**执行，
+    V8 的初始化/回收与崩溃风险一律隔离在进程边界外。
 
     Returns:
         交易日日期字符串集合
@@ -200,10 +201,15 @@ def _get_trading_calendar() -> set[str]:
             _calendar_memo_store(dates)
             return dates
         try:
-            import akshare as ak
+            from src.python.core.v8_subprocess import run_akshare_v8
 
-            df = ak.tool_trade_date_hist_sina()
-            dates: set[str] = set(df["trade_date"].dropna().astype(str).tolist())
+            # 必须走子进程：tool_trade_date_hist_sina 内部建 py_mini_racer(V8) 上下文，
+            # 主进程内无论用什么线程调度都可能段错误或退出死锁（三种崩法见
+            # core/v8_subprocess.py 说明）。子进程退出即回收全部 V8 状态。
+            rows = run_akshare_v8("tool_trade_date_hist_sina")
+            dates: set[str] = {
+                str(row.get("trade_date"))[:10] for row in rows if row.get("trade_date") is not None
+            }
             if dates:
                 cache.set(_TRADING_CALENDAR_CACHE_KEY, sorted(dates))
                 _calendar_memo_store(dates)
@@ -345,13 +351,13 @@ def get_last_trading_day() -> str:
     return trading_day_as_of(datetime.now(BEIJING_TZ))
 
 
-def get_prev_trading_day(trading_day: str = "") -> str:
+def get_prev_trading_day(trading_day: str | None = "") -> str:
     """获取指定交易日的前一个交易日，含节假日感知。
 
     使用 akshare 交易日历向前查找，找不到时回退到简易周度判断。
 
     Args:
-        trading_day: YYYY-MM-DD 格式的交易日，默认取最近交易日
+        trading_day: YYYY-MM-DD 格式的交易日；空串/None 表示取最近交易日之日的前一日
 
     Returns:
         前一个交易日 YYYY-MM-DD

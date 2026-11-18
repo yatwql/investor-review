@@ -997,6 +997,8 @@ INVEST_LOG_CONSOLE_LEVEL=DEBUG ...                                              
 
 非法值回落 INFO 并提示一次。**默认不开 DEBUG** 的原因：日志审计（近一周 107,625 行）显示 DEBUG 占 91%，其中「市场时段」67%、缓存命中 17%，真实告警被埋在噪声里，10MB 轮转只能留约 6 天。
 
+**触到 V8 的第三方调用必须走 `core/v8_subprocess.py`**：akshare 的若干接口（交易日历、同花顺资金流）内部就地建 `py_mini_racer.MiniRacer()`，而 V8 平台的初始化是进程级、与线程绑定的——实测三种崩法都拦不住也不可捕获：两条线程先后 init V8 → 段错误；上下文在别的线程被 GC 回收 → 段错误；上下文活到进程退出期被主线程回收 → `close()` 去 join 已结束线程的事件循环，退出死锁。**主进程内没有安全调度方式**（专用线程、全局锁、就地 `gc.collect()` 都实测留活口），故一律放子进程：接口名进 `_ALLOWED_FUNCTIONS` 白名单，调用方用 `run_akshare_v8(...)` 取 records，超时/崩溃按源不可用降级；`src/test/unit/core/test_v8_call_sites.py` 扫描主进程内的 `ak.<name>` 调用点并与 akshare 源码比对，漏接即红。另注意：父进程的 socket 桩不跨进程，测试/基准须设 `INVEST_SUBPROCESS_NETWORK_OFFLINE=1` 让子进程也离线。
+
 **重复装配的日志走折叠原语**：同一份报告会在多个阶段重复装配同一批数据（行业批量、事件窗契约、新闻关联），这些点用 `core/log_dedupe.py::log_throttled(logger, key, fmt, *args)`，同 key 在 60s 窗口内只上屏第一行、重复降到 DEBUG（窗口外即下一次报告照常上屏）。**不要**自己写「首次才打」的布尔标记——那样长驻进程第二次报告就再也看不到该行；也不要把窗口调到远超单份报告的耗时，否则连续生成的报告会被误折叠。
 
 **非真实运行的日志/缓存隔离**（演示截屏、性能基准）：

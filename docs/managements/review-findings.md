@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.18.5-dev
-> **编号源**：`rf-next = 1174`（新增问题提出后更新为 +1；已用最大 rf-1173，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1175`（新增问题提出后更新为 +1；已用最大 rf-1173，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -18,7 +18,6 @@
 
 | # | 问题 | 修复方向 |
 | --- | --- | --- |
-| rf-1173 | `scripts/test-perf-report.py` 本机必崩：`Segmentation fault`（退出 139，`-X faulthandler` 定位在 `fetcher/financial_indicator.py:137` → `fetch_latest_indicator` → `source_adapter.fetch_raw`，工作线程内触发）；`git stash` 后在 `HEAD` 上同样复现，与本轮改动无关。后果：`perf-gate` 在本机完全跑不起来，性能改动无法本地验收（CI 环境未复现） | 先确认是否 akshare/pandas C 扩展在工作线程内的已知崩溃（取数入口串行化 / 主线程预导入 / 升级 akshare 三者择一验证）；有结论后在 `source_adapter` 层加「原生崩溃不可捕获」的文档说明与线程边界约束 |
 
 ### P3 — 持续监控：兼容残留
 
@@ -40,7 +39,7 @@
 
 | 文件 | 现状与拆分方向 |
 |------|----------------|
-| `src/test/conftest.py` 1195 行（测试登记线 900） | fixture 族按域下沉（行情/LLM/网络/持久化各一模块），conftest 只留 autouse 与装配 |
+| `src/test/conftest.py` 1199 行（测试登记线 900） | fixture 族按域下沉（行情/LLM/网络/持久化各一模块），conftest 只留 autouse 与装配 |
 | `src/python/core/perf.py` 800 行 | 采集器与台账落盘可拆（`perf` 采集 / `perf_history` 读写两文件） |
 | `src/python/core/doctor.py` 787 行 | 检查项按域分文件（环境 / 配置 / 数据源 / 报告产物），入口只留编排 |
 | `src/python/llm/fact_checker/_numerical.py` 764 行 | 数值校验按规则族拆（金额 / 比率 / 计数），共享解析原语上提包内 `_common` |
@@ -49,7 +48,7 @@
 | `src/python/core/degradation.py` 768 行 | 状态词与事件模型、登记面与持久化可拆两文件 |
 | `src/python/report/action_sheet.py` 726 行 | 行动页签内各块（建议表 / 判断依据 / 决策书 / 复盘）拆子模块 |
 | `src/python/fetcher/financial_report.py` 719 行 | 按「索引 / 正文 / 全文定位」三阶下沉 |
-| `src/python/providers/akshare_extras.py` 714 行 | 按接口族拆（指数 / 行业 / 分红 / 盈利预测） |
+| `src/python/providers/akshare_extras.py` 716 行 | 按接口族拆（指数 / 行业 / 分红 / 盈利预测） |
 | `src/python/core/provider_registry.py` 710 行 | 熔断与会话缓存各自独立文件 |
 | `src/python/llm/skeleton.py` 877 行 | 模板数据与渲染逻辑可下沉 `llm/skeleton_*`（骨架模板 / 占位渲染） |
 | `src/python/cli/_handlers.py` 890 行 | 命令处理器按渠道分文件（generate/config/data 三簇），保持入口薄 |
@@ -68,6 +67,8 @@
 | **rf-1170** | `llm_settings.json` 里 `max_tokens_*` 低于本版出厂默认时静默生效（实例：`max_tokens_self_review=2048` vs 默认 8192）——满编持仓必然触顶，触顶会**自动放大重生成一次 = 多一次计费调用**，用户在报告里只看到 WARNING，根因无从追溯 | `_validation_llm` 新增 `_below_default_advisory()`：加载期点名「当前值 / 本版默认 / 代价」，合法值不回落不改写；配 2 条用例（低于默认保留原值并出提示 / ≥默认不产生提示噪声） |
 | **rf-1171** | 多处 `except Exception` 无任何日志的静默降级：`core/concurrency.py` 配置读失败 → 并发档位静默变 high；`core/data_freshness.py` 交易日历/阈值回落无痕；`report/_report_factor_metrics.py` 单品种 K 线失败与「真无数据」不可区分 | 逐处补日志（并发档位回落用 WARNING + exc_info，其余用 DEBUG + exc_info）；其余仅探针性质（doctor 健康检查等把失败当结果返回）不动 |
 | **rf-1172** | 持仓文件缺失只报「文件不存在（路径: X）」：目录本身不存在（旧机器/旧版本配置残留，本机曾实测指向一个已不存在的路径）与「目录在、文件名对不上」两种情形修法完全不同（改 `holdings_dir` 还是改 `holdings_filename`），原提示两者都说，用户会在错误的配置键上来回试 | 新增 `_missing_holdings_hint()` 分三种情形给可执行修法（目录不存在 → 点名 `holdings_dir` 且提示旧配置残留；目录在 → 列出该目录现有 xlsx 并点名 `holdings_filename`；空目录 → 提示放文件）；配 3 条用例 |
+
+| **rf-1173** | `test-perf-report.py`（及真实报告）本机必崩/挂死：`Segmentation fault`（退出 139）与退出期死锁。`-X faulthandler` 原栈先指向 akshare 财务指标链，实为**栈顶 `py_mini_racer.MiniRacer.__del__` → `dll.mr_free_context`**；`git stash` 后在 `HEAD` 上同样复现。逐层定位出三种崩法（两条线程先后 init V8 / 上下文跨线程 GC / 上下文活到退出期）——都是原生崩溃，`try/except` 与 pytest 一律拦不住；且实测**主进程内无论专用线程、全局锁、就地回收都留活口**（异常栈帧与第三方内部引用会把上下文留到下一次 GC） | 改为**子进程隔离**：新增 `core/v8_subprocess.py`（白名单接口 + JSON 契约 + 超时杀子进程 + 离线开关），`tool_trade_date_hist_sina`（交易日历）与 `stock_fund_flow_industry`（同花顺资金流备用通道）改走子进程，主进程只收 records；配 12 条用例（白名单/JSON 契约/子进程错误与超时降级/日历与资金流接线/主进程禁直调契约）与离线契约（基准与测试都把「子进程也离线」传下去，防止测试偷偷走真实网络）；基准连续两轮退出码 0 |
 
 ### 归档档案
 - [`archived_review-findings.0.18.x.md`](../archive/v0.18.x/archived_review-findings.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-18）

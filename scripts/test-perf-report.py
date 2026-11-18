@@ -367,8 +367,13 @@ def _install_offline_network() -> None:
       58s 几乎全是这类等待）。全仓无 ``from time import ... sleep``，补丁模块
       属性即覆盖全部调用点。
     """
+    import os as _os
     import socket as _socket
     import time as _time
+
+    # 子进程取数（V8 类 akshare，见 core/v8_subprocess）不继承本进程 socket 桩：
+    # 用环境变量显式告知子进程「离线」，否则基准会偷偷发起真实网络请求。
+    _os.environ["INVEST_SUBPROCESS_NETWORK_OFFLINE"] = "1"
 
     def _blocked(*_args: object, **_kwargs: object) -> None:
         raise OSError("test-perf-report: 基准运行按设计禁网")

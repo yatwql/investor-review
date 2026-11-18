@@ -152,18 +152,20 @@ def _fetch_sector_flow_ths_industry() -> list[dict[str, Any]]:
     差异归一：金额由亿元换算为元；同花顺没有「主力净占比」字段，改由
     ``净额 / (流入+流出) * 100`` 派生（分母不可用时留空，不编造 0）。
     """
-    _ak = ak
-    if _ak is None:
-        raise _SectorFlowUnavailable("connection", "ths_industry")
-    df = run_with_timeout(lambda: _ak.stock_fund_flow_industry(symbol="即时"))
-    if df is None:
-        raise _SectorFlowUnavailable("connection", "ths_industry")
-    if df.empty:
+    from src.python.core.v8_subprocess import V8SourceError, run_akshare_v8
+
+    # 必走子进程：stock_fund_flow_industry 内部建 py_mini_racer(V8) 上下文（同花顺 JS
+    # 解码），主进程内无论怎么调度都可能段错误/退出死锁（三种崩法见 core/v8_subprocess）。
+    try:
+        rows = run_akshare_v8("stock_fund_flow_industry", {"symbol": "即时"})
+    except V8SourceError as exc:
+        raise _SectorFlowUnavailable("connection", "ths_industry") from exc
+    if not rows:
         raise _SectorFlowUnavailable("empty", "ths_industry")
 
     result: list[dict[str, Any]] = []
     try:
-        for _, row in df.iterrows():  # noqa: PERF203 —— 逐行容错，单行脏数据不弃整榜
+        for row in rows:  # noqa: PERF203 —— 逐行容错，单行脏数据不弃整榜
             _in = _safe_float(row.get("流入资金"))
             _out = _safe_float(row.get("流出资金"))
             _net = _safe_float(row.get("净额"))
@@ -317,7 +319,7 @@ def _compute_index_fingerprint() -> str:
                 _INDEX_MEMO["indices"] = ((a_indices, us_indices), _time.time())
 
         raw = json.dumps([a_indices, us_indices], ensure_ascii=False, sort_keys=True, default=str)
-        return hashlib.md5(raw.encode()).hexdigest()[:12]
+        return hashlib.md5(raw.encode(), usedforsecurity=False).hexdigest()[:12]
     except (TypeError, ValueError):
         logger.debug("指数指纹计算失败（降级到纯 TTL 缓存）", exc_info=True)
         return ""
@@ -546,7 +548,7 @@ def _compute_dividend_fingerprint(codes: list[str]) -> str:
         return "empty"
     try:
         raw = json.dumps(sorted(set(codes)), ensure_ascii=False, sort_keys=True)
-        return hashlib.md5(raw.encode()).hexdigest()[:12]
+        return hashlib.md5(raw.encode(), usedforsecurity=False).hexdigest()[:12]
     except (TypeError, ValueError):
         logger.debug("分红指纹计算失败，降级到无指纹缓存", exc_info=True)
         return "nofp"
@@ -656,7 +658,7 @@ def get_dividend_data(codes: list[str]) -> dict[str, dict]:
     global _DIVIDEND_FAILURE
 
     # ── 内存缓存 ──
-    _codes_hash = hashlib.md5(json.dumps(sorted(codes), ensure_ascii=False).encode()).hexdigest()[:12]
+    _codes_hash = hashlib.md5(json.dumps(sorted(codes), ensure_ascii=False).encode(), usedforsecurity=False).hexdigest()[:12]
     _memo_key_str = _memo_key("dividend", _codes_hash)
     _memo_val = _memo_get(_memo_key_str)
     if _memo_val is not None:

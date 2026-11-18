@@ -16,6 +16,7 @@
 - **性能门禁补 full 档**：`test-perf-report.py` 新增 Phase 4（full 全链路，LLM 已 mock），门禁改为 basic ≤60s **且** full ≤300s 双口径，填补「只卡 Excel 一段、full 退化无门槛」的缺口（`rf-1169`）。
 - **max_tokens 偏低不再静默**：`llm_settings.json` 中 `max_tokens_*` 低于本版出厂默认时，加载期点名「当前值 / 默认值 / 代价（触顶会追加一次计费调用）」，不回落、不改写用户值；配 2 条用例（`rf-1170`）。
 - **静默降级补痕**：并发档位配置读失败（`core/concurrency.py`）、交易日历/阈值回落（`core/data_freshness.py`）、逐品种 K 线取数失败（`report/_report_factor_metrics.py`）不再无声（`rf-1171`）。
+- **V8 崩溃/退出死锁修复**：akshare 的交易日历与同花顺资金流会在函数内建 `py_mini_racer(V8)` 上下文，主进程内无论专用线程/全局锁/就地回收都实测段错误或退出死锁（原生崩溃，`try/except` 拦不住）；新增 `core/v8_subprocess.py` 把这两类取数放进子进程（白名单 + JSON 契约 + 超时杀进程 + 离线开关），父进程只收 records 并按源不可用降级，配 12 条用例与离线契约（`rf-1173`）。
 - **持仓文件缺失提示可执行**：`_missing_holdings_hint()` 区分「目录不存在（旧配置残留，改 `holdings_dir`）」与「文件名对不上（列出目录现有 xlsx，改 `holdings_filename`）」两神情形；配 3 条用例（`rf-1172`）。
 
 ## 归档
