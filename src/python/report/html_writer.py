@@ -19,7 +19,7 @@ from __future__ import annotations
 from dataclasses import asdict
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, NamedTuple
 
 
 import logging
@@ -82,6 +82,7 @@ logger = logging.getLogger("invest")
 from src.python.report.html_jinja_env import _ENV  # noqa: E402
 from src.python.report.html_sections import (  # noqa: E402
     HtmlAssembly,
+    SectionBindings,
     assemble_sections,
 )
 
@@ -185,6 +186,356 @@ def _run_post_stages(state: dict, mark: Callable[[str], None]) -> None:
         mark(name)
 
 
+class _RenderOptions(NamedTuple):
+    """`write_html_report` 的**非装配入参**清单（渲染期要用的那一组）。
+
+    为什么单列一张表：渲染期依赖的外部入参有 38 项，散在一个几百行的
+    函数里既看不出全貌，也无法在拆分出的渲染辅助函数间稳妥传递。集中声明后，调用侧
+    按名构造、辅助函数整表解包（解包名即局部名），新增入参只改这一处 + 解包处。
+    """
+
+    action_data: dict | None
+    chart_datasets: dict | None
+    crisis_annotation_data: dict | None
+    data_freshness: dict | None
+    debate_info: dict | None
+    decision_basis_data: dict | None
+    decision_review_data: dict | None
+    drawdown_min_span: int
+    enable_action: bool
+    enable_fund_deep_analysis: bool
+    enable_fundamental_snapshot: bool
+    enable_history: bool
+    enable_llm: bool
+    enable_news: bool
+    enable_portfolio_evolution: bool
+    event_impact_data: dict | None
+    evolution_data: dict | None
+    factor_catalog_data: dict | None
+    financial_indicator_data: dict | None
+    financial_report_digest_data: dict | None
+    fund_flow_data: dict | None
+    history_data: dict | None
+    holding_change_data: dict | None
+    include_news: bool
+    market_sentiment_data: dict | None
+    market_temperature_data: dict | None
+    position_relationship_data: dict | None
+    position_status: dict | None
+    prosperity_framework_data: dict | None
+    purchase_status_data: dict | None
+    risk_adjusted_excess_data: dict | None
+    schedule_replay_data: dict | None
+    section_order: list[dict] | None
+    snapshot_diff_data: dict | None
+    style_factor_data: dict | None
+    summary_highlights_data: dict | None
+    tail_risk_data: dict | None
+    valuation_data: dict | None
+
+
+def _prepare_page_state(
+    holdings: list[Holding],
+    bindings: SectionBindings,
+    options: _RenderOptions,
+    *,
+    order: list[dict],
+) -> Any:
+    """装配「章节可见性 + 数据状态 + 目录导航」的渲染态（纯字段映射，不取数）。
+
+    输入分两族：**章节可见性**（开关态 + 各分析模块是否有数据）与**数据源状态**
+    （指数/穿透/绩效/持仓/历史）；这一层只决定「章显示不显示、状态行怎么措辞」，
+    渲染与落盘都不在这里。拆分前它与模板上下文的 90 余个字段挤在同一函数里，
+    改可见性判据要跨过整段映射才能确认影响面。
+    """
+    return _prepare_render_context(
+        visibility=_VisibilityInputs(
+            order=order,
+            manager_analysis=bindings.manager_analysis,
+            overlap_matrix=bindings.overlap_matrix,
+            concentration_analysis=bindings.concentration_analysis,
+            style_analysis=bindings.style_analysis,
+            include_news=options.include_news,
+            llm_enabled_flag=bindings.llm_enabled_flag,
+            enable_llm=options.enable_llm,
+            enable_news=options.enable_news,
+            enable_fund_deep_analysis=options.enable_fund_deep_analysis,
+            enable_history=options.enable_history,
+            enable_portfolio_evolution=options.enable_portfolio_evolution,
+            enable_action=options.enable_action,
+            style_factor_data=options.style_factor_data,
+            position_relationship_data=options.position_relationship_data,
+            evolution_data=options.evolution_data,
+            holding_change_data=options.holding_change_data,
+            schedule_replay_data=options.schedule_replay_data,
+            enable_fundamental_snapshot=options.enable_fundamental_snapshot,
+            financial_report_digest_data=options.financial_report_digest_data,
+            financial_indicator_data=options.financial_indicator_data,
+        ),
+        data_source=_DataSourceInputs(
+            a_indices=bindings.a_indices,
+            us_indices=bindings.us_indices,
+            penetration=bindings.penetration,
+            penetration_profit_ok=bindings.penetration_profit_ok,
+            penetration_dividend_ok=bindings.penetration_dividend_ok,
+            perf_data=bindings.perf_data,
+            holdings=holdings,
+            cat_dividend_ok=bindings.cat_dividend_ok,
+            history_data=options.history_data,
+        ),
+        details=bindings.details,
+    )
+
+
+def _build_template_context(
+    holdings: list[Holding],
+    bindings: SectionBindings,
+    options: _RenderOptions,
+    *,
+    now_str: str,
+    today_str: str,
+    trading_day: str | None,
+    mark: Callable[[str], None],
+) -> tuple[TemplateContext, dict]:
+    """把装配产物 + 渲染入参映射成模板上下文（含可见性与派生量）。
+
+    本函数是**纯映射 + 派生**：不取数、不落盘、不渲染，只把「装配产物 / 入参 / 开关态」
+    变成模板变量——改模板变量在这里改，改取数去 `html_sections`，改落盘去 `html_save`。
+    拆分前这段与取数、渲染、落盘串在同一个 349 行函数里，改模板变量的风险面被整段放大。
+
+    Args:
+        holdings: 持仓（`_DataSourceInputs` 与覆盖面统计需要）
+        bindings: `assemble_sections` 产物（字段顺序即契约）
+        options: 非装配入参（见 :class:`_RenderOptions`）
+        now_str/today_str/trading_day: 时间串（一次取定，全函数共用同一时刻）
+        mark: 细分耗时回调（把「面板视图装配」记进 perf 阶段）
+
+    Returns:
+        (模板上下文, 匿名化代码映射 `_code_display_map`（后处理落盘前要用）)
+    """
+    (
+        details,
+        total_mv,
+        total_cost,
+        total_profit,
+        total_today_profit,
+        total_profit_rate,
+        today_profit_rate,
+        accounts,
+        account_totals,
+        cat_counts,
+        update_status_dict,
+        a_indices,
+        us_indices,
+        a_indices_list,
+        us_indices_list,
+        cat_data,
+        cat_dividend_ok,
+        penetration,
+        penetration_profit_ok,
+        penetration_dividend_ok,
+        perf_data,
+        candidate_data,
+        manager_analysis,
+        overlap_matrix,
+        concentration_analysis,
+        style_analysis,
+        news_data,
+        _news_llm_meta,
+        llm_enabled_flag,
+        global_macro_content,
+        expert_review_content,
+        health_check_content,
+        penetration_deep_content,
+        llm_module_info,
+        llm_endpoint,
+        module_disabled,
+        _llm_session_usage,
+        _debate_mode_label,
+        _debate_mode_combination,
+    ) = bindings
+    # 区块装配（含穿透/基金业绩/风格等取数）与三面板视图串在一个窗口里时，慢的
+    # 时候分不清是「取数」还是「视图拼装」——实测同机同数据 1.4s / 6.8s 双峰，
+    # 归因显示落差全在前者（财务指标/基金业绩取数）。分两步记，名字才对得上内容。
+    (
+        action_data,
+        chart_datasets,
+        crisis_annotation_data,
+        data_freshness,
+        debate_info,
+        decision_basis_data,
+        decision_review_data,
+        drawdown_min_span,
+        enable_action,
+        enable_fund_deep_analysis,
+        enable_fundamental_snapshot,
+        enable_history,
+        enable_llm,
+        enable_news,
+        enable_portfolio_evolution,
+        event_impact_data,
+        evolution_data,
+        factor_catalog_data,
+        financial_indicator_data,
+        financial_report_digest_data,
+        fund_flow_data,
+        history_data,
+        holding_change_data,
+        include_news,
+        market_sentiment_data,
+        market_temperature_data,
+        position_relationship_data,
+        position_status,
+        prosperity_framework_data,
+        purchase_status_data,
+        risk_adjusted_excess_data,
+        schedule_replay_data,
+        section_order,
+        snapshot_diff_data,
+        style_factor_data,
+        summary_highlights_data,
+        tail_risk_data,
+        valuation_data,
+    ) = options
+
+    has_llm_analysis = any(item.get("llm_analysis") for item in (news_data or []))
+
+    # ── 10a) 报告模块序号 & 可见性 ──
+    order = section_order or get_report_section_order()
+    # 持仓变动复盘视图（双端单源）：与 Excel 页签消费同一份预格式化字符串；
+    # 契约缺席（开关关闭）→ None → 章隐藏，逐字节回退既有输出
+    holding_change_view, event_impact_view, schedule_replay_view = _build_panel_views(
+        holding_change_data, event_impact_data, schedule_replay_data
+    )
+    # 三个面板视图（持仓变动 / 事件窗 / 纪律回放）单列一步：与区块装配分开记，
+    # 免得住取数时间算到视图拼装头上
+    mark("面板视图装配")
+    # 章级：enabled_llm 模块禁用的 LLM 分析章整章隐藏（与 Excel 端同函数同配置推导）
+    _ctx = _prepare_page_state(holdings, bindings, options, order=order)
+    section_numbers, section_visible_dict, _sv_fn = _ctx.section_numbers, _ctx.section_visible_dict, _ctx.sv_fn
+    (data_status_summary, data_status_penetration, data_status_perf, data_status_category) = _ctx.status
+    data_status_history = _ctx.data_status_history
+    data_source_matrix, data_source_catalog = _ctx.data_source_matrix, _ctx.data_source_catalog
+    _factor_names = _ctx.factor_names
+    _code_display_map = _ctx.code_display_map
+
+    # 模板派生量（原在 _render_template 内计算，随上下文对象上移到调用方装配，
+    # 让「取数 → 派生 → 渲染」三段在同一个函数里可见）
+    from src.python.config.features import enabled_experimental_features, is_feature_enabled
+    from src.python.report.chart_data_builder import build_evolution_chart_data
+
+    enabled_experiments = [name for _flag, name in enabled_experimental_features()]
+    # 报告追问区块开关态：经 render context 传递（不写模板 globals）；关态模板分支不渲染，报告字节不变
+    report_qa_enabled = is_feature_enabled("report_qa")
+    # 估值分位 + 市场温度：开关关闭时为 None（模板保持既有输出）
+    valuation_enabled = valuation_data is not None
+    # 真实分位口径是否生效（未生效时页脚保持引入前的原始免责语）
+    valuation_real_basis = (valuation_data or {}).get("basis_mode") == "real_ttm"
+    penetration_display = _attach_valuation_to_penetration(penetration, valuation_data)
+    market_temperature = _build_temperature_display(market_temperature_data)
+    purchase_status_display = _build_purchase_status_display(purchase_status_data, accounts)
+    # 目录分组导航：按「基础信息/基金深度分析/行动建议/历史/LLM/附录」六组折叠（_sv_fn 闭包过滤不可见章节）
+    section_groups = _build_section_nav_groups(order, _sv_fn, section_numbers)
+
+
+    context = TemplateContext(
+        flow_display=_build_flow_display(fund_flow_data),
+        purchase_status_display=purchase_status_display,
+        section_groups=section_groups,
+        anon_code_map=_code_display_map,
+        llm_supported_sections=_LLM_SUPPORTED_SECTIONS,
+        valuation_enabled=valuation_enabled,
+        valuation_real_basis=valuation_real_basis,
+        market_temperature=market_temperature,
+        now=now_str,
+        today=today_str,
+        trading_day=trading_day,
+        total_mv=total_mv,
+        total_cost=total_cost,
+        total_profit=total_profit,
+        total_profit_rate=total_profit_rate,
+        total_today_profit=total_today_profit,
+        today_profit_rate=today_profit_rate,
+        categories=cat_counts,
+        update_status=update_status_dict,
+        a_indices=a_indices_list,
+        us_indices=us_indices_list,
+        accounts=accounts,
+        account_totals=account_totals,
+        cat_data=cat_data,
+        penetration=penetration_display,
+        perf_data=perf_data,
+        candidate_data=candidate_data,
+        news_data=news_data,
+        news_llm_meta=_news_llm_meta,
+        has_llm_analysis=has_llm_analysis,
+        manager_analysis=manager_analysis,
+        overlap_matrix=overlap_matrix,
+        concentration_analysis=concentration_analysis,
+        style_analysis=style_analysis,
+        llm_enabled=llm_enabled_flag,
+        global_macro=global_macro_content,
+        expert_review=expert_review_content,
+        health_check=health_check_content,
+        penetration_deep=penetration_deep_content,
+        self_review_block=_self_review_block(),
+        llm_session_usage=_llm_session_usage,
+        module_labels=get_llm_module_names(),
+        module_disabled=module_disabled,
+        llm_module_info=llm_module_info,
+        llm_endpoint=llm_endpoint,
+        cache_stats=get_cache_hit_rate(),
+        app_name=APP_NAME,
+        app_version=APP_VERSION,
+        debate_mode_label=_debate_mode_label,
+        debate_info=debate_info,
+        debate_mode_combination=_debate_mode_combination,
+        enabled_experiments=enabled_experiments,
+        report_qa_enabled=report_qa_enabled,
+        section_order=order,
+        section_numbers=section_numbers,
+        section_visible_dict=section_visible_dict,
+        section_visible=_sv_fn,
+        data_status_summary=data_status_summary,
+        degradation_line=_ctx.degradation_line,
+        data_status_penetration=data_status_penetration,
+        data_status_perf=data_status_perf,
+        data_status_category=data_status_category,
+        history_data=history_data,
+        data_status_history=data_status_history,
+        data_source_matrix=data_source_matrix,
+        data_source_catalog=data_source_catalog,
+        report_year=datetime.now().year,
+        data_unavailable=bool(total_mv == 0 and total_cost > 0),
+        chart_datasets=chart_datasets,
+        style_factor_data=style_factor_data,
+        factor_catalog_data=factor_catalog_data,
+        factor_names=_factor_names or {},
+        industry_beta=(style_factor_data or {}).get("industry_beta"),
+        position_relationship_data=position_relationship_data,
+        evolution_data=evolution_data,
+        evolution_chart_data=build_evolution_chart_data(evolution_data, code_map=_code_display_map),
+        drawdown_min_span=drawdown_min_span,
+        position_status=position_status,
+        data_freshness=data_freshness,
+        action_data=action_data,
+        decision_basis_data=_with_decision_book(decision_basis_data),
+        prosperity_framework_data=prosperity_framework_data,
+        market_sentiment_data=market_sentiment_data,
+        crisis_annotation_data=crisis_annotation_data,
+        risk_adjusted_excess_data=risk_adjusted_excess_data,
+        tail_risk_data=tail_risk_data,
+        snapshot_diff_data=snapshot_diff_data,
+        decision_review_data=decision_review_data,
+        holding_change_view=holding_change_view,
+        event_impact_view=event_impact_view,
+        schedule_replay_view=schedule_replay_view,
+        financial_report_digest_data=financial_report_digest_data,
+        financial_indicator_data=financial_indicator_data,
+        summary_highlights_data=summary_highlights_data,    )
+    return context, _code_display_map
+
+
 def write_html_report(
     holdings: list[Holding],
     output_dir: str = "reports",
@@ -281,6 +632,46 @@ def write_html_report(
     prog = progress if progress is not None else SilentProgressReporter()
     now_str, today_str, trading_day = _time_strings()
 
+    options = _RenderOptions(
+        action_data=action_data,
+        chart_datasets=chart_datasets,
+        crisis_annotation_data=crisis_annotation_data,
+        data_freshness=data_freshness,
+        debate_info=debate_info,
+        decision_basis_data=decision_basis_data,
+        decision_review_data=decision_review_data,
+        drawdown_min_span=drawdown_min_span,
+        enable_action=enable_action,
+        enable_fund_deep_analysis=enable_fund_deep_analysis,
+        enable_fundamental_snapshot=enable_fundamental_snapshot,
+        enable_history=enable_history,
+        enable_llm=enable_llm,
+        enable_news=enable_news,
+        enable_portfolio_evolution=enable_portfolio_evolution,
+        event_impact_data=event_impact_data,
+        evolution_data=evolution_data,
+        factor_catalog_data=factor_catalog_data,
+        financial_indicator_data=financial_indicator_data,
+        financial_report_digest_data=financial_report_digest_data,
+        fund_flow_data=fund_flow_data,
+        history_data=history_data,
+        holding_change_data=holding_change_data,
+        include_news=include_news,
+        market_sentiment_data=market_sentiment_data,
+        market_temperature_data=market_temperature_data,
+        position_relationship_data=position_relationship_data,
+        position_status=position_status,
+        prosperity_framework_data=prosperity_framework_data,
+        purchase_status_data=purchase_status_data,
+        risk_adjusted_excess_data=risk_adjusted_excess_data,
+        schedule_replay_data=schedule_replay_data,
+        section_order=section_order,
+        snapshot_diff_data=snapshot_diff_data,
+        style_factor_data=style_factor_data,
+        summary_highlights_data=summary_highlights_data,
+        tail_risk_data=tail_risk_data,
+        valuation_data=valuation_data,
+    )
     # 区块装配：7 个连续区段按 `SECTION_BUILDERS` 表执行（顺序即契约），产物以
     # `SectionBindings`（NamedTuple）一次取回——字段顺序即契约，类型逐字段保留。
     bindings = assemble_sections(
@@ -305,233 +696,29 @@ def write_html_report(
             debate_info=debate_info,
         )
     ).bindings()
-    (
-        details,
-        total_mv,
-        total_cost,
-        total_profit,
-        total_today_profit,
-        total_profit_rate,
-        today_profit_rate,
-        accounts,
-        account_totals,
-        cat_counts,
-        update_status_dict,
-        a_indices,
-        us_indices,
-        a_indices_list,
-        us_indices_list,
-        cat_data,
-        cat_dividend_ok,
-        penetration,
-        penetration_profit_ok,
-        penetration_dividend_ok,
-        perf_data,
-        candidate_data,
-        manager_analysis,
-        overlap_matrix,
-        concentration_analysis,
-        style_analysis,
-        news_data,
-        _news_llm_meta,
-        llm_enabled_flag,
-        global_macro_content,
-        expert_review_content,
-        health_check_content,
-        penetration_deep_content,
-        llm_module_info,
-        llm_endpoint,
-        module_disabled,
-        _llm_session_usage,
-        _debate_mode_label,
-        _debate_mode_combination,
-    ) = bindings
-    # 区块装配（含穿透/基金业绩/风格等取数）与三面板视图串在一个窗口里时，慢的
-    # 时候分不清是「取数」还是「视图拼装」——实测同机同数据 1.4s / 6.8s 双峰，
-    # 归因显示落差全在前者（财务指标/基金业绩取数）。分两步记，名字才对得上内容。
     _mark("区块装配")
 
-    # ── 10) 渲染模板 ──
     prog.info("正在渲染 HTML...")
-    has_llm_analysis = any(item.get("llm_analysis") for item in (news_data or []))
-
-    # ── 10a) 报告模块序号 & 可见性 ──
-    order = section_order or get_report_section_order()
-    # 持仓变动复盘视图（双端单源）：与 Excel 页签消费同一份预格式化字符串；
-    # 契约缺席（开关关闭）→ None → 章隐藏，逐字节回退既有输出
-    holding_change_view, event_impact_view, schedule_replay_view = _build_panel_views(
-        holding_change_data, event_impact_data, schedule_replay_data
-    )
-    # 三个面板视图（持仓变动 / 事件窗 / 纪律回放）单列一步：与区块装配分开记，
-    # 免得住取数时间算到视图拼装头上
-    _mark("面板视图装配")
-    # 章级：enabled_llm 模块禁用的 LLM 分析章整章隐藏（与 Excel 端同函数同配置推导）
-    _ctx = _prepare_render_context(
-        visibility=_VisibilityInputs(
-            order=order,
-            manager_analysis=manager_analysis,
-            overlap_matrix=overlap_matrix,
-            concentration_analysis=concentration_analysis,
-            style_analysis=style_analysis,
-            include_news=include_news,
-            llm_enabled_flag=llm_enabled_flag,
-            enable_llm=enable_llm,
-            enable_news=enable_news,
-            enable_fund_deep_analysis=enable_fund_deep_analysis,
-            enable_history=enable_history,
-            enable_portfolio_evolution=enable_portfolio_evolution,
-            enable_action=enable_action,
-            style_factor_data=style_factor_data,
-            position_relationship_data=position_relationship_data,
-            evolution_data=evolution_data,
-            holding_change_data=holding_change_data,
-            schedule_replay_data=schedule_replay_data,
-            enable_fundamental_snapshot=enable_fundamental_snapshot,
-            financial_report_digest_data=financial_report_digest_data,
-            financial_indicator_data=financial_indicator_data,
-        ),
-        data_source=_DataSourceInputs(
-            a_indices=a_indices,
-            us_indices=us_indices,
-            penetration=penetration,
-            penetration_profit_ok=penetration_profit_ok,
-            penetration_dividend_ok=penetration_dividend_ok,
-            perf_data=perf_data,
-            holdings=holdings,
-            cat_dividend_ok=cat_dividend_ok,
-            history_data=history_data,
-        ),
-        details=details,
-    )
-    section_numbers, section_visible_dict, _sv_fn = _ctx.section_numbers, _ctx.section_visible_dict, _ctx.sv_fn
-    (data_status_summary, data_status_penetration, data_status_perf, data_status_category) = _ctx.status
-    data_status_history = _ctx.data_status_history
-    data_source_matrix, data_source_catalog = _ctx.data_source_matrix, _ctx.data_source_catalog
-    _factor_names = _ctx.factor_names
-    _code_display_map = _ctx.code_display_map
-
-    # 模板派生量（原在 _render_template 内计算，随上下文对象上移到调用方装配，
-    # 让「取数 → 派生 → 渲染」三段在同一个函数里可见）
-    from src.python.config.features import enabled_experimental_features, is_feature_enabled
-    from src.python.report.chart_data_builder import build_evolution_chart_data
-
-    enabled_experiments = [name for _flag, name in enabled_experimental_features()]
-    # 报告追问区块开关态：经 render context 传递（不写模板 globals）；关态模板分支不渲染，报告字节不变
-    report_qa_enabled = is_feature_enabled("report_qa")
-    # 估值分位 + 市场温度：开关关闭时为 None（模板保持既有输出）
-    valuation_enabled = valuation_data is not None
-    # 真实分位口径是否生效（未生效时页脚保持引入前的原始免责语）
-    valuation_real_basis = (valuation_data or {}).get("basis_mode") == "real_ttm"
-    penetration_display = _attach_valuation_to_penetration(penetration, valuation_data)
-    market_temperature = _build_temperature_display(market_temperature_data)
-    purchase_status_display = _build_purchase_status_display(purchase_status_data, accounts)
-    # 目录分组导航：按「基础信息/基金深度分析/行动建议/历史/LLM/附录」六组折叠（_sv_fn 闭包过滤不可见章节）
-    section_groups = _build_section_nav_groups(order, _sv_fn, section_numbers)
-
-    html = _render_template(
-        TemplateContext(
-        flow_display=_build_flow_display(fund_flow_data),
-        purchase_status_display=purchase_status_display,
-        section_groups=section_groups,
-        anon_code_map=_code_display_map,
-        llm_supported_sections=_LLM_SUPPORTED_SECTIONS,
-        valuation_enabled=valuation_enabled,
-        valuation_real_basis=valuation_real_basis,
-        market_temperature=market_temperature,
-        now=now_str,
-        today=today_str,
+    context, _code_display_map = _build_template_context(
+        holdings,
+        bindings,
+        options,
+        now_str=now_str,
+        today_str=today_str,
         trading_day=trading_day,
-        total_mv=total_mv,
-        total_cost=total_cost,
-        total_profit=total_profit,
-        total_profit_rate=total_profit_rate,
-        total_today_profit=total_today_profit,
-        today_profit_rate=today_profit_rate,
-        categories=cat_counts,
-        update_status=update_status_dict,
-        a_indices=a_indices_list,
-        us_indices=us_indices_list,
-        accounts=accounts,
-        account_totals=account_totals,
-        cat_data=cat_data,
-        penetration=penetration_display,
-        perf_data=perf_data,
-        candidate_data=candidate_data,
-        news_data=news_data,
-        news_llm_meta=_news_llm_meta,
-        has_llm_analysis=has_llm_analysis,
-        manager_analysis=manager_analysis,
-        overlap_matrix=overlap_matrix,
-        concentration_analysis=concentration_analysis,
-        style_analysis=style_analysis,
-        llm_enabled=llm_enabled_flag,
-        global_macro=global_macro_content,
-        expert_review=expert_review_content,
-        health_check=health_check_content,
-        penetration_deep=penetration_deep_content,
-        self_review_block=_self_review_block(),
-        llm_session_usage=_llm_session_usage,
-        module_labels=get_llm_module_names(),
-        module_disabled=module_disabled,
-        llm_module_info=llm_module_info,
-        llm_endpoint=llm_endpoint,
-        cache_stats=get_cache_hit_rate(),
-        app_name=APP_NAME,
-        app_version=APP_VERSION,
-        debate_mode_label=_debate_mode_label,
-        debate_info=debate_info,
-        debate_mode_combination=_debate_mode_combination,
-        enabled_experiments=enabled_experiments,
-        report_qa_enabled=report_qa_enabled,
-        section_order=order,
-        section_numbers=section_numbers,
-        section_visible_dict=section_visible_dict,
-        section_visible=_sv_fn,
-        data_status_summary=data_status_summary,
-        degradation_line=_ctx.degradation_line,
-        data_status_penetration=data_status_penetration,
-        data_status_perf=data_status_perf,
-        data_status_category=data_status_category,
-        history_data=history_data,
-        data_status_history=data_status_history,
-        data_source_matrix=data_source_matrix,
-        data_source_catalog=data_source_catalog,
-        report_year=datetime.now().year,
-        data_unavailable=bool(total_mv == 0 and total_cost > 0),
-        chart_datasets=chart_datasets,
-        style_factor_data=style_factor_data,
-        factor_catalog_data=factor_catalog_data,
-        factor_names=_factor_names or {},
-        industry_beta=(style_factor_data or {}).get("industry_beta"),
-        position_relationship_data=position_relationship_data,
-        evolution_data=evolution_data,
-        evolution_chart_data=build_evolution_chart_data(evolution_data, code_map=_code_display_map),
-        drawdown_min_span=drawdown_min_span,
-        position_status=position_status,
-        data_freshness=data_freshness,
-        action_data=action_data,
-        decision_basis_data=_with_decision_book(decision_basis_data),
-        prosperity_framework_data=prosperity_framework_data,
-        market_sentiment_data=market_sentiment_data,
-        crisis_annotation_data=crisis_annotation_data,
-        risk_adjusted_excess_data=risk_adjusted_excess_data,
-        tail_risk_data=tail_risk_data,
-        snapshot_diff_data=snapshot_diff_data,
-        decision_review_data=decision_review_data,
-        holding_change_view=holding_change_view,
-        event_impact_view=event_impact_view,
-        schedule_replay_view=schedule_replay_view,
-        financial_report_digest_data=financial_report_digest_data,
-        financial_indicator_data=financial_indicator_data,
-        summary_highlights_data=summary_highlights_data,
-        )
+        mark=_mark,
     )
+    html = _render_template(context)
     _mark("模板渲染")
 
     # 后处理三段（资产内嵌 → 匿名化 → 落盘）按表执行：阶段名是 perf 细分口径的单一来源
     _MASK_CTX["holdings"] = holdings
     _MASK_CTX["code_map"] = _code_display_map
-    _post_state: dict = {"html": html, "path": None, "save_args": (output_dir, total_mv, total_profit, prog)}
+    _post_state: dict = {
+        "html": html,
+        "path": None,
+        "save_args": (output_dir, bindings.total_mv, bindings.total_profit, prog),
+    }
     _run_post_stages(_post_state, _mark)
     # 落盘阶段必定写入路径（异常在上一步抛出）；`or ""` 只为收窄类型
     return str(_post_state["path"] or "")

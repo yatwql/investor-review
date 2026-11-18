@@ -11,7 +11,7 @@ import logging
 import time
 
 from datetime import datetime
-from typing import Any
+from typing import Any, NamedTuple
 
 from src.python.report.progress import ProgressReporter
 
@@ -73,44 +73,25 @@ def _warm_render_contracts(holdings: list, details: list, reporter, config: dict
         logger.debug("[prefetch] 基金风格预取失败，渲染阶段重取", exc_info=True)
 
 
-def prepare_report_data(
-    holdings: list,
-    reporter: ProgressReporter,
-    config: dict,
-    transactions: list | None = None,
-    recorder=None,
-) -> dict:
-    """获取行情、指数、穿透数据，整理持仓明细字典列表。
+class _MarketSummary(NamedTuple):
+    """行情与明细阶段的产物（一次算定，后续各阶段只读）。"""
 
-    使用内部 ThreadPoolExecutor。
-    注意：config 参数传入后必须只读使用，不得 mutate。调用方持有的 dict 引用
-    指向相同的配置对象，写入会导致跨模块状态污染。
+    details: list
+    total_mv: float
+    total_cost: float
+    total_profit: float
+    total_today_profit: float
+    categories: dict
 
-    Args:
-        transactions: 交易流水记录（可选）。提供时为持仓明细附加 holding_days
-            （首次买入至今的交易日数），供再平衡误报防护的「新买入品种观察期」
-            判定；缺省不附加该字段，防护按「未知」跳过观察期过滤。
-        recorder: 可选子阶段记录器（``PerfCollector.recorder("数据准备")``）；
-            None 时零行为变化。子项自身耗时，互不重叠。
+
+def _prepare_market_details(holdings: list, today_str: str, reporter: ProgressReporter, recorder: Any) -> _MarketSummary:
+    """市值/成本/盈亏/分类汇总（数据准备的第 1 段：逐品种行情与明细）。
+
+    注意：`_generate_details` 内部走行情链，冷缓存时这一段就是数据准备的大头；
+    单独成函数是为了让「行情与明细」这一段的输入/产出边界明确（产物即 _MarketSummary），
+    后续各段只消费不修改。
     """
-    from concurrent.futures import ThreadPoolExecutor
-
-    from src.python.core.data_freshness import build_freshness_summary
-    from src.python.core.holding_status import build_coverage_summary
-    from src.python.analysis.action_advisor import build_action_data
-    from src.python.report.decision_basis import build_decision_basis_data
-    from src.python.fetcher.index import fetch_indices, fetch_us_indices
-    from src.python.report.market_value import (
-        _generate_details,
-        classify_holdings,
-        get_last_trading_day,
-        get_prev_trading_day,
-        sum_today_profit,
-    )
-    from src.python.report.penetration import compute_penetration_top10
-
-    today_str = datetime.now().strftime("%Y-%m-%d")
-
+    from src.python.report.market_value import _generate_details, classify_holdings, sum_today_profit
     _t0 = time.perf_counter()
     reporter.info(MSG_FETCHING_MARKET)
     details = _generate_details(holdings, today_str)
@@ -120,6 +101,15 @@ def prepare_report_data(
     total_today_profit = sum_today_profit(details)
     categories = classify_holdings(holdings)
     _record_span(recorder, "行情与明细", _t0)
+
+    return _MarketSummary(details, total_mv, total_cost, total_profit, total_today_profit, categories)
+
+
+def _fetch_index_quotes(reporter: ProgressReporter, recorder: Any) -> tuple[dict, dict]:
+    """A 股 / 美股指数行情（两路并发；任一路失败由抓取层自行降级为空表）。"""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from src.python.fetcher.index import fetch_indices, fetch_us_indices
 
     _t0 = time.perf_counter()
     reporter.info("正在获取指数行情...")
@@ -133,12 +123,34 @@ def prepare_report_data(
         pool.shutdown(wait=False)
     _record_span(recorder, "指数获取", _t0)
 
+    return a_indices, us_indices
+
+
+def _compute_penetration(holdings: list, details: list, reporter: ProgressReporter, recorder: Any) -> list:
+    """资产穿透 TOP10：返回 `top10` 列表（无数据时为空表）。"""
+    from src.python.report.penetration import compute_penetration_top10
+
     _t0 = time.perf_counter()
     reporter.info("正在计算资产穿透 TOP10...")
     pen_result = compute_penetration_top10(holdings, details)
     penetrated_assets = (pen_result or {}).get("top10", [])
     _record_span(recorder, "穿透", _t0)
 
+    return penetrated_assets
+
+
+def _compute_style_contracts(
+    holdings: list,
+    details: list,
+    config: dict,
+    reporter: ProgressReporter,
+    recorder: Any,
+) -> tuple[dict | None, dict | None]:
+    """风格因子 / 行业 Beta / 持仓关系矩阵三契约（基金深度分析关闭时均为 None）。
+
+    三段各自记 span：合并成一个「风格与因子」时，p95 18s / max 208s 的抖动无法判断是
+    三因子族取数、行业 Beta 还是相关性矩阵——分开后才好对症（原始计时口径不变）。
+    """
     _t0 = time.perf_counter()
     # 风格与因子分析：基金深度分析关闭时为 None（章节隐藏），
     # 开启时计算 dict（数据不足/故障时 available=False，不阻塞主报告）。
@@ -163,6 +175,15 @@ def prepare_report_data(
     correlation_data = compute_correlation_data(holdings, config, reporter)
     _record_span(recorder, "相关性矩阵", _t0)
 
+    return factor_exposure, correlation_data
+
+
+def _compute_holdings_status(holdings: list, details: list, recorder: Any) -> tuple[dict, dict]:
+    """品种覆盖诊断 position_status + 可信度摘要 data_freshness。"""
+    from src.python.core.data_freshness import build_freshness_summary
+    from src.python.core.holding_status import build_coverage_summary
+    from src.python.report.market_value import get_last_trading_day, get_prev_trading_day
+
     _t0 = time.perf_counter()
     # 品种覆盖诊断：逐品种标注数据状态，position_status数据契约
     coverage_status = build_coverage_summary(holdings, details)
@@ -175,6 +196,16 @@ def prepare_report_data(
     )
     _record_span(recorder, "覆盖与新鲜度", _t0)
 
+    return coverage_status, freshness_summary
+
+
+def _compute_valuation_contracts(
+    details: list,
+    config: dict,
+    reporter: ProgressReporter,
+    recorder: Any,
+) -> tuple[dict | None, dict | None]:
+    """估值分位 valuation_data + 市场温度 market_temperature_data（开关关闭时均为 None）。"""
     _t0 = time.perf_counter()
     # 估值分位（数据契约 valuation_data）：功能开关 `valuation_percentile`
     # 开启时计算（当前 PE/PB + 价格分位代理）；关闭返回 None（「资产穿透TOP10」列隐藏）
@@ -184,6 +215,22 @@ def prepare_report_data(
     market_temperature_data = compute_market_temperature_data(config, reporter)
     _record_span(recorder, "估值与温度", _t0)
 
+    return valuation_data, market_temperature_data
+
+
+def _compute_financial_contracts(
+    holdings: list,
+    details: list,
+    penetrated_assets: list,
+    config: dict,
+    reporter: ProgressReporter,
+    recorder: Any,
+) -> tuple[dict | None, dict | None]:
+    """财报摘要 financial_report_digest_data + 财务指标 financial_indicator_data。
+
+    两契约各计一段：「财报摘要」是逐篇候选的网络探测（索引/章节清单/正文），
+    「财务指标」是单次 akshare 多期取数——合并成一段时全缓存运行仍报 5~8s 无法归因。
+    """
     _t0 = time.perf_counter()
     # 持仓个股财报摘要（数据契约 financial_report_digest_data）：
     # 功能开关 `financial_report_digest` 开启时计算（A 股标的取最新年报章节摘要）；
@@ -202,6 +249,16 @@ def prepare_report_data(
     )
     _record_span(recorder, "财务指标", _t0)
 
+    return financial_report_digest_data, financial_indicator_data
+
+
+def _compute_purchase_and_cost(
+    holdings: list,
+    details: list,
+    config: dict,
+    recorder: Any,
+) -> tuple[dict | None, dict | None]:
+    """申购限购状态 purchase_status_data（含受限标的预格式化索引）+ 成本区间位置 cost_position_data。"""
     _t0 = time.perf_counter()
     # 申购限购状态（数据契约 purchase_status_data）：功能开关 `fund_purchase_limit`
     # 开启时取全量表（每日 1 次，会话内复用）；关闭时返回 None（申购状态列隐藏）；
@@ -226,6 +283,57 @@ def prepare_report_data(
     # 全链失败返回 available=False 的降级契约（静默隐列，不阻断主链路）
     cost_position_data = compute_cost_position_data(holdings, config)
     _record_span(recorder, "申购与成本位置", _t0)
+
+    return purchase_status_data, cost_position_data
+
+
+def prepare_report_data(
+    holdings: list,
+    reporter: ProgressReporter,
+    config: dict,
+    transactions: list | None = None,
+    recorder=None,
+) -> dict:
+    """获取行情、指数、穿透数据，整理持仓明细字典列表。
+
+    使用内部 ThreadPoolExecutor。
+    注意：config 参数传入后必须只读使用，不得 mutate。调用方持有的 dict 引用
+    指向相同的配置对象，写入会导致跨模块状态污染。
+
+    Args:
+        transactions: 交易流水记录（可选）。提供时为持仓明细附加 holding_days
+            （首次买入至今的交易日数），供再平衡误报防护的「新买入品种观察期」
+            判定；缺省不附加该字段，防护按「未知」跳过观察期过滤。
+        recorder: 可选子阶段记录器（``PerfCollector.recorder("数据准备")``）；
+            None 时零行为变化。子项自身耗时，互不重叠。
+    """
+
+    from src.python.analysis.action_advisor import build_action_data
+    from src.python.report.decision_basis import build_decision_basis_data
+
+    today_str = datetime.now().strftime("%Y-%m-%d")
+
+    market = _prepare_market_details(holdings, today_str, reporter, recorder)
+    details = market.details
+    total_mv, total_cost, total_profit = market.total_mv, market.total_cost, market.total_profit
+    total_today_profit, categories = market.total_today_profit, market.categories
+
+    a_indices, us_indices = _fetch_index_quotes(reporter, recorder)
+
+    penetrated_assets = _compute_penetration(holdings, details, reporter, recorder)
+
+    factor_exposure, correlation_data = _compute_style_contracts(holdings, details, config, reporter, recorder)
+
+    coverage_status, freshness_summary = _compute_holdings_status(holdings, details, recorder)
+
+    valuation_data, market_temperature_data = _compute_valuation_contracts(details, config, reporter, recorder)
+
+    financial_report_digest_data, financial_indicator_data = _compute_financial_contracts(
+        holdings, details, penetrated_assets, config, reporter, recorder
+    )
+
+    purchase_status_data, cost_position_data = _compute_purchase_and_cost(holdings, details, config, recorder)
+
 
     _t0 = time.perf_counter()
     # 行动建议单一数据源：再平衡信号等纯算法产出，action_data数据契约

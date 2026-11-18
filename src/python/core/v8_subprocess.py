@@ -44,7 +44,7 @@ _ERROR_MARKER = "<<<V8_ERROR>>>"
 OFFLINE_ENV = "INVEST_SUBPROCESS_NETWORK_OFFLINE"
 
 #: 子进程脚本：白名单接口 → DataFrame → records JSON。异常也转 JSON 回传，便于父进程归类。
-_CHILD_SCRIPT = f'''
+_CHILD_SCRIPT = f"""
 import json
 import sys
 
@@ -61,7 +61,7 @@ try:
 except Exception as exc:
     print({_ERROR_MARKER!r} + json.dumps({{"type": type(exc).__name__, "message": str(exc)}}, ensure_ascii=False))
     raise SystemExit(1)
-'''
+"""
 
 
 class V8SourceError(RuntimeError):

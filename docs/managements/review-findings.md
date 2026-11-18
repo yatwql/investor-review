@@ -18,7 +18,7 @@
 
 | # | 问题 | 修复方向 |
 | --- | --- | --- |
-| rf-1174 | 近 213 小时变更审计（164 提交）：新增/大改的超长函数已到「改一处要通读全文」的程度——`report/html_writer.py::write_html_report` 349 行、`llm/generators.py::generate_debate_procon` 311 行、`report/_generation_full.py::_generate_report_full` 303 行、`report/action_sheet.py::_write_decision_basis_block` 275 行、`report/_orchestrator_data.py::prepare_report_data` 270 行。它们各自内部已是「取数 → 归一 → 渲染」多段串行，改动风险集中在无法单独测试的中段 | 按阶段切分为可单测的私有步骤（取数/归一/渲染各一段），入口只留编排；先拆 `write_html_report`（有模板契约测试可兜底）与 `prepare_report_data`（已有 13 个子 span 可作为切分边界） |
+| rf-1174 | 近 213 小时变更审计（164 提交）：新增/大改的超长函数已到「改一处要通读全文」的程度。**已完成 2 个**：`write_html_report` 349→185（取数/派生/映射拆出 `_prepare_page_state` + `_build_template_context`）、`prepare_report_data` 270→176（8 段数据准备各自成函数，span 名与调用序不变）。**仍待拆 3 个**：`llm/generators.py::generate_debate_procon` 311 行、`report/_generation_full.py::_generate_report_full` 303 行、`report/action_sheet.py::_write_decision_basis_block` 275 行 | 同前 2 个的做法：按阶段切分为可单测的私有步骤，入口只留编排——`_generate_report_full` 按「数据准备/新闻 LLM/历史与风险/渲染/落盘」切；`generate_debate_procon` 按「提示词三段 → 逐轮调用 → 截面问答 → 汇总」切；`_write_decision_basis_block` 按「依据表 / 决策书 / 复盘」三块切 |
 
 ### P3 — 持续监控：兼容残留
 
