@@ -71,7 +71,6 @@ def _calm_retry(system_prompt: str, user_prompt: str, name: str, do_retry) -> tu
     return None, None
 
 
-
 def _resolve_entry_credentials(
     entry: dict,
     llm_config: dict | None,
@@ -437,7 +436,6 @@ def call_llm(
             "final_status": final_status,
         }
     return (None, None, None)
-
 
 
 # ── Provider 调用实现（从子模块导入） ─────────────────

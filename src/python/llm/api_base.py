@@ -557,7 +557,6 @@ def _resolve_thinking_budget(llm_config: dict, config_field: str, max_tokens: in
     return budget
 
 
-
 def configure_extended_thinking(
     payload: dict[str, Any],
     llm_config: dict | None,
@@ -607,5 +606,3 @@ def configure_extended_thinking(
         # 收窄成声明处的 str；行为与分两步写等价。
         payload["thinking"] = {"type": "enabled", "budget_tokens": budget}
         logger.info("Extended Thinking 已开启 [%s]: budget=%d", module_suffix, budget)
-
-

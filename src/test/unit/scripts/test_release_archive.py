@@ -160,12 +160,40 @@ class TestLedgerArchive:
         assert "> 备注：本节按批次处理。" in new_main
         assert "rf-901" not in new_main
 
-    def test_archive_heading_uses_release_version(self, rel):
-        """批次标题/说明行随既有归档格式（`## 已修复（X.Y.Z）` + changelog 指路）。
+    def test_fragmented_table_blocks_all_migrated(self, rel):
+        """表格被空行切成多块时一次搬全（回归：只搬首块→余行滞留且门禁误判搬空）。"""
+        fragmented = _SAMPLE_RF.replace(
+            "| **rf-901** | 问题甲 | 处理甲 |\n| **rf-902** | 问题乙 | 处理乙 |",
+            "| **rf-901** | 问题甲 | 处理甲 |\n\n> 批中备注（人工空行把表切成了两块）\n\n| **rf-902** | 问题乙 | 处理乙 |",
+        )
+        section = fragmented.split("### 开发期已修复（0.12.6-dev）")[1]
+        assert rel.count_rf_rows(section) == 2  # 门禁口径按节内全量清点，不只首块
+        main, arch, moved = rel.apply_rf_archive(fragmented, _SAMPLE_RF_ARCHIVE, "0.12.6", "2026-10-08")
+        assert moved == 2
+        assert "rf-901" not in main and "rf-902" not in main
+        assert arch.count("## 已修复（0.12.6）") == 1  # 不得长出多个同名批次节
+        assert "| **rf-901** |" in arch and "| **rf-902** |" in arch
+        assert "> 批中备注" in main  # 表外散文留主台账
+        assert rel.rf_archive_status(main, "0.12.6")[0] == "archived"
 
-        版号用**发布版**而非开发周期号：归档描述的是已发布的那个版本，
-        写 `-dev` 会让读者把已发布批次当成开发中状态。
-        """
+    def test_existing_batch_section_merged_not_duplicated(self, rel):
+        """归档已有本版批次节时并入而非追新节（回归：重复运行长出两个同名节）。"""
+        existing = (
+            _SAMPLE_RF_ARCHIVE
+            + "\n## 已修复（0.12.6）\n\n> 完整复盘见 `changelog.md` 0.12.6 段；此处为台账原表搬运。\n"
+            + "\n| **rf-902** | 问题乙 | 处理乙 |\n"
+        )
+        only_first = _SAMPLE_RF.replace("| **rf-902** | 问题乙 | 处理乙 |\n", "")
+        main, arch, moved = rel.apply_rf_archive(only_first, existing, "0.12.6", "2026-10-08")
+        assert moved == 1
+        assert arch.count("## 已修复（0.12.6）") == 1, "同一版只允许一个批次节"
+        rows = [line for line in arch.splitlines() if line.startswith("| **rf-")]
+        assert rows == ["| **rf-901** | 问题甲 | 处理甲 |", "| **rf-902** | 问题乙 | 处理乙 |"]  # 并入后编号升序
+        again_main, again_arch, moved_again = rel.apply_rf_archive(main, arch, "0.12.6", "2026-10-08")
+        assert (moved_again, again_main, again_arch) == (0, main, arch)  # 并入路径同样幂等
+
+    def test_archive_heading_uses_release_version(self, rel):
+        """批次标题/说明行随既有归档格式（`## 已修复（X.Y.Z）` + changelog 指路）。"""
         _main, arch, _n = rel.apply_rf_archive(_SAMPLE_RF, _SAMPLE_RF_ARCHIVE, "0.12.6", "2026-10-08")
         assert "## 已修复（0.12.6）" in arch
         assert "-dev" not in arch.split("## 已修复（0.12.6）")[1]

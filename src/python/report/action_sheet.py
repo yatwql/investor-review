@@ -708,6 +708,7 @@ def _write_prosperity_block(ws, row: int, data: dict[str, Any], ncols: int) -> i
         row = write_data_row(ws, row, [f"* {text}", "", "", "", ""])
     return row
 
+
 def _write_decision_basis_block(
     ws: Worksheet,
     row: int,

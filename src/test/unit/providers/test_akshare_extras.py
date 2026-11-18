@@ -35,7 +35,6 @@ class _FakeFlowDF:
         return list(enumerate(self._rows))
 
 
-
 def _patch_ths_records(rows: list[dict] | None = None, *, raises: bool = False):
     """把同花顺通道的 V8 子进程取数桩成固定 records（或源不可用）。
 
@@ -314,6 +313,7 @@ class TestSectorFlowChannelFallback(unittest.TestCase):
 
     def test_primary_negative_cache_does_not_block_secondary(self) -> None:
         """主通道在负缓存窗口内 !== 全部通道都不可用。"""
+
         def _fake_get(key, _ttl):
             return {"em_push2": "connection"} if key == ae._SECTOR_FLOW_NEG_KEY else None
 

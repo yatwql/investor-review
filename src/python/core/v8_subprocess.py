@@ -31,9 +31,12 @@ import subprocess
 import sys
 from typing import Callable
 
+from src.python.core.akshare_compat import candidate_names
+
 logger = logging.getLogger("invest")
 
 #: 允许在子进程中调用的 akshare 接口（白名单：只有这些名字会被拼进子进程脚本）
+#: 与 `core/akshare_compat.py` 对齐：白名单收**逻辑名**，子进程按候选链取第一个存在的接口
 _ALLOWED_FUNCTIONS: frozenset[str] = frozenset({"tool_trade_date_hist_sina", "stock_fund_flow_industry"})
 
 #: 子进程输出标记（结果 JSON 紧随其后一行）
@@ -55,7 +58,11 @@ if __import__("os").environ.get({OFFLINE_ENV!r}, "") == "1":
 
 try:
     import akshare as ak
-    df = getattr(ak, payload["func"])(**payload.get("kwargs", {{}}))
+    _names = payload.get("names") or [payload["func"]]
+    _fn = next((getattr(ak, n) for n in _names if hasattr(ak, n)), None)
+    if _fn is None:
+        raise AttributeError("akshare 无该接口（已试：" + ", ".join(_names) + "）")
+    df = _fn(**payload.get("kwargs", {{}}))
     records = df.to_dict("records") if hasattr(df, "to_dict") else list(df or [])
     print({_RESULT_MARKER!r} + json.dumps(records, ensure_ascii=False, default=str))
 except Exception as exc:
@@ -84,7 +91,7 @@ def _validated_payload(func: str, kwargs: dict | None) -> dict:
         json.dumps(params, ensure_ascii=False)
     except TypeError as exc:
         raise ValueError(f"参数不可 JSON 序列化（子进程只收纯数据）: {exc}") from exc
-    return {"func": func, "kwargs": params}
+    return {"func": func, "names": list(candidate_names(func)), "kwargs": params}
 
 
 def _parse_child_output(proc: subprocess.CompletedProcess) -> list[dict]:

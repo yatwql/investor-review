@@ -32,6 +32,7 @@ GROUP_CREDENTIAL = "数据源凭据"
 GROUP_NETWORK = "数据源"
 GROUP_LOG_CACHE = "日志与缓存"
 
+
 def _item(group: str, label: str, ok: bool, message: str, *, hint: str = "") -> dict[str, Any]:
     """构造一条自检结果。
 

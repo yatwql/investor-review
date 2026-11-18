@@ -27,6 +27,7 @@ from src.python.core.data_registry import (
     get_exact_ttl_map,
 )
 from src.python.core.num_utils import safe_num
+from src.python.core.akshare_compat import resolve
 from src.python.providers.utils import run_with_timeout
 
 logger = logging.getLogger("invest")
@@ -138,7 +139,9 @@ def _fetch_sector_flow_em_push2() -> list[dict[str, Any]]:
     _ak = ak
     if _ak is None:
         raise _SectorFlowUnavailable("connection", "em_push2")
-    df = run_with_timeout(lambda: _ak.stock_sector_fund_flow_rank(indicator="今日", sector_type="行业资金流"))
+    df = run_with_timeout(
+        lambda: resolve(_ak, "stock_sector_fund_flow_rank")(indicator="今日", sector_type="行业资金流")
+    )
     if df is None:
         raise _SectorFlowUnavailable("connection", "em_push2")
     if df.empty:
@@ -658,7 +661,9 @@ def get_dividend_data(codes: list[str]) -> dict[str, dict]:
     global _DIVIDEND_FAILURE
 
     # ── 内存缓存 ──
-    _codes_hash = hashlib.md5(json.dumps(sorted(codes), ensure_ascii=False).encode(), usedforsecurity=False).hexdigest()[:12]
+    _codes_hash = hashlib.md5(
+        json.dumps(sorted(codes), ensure_ascii=False).encode(), usedforsecurity=False
+    ).hexdigest()[:12]
     _memo_key_str = _memo_key("dividend", _codes_hash)
     _memo_val = _memo_get(_memo_key_str)
     if _memo_val is not None:
