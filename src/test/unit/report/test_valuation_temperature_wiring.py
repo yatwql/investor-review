@@ -383,6 +383,39 @@ class TestComputeValuationData(unittest.TestCase):
         assert result["status"] == "ok"
         assert result["by_code"]["600001"]["pe"] == 12.3
 
+    def test_single_code_failure_is_logged_and_others_survive(self):
+        """单只估值取数异常：该标的按无估值剔除，但必须留一行可归因日志（另一只不受影响）。
+
+        回归：并发 futures 的 `except Exception: _val = None` 曾静默吞掉单只失败，
+        报告里只是少一行，排障时无法区分「该标的本来无估值」与「取数异常」。
+        """
+        import logging
+
+        from src.python.config.features import set_feature_enabled
+        from src.python.report.orchestrator import compute_valuation_data
+
+        set_feature_enabled("valuation_percentile", True)
+        good, bad = MagicMock(), MagicMock()
+        good.code, good.name = "600001", "测试股票甲"
+        bad.code, bad.name = "600002", "测试股票乙"
+        fetched = {"pe": 12.3, "pb": 1.5, "price_percentile": 45.0, "tier": "合理", "available": True}
+
+        def _fetch(code, _name, *a, **k):
+            if code == "600002":
+                raise RuntimeError("估值服务超时")
+            return fetched
+
+        with (
+            patch("src.python.report._orchestrator_data._fetch_valuation_for_code", side_effect=_fetch),
+            self.assertLogs("invest", level=logging.WARNING) as logs,
+        ):
+            result = compute_valuation_data([good, bad], {}, MagicMock())
+
+        assert set(result["by_code"]) == {"600001"}, "异常标的被剔除，其余照常计入"
+        joined = "\n".join(logs.output)
+        assert "600002" in joined, "日志必须点名异常标的代码"
+        assert "估值取数异常" in joined
+
     def test_switch_on_source_failed(self):
         """PE/PB 与 K 线均不可得 → available=False 占位（§1.4.5）。"""
         from src.python.report.orchestrator import compute_valuation_data
