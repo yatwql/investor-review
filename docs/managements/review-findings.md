@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.18.5-dev
-> **编号源**：`rf-next = 1167`（新增问题提出后更新为 +1；已用最大 rf-1166，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1168`（新增问题提出后更新为 +1；已用最大 rf-1167，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -61,6 +61,7 @@
 ### 开发期已修复（0.18.5-dev）
 
 > 本表为本开发周期已修条目的**摘要行**（详情见 `changelog.md` 对应段）；发布时由 `release.py prepare` 的 archive 步原表搬入版本归档并在此留占位。
+| **rf-1167** | `prepare` 的 plan 归档只认「完成标记」标题，而本周期 9 个已完成节写成 `` `plan-N` 标题 `` 无标记 → **静默漏档**：既不进 `archived_plan.*`、也不报错，靠发布时人工复核才捞出（否则这批完成项永久留在主台账） | 归档前兜底：新增 `unmarked_completed_plan_sections()`，`apply_plan_archive` 发现缺标记即抛 `ReleaseError` 并点名 `plan-N` + 给出可照抄写法；配 3 条用例（只报未标记 / 报错点名 / 全标记正常归档）；`developer-guide` 发布流程首段写明该硬约束 |
 
 ### 归档档案
 - [`archived_review-findings.0.18.x.md`](../archive/v0.18.x/archived_review-findings.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-18）

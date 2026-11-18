@@ -424,6 +424,34 @@ def recompute_current_iteration(text: str) -> str:
     return text
 
 
+#: 「已完成（待发布归档）」小节标题（其下的 `#### plan-N` 节为待归档任务）
+_PLAN_DONE_SECTION_RE = re.compile(r"^###\s*已完成（待发布归档）\s*$", re.M)
+#: 已完成区里的任务节头（`#### `plan-N` 标题`）
+_PLAN_DONE_ITEM_RE = re.compile(r"^####\s*`?(plan-\d+)`?[^\n]*$", re.M)
+
+
+def unmarked_completed_plan_sections(text: str) -> list[str]:
+    """「已完成（待发布归档）」区里**缺完成标记**的任务编号（plan-N 列表）。
+
+    归档只认标题带完成标记的节（✅/❌/已完成/已落地/已实现/已交付，见
+    ``_PLAN_CLOSED_MARK``）；写完就忘了标记的节会被静默留在主台账——发布后既不进
+    归档、也没人发现（实测一整批 9 项都这样漏掉，靠人工复核才捞出）。故归档前用本函数
+    兜底：发现缺标记即报错，把「静默漏档」变成发布期硬失败。
+    """
+    match = _PLAN_DONE_SECTION_RE.search(text)
+    if not match:
+        return []
+    rest = text[match.end() :]
+    end = re.search(r"^#{1,3} ", rest, re.M)
+    section = rest[: end.start()] if end else rest
+    marked = {m.group(0) for m in _PLAN_DONE_HEAD_RE.finditer(section)}
+    return [
+        m.group(1)
+        for m in _PLAN_DONE_ITEM_RE.finditer(section)
+        if not any(m.group(1) in heading for heading in marked)
+    ]
+
+
 def apply_plan_archive(main_text: str, archive_text: str, version: str, date: str) -> tuple[str, str, int]:
     """把 plan.md 已完成任务节整节搬入计划归档（统一降为扁平 `## plan-N … ✅`）。
 
@@ -431,6 +459,15 @@ def apply_plan_archive(main_text: str, archive_text: str, version: str, date: st
     归档只按版本批次堆叠，不需要优先级分层；入档时把节头系数归一，
     保持同一归档文件内标题层级一致。
     """
+    unmarked = unmarked_completed_plan_sections(main_text)
+    if unmarked:
+        listed = "、".join(f"`{pid}`" for pid in unmarked)
+        raise ReleaseError(
+            "plan.md「已完成（待发布归档）」区有任务节缺完成标记：" + listed + "\n"
+            "      期望：节头写成「#### `plan-N` ✅ 标题」（✅/❌/已完成/已落地/已实现/已交付 之一），"
+            "否则归档步认不出来、会静默留在主台账\n"
+            "      下一步：给上述节头补标记后重跑 `release.py archive`"
+        )
     sections = plan_completed_sections(main_text)
     if not sections:
         return main_text, archive_text, 0
