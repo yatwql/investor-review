@@ -14,6 +14,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import inspect
 import unittest
 from unittest import mock
@@ -127,13 +129,16 @@ class TestConditionalScenarioInjection(unittest.TestCase):
 
         scenarios = [{"name": "震荡", "change": 0.05, "desc": "指数震荡±5%"}]
         mock_get.return_value = {"debate": {"conditional": {"scenarios": scenarios}}}
-        base_kwargs = dict(
-            total_mv=1_000_000,
-            total_cost=900_000,
-            total_profit=100_000,
-            total_today_profit=5_000,
+        # 逐项标注类型：**base_kwargs 会展开成关键字实参，dict 字面量混入
+        # `categories` 后 pyright 会把整张表推成 `int | dict[str, int]`，
+        # 展开时每个键都报「不能赋给 float」——标注后按字段各自推断。
+        base_kwargs: dict[str, Any] = dict(
+            total_mv=1_000_000.0,
+            total_cost=900_000.0,
+            total_profit=100_000.0,
+            total_today_profit=5_000.0,
             holdings_count=2,
-            categories={"股票": 1_000_000},
+            categories={"股票": 1_000_000.0},
         )
 
         with_conditional = _build_expert_review_prompt(**base_kwargs, enable_conditional=True)
@@ -534,8 +539,14 @@ class TestDebateCacheKeyPrefixSingleSource:
         from src.python.llm import generators
         from src.python.llm.skeleton import CACHE_PREFIX_LLM
 
+        import re
+
         src = inspect.getsource(generators)
-        # 三处辩论缓存键均以共享常量拼接；无残留的字面量前缀
-        assert src.count("CACHE_PREFIX_LLM}debate_") == 3
-        assert 'f"llm_debate_' not in src
+        # 结构性断言：凡「辩论缓存键」的字面量片段都必须紧跟共享常量，且不得有硬编码前缀。
+        # 不数条数——白脸/黑脸已收敛到同一个构造函数（`_run_debate_side`），键的处数会随
+        # 实现演进变化，写死条数只会把良性重构判成回归。
+        debate_key_sites = re.findall(r"\{[^}]*\}debate_[a-z_]*\{", src)
+        assert debate_key_sites, "未找到辩论缓存键构造点"
+        assert src.count("{CACHE_PREFIX_LLM}debate_") == len(debate_key_sites), "存在未以共享常量拼接的辩论缓存键"
+        assert 'f"llm_debate_' not in src and '"llm_debate_' not in src
         assert CACHE_PREFIX_LLM == "llm_"

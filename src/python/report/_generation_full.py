@@ -19,6 +19,7 @@ from src.python.report._experimental_seams import (
 )
 
 if TYPE_CHECKING:  # ReportResult 定义在编排门面，运行期从生成入口传入（避免循环导入）
+    from src.python.core.perf import PerfCollector
     from src.python.report.orchestrator import ReportResult
 from src.python.core.decision_header import strip_structured_header
 from src.python.report.progress import ProgressReporter
@@ -312,78 +313,19 @@ def _emit_full_reports(ctx: _FullEmitContext) -> Any:
     return result
 
 
-def _generate_report_full(
+def _prepare_full_data_stage(
     holdings: list,
     config: dict,
     reporter: ProgressReporter,
-    fetch_history: bool = False,
-    force_llm: bool = False,
-    force_llm_modules: list[str] | None = None,
-    output_dir: str | None = None,
-    transactions: list | None = None,
-    dividends: list | None = None,
-    *,
-    snapshot_namespace: str | None = None,
-) -> "ReportResult":
-    """full 报告路径：生成 HTML + Excel + LLM 分析章节。
+    transactions: list | None,
+    perf: PerfCollector,
+) -> dict:
+    """阶段 1：完整数据准备（行情/指数/穿透/分类 + 各数据契约）。
 
-    流程：prepare_report_data() → capture_snapshot() → _prepare_full_risk_metrics()
-          → get_sector_fund_flow() → _fetch_llm_and_news()
-          → write_html_report() → generate_excel_report()
-
-    Args:
-        snapshot_namespace: 快照隔离域（None=共享主目录；如 "web"=web 试算域）。
-            快照对比/组合演进/快照差异均在本域内闭环，不污染共享时间线。
+    缓存冷热标记（`perf.track_cache_counters`）留在这里：同一阶段在「全命中 / 全落空」
+    下的耗时差一个数量级，不记这个增量时跨运行对拍「这轮为什么慢」只能靠猜。
     """
-    from src.python.config import (
-        is_enable_action,
-        is_enable_cost_lots,
-        is_enable_fund_deep_analysis,
-        is_enable_history,
-        is_enable_llm,
-        is_enable_news,
-        is_enable_portfolio_evolution,
-        is_enable_stock_fundamentals,
-    )
-    from src.python.core.cancel import token_of
-    from src.python.core.perf import PerfCollector
-    from src.python.core.registry import get_report_section_order
-    from src.python.report._snapshot import capture_snapshot
-    from src.python.report.orchestrator import ReportResult, prepare_report_data
-
-    from src.python.report._run_scope import start_report_run
-
-    perf = PerfCollector(
-        report_type="full",
-        holdings=holdings,
-        stage_announcer=reporter.stage_progress,
-        cancel_token=token_of(reporter),
-    )
-    bind_perf(perf)
-    # 报告运行边界：清本轮降级事件与自检载体，取 LLM 用量基线（缓存状态按报告隔离）
-    _usage_baseline = start_report_run()
-    result = ReportResult()
-    result.holdings_ok = True
-    _health_fut = _spawn_health_checks()
-    bind_health(_health_fut, "full", holdings)
-
-    _enable_fund_deep_analysis = is_enable_fund_deep_analysis(config)
-    _enable_news = is_enable_news(config)
-    _enable_history = is_enable_history(config)
-    _enable_portfolio_evolution = is_enable_portfolio_evolution(config)
-    _enable_action = is_enable_action(config)
-    _enable_llm = is_enable_llm(config)
-    if not _enable_llm:
-        from src.python.core.system_info import llm_report_unavailable_reason
-
-        _llm_reason = llm_report_unavailable_reason() or "LLM 分析章节未启用"
-        reporter.warn(f"{_llm_reason}；本次按不含 LLM 内容生成（full 等同 both）")
-    _enable_cost_lots = is_enable_cost_lots()
-    _enable_stock_fundamentals = is_enable_stock_fundamentals()
-    from src.python.config.features import is_feature_enabled
-
-    _enable_summary_highlights = is_feature_enabled("summary_highlights")
-    sec_order = get_report_section_order(config)
+    from src.python.report.orchestrator import prepare_report_data
 
     # ── 1. 完整数据准备（含指数/穿透/分类） ──
     perf.start("数据准备")
@@ -395,6 +337,23 @@ def _generate_report_full(
         )
     _validate_prep_completeness(prep)
     perf.stop()
+
+    return prep
+
+
+def _capture_full_snapshot_stage(
+    holdings: list,
+    prep: dict,
+    config: dict,
+    reporter: ProgressReporter,
+    perf: PerfCollector,
+    *,
+    snapshot_namespace: str | None,
+    enable_portfolio_evolution: bool,
+    enable_summary_highlights: bool,
+) -> dict | None:
+    """阶段 2：快照捕获 + 各数据契约注入（演进/差异/变动复盘/纪律回放/摘要卡）。"""
+    from src.python.report._snapshot import capture_snapshot
 
     # ── 2. 快照对比 ──
     perf.start("快照对比")
@@ -426,7 +385,7 @@ def _generate_report_full(
         pipeline_data["purchase_status_data"] = prep.get("purchase_status_data")
     _validate_pipeline_snapshot(pipeline_data)
     # 2b. 组合演进数据（聚合多期快照，evolution_data；开关关闭时跳过计算）
-    if _enable_portfolio_evolution:
+    if enable_portfolio_evolution:
         pipeline_data = _inject_evolution_data(pipeline_data, snapshot_namespace=snapshot_namespace)
         # 2b1. 快照差异摘要（snapshot_diff_data）：组合演进章顶部变化摘要，
         #      与演进数据同开关（同属组合演进章节）
@@ -439,24 +398,28 @@ def _generate_report_full(
     inject_schedule_replay_data(pipeline_data, reporter, holdings=holdings)
     # 2b4. 摘要区首页执行摘要卡（报告章节与增强开关 summary_highlights，默认关）：
     #      快照 diff 单源纯内存派生；无上期快照时键值为 None → 首屏整块隐藏
-    if _enable_summary_highlights and pipeline_data is not None:
+    if enable_summary_highlights and pipeline_data is not None:
         from src.python.report.summary_highlights import build_summary_highlights
 
         pipeline_data["summary_highlights_data"] = build_summary_highlights(pipeline_data)
     perf.stop()
 
-    # ── 3. 历史走势 + 全量量化指标 ──
-    history_data, _metrics = _prepare_full_risk_metrics(
-        holdings,
-        config,
-        reporter,
-        perf,
-        fetch_history,
-        _enable_history,
-        prep,
-        pipeline_data,
-    )
+    return pipeline_data
 
+
+def _refresh_action_and_decision_basis(
+    prep: dict,
+    pipeline_data: dict | None,
+    history_data: dict | None,
+    perf: PerfCollector,
+) -> dict:
+    """阶段 3.5：历史峰值就绪后重建 action_data 与判断依据块（幂等，返回 action_data）。
+
+    `prepare_report_data` 产的 action_data 是**占位构建**（`persist_silence=False`，
+    不读写静默文件）：彼时历史时序未就绪、峰值未知。此处用 `history_data.bars` 算出
+    组合历史峰值后重建，作为管线中纪律静默的唯一写入方——同时保证单品信号不被占位
+    构建抢占静默而误抑制。
+    """
     # 3.5 行动建议回填（历史走势就绪后注入组合历史峰值市值，激活回撤纪律）。
     # prepare_report_data 的 action_data 为「中间占位构建」（persist_silence=False，
     # 不读写静默文件）：彼时历史时序未就绪、峰值未知。此处用 history_data.bars
@@ -494,6 +457,169 @@ def _generate_report_full(
     if pipeline_data is not None:
         pipeline_data["decision_basis_data"] = _decision_basis
 
+    return _action_data
+
+
+def _record_llm_stage_counters(perf: PerfCollector) -> None:
+    """把事实校验修正数与 thinking 串行等待记进 perf counters（跨期可对拍趋势）。"""
+    from src.python.llm.fact_checker import auto_correction_counts
+    from src.python.llm.generators_orchestrator import thinking_wait_total_seconds
+
+    # 事实校验自动修正计数入 perf_history.counters（跨期可看趋势；单次只进日志时
+    # 无法判断提示词/口径改动有没有效——实测单轮可修正 5 处数值）
+    for _fix_key, _fix_n in auto_correction_counts().items():
+        perf.count(_fix_key, _fix_n)
+    # thinking 串行等待（毫秒）：量化「上限 1 → 2」的潜在收益，跨期可对拍
+    _thinking_wait_ms = int(thinking_wait_total_seconds() * 1000)
+    if _thinking_wait_ms:
+        perf.count("llm_thinking_wait_ms", _thinking_wait_ms)
+
+
+def _postprocess_llm_output(
+    llm_content: tuple,
+    prep: dict,
+    pipeline_data: dict | None,
+    reporter: ProgressReporter,
+    perf: PerfCollector,
+    *,
+    enable_llm: bool,
+) -> tuple:
+    """阶段 5b–5d：决策登记 → 决策头剥离 → 输出评级 → 确定性信号沉淀（返回处理后的内容）。
+
+    顺序本身是契约（见 `test_experimental_seams` 的 `_SEAM_ORDER`）：登记要先读未剥离的
+    结构化决策头；评级横幅会改内容文本，须排在解析之后；确定性信号要等 LLM 阶段把
+    A 通道键注入 pipeline_data 之后才登记（过早会漏采）。
+    """
+    # ── 5b. 决策跨期反思闭环（LLM 载体登记 + 复盘区块装配）──
+    # ③ 登记 LLM 操作建议 ④ 复盘区块数据契约注入 pipeline_data（HTML/Excel 行动章
+    # 内嵌块消费）。挂载点实现与异常守护见 `_experimental_seams`。
+    record_llm_decisions_and_review_block(prep, llm_content, enable_llm, pipeline_data, reporter)
+
+    # ── 5b'. 结构化决策头渲染剥离 ──
+    # 决策头是给上方登记解析的机器载荷（单行 JSON，用户不可读）；登记完成后从
+    # 四元组整体剥离——HTML/Excel 双端写出共用本元组，单点剥离即双端干净；
+    # 缓存保留原始内容不回写（登记与剥离每次运行重新执行）。
+    if llm_content:
+        llm_content = tuple(strip_structured_header(_item) for _item in llm_content)
+
+    # ── 5c. LLM 输出评级（实验开关，默认关闭）──
+    # 只标注不阻断、不重试、不写回缓存。置于决策登记之后：横幅会改变内容文本，
+    # 须避开操作建议表的解析。
+    llm_content = apply_module_quality_banners(llm_content, reporter)
+
+    # ── 5d. 确定性数值信号沉淀（实验开关，默认关闭）──
+    # 置于此处而非 3.6：尾部风险等 A 通道键在 LLM 生成阶段才注入 pipeline_data，
+    # 过早登记会漏采；适配器对缺失键逐项跳过，故不构成硬依赖。
+    record_deterministic_signals(pipeline_data, prep, reporter)
+    perf.stop()
+
+    _record_llm_stage_counters(perf)
+
+
+    return llm_content
+
+
+def _generate_report_full(
+    holdings: list,
+    config: dict,
+    reporter: ProgressReporter,
+    fetch_history: bool = False,
+    force_llm: bool = False,
+    force_llm_modules: list[str] | None = None,
+    output_dir: str | None = None,
+    transactions: list | None = None,
+    dividends: list | None = None,
+    *,
+    snapshot_namespace: str | None = None,
+) -> "ReportResult":
+    """full 报告路径：生成 HTML + Excel + LLM 分析章节。
+
+    流程：prepare_report_data() → capture_snapshot() → _prepare_full_risk_metrics()
+          → get_sector_fund_flow() → _fetch_llm_and_news()
+          → write_html_report() → generate_excel_report()
+
+    Args:
+        snapshot_namespace: 快照隔离域（None=共享主目录；如 "web"=web 试算域）。
+            快照对比/组合演进/快照差异均在本域内闭环，不污染共享时间线。
+    """
+    from src.python.config import (
+        is_enable_action,
+        is_enable_cost_lots,
+        is_enable_fund_deep_analysis,
+        is_enable_history,
+        is_enable_llm,
+        is_enable_news,
+        is_enable_portfolio_evolution,
+        is_enable_stock_fundamentals,
+    )
+    from src.python.core.cancel import token_of
+    from src.python.core.perf import PerfCollector
+    from src.python.core.registry import get_report_section_order
+    from src.python.report.orchestrator import ReportResult
+
+    from src.python.report._run_scope import start_report_run
+
+    perf = PerfCollector(
+        report_type="full",
+        holdings=holdings,
+        stage_announcer=reporter.stage_progress,
+        cancel_token=token_of(reporter),
+    )
+    bind_perf(perf)
+    # 报告运行边界：清本轮降级事件与自检载体，取 LLM 用量基线（缓存状态按报告隔离）
+    _usage_baseline = start_report_run()
+    result = ReportResult()
+    result.holdings_ok = True
+    _health_fut = _spawn_health_checks()
+    bind_health(_health_fut, "full", holdings)
+
+    _enable_fund_deep_analysis = is_enable_fund_deep_analysis(config)
+    _enable_news = is_enable_news(config)
+    _enable_history = is_enable_history(config)
+    _enable_portfolio_evolution = is_enable_portfolio_evolution(config)
+    _enable_action = is_enable_action(config)
+    _enable_llm = is_enable_llm(config)
+    if not _enable_llm:
+        from src.python.core.system_info import llm_report_unavailable_reason
+
+        _llm_reason = llm_report_unavailable_reason() or "LLM 分析章节未启用"
+        reporter.warn(f"{_llm_reason}；本次按不含 LLM 内容生成（full 等同 both）")
+    _enable_cost_lots = is_enable_cost_lots()
+    _enable_stock_fundamentals = is_enable_stock_fundamentals()
+    from src.python.config.features import is_feature_enabled
+
+    _enable_summary_highlights = is_feature_enabled("summary_highlights")
+    sec_order = get_report_section_order(config)
+
+    prep = _prepare_full_data_stage(holdings, config, reporter, transactions, perf)
+
+
+    pipeline_data = _capture_full_snapshot_stage(
+        holdings,
+        prep,
+        config,
+        reporter,
+        perf,
+        snapshot_namespace=snapshot_namespace,
+        enable_portfolio_evolution=_enable_portfolio_evolution,
+        enable_summary_highlights=_enable_summary_highlights,
+    )
+
+
+    # ── 3. 历史走势 + 全量量化指标 ──
+    history_data, _metrics = _prepare_full_risk_metrics(
+        holdings,
+        config,
+        reporter,
+        perf,
+        fetch_history,
+        _enable_history,
+        prep,
+        pipeline_data,
+    )
+
+    _action_data = _refresh_action_and_decision_basis(prep, pipeline_data, history_data, perf)
+
     # ── 3.6 决策跨期反思闭环（decision_reflection 实验功能，默认关）──
     # 结算必须先于 LLM 拉取：否则当次教训（含本批结算结果）在 LLM 注入前未落档，
     # 注入读不到新结算。挂载点实现与异常守护见 `_experimental_seams`。
@@ -530,40 +656,9 @@ def _generate_report_full(
     )
     _llm_sink = _llm.llm_sink
 
-    # ── 5b. 决策跨期反思闭环（LLM 载体登记 + 复盘区块装配）──
-    # ③ 登记 LLM 操作建议 ④ 复盘区块数据契约注入 pipeline_data（HTML/Excel 行动章
-    # 内嵌块消费）。挂载点实现与异常守护见 `_experimental_seams`。
-    record_llm_decisions_and_review_block(prep, llm_content, _enable_llm, pipeline_data, reporter)
-
-    # ── 5b'. 结构化决策头渲染剥离 ──
-    # 决策头是给上方登记解析的机器载荷（单行 JSON，用户不可读）；登记完成后从
-    # 四元组整体剥离——HTML/Excel 双端写出共用本元组，单点剥离即双端干净；
-    # 缓存保留原始内容不回写（登记与剥离每次运行重新执行）。
-    if llm_content:
-        llm_content = tuple(strip_structured_header(_item) for _item in llm_content)
-
-    # ── 5c. LLM 输出评级（实验开关，默认关闭）──
-    # 只标注不阻断、不重试、不写回缓存。置于决策登记之后：横幅会改变内容文本，
-    # 须避开操作建议表的解析。
-    llm_content = apply_module_quality_banners(llm_content, reporter)
-
-    # ── 5d. 确定性数值信号沉淀（实验开关，默认关闭）──
-    # 置于此处而非 3.6：尾部风险等 A 通道键在 LLM 生成阶段才注入 pipeline_data，
-    # 过早登记会漏采；适配器对缺失键逐项跳过，故不构成硬依赖。
-    record_deterministic_signals(pipeline_data, prep, reporter)
-    perf.stop()
-
-    from src.python.llm.fact_checker import auto_correction_counts
-    from src.python.llm.generators_orchestrator import thinking_wait_total_seconds
-
-    # 事实校验自动修正计数入 perf_history.counters（跨期可看趋势；单次只进日志时
-    # 无法判断提示词/口径改动有没有效——实测单轮可修正 5 处数值）
-    for _fix_key, _fix_n in auto_correction_counts().items():
-        perf.count(_fix_key, _fix_n)
-    # thinking 串行等待（毫秒）：量化「上限 1 → 2」的潜在收益，跨期可对拍
-    _thinking_wait_ms = int(thinking_wait_total_seconds() * 1000)
-    if _thinking_wait_ms:
-        perf.count("llm_thinking_wait_ms", _thinking_wait_ms)
+    llm_content = _postprocess_llm_output(
+        llm_content, prep, pipeline_data, reporter, perf, enable_llm=_enable_llm
+    )
 
     # 景气度框架诊断（实验性功能 prosperity_framework）：经实验挂载点接入。
     # full 路径 prep 已含穿透重仓（`penetrated_assets`），基本面与历史走势亦已就绪。

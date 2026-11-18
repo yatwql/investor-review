@@ -10,7 +10,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 if TYPE_CHECKING:
     import httpx
@@ -88,6 +88,218 @@ def _compute_industry_concentration(
 # ── 辩论模式：白脸/黑脸/综合生成 ───────────────────────────
 
 
+class _DebateRuntime(NamedTuple):
+    """辩论运行参数（配置解析结果；与提示词/缓存键无关）。"""
+
+    llm_config: dict | None
+    max_tokens: int
+    #: 单次调用超时的**配置原值**（可为 None）：下游按
+    #: `llm_config["timeout_<module>"]` 优先、取不到时用此值，保持「配置怎么写就怎么用」
+    timeout: Any
+    budget_char_threshold: int
+    synthesis_temperature: float | None
+
+
+def _resolve_debate_runtime(llm_config: dict | None) -> _DebateRuntime:
+    """解析辩论所需的模型/预算参数（配置缺省时逐项回落出厂默认）。
+
+    每阶段输出上限兜底 18432：原 8192 在智囊团复盘三段式下偏紧，实测 pro 段即被截断
+    触发重试；思考型模型还会先把预算吃在 thinking 上，故再上调 50%。
+
+    Token 预算守卫按 **1 字符 ≈ 1 token** 折算（中文+Markdown 混排实测）：若按
+    1.5 token/字符估算，守卫会在真实预算 ~65% 处过早触发。
+    """
+    from src.python.config import get_llm_config
+
+    _lc = llm_config or get_llm_config()
+    debate_cfg = (_lc or {}).get("debate", {})
+    procon_cfg = debate_cfg.get("procon", {})
+    _debate_raw = get_llm_setting_default("debate")
+    _debate_defaults: dict[str, Any] = _debate_raw if isinstance(_debate_raw, dict) else {}
+    _procon_defaults = _debate_defaults.get("procon") or {}
+    _per_call_max_tokens = procon_cfg.get("per_call_max_tokens")
+    _synthesis_temperature = procon_cfg.get("synthesis_temperature", _procon_defaults.get("synthesis_temperature"))
+    _max_tokens = int(
+        _per_call_max_tokens
+        if _per_call_max_tokens is not None
+        else (_procon_defaults.get("per_call_max_tokens") or 18432)
+    )
+    _timeout = debate_cfg.get("per_call_timeout_override", _debate_defaults.get("per_call_timeout_override"))
+    _max_total_tokens_budget = debate_cfg.get(
+        "max_total_tokens_per_report", _debate_defaults.get("max_total_tokens_per_report")
+    )
+    return _DebateRuntime(
+        llm_config=_lc,
+        max_tokens=_max_tokens,
+        timeout=_timeout,
+        budget_char_threshold=int(_max_total_tokens_budget),
+        synthesis_temperature=_synthesis_temperature,
+    )
+
+
+def _run_debate_synthesis(
+    *,
+    llm_config: dict | None,
+    pro_text: str,
+    con_text: str,
+    enable_conditional: bool,
+    industry_concentration: dict | None,
+    holdings_details: list[dict] | None,
+    total_mv: float,
+    fp_inputs: Any,
+    valid_codes: set[str],
+    force: bool,
+    http_client: httpx.Client | None,
+    blocks: dict[str, str],
+    max_tokens: int,
+    timeout: Any,
+    session_cache: dict | None,
+    session_lock: Any,
+) -> str | None:
+    """辩论综合段：按「基础指纹 + 综合提示词全文」取键，跑综合并双写缓存。
+
+    综合指纹取**全文**而非 pro/con 前 200 字符摘要：摘要口径会漏掉 200 字符之后的正文
+    差异，也漏掉仅 config 变化（情景名/描述、集中度阈值）的情形——两者都让提示词变了
+    而键不动，命中旧综合结论。
+
+    Returns:
+        综合正文；失败返回 None（调用方用 pro+con 拼接兜底）。
+    """
+    synthesis_user = _build_debate_synthesis_prompt(
+        pro_text,
+        con_text,
+        enable_conditional=enable_conditional,
+        include_concentration_qa=True,  # 内建段落：综合阶段始终携带集中度问答段
+        industry_concentration=industry_concentration,
+        holdings_details=holdings_details,
+        total_mv=total_mv,
+    )
+    syn_fingerprint = debate_synthesis_fingerprint(fp_inputs, synthesis_user)
+    cache_key = f"{CACHE_PREFIX_LLM}debate_synthesis_{syn_fingerprint}"
+    session_key = f"debate_syn_{syn_fingerprint}"
+    synthesis_text: str | None = None
+    if session_cache is not None:
+        with session_lock:
+            synthesis_text = session_cache.get(session_key)
+
+    if synthesis_text is None and not force:
+        synthesis_text = cache_get(cache_key, get_cache_ttl_llm("debate_synthesis"))
+
+    if synthesis_text is None:
+        # conditional 开启时用强化版 system prompt（允许情景分析但约束不复述白脸/黑脸
+        # 观点，避免 user prompt 的情景指令与 system prompt 的「禁止插入情景分析」冲突）
+        synthesis_system = _build_system_debate_synthesis(
+            enable_conditional,
+            True,  # 内建段落：综合 system prompt 始终携带集中度问答输出要求
+        )
+        synthesis_result = generate_llm_module(
+            llm_config,
+            "expert_review",
+            force=force,
+            http_client=http_client,
+            fingerprint_fn=lambda: f"{syn_fingerprint}_debate_syn",
+            purchase_constraint_block=blocks.get("purchase", ""),
+            holding_change_block=blocks.get("holding_change", ""),
+            event_impact_block=blocks.get("event_impact", ""),
+            schedule_replay_block=blocks.get("schedule_replay", ""),
+            system_prompt_default=synthesis_system,
+            prompt_builder=lambda: synthesis_user,
+            max_tokens_default=max_tokens,
+            max_tokens_override=max_tokens,
+            timeout_default=timeout,
+            output_brief_limit=300,
+            system_prompt=synthesis_system,
+            user_prompt=synthesis_user,
+            raw_filter_fn=lambda t: _filter_hallucinated_codes(t, valid_codes),
+        )
+        synthesis_text = synthesis_result[0] if synthesis_result and isinstance(synthesis_result, tuple) else None
+        if synthesis_text:
+            cache_set(cache_key, synthesis_text)
+            if session_cache is not None:
+                with session_lock:
+                    session_cache[session_key] = synthesis_text
+
+    return synthesis_text
+
+
+def _run_debate_side(
+    llm_config: dict | None,
+    *,
+    side: str,
+    system_prompt: str,
+    user_prompt: str,
+    base_fingerprint: str,
+    ttl_key: str,
+    http_client: httpx.Client | None,
+    force: bool,
+    purchase_constraint_block: str,
+    holding_change_block: str,
+    event_impact_block: str,
+    schedule_replay_block: str,
+    max_tokens: int,
+    timeout: float,
+    holdings_details: list[dict] | None,
+    total_mv: float,
+    total_cost: float,
+    total_profit: float,
+    valid_codes: set[str],
+    session_cache: dict | None,
+    session_lock: Any,
+) -> str | None:
+    """跑辩论的一方（白脸 / 黑脸）：会话缓存 → 文件缓存 → 生成 → 双写缓存。
+
+    白脸与黑脸只差 system prompt / 缓存键 / TTL，其余流程（会话缓存 → 文件缓存 →
+    生成 → 双写）逐字相同；各自实现一份时，改一边漏一边会让两侧的缓存与幻觉过滤
+    口径分叉——故收敛到这一处，由 `side` 参数区分。
+
+    Returns:
+        该方正文；生成失败返回 None（调用方据此回退普通模式）。
+    """
+    cache_key = f"{CACHE_PREFIX_LLM}debate_{side}_{base_fingerprint}"
+    session_key = f"debate_{side}_{base_fingerprint}"
+    text: str | None = None
+    if session_cache is not None:
+        with session_lock:
+            text = session_cache.get(session_key)
+
+    if text is None and not force:
+        text = cache_get(cache_key, get_cache_ttl_llm(ttl_key))
+
+    if text is None:
+        result = generate_llm_module(
+            llm_config,
+            "expert_review",
+            force=force,
+            http_client=http_client,
+            fingerprint_fn=lambda: f"{base_fingerprint}_debate_{side}",
+            purchase_constraint_block=purchase_constraint_block,
+            holding_change_block=holding_change_block,
+            event_impact_block=event_impact_block,
+            schedule_replay_block=schedule_replay_block,
+            system_prompt_default=system_prompt,
+            prompt_builder=lambda: user_prompt,
+            max_tokens_default=max_tokens,
+            max_tokens_override=max_tokens,
+            timeout_default=timeout,
+            output_brief_limit=300,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            holdings_details=holdings_details,
+            total_mv=total_mv,
+            total_cost=total_cost,
+            total_profit=total_profit,
+            raw_filter_fn=lambda t: _filter_hallucinated_codes(t, valid_codes),
+        )
+        text = result[0] if result and isinstance(result, tuple) else None
+        if text:
+            cache_set(cache_key, text)
+            if session_cache is not None:
+                with session_lock:
+                    session_cache[session_key] = text
+
+    return text
+
+
 def generate_debate_procon(
     total_mv: float,
     total_cost: float,
@@ -124,8 +336,6 @@ def generate_debate_procon(
         (pro_text, con_text, synthesis_text) 三元组，均为 None 表示完全失败。
     """
     import threading as _threading
-    from src.python.config import get_llm_config
-
     # ── 辩论模式 feature 组合 ──────────────────────────
     _fp_suffix = debate_feature_cache_suffix()
     _enable_conditional = "c" in _fp_suffix
@@ -176,43 +386,11 @@ def generate_debate_procon(
     # ── Session 级缓存（线程安全） ──────────────────────
     _cache_lock = _threading.Lock()
 
-    def _check_session_cache(key: str) -> str | None:
-        if session_cache is not None:
-            with _cache_lock:
-                return session_cache.get(key)
-        return None
-
-    def _set_session_cache(key: str, value: str) -> None:
-        if session_cache is not None:
-            with _cache_lock:
-                session_cache[key] = value
-
-    # ── 获取 debate 配置 ────────────────────────────────
-    _lc = llm_config or get_llm_config()
-    debate_cfg = (_lc or {}).get("debate", {})
-    procon_cfg = debate_cfg.get("procon", {})
-    _debate_raw = get_llm_setting_default("debate")
-    _debate_defaults: dict[str, Any] = _debate_raw if isinstance(_debate_raw, dict) else {}
-    _procon_defaults = _debate_defaults.get("procon") or {}
-    _per_call_max_tokens = procon_cfg.get("per_call_max_tokens")
-    _synthesis_temperature = procon_cfg.get("synthesis_temperature", _procon_defaults.get("synthesis_temperature"))
-
-    # 每阶段输出上限兜底：配置缺省/为 null 时用 18432（原 8192 在智囊团复盘三段式下偏紧，
-    # 实测 pro 段即被截断触发重试；思考型模型还会先把预算吃在 thinking 上，故再上调 50%）
-    _max_tokens = int(
-        _per_call_max_tokens
-        if _per_call_max_tokens is not None
-        else (_procon_defaults.get("per_call_max_tokens") or 18432)
-    )
-    _timeout = debate_cfg.get("per_call_timeout_override", _debate_defaults.get("per_call_timeout_override"))
-
-    # ── Token 预算守卫 ─────────────────────────────────
-    _max_total_tokens_budget = debate_cfg.get(
-        "max_total_tokens_per_report", _debate_defaults.get("max_total_tokens_per_report")
-    )
-    # 中文+Markdown 混排输出约 1 字符 ≈ 1 token，按 1:1 折算字符级阈值；
-    # 若按 1.5 token/字符估算，守卫会在真实预算 ~65% 处过早触发。
-    _budget_char_threshold = int(_max_total_tokens_budget)
+    _runtime = _resolve_debate_runtime(llm_config)
+    _lc = _runtime.llm_config
+    _max_tokens = _runtime.max_tokens
+    _timeout = _runtime.timeout
+    _budget_char_threshold = _runtime.budget_char_threshold
     _cumulative_chars: int = 0
 
     # ── 构建有效持仓代码集合（幻觉过滤用） ────────────
@@ -232,42 +410,29 @@ def generate_debate_procon(
                     _valid_codes.add(str(_c).strip())
 
     # ── Step 1: 白脸（Pro） ────────────────────────────
-    _pro_cache_key = f"{CACHE_PREFIX_LLM}debate_pro_{_fingerprint}"
-    _session_pro_key = f"debate_pro_{_fingerprint}"
-    pro_text = _check_session_cache(_session_pro_key)
-
-    if pro_text is None and not force:
-        pro_text = cache_get(_pro_cache_key, get_cache_ttl_llm("debate_pro"))
-
-    if pro_text is None:
-        pro_result = generate_llm_module(
-            _lc,
-            "expert_review",
-            force=force,
-            http_client=http_client,
-            fingerprint_fn=lambda: f"{_fingerprint}_debate_pro",
-            purchase_constraint_block=purchase_constraint_block,
-            holding_change_block=holding_change_block,
-            event_impact_block=event_impact_block,
-            schedule_replay_block=schedule_replay_block,
-            system_prompt_default=_SYSTEM_DEBATE_PRO,
-            prompt_builder=lambda: _user,
-            max_tokens_default=_max_tokens,
-            max_tokens_override=_max_tokens,
-            timeout_default=_timeout,
-            output_brief_limit=300,
-            system_prompt=_SYSTEM_DEBATE_PRO,
-            user_prompt=_user,
-            holdings_details=holdings_details,
-            total_mv=total_mv,
-            total_cost=total_cost,
-            total_profit=total_profit,
-            raw_filter_fn=lambda t: _filter_hallucinated_codes(t, _valid_codes),
-        )
-        pro_text = pro_result[0] if pro_result and isinstance(pro_result, tuple) else None
-        if pro_text:
-            cache_set(_pro_cache_key, pro_text)
-            _set_session_cache(_session_pro_key, pro_text)
+    pro_text = _run_debate_side(
+        _lc,
+        side="pro",
+        system_prompt=_SYSTEM_DEBATE_PRO,
+        user_prompt=_user,
+        base_fingerprint=_fingerprint,
+        ttl_key="debate_pro",
+        http_client=http_client,
+        force=force,
+        purchase_constraint_block=purchase_constraint_block,
+        holding_change_block=holding_change_block,
+        event_impact_block=event_impact_block,
+        schedule_replay_block=schedule_replay_block,
+        max_tokens=_max_tokens,
+        timeout=_timeout,
+        holdings_details=holdings_details,
+        total_mv=total_mv,
+        total_cost=total_cost,
+        total_profit=total_profit,
+        valid_codes=_valid_codes,
+        session_cache=session_cache,
+        session_lock=_cache_lock,
+    )
 
     if not pro_text:
         logger.warning("[debate] 白脸生成失败，回退普通模式")
@@ -287,42 +452,29 @@ def generate_debate_procon(
         return (None, None, None)
 
     # ── Step 2: 黑脸（Con） ────────────────────────────
-    _con_cache_key = f"{CACHE_PREFIX_LLM}debate_con_{_fingerprint}"
-    _session_con_key = f"debate_con_{_fingerprint}"
-    con_text = _check_session_cache(_session_con_key)
-
-    if con_text is None and not force:
-        con_text = cache_get(_con_cache_key, get_cache_ttl_llm("debate_con"))
-
-    if con_text is None:
-        con_result = generate_llm_module(
-            _lc,
-            "expert_review",
-            force=force,
-            http_client=http_client,
-            fingerprint_fn=lambda: f"{_fingerprint}_debate_con",
-            purchase_constraint_block=purchase_constraint_block,
-            holding_change_block=holding_change_block,
-            event_impact_block=event_impact_block,
-            schedule_replay_block=schedule_replay_block,
-            system_prompt_default=_SYSTEM_DEBATE_CON,
-            prompt_builder=lambda: _user,
-            max_tokens_default=_max_tokens,
-            max_tokens_override=_max_tokens,
-            timeout_default=_timeout,
-            output_brief_limit=300,
-            system_prompt=_SYSTEM_DEBATE_CON,
-            user_prompt=_user,
-            holdings_details=holdings_details,
-            total_mv=total_mv,
-            total_cost=total_cost,
-            total_profit=total_profit,
-            raw_filter_fn=lambda t: _filter_hallucinated_codes(t, _valid_codes),
-        )
-        con_text = con_result[0] if con_result and isinstance(con_result, tuple) else None
-        if con_text:
-            cache_set(_con_cache_key, con_text)
-            _set_session_cache(_session_con_key, con_text)
+    con_text = _run_debate_side(
+        _lc,
+        side="con",
+        system_prompt=_SYSTEM_DEBATE_CON,
+        user_prompt=_user,
+        base_fingerprint=_fingerprint,
+        ttl_key="debate_con",
+        http_client=http_client,
+        force=force,
+        purchase_constraint_block=purchase_constraint_block,
+        holding_change_block=holding_change_block,
+        event_impact_block=event_impact_block,
+        schedule_replay_block=schedule_replay_block,
+        max_tokens=_max_tokens,
+        timeout=_timeout,
+        holdings_details=holdings_details,
+        total_mv=total_mv,
+        total_cost=total_cost,
+        total_profit=total_profit,
+        valid_codes=_valid_codes,
+        session_cache=session_cache,
+        session_lock=_cache_lock,
+    )
 
     if not con_text:
         logger.warning("[debate] 黑脸生成失败，回退普通模式")
@@ -342,58 +494,29 @@ def generate_debate_procon(
         return (pro_text, con_text, None)
 
     # ── Step 3: 综合（Synthesis） ──────────────────────
-    _synthesis_user = _build_debate_synthesis_prompt(
-        pro_text,
-        con_text,
+    synthesis_text = _run_debate_synthesis(
+        llm_config=_lc,
+        pro_text=pro_text,
+        con_text=con_text,
         enable_conditional=_enable_conditional,
-        include_concentration_qa=True,  # 内建段落：综合阶段始终携带集中度问答段
         industry_concentration=_industry_conc,
         holdings_details=holdings_details,
         total_mv=total_mv,
+        fp_inputs=_fp_inputs,
+        valid_codes=_valid_codes,
+        force=force,
+        http_client=http_client,
+        blocks={
+            "purchase": purchase_constraint_block,
+            "holding_change": holding_change_block,
+            "event_impact": event_impact_block,
+            "schedule_replay": schedule_replay_block,
+        },
+        max_tokens=_max_tokens,
+        timeout=_timeout,
+        session_cache=session_cache,
+        session_lock=_cache_lock,
     )
-    # 综合指纹取「辩论基础指纹 + 综合提示词全文」而非 pro/con 前 200 字符摘要：
-    # 摘要口径会漏掉 200 字符之后的正文差异，也漏掉仅 config 变化（情景名/描述、
-    # 集中度阈值）的情形——两者都让提示词变了而键不动，命中旧综合结论。
-    _syn_fingerprint = debate_synthesis_fingerprint(_fp_inputs, _synthesis_user)
-    _syn_cache_key = f"{CACHE_PREFIX_LLM}debate_synthesis_{_syn_fingerprint}"
-    _session_syn_key = f"debate_syn_{_syn_fingerprint}"
-    synthesis_text = _check_session_cache(_session_syn_key)
-
-    if synthesis_text is None and not force:
-        synthesis_text = cache_get(_syn_cache_key, get_cache_ttl_llm("debate_synthesis"))
-
-    if synthesis_text is None:
-        # conditional 开启时用强化版 system prompt（允许情景分析但约束不复述
-        # 白脸/黑脸观点，避免 user prompt 的情景指令与 system prompt 的
-        # "禁止插入情景分析" 直接冲突）。
-        _synthesis_system = _build_system_debate_synthesis(
-            _enable_conditional,
-            True,  # 内建段落：综合 system prompt 始终携带集中度问答输出要求
-        )
-        synthesis_result = generate_llm_module(
-            _lc,
-            "expert_review",
-            force=force,
-            http_client=http_client,
-            fingerprint_fn=lambda: f"{_syn_fingerprint}_debate_syn",
-            purchase_constraint_block=purchase_constraint_block,
-            holding_change_block=holding_change_block,
-            event_impact_block=event_impact_block,
-            schedule_replay_block=schedule_replay_block,
-            system_prompt_default=_synthesis_system,
-            prompt_builder=lambda: _synthesis_user,
-            max_tokens_default=_max_tokens,
-            max_tokens_override=_max_tokens,
-            timeout_default=_timeout,
-            output_brief_limit=300,
-            system_prompt=_synthesis_system,
-            user_prompt=_synthesis_user,
-            raw_filter_fn=lambda t: _filter_hallucinated_codes(t, _valid_codes),
-        )
-        synthesis_text = synthesis_result[0] if synthesis_result and isinstance(synthesis_result, tuple) else None
-        if synthesis_text:
-            cache_set(_syn_cache_key, synthesis_text)
-            _set_session_cache(_session_syn_key, synthesis_text)
 
     if not synthesis_text:
         logger.warning("[debate] 综合生成失败，返回 pro+con 拼接")

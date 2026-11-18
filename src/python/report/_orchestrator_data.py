@@ -84,7 +84,9 @@ class _MarketSummary(NamedTuple):
     categories: dict
 
 
-def _prepare_market_details(holdings: list, today_str: str, reporter: ProgressReporter, recorder: Any) -> _MarketSummary:
+def _prepare_market_details(
+    holdings: list, today_str: str, reporter: ProgressReporter, recorder: Any
+) -> _MarketSummary:
     """市值/成本/盈亏/分类汇总（数据准备的第 1 段：逐品种行情与明细）。
 
     注意：`_generate_details` 内部走行情链，冷缓存时这一段就是数据准备的大头；
@@ -92,6 +94,7 @@ def _prepare_market_details(holdings: list, today_str: str, reporter: ProgressRe
     后续各段只消费不修改。
     """
     from src.python.report.market_value import _generate_details, classify_holdings, sum_today_profit
+
     _t0 = time.perf_counter()
     reporter.info(MSG_FETCHING_MARKET)
     details = _generate_details(holdings, today_str)
@@ -333,7 +336,6 @@ def prepare_report_data(
     )
 
     purchase_status_data, cost_position_data = _compute_purchase_and_cost(holdings, details, config, recorder)
-
 
     _t0 = time.perf_counter()
     # 行动建议单一数据源：再平衡信号等纯算法产出，action_data数据契约
