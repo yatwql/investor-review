@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.18.6-dev
-> **编号源**：`rf-next = 1181`（新增问题提出后更新为 +1；已用最大 rf-1180，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1183`（新增问题提出后更新为 +1；已用最大 rf-1182，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -67,6 +67,10 @@
 | **rf-1179** | GitHub CI 三条 job 红：① akshare 1.20.65（CI 依赖解析落点）**就地重命名了四个导出接口**且不留别名（`tool_trade_date_hist_sina`→`calendar_trade_date_hist_sina`、`stock_fund_flow_industry`→`stock_fund_flow_industry_ths`、`news_cctv`→`alternative_news_cctv`、`stock_sector_fund_flow_rank`→`stock_fund_flow_sector_rank_em`），依赖声明是区间 `>=1.16,<2.0` → 新装机器上交易日历/行业资金流/央视新闻三条链路 `AttributeError` 被降级吞掉、数据静默缺失，本机 1.20.42 因旧名仍在而全程未暴露；② `test_v8_call_sites` 的「已知 V8 接口」断言写死旧名，在 CI 假红；③ `ruff format --check` 有 14 个文件早已漂移（CI `format` job 长期红） | ① 新增 `core/akshare_compat.py`（逻辑名→候选链，`resolve()` 取第一个存在的接口；旧名与改名后名字并存时优先走旧名，行为不变），`core/v8_subprocess.py` 子进程按候选链解析、`providers/akshare_news.py`/`providers/akshare_extras.py` 改走 `resolve()`；② 该断言改为按候选链整条判定，另加「合成模块」确定性用例（判定不依赖 akshare 当前实现）；③ 新增 `test_akshare_compat.py`（10 例：候选链/旧名优先/改名回落/不可调用跳过/调用点不得硬引旧名）；④ 14 个漂移文件 `ruff format` 归位，全仓 `format --check` 恢复零告警 |
 
 | **rf-1180** | 全仓核查「旧结构兼容」残留（旧数据结构/旧数据文件/旧缓存结构/旧缓存文件/旧配置/旧配置项/旧内部 API）：运行期仍有三处为旧形态留分支——① `fetcher/index.py` 的 `history_index` 会话缓存对裸列表（旧条目形态）按「窗口未知」放行；② `providers/akshare_extras.py` 的通道失败负缓存把整源单字符串当作「全通道同源失败」；③ `report/_snapshot.capture_snapshot` 的 `**extra` 是无调用方的扩展透传口。其余「兼容」注释均为第三方变体容错（§9.2 形状容错归属）或单据版本拒载护栏，不属跳版本兼容 | ① 会话缓存只认 `(days, bars)` 二元组，其它形态一律当未命中重新取数（写回形态固定）；② 负缓存只认 `{通道: 失败类型}`，非 dict 载荷按空处理；③ 删 `**extra` 与 `pipeline_data.update(extra)`；④ 配 4 条回归用例（裸列表当未命中并回写二元组 / 窗口不足重取 / 窗口足够复用 / 单字符串负缓存按空） |
+
+| **rf-1181** | 近 8 小时变更审计（14 提交）：① `scripts/_release/_ledger_archive.py` 的 `split_section_table` / `extract_rf_table` 在迁档改为「逐块全搬」后已无生产调用方，只剩 3 条用例引用——死生产码靠测试续命，且用例断言的是内部辅助而非真实产出；② `core/akshare_compat.resolve` 的 `# type: ignore[no-any-return]` 在该返回注解下并不触发，属新增噪音；③ `core/v8_subprocess.py` 模块 docstring 把两个 V8 接口写成具体名，未标「逻辑名，实际名经候选链解析」，与同文件的 `_ALLOWED_FUNCTIONS` 注释口径不一 | ① 删除两个死辅助与 `release.py` 的再导出，3 条用例改写为断言 `apply_rf_archive` 的真实产出（表头/分隔行/非 rf 行随块搬入归档、占位台账零改动）；② 去掉多余的 `type: ignore`（类型检查仍零错）；③ docstring 补「逻辑名 + 候选链解析」口径 |
+
+| **rf-1182** | `test_cache_core.py` 的等值断言依赖缓存目录里的**实际文件条数**：`os.remove` 用固定长度 `side_effect=[OSError, None]`，并行档下目录里 `price_` 文件多于 2 个时第三次调用抛 `StopIteration`（本轮 dev-verify 即因此单点假红，单跑必过）；同文件另有三处 `len(os.listdir(...)) == 5` / `count == 2` 绝对值断言，属同类脆弱写法 | `os.remove` 改函数式 side_effect（首个失败、其余成功，不看文件数）；计数断言改为由前置清单派生（`count == len(expected)` / 前后条数不变 / `count == len(attempts)-1` 且 `len(attempts) >= 2`）——断言结构关系而非绝对值 |
 
 ### 归档档案
 - [`archived_review-findings.0.18.x.md`](../archive/v0.18.x/archived_review-findings.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-18）

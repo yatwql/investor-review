@@ -18,6 +18,10 @@
 
 - **旧结构兼容残留清理**：`fetch_index_history` 的会话缓存只认 `(days, bars)`（裸列表脏条目改为未命中重取）、行业资金流通道失败负缓存只认 `{通道: 失败类型}`（整源单字符串不再回退成全通道失败）、`capture_snapshot` 删掉无调用方的 `**extra` 透传口；配 4 条回归用例（`rf-1180`）。
 
+- **8 小时变更审计**：删掉迁档重构后失去生产调用方的 `split_section_table` / `extract_rf_table`（用例改为断言真实产出）、去掉 `akshare_compat.resolve` 上多余的 `type: ignore`、V8 子进程模块 docstring 补齐「逻辑名 + 候选链」口径（`rf-1181`）。
+
+- **缓存测试去脆**：`test_cache_core.py` 的 `clear_by_prefix` 用例不再写死文件条数与固定长度 `side_effect`（并行档下会 `StopIteration` 假红），改为函数式副作用 + 由前置清单派生的结构断言（`rf-1182`）。
+
 ## 归档
 
 - [`archived_changelog.0.18.x.md`](../archive/v0.18.x/archived_changelog.0.18.x.md) — v0.18.0 ~ v0.18.5（2026-11-12 ~ 2026-11-18）

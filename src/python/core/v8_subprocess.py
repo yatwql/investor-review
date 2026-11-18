@@ -1,6 +1,7 @@
 """把「内部建 py_mini_racer(V8) 上下文」的 akshare 调用放进子进程执行。
 
-**为什么必须隔离**：akshare 若干接口（`tool_trade_date_hist_sina`、`stock_fund_flow_industry`）
+**为什么必须隔离**：akshare 若干接口（逻辑名 `tool_trade_date_hist_sina`、`stock_fund_flow_industry`——
+实际接口名经 `core/akshare_compat.py` 候选链解析，akshare 改名不影响本模块）
 在函数体内就地 `py_mini_racer.MiniRacer()` 建 V8 上下文。V8 平台的初始化是进程级的且与线程
 绑定，实测三种崩法都拦不住（原生崩溃/死锁，`try/except` 与 pytest 均无效）：
 

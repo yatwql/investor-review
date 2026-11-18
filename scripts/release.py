@@ -121,7 +121,6 @@ from _release._ledger_archive import (  # noqa: E402, F401 — 台账变换纯�
     count_rf_rows,
     design_doc_candidates,
     drop_migration_placeholders,
-    extract_rf_table,
     has_archive_section,
     move_tree_entry,
     open_ids,

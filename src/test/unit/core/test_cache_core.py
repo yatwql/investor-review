@@ -411,11 +411,12 @@ class TestCacheClearByPrefix(CacheTestBase):
         self._write_cache("other_key", 5, 100.0)
 
     def test_clear_by_prefix_matches(self):
-        """匹配前缀的文件全部删除。"""
+        """匹配前缀的文件全部删除（条数由前置清单派生，不写死绝对值）。"""
         from src.python.cache import clear_by_prefix
 
+        expected = [f for f in os.listdir(self.cache_dir) if f.startswith("price_") and f.endswith((".json", ".json.gz"))]
         count = clear_by_prefix("price_")
-        self.assertEqual(count, 2)
+        self.assertEqual(count, len(expected))
         from src.python.cache._paths import _cache_path
 
         self.assertFalse(os.path.exists(_cache_path("price_000001")))
@@ -426,9 +427,10 @@ class TestCacheClearByPrefix(CacheTestBase):
         """无前缀匹配 → 返回 0。"""
         from src.python.cache import clear_by_prefix
 
+        before = len(os.listdir(self.cache_dir))
         count = clear_by_prefix("nonexistent_")
         self.assertEqual(count, 0)
-        self.assertEqual(len(os.listdir(self.cache_dir)), 5)
+        self.assertEqual(len(os.listdir(self.cache_dir)), before)
 
     def test_clear_by_prefix_ignores_non_json(self):
         """非 .json 文件不被纳入匹配。"""
@@ -438,8 +440,9 @@ class TestCacheClearByPrefix(CacheTestBase):
 
         from src.python.cache import clear_by_prefix
 
+        expected = [f for f in os.listdir(self.cache_dir) if f.startswith("price_") and f.endswith((".json", ".json.gz"))]
         count = clear_by_prefix("price_")
-        self.assertEqual(count, 2)
+        self.assertEqual(count, len(expected))
         self.assertTrue(os.path.exists(non_json))
 
     def test_clear_by_prefix_empty_dir(self):
@@ -452,13 +455,22 @@ class TestCacheClearByPrefix(CacheTestBase):
         self.assertEqual(clear_by_prefix("price_"), 0)
 
     def test_clear_by_prefix_os_error_continues(self):
-        """单个文件删除失败 → 继续删除其他文件。"""
+        """单个文件删除失败 → 继续删除其他文件（不因首个失败中断整批）。"""
         from src.python.cache import clear_by_prefix as real_cbp
 
-        with patch("src.python.cache._groups.os.remove") as mock_remove:
-            mock_remove.side_effect = [OSError("locked"), None]
+        attempts: list[str] = []
+
+        def _remove(path: str) -> None:
+            attempts.append(os.path.basename(path))
+            if len(attempts) == 1:
+                raise OSError("locked")
+
+        # `os` 是共享模块，patch 到 `_groups` 名下的 `os.remove` 仍是全局生效：用函数式
+        # side_effect（而非固定长度的列表）——后者在文件多于预期时会 StopIteration 假红
+        with patch("src.python.cache._groups.os.remove", side_effect=_remove):
             count = real_cbp("price_")
-            self.assertEqual(count, 1)
+        self.assertGreaterEqual(len(attempts), 2, "首个失败后必须继续尝试其余文件")
+        self.assertEqual(count, len(attempts) - 1, "失败的那个不计数，其余照常删除")
 
 
 # ═══════════════════════════════════════════════════════════

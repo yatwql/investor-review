@@ -79,21 +79,27 @@ def rel():
 
 
 class TestLedgerArchive:
-    def test_rf_table_extracted_verbatim(self, rel):
-        text = _SAMPLE_RF
-        body = text[text.index("### 开发期已修复（0.12.6-dev）") :]
-        table = rel.extract_rf_table(body)
-        assert table is not None
-        assert table.splitlines()[0].startswith("| # | 问题 | 处理 |")
-        rows = [line for line in table.splitlines() if line.startswith("| **rf-")]  # 数据行逐行原样
+    def test_rf_rows_moved_verbatim(self, rel):
+        """表块逐行原样搬进归档（表头/数据行不改写），主台账只剩占位。"""
+        body = _SAMPLE_RF[_SAMPLE_RF.index("### 开发期已修复（0.12.6-dev）") :]
+        _main, arch, moved = rel.apply_rf_archive(_SAMPLE_RF, _SAMPLE_RF_ARCHIVE, "0.12.6", "2026-10-08")
+        assert moved == 2
+        assert "| # | 问题 | 处理 |" in arch, "原表头随块搬入归档"
+        rows = [line for line in arch.splitlines() if line.startswith("| **rf-")]
         assert rows == ["| **rf-901** | 问题甲 | 处理甲 |", "| **rf-902** | 问题乙 | 处理乙 |"]
         assert rel.count_rf_rows(body) == len(rows)  # 结构关系，不写死条数
 
     def test_placeholder_body_yields_no_table(self, rel):
-        """已迁档（只剩占位）时不再有表 → 计数 0，重复归档不会二次搬运。"""
+        """已迁档（只剩占位）时计数 0、重复归档不二次搬运。"""
         body = "\n\n（本版开发期已修复项已随 v0.12.5 发布迁入上方归档档案）\n"
-        assert rel.extract_rf_table(body) is None
         assert rel.count_rf_rows(body) == 0
+        only_placeholder = _SAMPLE_RF.replace(
+            "| # | 问题 | 处理 |\n|---|------|------|\n| **rf-901** | 问题甲 | 处理甲 |\n"
+            "| **rf-902** | 问题乙 | 处理乙 |",
+            "（本版开发期已修复项已随 v0.12.6 发布迁入上方归档档案）",
+        )
+        main, arch, moved = rel.apply_rf_archive(only_placeholder, _SAMPLE_RF_ARCHIVE, "0.12.6", "2026-10-08")
+        assert (moved, main, arch) == (0, only_placeholder, _SAMPLE_RF_ARCHIVE)
 
     def test_apply_rf_archive_is_idempotent(self, rel):
         main, arch, moved = rel.apply_rf_archive(_SAMPLE_RF, _SAMPLE_RF_ARCHIVE, "0.12.6", "2026-10-08")
@@ -142,12 +148,14 @@ class TestLedgerArchive:
 
     def test_table_block_moved_verbatim_with_separator(self, rel):
         """表块逐行原样搬（含原分隔行），非 rf 起头的行也在块内不被落下。"""
-        body = "\n\n| # | 问题 | 处理 |\n|:--|:--|:--|\n| **rf-901** | 甲 | 处理甲 |\n| — | 汇总行 | 未分类 |\n"
-        table = rel.extract_rf_table(body)
-        assert table is not None
-        assert "|:--|:--|:--|" in table  # 原分隔行（非脚本合成的 `|---|`）
-        assert "| — | 汇总行 | 未分类 |" in table  # 非 rf 行随块搬运
-        assert rel.count_rf_rows(body) == 1  # 计数只认 rf 标识行
+        main = _SAMPLE_RF.replace(
+            "| # | 问题 | 处理 |\n|---|------|------|",
+            "| # | 问题 | 处理 |\n|:--|:--|:--|",
+        ).replace("| **rf-902** | 问题乙 | 处理乙 |", "| — | 汇总行 | 未分类 |")
+        _main, arch, moved = rel.apply_rf_archive(main, _SAMPLE_RF_ARCHIVE, "0.12.6", "2026-10-08")
+        assert moved == 1  # 计数只认 rf 标识行
+        assert "|:--|:--|:--|" in arch  # 原分隔行（非脚本合成的 `|---|`）
+        assert "| — | 汇总行 | 未分类 |" in arch  # 非 rf 行随块搬运
 
     def test_section_prose_preserved_in_main(self, rel):
         """表外散文（说明/备注）不随表迁走，留在主台账。"""

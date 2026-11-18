@@ -58,5 +58,5 @@ def resolve(akshare: Any, name: str) -> Callable[..., Any]:
     for candidate in tried:
         fn = getattr(akshare, candidate, None)
         if callable(fn):
-            return fn  # type: ignore[no-any-return]  # 第三方函数无类型存根，返回 Any 后再调用
+            return fn
     raise AttributeError(f"akshare 无该接口（逻辑名 {name!r}，已试：{', '.join(tried)}）")

@@ -107,34 +107,6 @@ def _rf_section_or_none(text: str, dev_version: str) -> tuple[int, int] | None:
     return m.end(), end
 
 
-def split_section_table(section_body: str) -> tuple[str, str, str] | None:
-    """节正文切成 (表前散文, 表格块, 表后散文)；无表格行返回 None。
-
-    表块 = 从第一条 `|` 行起、连续 `|` 行为止——**原样**返回（含分隔行与所有行），
-    不按 `rf-N` 前缀筛选，避免漏搬合并行/续行；表外散文由调用方保留在原位。
-    """
-    lines = section_body.splitlines()
-    start = next((i for i, line in enumerate(lines) if _TABLE_LINE_RE.match(line)), None)
-    if start is None:
-        return None
-    end = start
-    while end < len(lines) and _TABLE_LINE_RE.match(lines[end]):
-        end += 1
-    return (
-        "\n".join(lines[:start]),
-        "\n".join(lines[start:end]),
-        "\n".join(lines[end:]),
-    )
-
-
-def extract_rf_table(section_body: str) -> str | None:
-    """取已解决表格块原文（含原表头与分隔行）；已迁档（只剩占位）或无 rf 行时 None。"""
-    parts = split_section_table(section_body)
-    if parts is None or not _RF_ROW_RE.search(parts[1]):
-        return None
-    return parts[1]
-
-
 def _table_blocks(lines: list[str]) -> list[tuple[int, int]]:
     """正文内**全部**表格块（连续 `|` 行的 [起, 止) 区间），按出现顺序返回。
 
