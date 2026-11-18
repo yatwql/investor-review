@@ -61,6 +61,7 @@ from src.python.providers.news_dedup_rules import (  # noqa: F401  — 门面 re
     _CROSS_SAFE_RATIO,
     _SAME_SRC_BIGRAM_MIN,
     _extract_entity_bigrams,
+    _extract_entity_bigrams_cached,
     _has_opposite_direction,
     has_proper_noun_token,
     _normalize_title,
@@ -70,6 +71,10 @@ from src.python.providers.news_dedup_rules import (  # noqa: F401  — 门面 re
 )
 
 logger = logging.getLogger("invest")
+
+#: 子串包含（⑥）的最短亚串长度；同时用作标题窗口索引的窗口长度
+#: （「短串 ⊂ 长串」必共享一个该长度窗口，故窗口索引不丢子串路径）。
+_SUBSTRING_MIN_LEN = 6
 
 
 def _dedup_by_title(
@@ -105,6 +110,13 @@ def _dedup_by_title(
     提取 bigram 前整体掩码替换（_mask_stop），消除同类新闻共享模板骨架的虚高
     重叠。英文专名占位按长度分桶（_tk2_/_tk4_/_tk6_），不同长度英文词不再
     共享相似度。_normalize_title 保留空格防英文 token 粘连。
+
+    比较成本（判定不变，只减无望比较）：循环不扫全部已保留项，而由两层候选
+    索引给出**候选超集**再逐对判定——① 实体 bigram → 已保留下标（所有合并规则
+    都要求 overlap ≥ 1）；② 标题 n-gram 窗口（长度 ``_SUBSTRING_MIN_LEN``）→
+    已保留下标（子串包含必共享窗口）。两层均未命中的对不可能合并，故判定结果
+    与全量逐对完全相同（首个命中对的下标升序也与改前一致）。唯一可见差异是
+    锚点语料：实体零重叠对不再进锚点（它们恒不合并）。
     """
     if not items:
         return items
@@ -114,6 +126,28 @@ def _dedup_by_title(
     kept: list[dict[str, Any]] = []
     kept_norms: list[str] = []
     kept_sources: list[str] = []
+    # 候选索引（两层，均只是**候选超集**，不参与判定）：
+    #   - 实体 bigram → 已保留下标：所有合并规则都要求 overlap ≥ 1，共享 bigram 的对一定在此；
+    #   - 标题 n-gram 窗口（长度 = ⑥ 的最短子串长度）→ 已保留下标：
+    #     「短串 ⊂ 长串」必共享一个窗口，故子串路径不会因索引而漏判。
+    # 两层都没有命中的对（无共享实体且无共享窗口）不可能合并，也就不必进入循环。
+    bigram_index: dict[str, list[int]] = {}
+    window_index: dict[str, list[int]] = {}
+
+    def _candidates(norm: str, bigrams: frozenset[str]) -> list[int]:
+        """取的候选下标（升序 = 原逐对顺序，保证首个命中对与改前一致）。"""
+        seen: set[int] = set()
+        for bg in bigrams:
+            hits = bigram_index.get(bg)
+            if hits:
+                seen.update(hits)
+        if len(norm) >= _SUBSTRING_MIN_LEN:
+            for i in range(len(norm) - _SUBSTRING_MIN_LEN + 1):
+                hits = window_index.get(norm[i : i + _SUBSTRING_MIN_LEN])
+                if hits:
+                    seen.update(hits)
+        return sorted(seen)
+
     for item in items:
         norm = _normalize_title(item.get("title", ""))
         if not norm:
@@ -121,30 +155,38 @@ def _dedup_by_title(
             continue
         is_dup = False
         source = item.get("_source", "") or ""
-        for idx, existing in enumerate(kept_norms):
+        bg_norm = _extract_entity_bigrams_cached(norm)
+        for idx in _candidates(norm, bg_norm):
             pairs_compared += 1
+            existing = kept_norms[idx]
             existing_src = kept_sources[idx]
             existing_item = kept[idx]
             same_source = bool(source) and bool(existing_src) and source == existing_src
 
-            # ① 同源：共享实体 bigram ≥ 阈值即合并
-            if same_source:
-                overlap = _overlap_of_norms(norm, existing)
-                if overlap >= _SAME_SRC_BIGRAM_MIN:
-                    is_dup = True
-                    break
-                # 锚点：同源 bigram 接近阈值
-                if 2 <= overlap <= 5:
-                    _record_anchor(_make_anchor(item, existing_item, 0.0, overlap, False, _SAME_SRC_RULE))
+            # 实体重叠先算：**所有合并规则都要求 overlap ≥ 1**（①≥4 / ②≥1 / ③≥3 /
+            # ④≥1 / ⑤≥2），唯一不需要实体的是 ⑥ 子串包含（下面照旧执行）。因此
+            # overlap == 0 的对不可能靠相似度合并——直接跳过 ratio 计算（SequenceMatcher
+            # 是循环里最贵的一段），只留子串判定。合并结果与此前逐对计算等价；
+            # 差异仅在锚点语料：实体零重叠对不再进锚点（它们恒不合并）。
+            overlap = _overlap_of_norms(norm, existing)
 
-            # ② 跨源安全区：ratio ≥ 0.65 直接合并；0.50~0.65 需专名 bg ≥ 2
-            #    剥离通用日期模式后比较，避免不同新闻因共享"2026年7月"等虚高；
-            #    英文专名按长度分桶占位，避免共享专名（Anthropic/Meta/AMD）导致
-            #    SequenceMatcher 比率虚高（英文专名在 _extract_entity_bigrams
-            #    中已有独立处理，ratio 中可降权）。口径实现见 _ratio_of_norms。
-            ratio = _ratio_of_norms_bounded(norm, existing, cross_threshold)
-            if ratio >= _CROSS_SAFE_RATIO:
-                overlap = _overlap_of_norms(norm, existing)
+            # ① 同源：共享实体 bigram ≥ 阈值即合并
+            if same_source and overlap >= _SAME_SRC_BIGRAM_MIN:
+                is_dup = True
+                break
+            # 锚点：同源 bigram 接近阈值
+            if same_source and 2 <= overlap <= 5:
+                _record_anchor(_make_anchor(item, existing_item, 0.0, overlap, False, _SAME_SRC_RULE))
+
+            ratio = 0.0
+            if overlap >= 1:
+                # ② 跨源安全区：ratio ≥ 0.65 直接合并；0.50~0.65 需专名 bg ≥ 2
+                #    剥离通用日期模式后比较，避免不同新闻因共享"2026年7月"等虚高；
+                #    英文专名按长度分桶占位，避免共享专名（Anthropic/Meta/AMD）导致
+                #    SequenceMatcher 比率虚高（英文专名在 _extract_entity_bigrams
+                #    中已有独立处理，ratio 中可降权）。口径实现见 _ratio_of_norms。
+                ratio = _ratio_of_norms_bounded(norm, existing, cross_threshold)
+            if overlap >= 1 and ratio >= _CROSS_SAFE_RATIO:
                 # ratio ≥ 0.65 直接合并也要求专名 bg ≥ 1：不同公司同模板
                 # （"XX：2026年半年度净利润同比增长N%"）ratio 可高达 0.7+，
                 # 但掩码后 bg=0（公司名不同），不能当作改写型重复。
@@ -160,7 +202,7 @@ def _dedup_by_title(
                 _record_anchor(_make_anchor(item, existing_item, ratio, overlap, False, "cross_safe"))
 
             # ③ 跨源候选区：候选区入口 ≤ ratio < 0.50，需共享 ≥ 3 实体 bigram
-            if not same_source and ratio >= cross_threshold:
+            if not same_source and overlap >= 1 and ratio >= cross_threshold:
                 bg1 = _extract_entity_bigrams(norm)
                 bg2 = _extract_entity_bigrams(existing)
                 shared = bg1 & bg2
@@ -195,7 +237,7 @@ def _dedup_by_title(
             # ⑥ 子串包含
             if not is_dup:
                 short, long = (norm, existing) if len(norm) <= len(existing) else (existing, norm)
-                if len(short) >= 6 and short in long:
+                if len(short) >= _SUBSTRING_MIN_LEN and short in long:
                     is_dup = True
                     break
 
@@ -203,6 +245,12 @@ def _dedup_by_title(
             kept_norms.append(norm)
             kept_sources.append(source)
             kept.append(item)
+            _new_idx = len(kept_norms) - 1
+            for bg in bg_norm:
+                bigram_index.setdefault(bg, []).append(_new_idx)
+            if len(norm) >= _SUBSTRING_MIN_LEN:
+                for i in range(len(norm) - _SUBSTRING_MIN_LEN + 1):
+                    window_index.setdefault(norm[i : i + _SUBSTRING_MIN_LEN], []).append(_new_idx)
     logger.info(
         "[news] 去重内部: 去重前 %d 条 → 保留 %d 条，两两比较 %d 对，耗时 %.2fs",
         len(items),

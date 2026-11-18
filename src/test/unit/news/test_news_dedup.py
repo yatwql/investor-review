@@ -390,6 +390,29 @@ class TestAnchorRulesVersion(unittest.TestCase):
         self.assertEqual(anchor[ANCHOR_RULES_FIELD], _ANCHOR_RULES_VERSION)
         self.assertTrue(_ANCHOR_RULES_VERSION)
 
+    def test_anchor_record_carries_same_source_flag(self) -> None:
+        """锚点显式记录源关系：规则名里的 "cross" 只表示「非①同源快路径」，不代表两侧不同源。"""
+        from src.python.providers.news_dedup import _make_anchor
+
+        same = _make_anchor(
+            {"title": "A", "_source": "sina", "ctime": ""},
+            {"title": "B", "_source": "sina", "ctime": ""},
+            0.4,
+            1,
+            False,
+            "cross_safe",
+        )
+        cross = _make_anchor(
+            {"title": "A", "_source": "sina", "ctime": ""},
+            {"title": "B", "_source": "eastmoney", "ctime": ""},
+            0.4,
+            1,
+            False,
+            "cross_safe",
+        )
+        self.assertTrue(same["same_source"])
+        self.assertFalse(cross["same_source"])
+
     def test_fingerprint_follows_threshold_change(self) -> None:
         """阈值一变，指纹随之变化（无需人工改版本号）。"""
         from src.python.providers import news_dedup_rules

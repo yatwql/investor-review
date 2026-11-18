@@ -16,7 +16,8 @@ import json
 import os
 from typing import Any
 
-from src.python.core.doctor import GROUP_LOG_CACHE, PROJECT_ROOT, _item
+from src.python.core.constants import PROJECT_ROOT
+from src.python.core.doctor_common import GROUP_LOG_CACHE, _item
 
 #: 与主模块 logs/ 目录同源（PROJECT_ROOT/logs）
 _LOGS_DIR = os.path.join(PROJECT_ROOT, "logs")

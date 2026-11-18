@@ -20,7 +20,7 @@ from src.python.llm.api_base import (
     call_llm_with_retry,
 )
 from src.python.llm._api_responses import _extract_content, _check_claude_truncation
-from src.python.llm.api import (
+from src.python.llm.api_base import (
     _DEFAULT_CLAUDE_MODEL,
     configure_extended_thinking,
 )

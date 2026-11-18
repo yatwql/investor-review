@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import httpx
@@ -15,9 +15,14 @@ if TYPE_CHECKING:
 from src.python.llm.api_base import (
     _get_last_llm_failure,
     _get_retry_max,
-    _is_default_thinking_on,
-    _is_effort_model,
-    _supports_extended_thinking,
+    _is_default_thinking_on,  # noqa: F401 —— 再导出面：provider 子模块与测试按原名从门面取用
+    _is_effort_model,  # noqa: F401 —— 再导出面：provider 子模块与测试按原名从门面取用
+    _supports_extended_thinking,  # noqa: F401 —— 再导出面：provider 子模块与测试按原名从门面取用
+    _DEFAULT_CLAUDE_MODEL,  # noqa: F401 —— 再导出面：provider 子模块与测试按原名从门面取用
+    _DEFAULT_OPENAI_MODEL,  # noqa: F401 —— 再导出面：provider 子模块与测试按原名从门面取用
+    _DEFAULT_GEMINI_MODEL,  # noqa: F401 —— 再导出面：provider 子模块与测试按原名从门面取用
+    _resolve_thinking_budget,  # noqa: F401 —— 再导出面：provider 子模块与测试按原名从门面取用
+    configure_extended_thinking,
 )
 from src.python.llm.compliance import apply_compliance_guardrails
 from src.python.llm.prompts import (
@@ -32,9 +37,6 @@ from src.python.llm.strategy import resolve_provider_chain
 logger = logging.getLogger("invest")
 
 # ── 默认模型名（Provider 未指定时使用） ─────────────────
-_DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-20250514"
-_DEFAULT_OPENAI_MODEL = "gpt-4o"
-_DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 
 # ── 内容过滤安抚重试 ────────────────────────────────
 
@@ -68,31 +70,6 @@ def _calm_retry(system_prompt: str, user_prompt: str, name: str, do_retry) -> tu
     logger.warning("%s 安抚重试后仍返回空内容", name)
     return None, None
 
-
-def _resolve_thinking_budget(llm_config: dict, config_field: str, max_tokens: int) -> int:
-    """从 llm_config 解析 Extended Thinking budget_tokens，无效时自动兜底。
-
-    Anthropic / Gemini 官方约束：budget_tokens（thinkingBudget）须**小于**
-    max_tokens（maxOutputTokens）——思考 token 计入 max_tokens 共享预算，
-    须为其后的正文留余量。故兜底取值保证：
-      - 下限 ≥ 1024（Anthropic 对 budget_tokens 的最小值硬约束）
-      - 上限 < max_tokens（正文至少留 2048 token 余量，max_tokens 较小时
-        让位于 1024 下限——但正常模块 max_tokens 均远超该值）
-
-    Args:
-        llm_config: LLM 配置字典
-        config_field: 如 ``"max_tokens_expert_review"``
-        max_tokens: 模块 max_tokens 值，用于兜底计算
-
-    Returns:
-        budget_tokens 值
-    """
-    module_suffix = config_field.replace("max_tokens_", "")
-    budget_key = f"thinking_budget_{module_suffix}"
-    budget = llm_config.get(budget_key)
-    if not budget or budget >= max_tokens:
-        budget = max(1024, max_tokens - 2048)  # 自动兜底：budget < max_tokens
-    return budget
 
 
 def _resolve_entry_credentials(
@@ -461,56 +438,6 @@ def call_llm(
         }
     return (None, None, None)
 
-
-def configure_extended_thinking(
-    payload: dict[str, Any],
-    llm_config: dict | None,
-    config_field: str,
-    model: str,
-    max_tokens: int,
-) -> None:
-    """如果开启，在 payload 中注入 Extended Thinking 参数（原地修改）。
-
-    根据模型类型选择 effort（DeepSeek）或 budget_tokens（Anthropic / Kimi）控制思考深度。
-    若模型不支持则自动降级跳过。
-    """
-    if not llm_config:
-        return
-
-    module_suffix = config_field.replace("max_tokens_", "")
-    thinking_key = f"thinking_enabled_{module_suffix}"
-    if not llm_config.get(thinking_key, False):
-        # 默认开思考的模型（DeepSeek 推理族 / Kimi）：未显式开启 thinking 时不传任何思考
-        # 参数会落入默认思考模式，思考占满 max_tokens 导致无正文（耗尽 max_tokens 预算）。
-        # 显式 disabled 才能真正关闭思考，从源头避免耗尽。默认不思考的模型（Anthropic 原生）
-        # 保持原样不注入。
-        if model and _is_default_thinking_on(model):
-            payload["thinking"] = {"type": "disabled"}
-        return
-
-    resolved_model = model or _DEFAULT_CLAUDE_MODEL
-    if not _supports_extended_thinking(resolved_model):
-        logger.warning(
-            "模型 %s 不支持 Extended Thinking：本次调用不启用思考（模块照常执行）[%s]",
-            resolved_model,
-            module_suffix,
-        )
-        return
-
-    payload["thinking"] = {"type": "enabled"}
-    payload.pop("temperature", None)  # Extended Thinking 与 temperature 互斥
-
-    if _is_effort_model(resolved_model):
-        effort_key = f"reasoning_effort_{module_suffix}"
-        effort = llm_config.get(effort_key, "high")
-        payload["output_config"] = {"effort": effort}
-        logger.info("Extended Thinking 已开启 [%s]: effort=%s", module_suffix, effort)
-    else:
-        budget = _resolve_thinking_budget(llm_config, config_field, max_tokens)
-        # 一次赋值写全（而非对已有 dict 追写子键），避免静态检查把套嵌 dict 的元素类型
-        # 收窄成声明处的 str；行为与分两步写等价。
-        payload["thinking"] = {"type": "enabled", "budget_tokens": budget}
-        logger.info("Extended Thinking 已开启 [%s]: budget=%d", module_suffix, budget)
 
 
 # ── Provider 调用实现（从子模块导入） ─────────────────

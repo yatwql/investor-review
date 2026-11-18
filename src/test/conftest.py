@@ -258,6 +258,8 @@ def _isolate_sensitive_paths(tmp_path, monkeypatch, _doctor_probe_targets):
       （结论缓存目录，同上重定向；当前接入：doc-traces / semantic-index / doc-links /
        code-traces / requirement-trace / doc-drift）
     - 替换 HISTORY_SNAPSHOT_DIR → tmp_path/data/history/snapshots
+    - 替换去重锚点语料路径 → tmp_path/data/calibration/dedup_anchors.jsonl（采集默认开，
+      防用例把测试标题写进阈值校准语料）
     - 清除 config 内存缓存，使 get_config() 从临时路径读取
     （无文件时自动回退到 _DEFAULT_CONFIG 默认值）
 

@@ -223,6 +223,31 @@ from _doc_drift import (  # noqa: E402,F401  # 原面 re-export（实现见 _doc
 )
 
 
+#: 最近一次 `run_checks` 的「子项 → finding 数」快照（命中台账用；进程内单次运行）
+_CHECK_TALLY: dict[str, int] = {}
+
+
+def _instrument_checks(namespace: dict, tally: dict[str, int]) -> None:
+    """给本模块全部 `check_*` 函数套一层计数壳（幂等），供命中台账记录子项粒度。
+
+    子项函数在 `run_checks` 内按**模块全局名**解析，故包住全局名即可覆盖全部子项，
+    不必逐行改写调用点；已包过的函数打 `_tally_wrapped` 标记，重复调用不叠壳。
+    """
+    for name, target in list(namespace.items()):
+        if not (name.startswith("check_") and callable(target)):
+            continue
+        if getattr(target, "_tally_wrapped", False):
+            continue
+
+        def _wrapped(*args, _fn=target, _name=name, **kwargs):
+            found = _fn(*args, **kwargs)
+            tally[_name] = tally.get(_name, 0) + len(found)
+            return found
+
+        _wrapped._tally_wrapped = True  # type: ignore[attr-defined]
+        namespace[name] = _wrapped
+
+
 def run_checks(with_test_count: bool = False, docs: dict | None = None) -> list[str]:
     """跑全部检查，返回不一致描述列表（空 = 全部一致）。
 
@@ -234,6 +259,8 @@ def run_checks(with_test_count: bool = False, docs: dict | None = None) -> list[
     assert docs is not None  # 类型收敛：扫描器恒返回映射，None 只表示「未传入」
     snapshot = _collect_test_snapshot(full_buckets=True) if with_test_count else {}
     findings: list[str] = []
+    _CHECK_TALLY.clear()
+    _instrument_checks(globals(), _CHECK_TALLY)
     findings += check_section_table(docs[_REPORTS_MD])
     findings += check_visibility_type_rows(docs[_REPORTS_MD])
     findings += check_section_counts(docs)
@@ -335,6 +362,7 @@ def _run_checks_phase(args: argparse.Namespace) -> int:
         "[OK] 文档与实现一致性校验通过（章节/开关/默认值/面板编号/目录树/统计表/归档索引/分区纪律/占位归档节/树描述计数/Thinking 支持矩阵/章节-区块矩阵/手册菜单块均与代码一致）",
         ci=args.ci,
         fail_message="[!] 发现 {n} 处文档与实现不一致，须修正后提交",
+        details=dict(_CHECK_TALLY),
     )
 
 

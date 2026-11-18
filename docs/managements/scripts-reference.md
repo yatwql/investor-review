@@ -54,6 +54,7 @@
 | `test-perf-report.py` | 评测 | 端到端报告生成管线性能基准（独立脚本，mock 外部数据源；进度判据 `--gate`）。**状态与日志双重隔离**：日志落临时目录（`INVEST_LOG_PATH` + `INVEST_RUN_CONTEXT=perf`，止住禁网告警写进真实日志）；持仓快照目录：合成持仓快照落隔离目录 + `snapshot_namespace="bench"` 域，不进共享主目录（否则按日去重会当权真实历史，把跨区间交易事件判成基线切换） |
 | `perf-history.py` | 运维 | 性能历史趋势查看（读取 perf_history.jsonl → 版本演进总表 + P95/P99 分位概览 + 离群/尾部归因 + 异常运行/同版本漂移 + 秒每品种归一化 + 并发预算段（档位/预算/峰值/缩容合计，标注跨档位不可直接比耗时）+ 时段聚合（耗时与费用合计/环比/缩容列）/机读输出（llm_cost、by_period 费用字段、CSV 增 budget/peak/clamps 三列）；实现拆在 `_perf_history/`——`stats.py` 统计原语 / `data.py` 派生 / `report.py` 渲染 / `cli.py` 入口，主入口只留 docstring 与 re-export） |
 | `probe.py` | 运维 | 探测统一入口（按 target 分发到 `_probes/` 子模块；新探针实现契约面登记即用） |
+| `probe-guard-hits.py` | 运维 | 守护项命中统计（读 `logs/guard-hits.jsonl`，输出「运行次数/命中次数/处置」表；非门禁） |
 | `probe-report-claims.py` | 运维观测 | 批量重放历史报告做确定性数值核对（覆盖率/告警/自动改写，零 LLM 调用、只读；不入门禁） |
 | `eval-factor-zoo.py` | 评测 | 因子动物园目录评测（非生产代码；五个来源族各抽 5 个因子，评测 A 字段可得率 / B 与既有信号族增量 / C 全量计算耗时占比三项指标，A/B/C 全过才转正立项；子命令 catalog / fields / signals / timing / verdict / all，产物只落 `docs/tmp/factor-zoo/`；实现拆在 `_eval_factor_zoo/`） |
 | `eval-decision-quality.py` | 评测 | 投资决策质量待验证项回测（决策视界命中率 / 因子单因子 IC / 估值两口径区分度；判据预注册于脚本常量，样本门槛 100、IC 绝对值拒绝线 0.05；子命令 horizon / factor-ic / valuation / all，产物落 `docs/tmp/decision-quality/`） |
@@ -102,6 +103,8 @@
 所有检查脚本共用的契约、设施与处置流程集中在「检查脚本的公共部分」，各条目不再重复。哪些脚本属于阻塞门禁的守护清单、各在 P0 还是 P2，以「三级门禁」章节的五处同源清单为准。
 
 ## 检查脚本的公共部分
+
+**命中台账（`logs/guard-hits.jsonl`）**：每个检查脚本调用 `_shared.checklib.report()` 时都会追加一行运行记录（`timestamp` / `script` / `findings` / `details`），`check-doc-drift` 另在 `details` 里给出「子项 → finding 数」。台账只供 `probe-guard-hits.py` 统计「哪项守护真的拦过东西」，**不参与任何判定**；写入尽力而为、失败静默，路径可用环境变量 `INVEST_GUARD_HITS_LEDGER` 覆盖（测试与 CI 隔离用），`logs/` 不入库。台账按体积治理：超过 4MB 即截断为最近 5000 行（原子替换、失败静默），近期分布统计不受影响。
 
 以下四块适用于所有检查脚本，条目里只写各自的差异。
 
@@ -1141,6 +1144,10 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 **使用逻辑**：`python scripts/probe-report-claims.py [--limit N] [--since DAYS] [--output FILE]`。退出码 0 正常（有告警也是 0——告警是内容线索不是脚本失败）、2 找不到可核对报告。已比对率低说明「多数声称被跳过」，样本里以权重/敞口/风险度为主属正常；要逐条判定跳过是否合理，用 `eval-llm-hallucination.py --from-report <html> --dump-skipped <模块|all>`。
 
+**`probe-guard-hits.py` — 守护项命中统计（非门禁）**
+
+**使用逻辑**：`python scripts/probe-guard-hits.py [-v] [--min-runs N] [--ledger PATH]`。读 `logs/guard-hits.jsonl`（由 `_shared/checklib.report()` 每次运行追加；`check-doc-drift` 另在 `details` 里给子项粒度），输出「守护项 × 运行次数 × 命中次数 × 命中 finding 总数 × 处置」表；`-v` 追加子项明细。处置三态：命中过 → 保留；命中 0 次且运行次数 ≥ `--min-runs`（默认 5）→ 建议降频（CI 恒跑兜底）；未达样本门槛 → 样本不足。本脚本**不改任何守护的启用状态**：降频属人工决策，须复核后写入本文件。退出码 0 = 统计已输出（命中 0 次也是 0，本脚本不是门禁）、1 = 台账不可读（路径是目录/权限不足）。
+
 **`probe.py` — 探测统一入口（target 分发 registry）**
 
 所有连通性/可用性探测统一走 `scripts/probe.py <target> [options…]`：target 实现在 `scripts/_probes/<语义名>.py`（声明 `PROBE_TARGET` / `build_parser()` / `run(args)` 契约面并在 `_probes/__init__.py` 登记），**全部纯只读**（不写缓存/熔断/降级记录，无副作用）；新探针只需新增子模块并登记，入口无需改动。现有 target：
@@ -1210,6 +1217,8 @@ curl 对照命令：`curl -s "https://push2.eastmoney.com/api/qt/stock/get?secid
 退出码：0 成功 / 1 运行失败 / 2 参数错误 / 3 判定不通过。
 
 **`eval-dedup-threshold.py` — 新闻去重阈值校准**
+
+**时代过滤**：判定分布只纳入 `anchor_rules_version` 等于当前指纹的样本（报告单列排除条数），旧时代/未标注样本只计入时代统计——不同时代的 ratio 与重叠是各自规则下的口径，混算会让阈值结论偏斜。源关系取记录里的 `same_source`（旧记录缺失时按两侧源名反推）。
 
 新闻标题去重（同源/跨源安全区分级 + 候选区阶梯 + 方向对立防护，阈值见 `news_dedup.py` 校准常量）的"边界案例"**默认采集**到 `data/calibration/dedup_anchors-YYYYMM.jsonl.gz`（按月 gzip 分片，写侧按 multi-member gzip 追加、不读旧文件；读侧 `gzip.open` 透明解压，跨轮重复由本脚本 `load_anchors` 按键去重），`INVEST_DEDUP_COLLECT_ANCHORS=0` 可关闭采集。积累足够锚点后，用此脚本分析当前阈值是否合理。**评估默认在分析完成后压缩一次锚点文件**（每 key 最新 + 保留期 30 天 + 体积目标 24MB 与分支配额，实现在 `news_dedup.compact_anchor_file`，与本工具同源），顺带完成体积维护；压缩结果会打印超期/体积裁剪（含分支分布）/无指纹旧行丢弃/并发放弃四类计数。`--no-compact` 只读分析，`--dry-run` 演练不写盘，`--compact` 仅压缩不分析。报告路径仍不自动压缩。
 

@@ -150,6 +150,7 @@ class _RenderContext:
     data_source_catalog: Any
     factor_names: dict
     code_display_map: dict
+    degradation_line: str
 
 
 def _prepare_render_context(
@@ -223,6 +224,10 @@ def _prepare_render_context(
 
     _mask_source = details if details is not None else data_source.holdings
     _code_display_map = build_code_display_map(_mask_source, get_anonymization_mode())
+    # 本轮降级汇总（无降级时为空串 → 模板不出该行，产物逐字节不变）
+    from src.python.core.degradation import report_degradation_summary
+
+    _degradation = report_degradation_summary()
     return _RenderContext(
         section_numbers=section_numbers,
         section_visible_dict=section_visible_dict,
@@ -233,4 +238,5 @@ def _prepare_render_context(
         data_source_catalog=data_source_catalog,
         factor_names=_factor_names,
         code_display_map=_code_display_map,
+        degradation_line=str(_degradation.get("text") or ""),
     )

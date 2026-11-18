@@ -1,13 +1,13 @@
 # 投资复盘助手 — 实现计划
 
-> 文档版本：0.18.3
-> **编号源**：`plan-next = 259`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-251，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> 文档版本：0.18.4
+> **编号源**：`plan-next = 266`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-265，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
 
 ## 概述
 
-在办 11 项：P1 2 项（**plan-238**、**plan-239**）、P2 3 项（**plan-92**、**plan-252**、**plan-253**）、P3 5 项（**plan-70**、**plan-233**、**plan-243**、**plan-254**、**plan-255**）、P4 1 项（**plan-55**）。命名与实现纪律见 `CLAUDE.md`（单一事实位，本表不重复）。
+在办 10 项：P1 3 项（**plan-238**、**plan-239**、**plan-259**）、P2 1 项（**plan-92**）、P3 5 项（**plan-70**、**plan-233**、**plan-243**、**plan-254**、**plan-255**）、P4 1 项（**plan-55**）。命名与实现纪律见 `CLAUDE.md`（单一事实位，本表不重复）。
 
 ---
 
@@ -47,6 +47,13 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 - [ ] 空态禁用与流水记忆：清单为空时保存 / 预览 / 清空按钮禁用、预览框隐藏；勾「同时记入交易流水」后刷新页面仍保留
 - [ ] 并发闸门：外部改过持仓文件后保存 → `HOLDINGS_STALE` 提示并自动刷新总览
 
+#### `plan-259` 持仓录入三渠道能力对齐收口
+
+**现状**：录入能力三渠道推进节奏不一——CLI 已闭环，TUI/WEB 两侧实现已落地但真机验收未完成（`plan-238`/`plan-239`），是目前唯一「用户可感知但未收口」的功能面；验收后又需要一次口径对账，避免三渠道各自漂移（校验文案、写回语义、流水记入、并发闸门）。
+**前置**：`plan-238` 与 `plan-239` 验收清单全部勾选。
+**动作**：① 按三渠道对账表逐项比对（账户/标的输入、份额与金额口径、撤销与清空、`.bak` 与回读校验、流水开关状态、并发闸门错误码）；② 差异项定为「渠道限定」写进手册或修成一致，不允许无声明差异；③ 把对账表落 `docs/managements/test-coverage.md` 的能力矩阵与手册；④ 两档验收记录归档。
+**验收**：三渠道对账表无未声明差异；手册三渠道录入流程口径一致；TUI/WEB 验收记录归档、本项转「已完成」。
+
 ### P2 — 下一阶段就绪（满足条件即开工）
 
 入选标准：价值明确、成本可控，条件满足即开工。
@@ -55,22 +62,6 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 
 **现状**：19 页签为静态数字与文字，收益率高低、集中度偏离需逐格读数。
 **动作**：高价值数值列加色阶/数据条，趋势列加迷你折线（openpyxl 原生）；先做持仓明细 / 量化指标 / 集中度 2~3 个页签，验证后再扩。
-
-#### `plan-252` 建议后验评估政策单源化 + 不动作类命中评估
-
-**来源**：PanWatch 借鉴分析（[`panwatch-borrowing-review.md`](../plan/panwatch-borrowing-review.md) §2.1），commit `97f1813`。
-**缺口**：账本对 `DIRECTION_FLAT`（持有/观望/不操作）只记平盘不判命中，模型输出里「不操作」占比不低却从不被评估；「什么算命中」的口径散在 `decision_ledger` / `decision_basis_settlement` / `decision_review_block` / `eval-decision-quality` 四处。
-**动作**：新增 `core/decision_eval_policy.py` 作评估口径唯一事实位（方向阈值沿用 1.5%、不动作容忍带 2.0%、样本门槛沿用 20、视界单位声明；**零依赖**，账本单向导入并保留原名导出），判定入口仍只有 `classify_direction_outcome` 一个（不新增第二套判定），结算新增 `flat_hit: bool|None` 字段（旧账本无字段按未判、不回填），折叠汇总新增 `flat` 分项与 `by_carrier.flat_*`，报告/`doctor` 并列呈现不动作命中率；同步附录 H 的 `decision_basis_data` 行与 R-OUT-17 口径。
-**不做**：不改方向性阈值与样本门槛；不做置信度加权；不参与 `plan-70` 转正判据。
-**设计**：[`decision-eval-policy-design.md`](../plan/decision-eval-policy-design.md)（三期：政策与结算 → 呈现 → 自检提示）。
-
-#### `plan-253` LLM 复盘结论结构化契约（claim / evidence / verdict）
-
-**来源**：PanWatch 借鉴分析（[`panwatch-borrowing-review.md`](../plan/panwatch-borrowing-review.md) §2.2 与 §2.3）。
-**缺口**：LLM 输出是自由 markdown；`fact_checker` 只校验数值，`decision_llm_capture` 只抽表格；没有「主张→证据→判决」链，也没有「证据时点 ≤ 分析截止」这类可机检约束，建议的 triggers/invalidations 只停留在提示词口头要求。
-**动作**：新增开关 `llm_research_contract`（默认关，关闭逐字节不变）。P1 由**该模块提示词输入块**生成内容寻址 `evidence_id` 池（不直接复用 fact_checker 内部语料结构）并追加结构头 `{claims[{id,statement,evidence[],inference,invalidations}],verdict}`；P2 引入 verdict 枚举（ready/revise/evidence_needed/reject）+ 一次预算受限补证（补证轮加缓存键盐，避免命中上一轮正文）；证据时点按报告行情口径 `as_of` 校验、场外滞后净值按披露分档放行；P3「决策书」并入**行动建议章的 LLM 解读位**（紧邻判断依据块；不新增章节/页签，也不写进零 LLM 的判断依据块本体）+ 建议硬约束（review/blocked 不得带数量、限购品种自动带执行约束）。
-**不做**：不做 agent 图与工具调用循环；不引入 Pydantic 契约模型；不自动改写正文。
-**设计**：[`llm-research-contract-design.md`](../plan/llm-research-contract-design.md)（三期与验收、golden 回归方案）。
 
 ### P3 — 预期实施，有空时安排
 
@@ -97,17 +88,6 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 **已定调**：估值分位/因子目录信号按「已回测未通过」「样本不足」**归档**（三态标注照常呈现；真实 PE/PB 口径不入管线；`scripts/eval-decision-quality.py` 保留，供样本累积后一次性复跑，日常不排期）；独立章节形态 B 不启用；LLM 章维持解读层。
 **长期观察（不排期，触发条件满足时再评估）**：① R8 纪律规则重构——前置 V5 成熟样本 ≥100（现 2 条）；② V7 相关性约束启用——前置样本期 ≥250 交易日（现 146）；③ 讨论稿优先级 6 与 V4/V6/V7 模型 A/B（人工采样，不入自动化）。以上任一前置达成前，资源投向其他任务。
 **事实位**：轮次明细、验收记录与回测读数见设计稿 [`investment-decision-basis-design.md`](../plan/investment-decision-basis-design.md) §4/§5 及[归档讨论稿](../archive/v0.16.x/investment-decision-quality/investment-decision-quality.md) §8.1；本表不复述。
-
-#### `plan-258` 深层渲染契约收敛（`_render_template` 收上下文对象）
-
-**现状**：`report/html_writer._render_template` 声明 80 个关键字形参并原样转发给 Jinja 渲染；`write_html_report` 有 50+ 入参，
-两侧都是长参数表。`plan-257` 已把编排逻辑切完，剩下的纯粹是「参数搬运」。
-**动作（条件性）**：`_render_template` 改为接收单个 `_RenderContext` 上下文对象（内部 `render(**vars(ctx))`），
-`write_html_report` 的入参分族收敛为该上下文，再逐层下传到调用方；渲染契约（模板变量键集合）由新增守卫用例锁死，
-`report_template.html` 不改。
-**为何暂不做**：触碰模板变量装配面 + 10 余个调用方，须按字节对拍产物；收益是可读性而非缺陷风险，等下次确有「改渲染入参」需求时一并做，避免为拆而拆。
-**已备范式**：同文件链上的 `_prepare_render_context` 已按「来源域 → dataclass」分组把 30 个关键字入参收为 3 个（`rf-1157`），本项沿用同一分族口径即可，无需另立风格。
-**验收**：模板变量键集合与拆分前完全一致（守卫用例比对）；同输入产物 SHA 一致；P0/P1 门禁全绿。
 
 #### `plan-254` 不动作建议命中率的真机读数（等样本成熟）
 
@@ -138,8 +118,6 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 **约束与红线**：① 不作为用户可选对话模型（不生成文本）；② 不做「生成 + 判定」双供应商级联；③ 语料冻结产物落 `docs/tmp/`，仅脱敏样例可入库；④ 类型化通道故障不得拖垮生成链（熔断实例分离）；⑤ 新增配置键按开关注册表纪律登记，默认值保持 `chat`。
 
 ### 已完成（待发布归档）
-
-（本开发周期暂无待归档完成项）
 
 ## 归档
 

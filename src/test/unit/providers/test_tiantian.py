@@ -737,7 +737,7 @@ class TestFundTypeHintFromName(unittest.TestCase):
         """指数联接 → index。"""
         self.assertEqual(_fund_type_hint_from_name("易方达上证50ETF联接A"), "index")
 
-    def test_etf(self):
+    def test_pure_etf_hint_is_index(self):
         """纯 ETF → index。"""
         self.assertEqual(_fund_type_hint_from_name("华夏上证50ETF"), "index")
 

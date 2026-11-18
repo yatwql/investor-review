@@ -145,6 +145,7 @@ def test_datasink_indicator_adapter_tries_next_section(monkeypatch):
     record = adapter.transform_record(adapter.fetch_raw(code="600900"), adapter.display_name)
 
     assert seen == ["公司简介和主要财务指标", "主要财务数据"]
+    assert record is not None
     assert record["revenue"] == pytest.approx(86_241_940_222.20)
     assert record["doc_type"] == "q1"
 
@@ -523,3 +524,53 @@ class TestSeriesTransientRetry:
         series = fi.fetch_indicator_series("600900")
         assert calls["n"] == 1  # 解析崩溃重试必然重复 → 未做注定失败的同源重试
         assert [r["source_api"] for r in series] == ["hithink"]
+
+
+class TestSingleFetchReusesSeriesCache:
+    """单期取数复用多期缓存（同轮同一 code 只回源一次）。
+
+    报告侧先取多期（`financial_indicator` 章）再逐 code 取单期（基金 ROE 估算 /
+    因子目录探测），两条缓存键（`fin_indicator_hist_{code}` / `fin_indicator_{code}`）
+    不同；不复用则同一 code 每轮多一次回源——这正是本轮缓存未命中数居首的成因。
+    """
+
+    def test_returns_series_head_without_network(self, monkeypatch):
+        from src.python.fetcher import financial_indicator as fi
+
+        cached = [{"report_period": "2026-06-30", "roe": 0.17}, {"report_period": "2025-12-31"}]
+        monkeypatch.setattr(
+            fi, "cache_get", lambda key, ttl=None: cached if key.startswith(fi.HISTORY_PREFIX) else None
+        )
+
+        def _no_network(*_args, **_kwargs):
+            raise AssertionError("多期缓存命中时不得回源")
+
+        from src.python.fetcher import chain
+
+        monkeypatch.setattr(chain, "fetch_with_fallback", _no_network)
+        assert fi.fetch_latest_indicator("600519") == cached[0]
+
+    def test_falls_through_when_series_cache_absent(self, monkeypatch):
+        from src.python.fetcher import financial_indicator as fi
+
+        monkeypatch.setattr(fi, "cache_get", lambda key, ttl=None: None)
+        single = {"report_period": "2026-06-30"}
+
+        from src.python.fetcher import chain, source_adapter
+
+        monkeypatch.setattr(chain, "fetch_with_fallback", lambda *a, **k: single)
+        monkeypatch.setattr(source_adapter, "adapter_chain_slots", lambda domain: ({}, {}))
+        assert fi.fetch_latest_indicator("600519") == single
+
+    def test_non_a_share_code_does_not_touch_cache(self, monkeypatch):
+        from src.python.fetcher import financial_indicator as fi
+
+        touched = {"n": 0}
+
+        def _cache_get(*_args, **_kwargs):
+            touched["n"] += 1
+            return [{"report_period": "2026-06-30"}]
+
+        monkeypatch.setattr(fi, "cache_get", _cache_get)
+        assert fi.fetch_latest_indicator("7203") is None
+        assert touched["n"] == 0

@@ -34,7 +34,6 @@ import hashlib
 import json
 import logging
 import os
-from datetime import datetime
 from typing import Any, Iterable
 
 from src.python.core.constants import PROJECT_ROOT
@@ -133,10 +132,10 @@ MIN_SUMMARY_SAMPLE = 3
 
 
 def is_active() -> bool:
-    """特性开关是否开启（收敛判定）。开关关闭时全链路无感。"""
-    from src.python.config.features import is_feature_enabled
+    """特性开关是否开启（收敛判定，原语见 `core/ledger_common.feature_active`）。"""
+    from src.python.core.ledger_common import feature_active
 
-    return is_feature_enabled(FEATURE_FLAG)
+    return feature_active(FEATURE_FLAG)
 
 
 # ── 来源标签判定（收敛于单一函数，禁止调用点自行拼字符串）────
@@ -183,7 +182,10 @@ def resolve_data_source(
 
 
 def _now_iso() -> str:
-    return datetime.now().isoformat(timespec="seconds")
+    """账本时间戳（口径见 `core/ledger_common.now_iso`）。"""
+    from src.python.core.ledger_common import now_iso
+
+    return now_iso()
 
 
 def _safe_number(value: Any) -> float | int | None:

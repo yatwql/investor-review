@@ -383,6 +383,25 @@ class TestEraBuckets:
         assert set(data["era_versions"]) == {_ANCHOR_RULES_VERSION, "oldfingerprint"}
         assert data["era_versions"]["oldfingerprint"] == 1
 
+    def test_analyze_only_buckets_current_era(self, tool):
+        """判定分布只纳入当前指纹：旧时代/未标注样本不计入 branches（避免拖动阈值结论）。"""
+        data = tool.analyze(self._records())
+
+        assert data["era_skipped"] == 2, "旧指纹 + 未标注两条都应被排除"
+        bucketed = sum(len(items) for items in data["branches"].values())
+        assert bucketed == data["era_current"]
+
+    def test_analyze_prefers_recorded_same_source(self, tool):
+        """记录里的 same_source 优先于按源名反推（跨轮归一化后源名可能不等）。"""
+        record = _record("同一事件同一来源", "同一事件同一来源改写", 0.7, 2, "same_src")
+        record[ANCHOR_RULES_FIELD] = _ANCHOR_RULES_VERSION
+        record.update(source_a="sina", source_b="sina", same_source=False)
+
+        data = tool.analyze([record])
+        assert data["era_current"] == 1
+        buckets = {name: len(items) for name, items in data["branches"].items()}
+        assert "same_src_merged" not in buckets, "记录声明非同源时不得按同源分支判定"
+
 
 class TestDefaultRetention:
     """缺省保留期与生产同源（不传 --retention-days 时按生产默认窗口裁剪）。"""

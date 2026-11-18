@@ -111,3 +111,76 @@ class TestMultisetUpperBound:
         )
         bound = rules._multiset_upper_bound("证监会发布新规支持科技企业上市", "证监会发布新规支持科技创新企业上市")
         assert bound + 1e-12 >= quick
+
+
+class TestEntityFirstGate:
+    """实体重叠前置关卡：overlap == 0 的对不构造相似度（判定不变，只省代价）。
+
+    合法性前提：**所有合并规则都要求 overlap ≥ 1**（①≥4 / ②≥1 / ③≥3 / ④≥1 / ⑤≥2），
+    唯一不需要实体的是 ⑥ 子串包含（本类末条用例守它没被连带跳过）。
+    """
+
+    _DISJOINT = [
+        {"title": "甲辰科技有限公司：半年度净利润同比增长 35%", "_source": "sina"},
+        {"title": "乙酉新能源：获机构上调评级", "_source": "eastmoney"},
+        {"title": "丙午半导体宣布回购计划", "_source": "cls"},
+        {"title": "丁未医药：新产品线投产", "_source": "sina"},
+    ]
+
+    def test_zero_overlap_pairs_skip_similarity(self, monkeypatch):
+        """实体互不重叠且无共享窗口的标题：连重叠计算都不发生，且全部保留。"""
+        monkeypatch.setenv("INVEST_DEDUP_COLLECT_ANCHORS", "0")
+        from src.python.providers import news_dedup as dedup_mod
+
+        computed: list[tuple[str, str]] = []
+        compared: list[tuple[str, str]] = []
+        real_ratio = dedup_mod._ratio_of_norms_bounded
+        real_overlap = dedup_mod._overlap_of_norms
+
+        def _ratio_spy(a: str, b: str, threshold: float) -> float:
+            computed.append((a, b))
+            return real_ratio(a, b, threshold)
+
+        def _overlap_spy(a: str, b: str) -> int:
+            compared.append((a, b))
+            return real_overlap(a, b)
+
+        monkeypatch.setattr(dedup_mod, "_ratio_of_norms_bounded", _ratio_spy)
+        monkeypatch.setattr(dedup_mod, "_overlap_of_norms", _overlap_spy)
+        kept = _dedup_by_title(list(self._DISJOINT))
+
+        assert len(kept) == len(self._DISJOINT)
+        assert compared == []
+        assert computed == []
+
+    def test_merge_result_matches_baseline_when_pairs_overlap(self, monkeypatch):
+        """共享实体的语料：跳过零重叠对不得改变保留集合（与本文件基线对照逐条比）。"""
+        monkeypatch.setenv("INVEST_DEDUP_COLLECT_ANCHORS", "0")
+        items = _corpus(80) + [
+            {"title": "英伟达发布新一代 GPU 算力平台，机构上调目标价", "_source": "sina"},
+            {"title": "英伟达发布新一代GPU算力平台 机构上调目标价", "_source": "eastmoney"},
+        ]
+        optimized = [it["title"] for it in _dedup_by_title(items)]
+        legacy = [it["title"] for it in _legacy_dedup(items, monkeypatch)]
+        assert optimized == legacy
+
+    def test_substring_path_survives_zero_overlap(self, monkeypatch):
+        """子串包含（⑥）不依赖实体重叠，前置关卡不得把它一并跳过。"""
+        monkeypatch.setenv("INVEST_DEDUP_COLLECT_ANCHORS", "0")
+        from src.python.providers import news_dedup as dedup_mod
+
+        short = "净利润同比增长目标价"
+        long_title = "净利润同比增长目标价上调至 480 元"
+        assert rules._overlap_of_norms(short, long_title) == 0, "本用例前提：零实体重叠"
+        computed: list[int] = []
+        monkeypatch.setattr(dedup_mod, "_ratio_of_norms_bounded", lambda a, b, t: computed.append(1) or 0.0)
+
+        kept = _dedup_by_title(
+            [
+                {"title": long_title, "_source": "sina"},
+                {"title": short, "_source": "eastmoney"},
+            ]
+        )
+
+        assert [it["title"] for it in kept] == [long_title]
+        assert computed == []

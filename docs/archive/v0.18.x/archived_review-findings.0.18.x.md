@@ -1,8 +1,8 @@
 # 自审记录归档 — v0.18.x
 
-> 归档时间：2026-11-12（v0.18.0 发布，本系列首批已修复批次并入）；2026-11-12 v0.18.0 本批原表搬运；2026-11-15 v0.18.1 本批原表搬运；2026-11-16 v0.18.2 本批原表搬运；2026-11-17 v0.18.3 本批原表搬运
+> 归档时间：2026-11-12（v0.18.0 发布，本系列首批已修复批次并入）；2026-11-12 v0.18.0 本批原表搬运；2026-11-15 v0.18.1 本批原表搬运；2026-11-16 v0.18.2 本批原表搬运；2026-11-17 v0.18.3 本批原表搬运；2026-11-18 v0.18.4 本批原表搬运
 > 原始文件：`docs/managements/review-findings.md`
-> 涵盖版本：v0.18.x 已修复项（按发布版号批次，v0.18.0 → ）（含 v0.18.3）
+> 涵盖版本：v0.18.x 已修复项（按发布版号批次，v0.18.0 → ）（含 v0.18.4）
 > 归档内容：台账表格经 `release.py prepare` 整块搬运（无损）；表外散文留主台账
 
 ---
@@ -62,3 +62,16 @@
 | **rf-1157** | `report/_html_render_context._prepare_render_context` 有 30 个关键字入参，新增派生量须同时改定义、调用点、上下文字段三处，位置对错只能靠阅读 | 入参按来源域收为两组 dataclass（`_VisibilityInputs` 21 字段 / `_DataSourceInputs` 9 字段）+ `details`，签名 30 → 3；`_build_data_source_bundle` 同收为单组入参；`write_html_report` 调用点改按域构造；配「可见性域按位序 + 关键字透传」用例（11 条全绿） |
 | **rf-1155** | 近 83 小时内新增/改动的静默降级处无任何日志痕迹（`report/decision_book.py` 两处、`llm/session.py` 两处、`report/_html_render_context.py` 因子名回退、`providers/utils.py`、`providers/eastmoney_industry.py`）——降级语义对，但线上出问题无法从日志定位到具体环节 | 逐处补 `logger.debug(..., exc_info=True)`（降级行为与返回值一字不改）；`decision_book.py` 另建模块 logger（原本无 `logging` 导入） |
 | **rf-1156** | `report/_html_render_context.py`（渲染前置装配抽取）无任何直测文件——装配契约（哪三个视图槽位、四元组位序、因子名降级）只能从 `write_html_report` 的用例间间接推断，改装配即无人拦截 | 新增 `src/test/unit/report/test_html_render_context.py`：三层装配各一组阶段契约用例（面板视图缺席→`None` 且槽位互不牵连 / 数据源四元组位序与转发入参 / 上下文四类派生量装齐 + `details` 优先于 `holdings` + 因子名导入失败降级升 debug） |
+
+## 已修复（0.18.4）
+
+> 完整复盘见 `changelog.md` 0.18.4 段；此处为台账原表搬运（无损），本批发布日 2026-11-18。
+
+| **rf-1159** | `config/_json_patch._replace_value_block` 的括号平衡扫描不跳过字符串与注释——数组/对象成员里含 `]` 或 `}`（如标题、正则、模板片段）时区块被提前截断，写出非法 JSON（`_find_value_end` 早已正确处理这类形态，两处口径不一致） | 改为复用 `_find_value_end`（注释/字符串感知），`end-1` 必须是目标闭括号否则原样返回；配 `test_array_with_bracket_in_string_replaced_intact` 与 `_find_value_end` 两条例外用例 |
+| **rf-1160** | `config/_json_patch._find_top_level_value_span` 对每个字符串片段直接 `json.loads`，人工改坏的转义（如 `"a"b"`）会抛 `JSONDecodeError` 中断整个 patch——配置损坏时不是降级找键，而是崩在写回路径 | 片段解析失败视为「不是目标键」继续扫描（`try/except ValueError`），失败仍返回 `None`→调用方走「找不到键」语义；配合法转义键与损坏转义两条用例 |
+| **rf-1161** | `config/_json_patch` 两处版式假设过强：① `_remove_top_level_key` 对单行（压缩）对象 `entry_start` 回退到 0，删掉整行对象只剩 `}`；② `_patch_config_key` 追加键时硬编码 LF，CRLF 文件变成混行尾 | ① 无行结构时按「上一个分隔符之后」截取条目；② 换行符沿用文件现有风格（有 `\r\n` 则用 `\r\n`）；尾逗号清理抽成 `_drop_trailing_member_comma` 供两路共用 |
+| **rf-1162** | 守护命中台账（本版新增）只追加不设上限——每次守护运行写一行，单日实测已 121 行/18KB，长期会膨胀到几十 MB 且拖慢读取 | `record_guard_run` 追加前按体积上限（4MB）截断为最近 5000 行（临时文件 + `os.replace` 原子替换，失败静默同写入口径）；配「超限截断 / 未超限只追加」两用例 |
+| **rf-1163** | `core/decision_ledger.py` 与 `core/signal_ledger.py` 各自复制 `is_active()`（4 行）与 `_now_iso()`（1 行）——同名同体，改「开关收敛方式」或「时间戳精度」要动两处，漏一处就静默漂移（一个账本按秒、另一个按微秒） | 新增 `core/ledger_common.py`（`feature_active(flag)` + `now_iso()` 秒级 ISO），两个账本的 `is_active` / `_now_iso` 改为薄封装并保留原名（导入面与既有 patch 点不变）；配 `test_ledger_common.py` 8 条（委托判定 / 秒级格式 / 单调不降 / 两账本薄封装同口径） |
+| **rf-1164** | 4 处用例命名与断言语义不精确：`test_low` / `test_no` / `test_etf` / `test_esc` —— 名字只说输入的一半（low / no / etf / esc），不表达「期望结果是什么」，跨文件检索时无法判断该用例守的是哪条语义 | 改为「输入 + 期望」双段式：`test_low_percentile_tier` / `test_env_no_returns_false` / `test_pure_etf_hint_is_index` / `test_esc_maps_to_key_esc`；同批核对 22 组「常量归一后同体」用例，确认属按 provider/契约并行的覆盖（各自 mock 与固件不同），保留不合并 |
+| **rf-1165** | 两处模块级循环 import：`core/doctor ↔ core/doctor_logs`（后者反向取 `GROUP_*`/`_item`）、`llm/api ↔ llm/_api_*`（子模块反向取默认模型与 Extended Thinking 装配）——靠「先定义、末尾延迟 import」勉强可用，改一行定义位置即 ImportError，且依赖方向读不出来 | 共用面下沉基座：新增 `core/doctor_common.py`（分组常量 + `_item`），provider 默认模型与 `_resolve_thinking_budget` / `configure_extended_thinking` 迁入 `llm/api_base.py`（门面与子模块双向取用改为单向）；依赖图机检 `test_module_graph.py`（顶层 import 无环 + 基座不反向依赖）落地，当前环数 0 |
+| **rf-1166** | 锚点语料（阈值校准数据）四项治理缺口：① 测试未隔离 `data/calibration/`，采集默认开 → 测试标题写进真实分片；② 校准工具把**三个规则时代**的样本混算（当前指纹仅占约三分之二）；③ 30 天保留期只在压缩触发时生效，近三成行超期；④ 规则名 `cross_*` 被同源对复用，记录无处表达源关系 | ① `_path_isolation` 重定向锚点基路径 + 隔离断言用例；② 校准工具按指纹只把当前时代样本纳入判定分布（旧样本仅计数对照），补 `test_analyze_only_buckets_current_era`；③ 清理残留行并按保留期压缩一次（87,540 → 66,847 行，3.5 → 2.6 MB，原分片留 `.bak`）；④ 锚点记录新增 `same_source` 字段（旧记录按源名反推，向后兼容），校准侧优先采用记录值 |

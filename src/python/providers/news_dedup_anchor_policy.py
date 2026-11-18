@@ -459,13 +459,20 @@ def _make_anchor(
     记录带 ``anchor_rules_version``（:data:`_ANCHOR_RULES_VERSION`）——校准工具
     据此区分「哪个规则时代」的样本；同一标题对也可用标题重算（见
     :func:`_pair_similarity`）。
+
+    另记 ``same_source``：安全区（②）与候选区（③）规则对**同源对**同样生效，规则名里的
+    "cross" 只表示「不是同源快路径（①）」，不代表两侧不同源。把这个事实显式落进记录，
+    校准侧才能按源关系分桶，而不用从 ``source_a/source_b`` 反推（跨轮归一化后可能不等）。
     """
+    source_a = item_a.get("_source", "") or ""
+    source_b = item_b.get("_source", "") or ""
     return {
         "ts": item_a.get("ctime", "") or item_b.get("ctime", ""),
         "title_a": item_a.get("title", ""),
         "title_b": item_b.get("title", ""),
-        "source_a": item_a.get("_source", ""),
-        "source_b": item_b.get("_source", ""),
+        "source_a": source_a,
+        "source_b": source_b,
+        "same_source": bool(source_a) and source_a == source_b,
         "ratio": round(ratio, 3),
         "bigram_overlap": bigram_overlap,
         "merged": merged,

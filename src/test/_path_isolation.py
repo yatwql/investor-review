@@ -20,6 +20,12 @@ def seed_sensitive_path_isolation(monkeypatch, tmp_path, _doctor_probe_targets) 
         "src.python.config._config_defaults._CONFIG_FILE",
         str(tmp_path / "data/config/config.json"),
     )
+    # 去重锚点采集语料（data/calibration/）：采集默认开启，用例一旦触发 _flush_anchors()
+    # 就会追加进真实分片（实测曾混入 200 条测试标题，污染阈值校准语料）。分片路径由本常量派生。
+    monkeypatch.setattr(
+        "src.python.providers.news_dedup_anchor_store._ANCHOR_PATH",
+        str(tmp_path / "data/calibration/dedup_anchors.jsonl"),
+    )
     # 测试敏感路径隔离: _CACHE_DIR 存在于 cache/ 子包中
     monkeypatch.setattr(
         "src.python.cache._paths._CACHE_DIR",

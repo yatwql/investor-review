@@ -1,5 +1,5 @@
 # 投资复盘助手 — 技术设计
-> 文档版本：0.18.3
+> 文档版本：0.18.4
 
 ## 目录
 
@@ -1733,6 +1733,7 @@ verbose 模式的颜色按 **stderr 自己的流**判定：取 `core.ansi_colors
 |:-----|:-----|:------|
 | 编排器 | `html_writer.py` | 区块装配（`html_sections.assemble_sections`；穿透（含盈利预测/股息率附属取数）/基金业绩/风格等**取数已前置**到数据准备的「渲染前置取数」段并经 `_run_scope.run_memo` 复用，此处只做串拼装与缓存命中，计时点 `区块装配`）→ 面板视图装配（持仓变动/事件窗/纪律回放，计时点 `面板视图装配`）→ 渲染前置装配（委托 `_html_render_context`）→ 模板渲染 → 后处理表（资产内嵌/匿名化/落盘）→ 保存 |
 | 渲染前置装配 | `_html_render_context.py` | 渲染前一次性算好派生量并打包：面板视图三槽（契约缺席→`None`→区块隐藏）、数据源状态包（摘要四元组/历史状态/矩阵与说明表）、`_RenderContext`（可见性三元组 + 数据源状态 + 因子名映射 + 代码掩码）。入参按**来源域**分组（`_VisibilityInputs` / `_DataSourceInputs` 两组 dataclass + `details`），新增派生量只在所属组加字段，不靠调用点位置对齐；因子名映射等任一环失败按原语义降级（空映射/空集）升 debug 日志，不阻断渲染 |
+| 模板上下文 | `html_template_context.py` | Jinja 模板变量的唯一载体（dataclass，字段名即模板变量名，顺序即契约）：`_render_template(context)` 只做 `render(**asdict(context))` 与章节顺序 CSS 注入；装配侧（`write_html_report`）负责把派生量填进上下文。守卫：`test_html_template_context.py` 锁字段集合与「渲染键 == 字段集合」，`test_html_writer_stage_contract.py` 锁「装配产物绑到自己的模板变量」|
 | 区块装配 | `html_sections.py` | `SECTION_BUILDERS` 连续区段表 + `HtmlAssembly` 上下文；产物经 `SectionBindings`（NamedTuple）具名返回，顺序即契约 |
 | 数据构建器 | `html_builders.py` | 原始数据 → 结构化渲染对象 |
 | 渲染器 | `html_renderers.py` | Markdown→HTML 转换、格式处理 |
@@ -2393,6 +2394,8 @@ industry_{code}.json
 
 `_dedup_by_title()` 采用**多档模糊去重 + 实体 bigram + 英数 token 辅助判定 + 方向对立防护**策略，阈值基于 42560 条锚点分层采样校准（2026-08-17，误合并率从 ~70-80% 压降至可控区间）。判定口径（阈值常量 / 模板词表与掩码 / 标题归一化 / 实体 bigram 提取 / 相似度 / 方向词对 / 规则指纹）的唯一实现在 `providers/news_dedup_rules.py`；主流程模块 `providers/news_dedup.py` 只留锚点采集与比较循环，并原面 re-export 规则原语（既有引用面不变）。
 
+**比较成本（判定不变，只减无望比较）**：循环不扫全部已保留项，而由两层候选索引给出**候选超集**再逐对判定——① 实体 bigram → 已保留下标（所有合并规则都要求 overlap ≥ 1）；② 标题 n-gram 窗口（长度 = 子串包含的最短亚串 `_SUBSTRING_MIN_LEN`）→ 已保留下标（「短串 ⊂ 长串」必共享一个窗口）。两层均未命中的对不可能合并，故判定结果与全量逐对完全相同，首个命中对的下标升序也与改前一致；唯一可见差异是锚点语料——实体零重叠对不再进锚点（它们恒不合并）。
+
 ##### 比较成本（判定不变的两层省算）
 
 - **比较串缓存**：`_ratio_ready(norm)`（去通用日期 + 英文专名按长度分桶）与 `_char_multiset(norm)` 按标题字符串 `lru_cache`——同一「已保留项」在循环里被比较数十次，避免重复跑正则。
@@ -2493,7 +2496,7 @@ _dedup_by_title(items)
 
 ##### 锚点采集体系
 
-去重判定边界案例**默认采集**写入 `data/calibration/dedup_anchors-YYYYMM.jsonl.gz`（按月 gzip 分片、append-only），供 `eval-dedup-threshold.py` 分析阈值合理性；`INVEST_DEDUP_COLLECT_ANCHORS=0` 可显式关闭。锚点不参与去重判定，写侧只追加、**不读旧文件**（跨轮重复由校准工具按键去重），因此采集本身不增加报告耗时；39 MB 文件的加载与压缩已移出报告主流程（详见下）。
+去重判定边界案例**默认采集**写入 `data/calibration/dedup_anchors-YYYYMM.jsonl.gz`（按月 gzip 分片、append-only），供 `eval-dedup-threshold.py` 分析阈值合理性；`INVEST_DEDUP_COLLECT_ANCHORS=0` 可显式关闭。记录含 `same_source`（源关系事实）：安全区/候选区规则对**同源对**同样生效，规则名里的 "cross" 只表示「非①同源快路径」，校准侧按该字段分桶而不用源名反推。**语料是校准数据，必须与测试隔离**（`conftest` 把锚点基路径重定向到 tmp，否则用例会把测试标题写进真实分片）。校准工具按 `anchor_rules_version` **只把当前指纹的样本纳入判定分布**，旧时代样本仅计数对照——混时代会把阈值结论往旧口径拖动。锚点不参与去重判定，写侧只追加、**不读旧文件**（跨轮重复由校准工具按键去重），因此采集本身不增加报告耗时；39 MB 文件的加载与压缩已移出报告主流程（详见下）。
 
 | 锚点规则 | 采集条件 | 用途 |
 |:---------|:---------|:------|
@@ -3600,6 +3603,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `module_fingerprint` | LLM 模块缓存指纹唯一事实来源（预检侧与写侧同源） | LLM 生成 | LLM 生成 | 无（模块级） |
 | `decision_reflection` | 决策跨期反思闭环（登记决策 → 真实行情结算命中率 → 教训回灌专家复盘提示词） | 行动建议 | 监控 | 实验开关 `decision_reflection`（默认关） |
 | `decision_ledger` | 决策账本（append-only JSONL，pending/settled 折叠统计） | 行动建议 | 监控 | 随 `decision_reflection` |
+| `ledger_common` | 账本级共用原语（`feature_active` 开关收敛判定 / `now_iso` 秒级时间戳；决策账本与信号账本薄封装共用，改口径只动一处） | 行动建议 | 监控 | 已内置 |
 | `decision_record` | 确定性卖出建议登记（仅带持仓基线者落账，入账必可结算） | 行动建议 | 监控 | 随 `decision_reflection` |
 | `decision_settlement` | 到期决策结算（幂等：同 decision 只结一次，行情不可得保持 pending） | 行动建议 | 监控 | 随 `decision_reflection` |
 | `decision_llm_capture` | LLM 操作建议表解析登记（结构化优先 → 表格兜底；缺行/缺方向/「不操作」行按原因记 INFO 后跳过，异常不中断报告） | 行动建议 | 监控 | 随 `decision_reflection` |
@@ -3643,7 +3647,9 @@ make_http_client(timeout=10.0) → httpx.Client
 | `throttle` | 按名最小间隔节流唯一原语（`RateLimiter` + `interval_delay` 抖动算式 + `wait_interval` 一次性等待；数据层限速/批量调度/LLM 端点节流/429 退避窗口共用） | 诊断 | 数据获取 | 无（模块级） |
 | `completion_notify` | 任务完成通知（CLI/Web 报告收尾按 `notify` 配置分发 webhook/邮件/桌面三通道事件——失败必发、成功需 `on_success`；无配置静默跳过；单通道失败隔离、永不抛出不改退出码；webhook URL 日志只记域名；降级摘要单源 `core/degradation.degradation_summary()`） | 诊断 | 报告 | 随 `notify` 配置节 |
 | `degradation_summary` | 通知降级摘要单源（数据状态跟踪器事件日志 → 摘要行，最新在前按源去重；CLI/Web 收尾共用，渠道层不再各自镜像） | 诊断 | 报告 | 随 `notify` 配置节 |
-| `doctor` | 系统自检（环境/配置/目录/日志与缓存/功能开关/数据源适配/数据源凭据/数据源八组，失败项附可执行建议，自身永不抛异常） | 诊断 | 诊断 | 恒上屏（无开关） |
+| `report_degradation_summary` | 本轮降级汇总出口（跟踪器本轮事件按「源 + 失败类型」去重计数 → `{count, events, lines, text}`；报告数据状态块尾与 CLI 产物清单尾部同源消费，无降级时 `text` 为空串故不出该行） | 诊断 | 报告 | 已内置 |
+| `doctor` | 系统自检（环境/配置/目录/日志与缓存/功能开关/数据源适配/数据源凭据/数据源八组，失败项附可执行建议，自身永不抛异常） | 诊断 | 诊断
+| `doctor_common` | 自检基座（分组名常量 + 结果构造器 `_item`）：`doctor` 与 `doctor_logs` 共用，避免两者互相 import 成环；依赖单向 `doctor_common ← doctor_logs ← doctor` | 诊断 | 诊断 | 已内置 | | 恒上屏（无开关） |
 | `datasource_fields` | 数据域标准字段记录（`schemas/datasource_fields.py`，类型注解即缺省语义） | 数据源适配 | 数据获取 | 随 `adapter_chain_slots` |
 | `source_adapter` | 数据源适配契约（`SourceAdapter` 基类 + 注册表 + 自检报告 `survey_adapters`） | 数据源适配 | 数据获取 | 已内置（适配契约） |
 | `quote_adapters` | 行情域适配器（腾讯/新浪/东方财富三源） | 数据源适配 | 数据获取 | 已内置（适配契约） |
@@ -3725,7 +3731,7 @@ make_http_client(timeout=10.0) → httpx.Client
 
 - **模块划分**：`qa/context.py`（`extract_report_qa_context`：`sec-*` 锚点分章 + 汇总/LLM 章全文、数据章摘要、整体字符上限三层截断 + 表头名映射持仓基线 + 生成条件声明；解析锚点收敛单文件，模板契约变更唯一同步点，失败显式报错不静默给错误上下文）；`qa/session.py`（`QaSession` 会话态 + `create_report_qa_session` 会话表登记/淘汰 + `ask_report_qa` 唯一编排入口：历史折叠、轮数与输入双上限、用量记账、事实核对、Markdown 渲染）；`web/handlers.py::_handle_report_qa_ask`（POST /api/qa/ask 校验矩阵与状态码映射）；`tui/handlers_qa.py`（主菜单 [Q] 入口：输出目录报告选择 + `input()` 多轮输入循环 + 回答纯文本化展示 + 会话续传；`FEATURE_GATED_ITEMS` 与 Web/报告区块同源裁剪；零业务副本——会话/上下文/记账/降级全部经 `ask_report_qa`）；`partials/report_qa_section.html`（报告尾部区块，JS 内嵌自包含，同源 fetch + `file://` 降级引导，样式全取报告既有 token）。
 - **数据流**：报告文件名（前端取自当前页 URL basename）→ 上下文（只读报告 HTML，零新增取数）→ system（边界规则 + 生成条件声明 + 本期报告内容）+ 最近 6 次问答历史（更早折叠为问题清单）+ 当前问题 → `call_llm` → `markdown_to_html` → `run_fact_check`（只检不改，警示不阻断）→ 统一信封返回。
-- **渲染期纪律**：会话态只活在 `qa/session.py` 服务内（进程内存、线程锁保护）；开关态经 `_render_template` 的 render context（`report_qa_enabled`）传递，不写 `_ENV.globals`；关闭时主模板 include 整体处于条件分支内，报告字节不变（实验项默认关、关闭时产物不变）。
+- **渲染期纪律**：会话态只活在 `qa/session.py` 服务内（进程内存、线程锁保护）；开关态经模板上下文对象（`TemplateContext.report_qa_enabled`）传递，不写 `_ENV.globals`；关闭时主模板 include 整体处于条件分支内，报告字节不变（实验项默认关、关闭时产物不变）。
 - **安全与日志**：report 参数三层同语义净化（路由/会话/上下文：basename + `.html` + 禁 `..` 与路径分隔符）；上下文在内存传递不落盘；日志只记会话 id、轮数、问题前 20 字与 token 数，不含上下文与回答正文。
 - **设计定稿与验证**：设计定稿已随功能完成归入版本归档（历史快照）。
 
@@ -3743,6 +3749,8 @@ make_http_client(timeout=10.0) → httpx.Client
 | `report_qa`（报告对话式追问） | 报告页内会话式追问，验证「零新增取数的报告内问答」的可用性与回答忠实度 | `qa/` 会话层（上下文只读当期报告、轮数上限）、`QaSession` 持久化（问答样本与用量留痕）、`qa/telemetry.py` 每次提问记一行账本、HTML 报告页内追问区块 | `experiment_stats` 启用计数、`QaSession.usage`（token 口径，费用口径待接）、`doctor` 的「报告追问效果」卡片 | 计划文档「`report_qa` 转正评估」条目（判据与执行清单在该条维护；历史评估记录见版本归档挂账） |
 
 **行维护约定**：新增实验项时按上表五列补行（列结构固定，行随实验项增长）；判据、转正/撤销条件与当前态写在计划文档对应条目，本表只收结构化的「机制—数据源—指针」三元组。
+
+**裁决汇编**：`core/experiment_verdicts.py` 把各项判据读数收成一张表（项清单由注册表 `experimental_flags()` 派生，阈值仍在各自模块/计划条目内），逐项给出「可转正 / 继续观察 / 撤销候选 / 无读数」四态，`doctor` 的「实验项裁决」行一次上屏全部判据与实测值，并单列「已达判据 → 请按计划裁决」提醒行。它**不改开关、不摘 `experimental` 标签**：转正与撤销仍是人工变更并进台账；未接读数适配器的实验项明说「判据未接读数源」，不臆造成绩。
 
 ## 7. 模块间依赖关系
 
@@ -3874,6 +3882,8 @@ web/ (Web 服务层，薄入口)
 | **C3** | **缓存原子写入** — 所有缓存/配置文件写入必须使用 `tempfile.mkstemp` + `os.replace` 原子写入模式；**实现收敛到唯一原语** `core/atomic_write.py`（`write_text_atomic` / `write_json_atomic`，成败如实布尔返回），各调用点不得自留第二份 mkstemp + os.replace 拷贝 | 直接覆写文件在断电/崩溃时产生半写损坏文件，导致后续读取解析失败；多份拷贝各自演化会让「原子」语义在其中一份上悄悄失效（修了 A 漏了 B），且调用点无法据成败判定后续动作（如写失败后误删唯一数据源） | 半写文件损坏、数据不完整、崩溃后无法自恢复；迁移类逻辑在写失败时误删数据源 | cache/ 子包（`cache/_io.py`+`_store.py`）、config/ 子包（`config/_core.py`）、`core/atomic_write.py` 及其调用方（`core/jsonl_store.py`、`core/provider_registry.py`、`report/history_snapshot.py`、`config/features.py`、`analysis/_silence.py`、`analysis/circuit_breaker_wrapper.py`、`core/degradation.py`）。例外（契约相反，有意不合并）：`cache/` 需 gzip 分支与文件锁；`config/_core.py::_atomic_write` 契约是「失败即抛且保留异常类型」（`init_config()` 的 `except PermissionError` 并发容忍分支、TUI 的权限不足提示依赖类型） |
 
 > **缓存载荷语义版本（词条外，非编号约束）**：当修复改变缓存**载荷字段的含义**而非键结构时，不得只靠 TTL 自然过期——旧条目在 TTL 内会被新代码误读，使修复在缓存未过期的机器上完全失效（已发生：QDII 联接穿透修复被 7 天旧 `fund_hold_*` 条目遮蔽）。规则：生产者在载荷里盖语义版本字段，读侧把「版本不符」当未命中（丢弃重取），判据接在**每一处读缓存接缝**（含批量缓存预检与过期降级）。通用原语：`fetch_with_fallback(cache_validate=...)`。
+>
+> **同事实单键（词条外，非编号约束）**：同一事实只应有一个缓存键，单一取数入口负责写、其余复用；同一 code 的「单期」与「多期」两种键并存时，必须让单期读路径先复用多期缓存（多期按报告期降序，头部即最新一期），否则同一事实每轮回源两次——实测 `fin_indicator` 未命中居本轮 Top1 即此形态。
 
 ### 8.3 报告层约束
 

@@ -32,15 +32,21 @@ from typing import Any
 from src.python.core.ansi_colors import RAW_CODES
 from src.python.core.constants import APP_NAME, APP_VERSION, PROJECT_ROOT
 
+# 分组常量与结果构造器下沉 `doctor_common`：`doctor_logs` 的探针实现需要它们，
+# 放在本文件会让两个模块互相 import（环）；下沉后依赖单向：doctor_common ← doctor_logs ← doctor。
+from src.python.core.doctor_common import (  # noqa: E402
+    GROUP_ADAPTER,
+    GROUP_CONFIG,
+    GROUP_CREDENTIAL,
+    GROUP_DIRS,
+    GROUP_ENV,
+    GROUP_FEATURES,
+    GROUP_LOG_CACHE,
+    GROUP_NETWORK,
+    _item,
+)
+
 # 自检分组顺序（渲染时按此顺序输出，便于稳定对比两次自检结果）
-GROUP_ENV = "环境"
-GROUP_CONFIG = "配置"
-GROUP_DIRS = "目录"
-GROUP_FEATURES = "功能开关"
-GROUP_ADAPTER = "数据源适配"
-GROUP_CREDENTIAL = "数据源凭据"
-GROUP_NETWORK = "数据源"
-GROUP_LOG_CACHE = "日志与缓存"
 
 GROUP_ORDER = [
     GROUP_ENV,
@@ -115,13 +121,6 @@ _LOGS_DIR = os.path.join(PROJECT_ROOT, "logs")
 _DEFAULT_OUTPUT_DIR = os.path.join(PROJECT_ROOT, "reports")
 
 
-def _item(group: str, label: str, ok: bool, message: str, *, hint: str = "") -> dict[str, Any]:
-    """构造一条自检结果。
-
-    Args:
-        hint: 可选的可执行修复建议（「错误即 UX」——不只报错，还告诉用户怎么办）
-    """
-    return {"group": group, "label": label, "ok": ok, "message": message, "hint": hint}
 
 
 def _check_python_version() -> dict[str, Any]:
@@ -480,6 +479,24 @@ def _check_report_qa_usage() -> list[dict[str, Any]]:
     return [_item(GROUP_FEATURES, "报告追问效果", True, "\n".join(lines))]
 
 
+def _check_experiment_verdicts() -> list[dict[str, Any]]:
+    """实验项转正/撤销裁决（信息性，不影响自检结论）。
+
+    项清单由 `experimental_flags()` 派生，判据逐条上屏；达资格的项另出提醒行——
+    转正/撤销都是人工变更（不改开关、不摘 `experimental`）。
+    """
+    try:
+        from src.python.core.experiment_verdicts import action_notices, collect_verdicts, format_verdict_lines
+
+        verdicts = collect_verdicts()
+        lines = format_verdict_lines(verdicts)
+        notices = action_notices(verdicts)
+    except Exception as exc:  # noqa: BLE001
+        return [_item(GROUP_FEATURES, "实验项裁决", False, f"读取失败: {type(exc).__name__}: {exc}")]
+    message = "\n".join(lines + notices) if lines or notices else "无可裁决的实验项"
+    return [_item(GROUP_FEATURES, "实验项裁决", True, message)]
+
+
 def _check_review_ledger_overview() -> list[dict[str, Any]]:
     """复盘账本与实验功能使用统计的只读概览（信息性，不影响自检结论）。
 
@@ -722,6 +739,7 @@ def run_doctor_checks(*, include_network: bool = True, max_timeout: float = 8.0)
     results.extend(_check_experimental_features())
     results.extend(_check_eval_status())
     results.extend(_check_report_qa_usage())
+    results.extend(_check_experiment_verdicts())
     results.extend(_check_review_ledger_overview())
     results.extend(_check_source_adapters())
     results.extend(_check_datasource_credentials())

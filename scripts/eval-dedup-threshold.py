@@ -178,23 +178,36 @@ def _shared_proper_nouns(title_a: str, title_b: str) -> list[str]:
 
 
 def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
-    """对全部锚点做「当前规则重判」并汇总。"""
+    """对锚点做「当前规则重判」并汇总——**判定分布只纳入当前规则时代**。
+
+    为什么按时代过滤：阈值/模板词/正则变过之后，旧样本的 ratio 与重叠是**当时规则**下的
+    口径，混进当前分布会把阈值校准结论往旧时代拖（实测语料里只有约三分之二属当前指纹）。
+    旧时代样本仍统计条数（报告里单列，便于对照），但不进 `branches`。
+    """
     branches: dict[str, list[dict[str, Any]]] = defaultdict(list)
     era_current = 0
     era_unattributed = 0
     era_versions: Counter[str] = Counter()
     drift = 0
+    era_skipped = 0
     for record in records:
         title_a = record.get("title_a", "") or ""
         title_b = record.get("title_b", "") or ""
         if not title_a or not title_b:
             continue  # 缺标题的残行不参与判定（空串相似度恒为 1，会误进安全区）
         ratio, overlap = _pair_similarity(title_a, title_b)
-        same_source = bool(record.get("source_a")) and record.get("source_a") == record.get("source_b")
+        # 优先用采集时记录的源关系（旧记录无该字段 → 按两侧源名反推，向后兼容）
+        recorded_same = record.get("same_source")
+        if isinstance(recorded_same, bool):
+            same_source = recorded_same
+        else:
+            same_source = bool(record.get("source_a")) and record.get("source_a") == record.get("source_b")
         branch = classify_pair(ratio, overlap, same_source, record.get("title_a", ""), record.get("title_b", ""))
         version = anchor_rules_version(record)
         if version == _ANCHOR_RULES_VERSION:
             era_current += 1
+        else:
+            era_skipped += 1
         if version:
             era_versions[version] += 1
         else:
@@ -203,10 +216,12 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
         stored = record.get("rule", "")
         if stored and not _branch_matches_stored(branch, stored):
             drift += 1
-        branches[branch].append({**record, "_ratio_now": ratio, "_overlap_now": overlap})
+        if version == _ANCHOR_RULES_VERSION:
+            branches[branch].append({**record, "_ratio_now": ratio, "_overlap_now": overlap})
     return {
         "branches": branches,
         "era_current": era_current,
+        "era_skipped": era_skipped,
         "era_legacy": len(records) - era_current - era_unattributed,
         "era_unattributed": era_unattributed,
         "era_versions": era_versions,
@@ -246,7 +261,11 @@ def report(records: list[dict[str, Any]], *, summary_only: bool = False, sample:
     print(
         f"规则时代: 当前指纹 {_ANCHOR_RULES_VERSION} = {data['era_current']} 条；"
         f"历史时代 = {data['era_legacy']} 条；未标注（旧版遗留）= {data['era_unattributed']} 条"
-        "（旧样本按当前代码重算，仍计入下方分布）"
+    )
+    print(
+        f"  分布口径: 仅纳入当前指纹样本（{data['era_current']} 条），"
+        f"排除 {data['era_skipped']} 条旧时代/未标注样本——阈值结论不受旧口径拖动；"
+        "要看旧样本自身读数请用 `--file` 指向单独时代的分片"
     )
     others = {v: n for v, n in data["era_versions"].items() if v != _ANCHOR_RULES_VERSION}
     if others:

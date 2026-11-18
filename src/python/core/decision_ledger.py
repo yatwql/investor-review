@@ -98,10 +98,10 @@ CARRIER_GENERIC = "generic"  # 未细分载体（低层 API 默认值）
 
 
 def is_active() -> bool:
-    """特性开关是否开启（收敛判定）。开关关闭时全链路无感。"""
-    from src.python.config.features import is_feature_enabled
+    """特性开关是否开启（收敛判定，原语见 `core/ledger_common.feature_active`）。"""
+    from src.python.core.ledger_common import feature_active
 
-    return is_feature_enabled(FEATURE_FLAG)
+    return feature_active(FEATURE_FLAG)
 
 
 # ── 原子 JSONL 追加（对齐 src/python/core/perf.py _append_jsonl_atomic）──────
@@ -137,7 +137,10 @@ def load_events(path: str | None = None) -> list[dict[str, Any]]:
 
 
 def _now_iso() -> str:
-    return datetime.now().isoformat(timespec="seconds")
+    """账本时间戳（口径见 `core/ledger_common.now_iso`）。"""
+    from src.python.core.ledger_common import now_iso
+
+    return now_iso()
 
 
 def append_decision(
