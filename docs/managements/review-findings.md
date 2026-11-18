@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.18.6-dev
-> **编号源**：`rf-next = 1184`（新增问题提出后更新为 +1；已用最大 rf-1183，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1185`（新增问题提出后更新为 +1；已用最大 rf-1184，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -72,6 +72,8 @@
 | **rf-1182** | `test_cache_core.py` 的等值断言依赖缓存目录里的**实际文件条数**：`os.remove` 用固定长度 `side_effect=[OSError, None]`，并行档下目录里 `price_` 文件多于 2 个时第三次调用抛 `StopIteration`（本轮 dev-verify 即因此单点假红，单跑必过）；同文件另有三处 `len(os.listdir(...)) == 5` / `count == 2` 绝对值断言，属同类脆弱写法 | `os.remove` 改函数式 side_effect（首个失败、其余成功，不看文件数）；计数断言改为由前置清单派生（`count == len(expected)` / 前后条数不变 / `count == len(attempts)-1` 且 `len(attempts) >= 2`）——断言结构关系而非绝对值 |
 
 | **rf-1183** | `src/test/conftest.py` 单文件 1199 行（顶到测试域 1200 行红线），且内容跨五类互不相关的职责——敏感路径隔离、33 个模块状态自动复位、cassette 回放、外网阻断、收集期校验混在一处，新增任一域都要在千行文件里定位。 | 按域拆为 `src/test/_conftest_{isolation,state_reset,cassette,network,hooks}.py`，入口只留标记注册与会话级兜底、把夹具/钩子显式 import 回来注册（pytest 只认入口命名空间，故 import 不可删）；`test_module_state_reset.py` 的复位接线判据改按 `conftest.py` + `_conftest_*.py` 全量汇总（glob 派生，新增实现模块自动纳入）；conftest.py 1199 → 176 行 |
+
+| **rf-1184** | 近 6 小时变更审计（13 提交）：conftest 拆分后 `src/test` 内的兄弟模块导入在编辑器/LSP 侧持续报「Import 无法解析」——`[tool.pyright]` 的 `exclude` 只把测试域移出受检程序，不静默打开文件时的解析诊断，每次改动都会在测试域刷出 5~7 条假红（命令行 pyright 与 `check-types.py` 均为 0 错）。其余核对无新增债务：窗口内无死私有函数（全仓 0）、无近重复函数（5 组同形对均为不同输入/不同 SUT 的并行覆盖）、拆分前后 conftest 的 53 个顶层函数零丢失零重复 | `pyproject.toml [tool.pyright]` 增 `ignore = ["src/test"]`（只静默诊断、不改受检域），并在 `scripts/check-types.py` 文档与 developer-guide 类型检查行同步说明该键的作用与边界 |
 
 ### 归档档案
 - [`archived_review-findings.0.18.x.md`](../archive/v0.18.x/archived_review-findings.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-18）

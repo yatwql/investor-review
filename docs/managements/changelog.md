@@ -24,6 +24,8 @@
 
 - **conftest 拆分**：`src/test/conftest.py` 1199 → 176 行，夹具/钩子按域下沉 `src/test/_conftest_{isolation,state_reset,cassette,network,hooks}.py`，入口只留标记注册与会话级兜底并把实现 import 回来注册；复位接线契约测试改为汇总 `conftest.py` + 实现模块（`rf-1183`）。
 
+- **类型检查配置补 `ignore`**：`[tool.pyright]` 增 `ignore = ["src/test"]`——测试域仍不入受检域，但编辑器/LSP 打开测试文件时的「兄弟模块导入无法解析」假红不再刷屏（`rf-1184`）。
+
 ## 归档
 
 - [`archived_changelog.0.18.x.md`](../archive/v0.18.x/archived_changelog.0.18.x.md) — v0.18.0 ~ v0.18.5（2026-11-12 ~ 2026-11-18）

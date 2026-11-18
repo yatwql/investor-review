@@ -7,6 +7,9 @@
     同样是缺陷，`scripts/` 停顿的历史噪声已清零）
   - `exclude`：**刻意排除 `src/test`**——单测天然大量 mock / 行内 dict，静态噪音远多于
     缺陷收益，其正确性由 pytest 运行时守卫（怪癖口径同 `technical.md` 的类型检查决策）
+  - `ignore`：同样收录 `src/test`——`exclude` 只能把文件移出「受检程序」，编辑器/LSP
+    打开这些文件时仍会解析其导入并对排除目录内的兄弟模块报「导入无法解析」；`ignore`
+    只静默这些诊断，不改解析语义（受检域仍是 `include`）
   - `venvPath` / `venv`：依赖解析走项目虚拟环境（否则 pandas/akshare/flask 判缺失）
 
 「ERROR」级别即 finding；WARNING/INFORMATION 不计（pyright 默认依据即可，不自造阈值）。
