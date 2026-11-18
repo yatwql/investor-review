@@ -2496,7 +2496,7 @@ _dedup_by_title(items)
 
 ##### 锚点采集体系
 
-去重判定边界案例**默认采集**写入 `data/calibration/dedup_anchors-YYYYMM.jsonl.gz`（按月 gzip 分片、append-only），供 `eval-dedup-threshold.py` 分析阈值合理性；`INVEST_DEDUP_COLLECT_ANCHORS=0` 可显式关闭。锚点不参与去重判定，写侧只追加、**不读旧文件**（跨轮重复由校准工具按键去重），因此采集本身不增加报告耗时；39 MB 文件的加载与压缩已移出报告主流程（详见下）。
+去重判定边界案例**默认采集**写入 `data/calibration/dedup_anchors-YYYYMM.jsonl.gz`（按月 gzip 分片、append-only），供 `eval-dedup-threshold.py` 分析阈值合理性；`INVEST_DEDUP_COLLECT_ANCHORS=0` 可显式关闭。记录含 `same_source`（源关系事实）：安全区/候选区规则对**同源对**同样生效，规则名里的 "cross" 只表示「非①同源快路径」，校准侧按该字段分桶而不用源名反推。**语料是校准数据，必须与测试隔离**（`conftest` 把锚点基路径重定向到 tmp，否则用例会把测试标题写进真实分片）。校准工具按 `anchor_rules_version` **只把当前指纹的样本纳入判定分布**，旧时代样本仅计数对照——混时代会把阈值结论往旧口径拖动。锚点不参与去重判定，写侧只追加、**不读旧文件**（跨轮重复由校准工具按键去重），因此采集本身不增加报告耗时；39 MB 文件的加载与压缩已移出报告主流程（详见下）。
 
 | 锚点规则 | 采集条件 | 用途 |
 |:---------|:---------|:------|

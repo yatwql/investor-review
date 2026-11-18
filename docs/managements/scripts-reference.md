@@ -1218,6 +1218,8 @@ curl 对照命令：`curl -s "https://push2.eastmoney.com/api/qt/stock/get?secid
 
 **`eval-dedup-threshold.py` — 新闻去重阈值校准**
 
+**时代过滤**：判定分布只纳入 `anchor_rules_version` 等于当前指纹的样本（报告单列排除条数），旧时代/未标注样本只计入时代统计——不同时代的 ratio 与重叠是各自规则下的口径，混算会让阈值结论偏斜。源关系取记录里的 `same_source`（旧记录缺失时按两侧源名反推）。
+
 新闻标题去重（同源/跨源安全区分级 + 候选区阶梯 + 方向对立防护，阈值见 `news_dedup.py` 校准常量）的"边界案例"**默认采集**到 `data/calibration/dedup_anchors-YYYYMM.jsonl.gz`（按月 gzip 分片，写侧按 multi-member gzip 追加、不读旧文件；读侧 `gzip.open` 透明解压，跨轮重复由本脚本 `load_anchors` 按键去重），`INVEST_DEDUP_COLLECT_ANCHORS=0` 可关闭采集。积累足够锚点后，用此脚本分析当前阈值是否合理。**评估默认在分析完成后压缩一次锚点文件**（每 key 最新 + 保留期 30 天 + 体积目标 24MB 与分支配额，实现在 `news_dedup.compact_anchor_file`，与本工具同源），顺带完成体积维护；压缩结果会打印超期/体积裁剪（含分支分布）/无指纹旧行丢弃/并发放弃四类计数。`--no-compact` 只读分析，`--dry-run` 演练不写盘，`--compact` 仅压缩不分析。报告路径仍不自动压缩。
 
 ```bash
