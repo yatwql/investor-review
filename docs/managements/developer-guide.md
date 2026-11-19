@@ -1,6 +1,6 @@
 # 开发者指南
 
-> 文档版本：0.18.5
+> 文档版本：0.18.6
 
 ## 概述
 
@@ -82,7 +82,7 @@
 | `maxTokens` | `65536` | 目录值 128K~384K（如 `grok-4.6` 500K）对编程无必要，且思考与正文共享该预算 |
 | `contextWindow` | `262144` | 把「压缩触发点」从 ~1M 拉到 ~246K → **单轮输入封顶**，这是降窗口消耗的最大单项；代价是压缩更频繁、跨轮记忆略少 |
 
-**③ 思考档位（全局，不在本文件）**：`~/.pi/agent/settings.json` 的 `defaultThinkingLevel` 设为 `low`（原 `high`）。思考 token 计入 output，实测输出量≈输入量是其主因；需要时用 `/thinking` 临时提升。
+**③ 思考档位（全局，不在本文件）**：`~/.pi/agent/settings.json` 的 `defaultThinkingLevel` 设为 `low`。思考 token 计入 output，实测输出量≈输入量是其主因；需要时用 `/thinking` 临时提升。
 
 **④ 提示缓存保留（`PI_CACHE_RETENTION=long` + `promptCache` 声明）**
 
@@ -173,7 +173,7 @@ ln -sf "$PWD/.pi/models.json" ~/.pi/agent/models.json
 .venv/bin/python scripts/check-script-contract.py --ci       # scripts 顶层脚本契约（退出码声明/CLI 面/显式 encoding/测试覆盖）
 .venv/bin/python scripts/check-import-surface.py --ci         # 导入面契约（兼容注释/私有 `__all__`/跨包私有导入/动态导入字面量 + 例外表自审）
 .venv/bin/python scripts/check-file-length.py --ci         # 单文件行数红线（主程序/脚本 >1000 行 / 测试 >1200 行 + 膨胀登记表同实）
-.venv/bin/python scripts/check-types.py --ci               # pyright 类型错误（受检域 src/python + scripts；规则基线与排除项在 pyproject.toml [tool.pyright]；钩子以 --changed 快车道只查本次变更文件，变更 >25 个或取不到 git 清单则回落全量，CI guards 与 P2 恒全量）
+.venv/bin/python scripts/check-types.py --ci               # pyright 类型错误（受检域 src/python + scripts；规则基线与排除/静默项在 pyproject.toml [tool.pyright]；钩子以 --changed 快车道只查本次变更文件，变更 >25 个或取不到 git 清单则回落全量，CI guards 与 P2 恒全量）
 ```
 
 > **`--sync` 统计快照口径（CI 分叉坑）**：`check-doc-drift --sync`（及 pre-commit 自动回写）按**工作区**实测写入 `folders.md` 行数，而 CI 的 `check-doc-drift` 按 **committed** 树实测——若受检目录存在**长期不提交的修改**（本地游离改动），本地已同步的数字会在 CI 上判「不一致」，连带 guards / test / portability 三个 job 同时红。提交前确认受检文件全部纳入本次提交；有长期游离修改时先提交它们、再 `--sync`。
@@ -205,7 +205,7 @@ ln -sf "$PWD/.pi/models.json" ~/.pi/agent/models.json
 
 **辅助（非阻塞）**：`.venv/bin/ruff check`（lint 基线，选择项与刻意豁免均在 `pyproject.toml` 显式声明）+ `.venv/bin/ruff format --check`（代码格式一致性）——问题可经 `.venv/bin/ruff check --fix` / `.venv/bin/ruff format` 自动修复，不阻止合并/发布。当前两者均为零告警基线，新增代码应在提交前保持干净。
 
-**归档区冻结**：`docs/` 下为历史快照（含各版本归档里的脚本副本），**不得被 lint/format 重排**。配置已声明 `extend-exclude` + `force-exclude = true`——后者是关键：ruff 的 `exclude` 只在整树扫描时生效，命令行显式给目录（`ruff format docs`）会绕过它、把归档脚本一并重排（实测曾误改 7 个文件）。因此需要格式化的只能是 `src/` / `scripts/` 等活代码路径；契约由 `src/test/unit/test_ruff_exclude_contract.py` 锁定。
+**归档区冻结**：`docs/` 下为历史快照（含各版本归档里的脚本副本），**不得被 lint/format 重排**。配置已声明 `extend-exclude` + `force-exclude = true`——后者是关键：ruff 的 `exclude` 只在整树扫描时生效，命令行显式给目录（`ruff format docs`）会绕过它、把归档脚本一并重排。因此需要格式化的只能是 `src/` / `scripts/` 等活代码路径；契约由 `src/test/unit/test_ruff_exclude_contract.py` 锁定。
 
 **CI 同步执行（`.github/workflows/ci.yml`）**：类型检查器的版本在 CI 侧**锁死**（`pyright==1.1.414`，与本地基线同版本）——类型口径随版本演进，不锁会出现「同一份代码本地绿、CI 先报新 finding」；升级须同时改 CI 版本行与本地环境后再动代码。三档测试按分支/标签分流——`dev` 推送跑 P0（`dev-verify`）、`master` 推送或 PR 跑 P1（`verify`）、打 `v*` tag 跑 P2（`regression`），矩阵覆盖 Python 3.11/3.12/3.13；另有三个独立 job：`guards`（**阻塞**，13 个 `--ci` 守护脚本即上方 P0/P2 清单全量（含 `check-types.py`，job 内另装 pyright 作解析器）——job 内按 pre-commit 同款后台并行回放，任一守护非零退出折叠为 FAIL 分组并使 job 红；守护经 src.python 链依赖项目运行时包（如 check-doc-drift → httpx），故 editable 安装保留）、`portability`（**阻塞**，非 UTF-8 locale + 隐式编码双探针，见下方「编码/locale 自检」）与 `format`（非阻塞，`ruff format --check src/python/ src/test/ scripts/` + `ruff check`；三条路径必须与本地整树基线同口径——只查 `src/python`+`scripts` 会放行测试文件的格式漂移）。
 
@@ -997,7 +997,9 @@ INVEST_LOG_CONSOLE_LEVEL=DEBUG ...                                              
 
 非法值回落 INFO 并提示一次。**默认不开 DEBUG** 的原因：日志审计（近一周 107,625 行）显示 DEBUG 占 91%，其中「市场时段」67%、缓存命中 17%，真实告警被埋在噪声里，10MB 轮转只能留约 6 天。
 
-**触到 V8 的第三方调用必须走 `core/v8_subprocess.py`**：akshare 的若干接口（交易日历、同花顺资金流）内部就地建 `py_mini_racer.MiniRacer()`，而 V8 平台的初始化是进程级、与线程绑定的——实测三种崩法都拦不住也不可捕获：两条线程先后 init V8 → 段错误；上下文在别的线程被 GC 回收 → 段错误；上下文活到进程退出期被主线程回收 → `close()` 去 join 已结束线程的事件循环，退出死锁。**主进程内没有安全调度方式**（专用线程、全局锁、就地 `gc.collect()` 都实测留活口），故一律放子进程：接口名进 `_ALLOWED_FUNCTIONS` 白名单，调用方用 `run_akshare_v8(...)` 取 records，超时/崩溃按源不可用降级；`src/test/unit/core/test_v8_call_sites.py` 扫描主进程内的 `ak.<name>` 调用点并与 akshare 源码比对，漏接即红。另注意：父进程的 socket 桩不跨进程，测试/基准须设 `INVEST_SUBPROCESS_NETWORK_OFFLINE=1` 让子进程也离线。
+**触到 V8 的第三方调用必须走 `core/v8_subprocess.py`**：akshare 的若干接口（交易日历、同花顺资金流）内部就地建 `py_mini_racer.MiniRacer()`，而 V8 平台的初始化是进程级、与线程绑定的——实测三种崩法都拦不住也不可捕获：两条线程先后 init V8 → 段错误；上下文在别的线程被 GC 回收 → 段错误；上下文活到进程退出期被主线程回收 → `close()` 去 join 已结束线程的事件循环，退出死锁。**主进程内没有安全调度方式**（专用线程、全局锁、就地 `gc.collect()` 都实测留活口），故一律放子进程：接口名（**逻辑名**，见下条）进 `_ALLOWED_FUNCTIONS` 白名单，调用方用 `run_akshare_v8(...)` 取 records，超时/崩溃按源不可用降级；`src/test/unit/core/test_v8_call_sites.py` 扫描主进程内的 `ak.<name>` 调用点并与 akshare 源码比对，漏接即红。另注意：父进程的 socket 桩不跨进程，测试/基准须设 `INVEST_SUBPROCESS_NETWORK_OFFLINE=1` 让子进程也离线。
+
+**akshare 接口名改走候选链，不在调用点写死**：akshare 会就地重命名导出接口且不留别名，接口名解析统一收在 `core/akshare_compat.py`（`resolve(akshare, 逻辑名)` 按 `_ALIASES` 取第一个存在的接口，旧名在前）。新增/接入 akshare 接口时：能写逻辑名就写逻辑名；日志出现 `akshare 无该接口（逻辑名 …，已试：…）` 即表示又改名了，在该文件的 `_ALIASES` 补新名即可（子进程白名单同样走这条链，不必改两处）；`test_akshare_compat.py` 会拦住调用点里直接写死已登记接口名的写法。
 
 **重复装配的日志走折叠原语**：同一份报告会在多个阶段重复装配同一批数据（行业批量、事件窗契约、新闻关联），这些点用 `core/log_dedupe.py::log_throttled(logger, key, fmt, *args)`，同 key 在 60s 窗口内只上屏第一行、重复降到 DEBUG（窗口外即下一次报告照常上屏）。**不要**自己写「首次才打」的布尔标记——那样长驻进程第二次报告就再也看不到该行；也不要把窗口调到远超单份报告的耗时，否则连续生成的报告会被误折叠。
 
@@ -1062,9 +1064,9 @@ INVEST_CACHE_DIR=docs/tmp/screenshots/demo/data/cache \    # 缓存改落（不�
 
 **缓存逐键日志只到 DEBUG**：`缓存未命中（无此缓存文件）` / `缓存已过期` 会逐文档 × 逐缓存键出现，单次运行可占日志的 10%~30%，而单条几乎不携带信息。现口径：逐键明细降 DEBUG（每进程每 key 首见一次，排查时把级别调到 DEBUG 即恢复逐键视图），INFO 由运行收尾的 `cache._stats.log_cache_summary()` **一行**承担——命中/未命中总量 + 未命中前缀 Top5；同一前缀未命中 ≥5 次另升一条 WARNING（那是「每轮重取同一批键」的真实信号，如每份报告都为同一文档重探章节清单）。缓存清理的「共 0 个文件」同样降 DEBUG。
 
-**LLM 总时间预算**：`llm_settings.json → llm_total_time_budget_sec`（秒，`0`=不启用）。超预算后**不再启动新模块**（已在跑的模块不打断），日志回显已用时与预算值，报告按已生成内容呈现。用于兜住「单模块卡住 + 重试叠加」把一次 full 拖成小时级（审计实测曾出现 6,623s 的 LLM+新闻阶段）。
+**LLM 总时间预算**：`llm_settings.json → llm_total_time_budget_sec`（秒，`0`=不启用）。超预算后**不再启动新模块**（已在跑的模块不打断），日志回显已用时与预算值，报告按已生成内容呈现。用于兜住「单模块卡住 + 重试叠加」把一次 full 拖成小时级。
 
-**去重锚点默认采集、写侧零读取**：`data/calibration/dedup_anchors-YYYYMM.jsonl.gz`（按月 gzip 分片；写侧按 multi-member gzip 追加，不重写既有压缩块，也不解析旧文件——读侧 `gzip.open` 透明解压，损坏分片只跳过其余内容）每次报告只追加边界案例；同源（`same_src`）样本按标题对哈希 **1/50 确定性采样**（同源 2~5 bigram 区间样本极密，全量采集曾占文件 61% 而 `ratio` 恒为占位值），其余规则全量采集；跨轮重复由 `eval-dedup-threshold.py::load_anchors` 按键去重（保留最早一条），诊断结论不受重复行影响。`INVEST_DEDUP_COLLECT_ANCHORS=0` 可关闭采集。文件超过 32MB 时只记提示，不自动压缩——压缩由 `scripts/eval-dedup-threshold.py` 评估后**默认顺带执行**（分析用完整样本，随后按三条件维护：① 每 key 最新；② 保留期 30 天——`ts`（发布时间）或 `written_at`（写入时刻）任一在窗口内即保留，补录/回溯抓到的老新闻不被秒裁，`INVEST_DEDUP_ANCHOR_RETENTION_DAYS` 可覆盖、`0` = 不按时间裁剪；③ 体积上限 24MB——超目标按最旧裁剪，每分支至少保留最新 50 条，小分支（方向对立等）不被整类裁光；`--no-compact` 关闭、`--retention-days` 指定窗口）或 `INVEST_DEDUP_MAINTENANCE=1` 显式触发。压缩前后比对 `(size, mtime)`，期间被并发追加则放弃本次压缩（不吞另一个进程写入的行）；无行可裁时不重写文件；无规则指纹的旧行（早期版本写入）压缩时直接丢弃，不保留旧文件形态。压缩前 `.bak` 与主文件等大，默认校验后清理（`INVEST_DEDUP_KEEP_BACKUP=1` 保留）。
+**去重锚点默认采集、写侧零读取**：`data/calibration/dedup_anchors-YYYYMM.jsonl.gz`（按月 gzip 分片；写侧按 multi-member gzip 追加、不重写既有压缩块也不解析内容——读侧 `gzip.open` 透明解压，损坏分片只跳过其余内容）每次报告只追加边界案例；同源（`same_src`）样本按标题对哈希 **1/50 确定性采样**（同源 2~5 bigram 区间样本极密且 `ratio` 恒为占位值），其余规则全量采集；跨轮重复由 `eval-dedup-threshold.py::load_anchors` 按键去重（保留最早一条），诊断结论不受重复行影响。`INVEST_DEDUP_COLLECT_ANCHORS=0` 可关闭采集。文件超过 32MB 时只记提示，不自动压缩——压缩由 `scripts/eval-dedup-threshold.py` 评估后**默认顺带执行**（分析用完整样本，随后按三条件维护：① 每 key 最新；② 保留期 30 天——`ts`（发布时间）或 `written_at`（写入时刻）任一在窗口内即保留，补录/回溯抓到的老新闻不被秒裁，`INVEST_DEDUP_ANCHOR_RETENTION_DAYS` 可覆盖、`0` = 不按时间裁剪；③ 体积上限 24MB——超目标按最旧裁剪，每分支至少保留最新 50 条，小分支（方向对立等）不被整类裁光；`--no-compact` 关闭、`--retention-days` 指定窗口）或 `INVEST_DEDUP_MAINTENANCE=1` 显式触发。压缩前后比对 `(size, mtime)`，期间被并发追加则放弃本次压缩（不吞另一个进程写入的行）；无行可裁时不重写文件；无规则指纹的行（无法归因到任何规则世代）压缩时直接丢弃。压缩前 `.bak` 与主文件等大，默认校验后清理（`INVEST_DEDUP_KEEP_BACKUP=1` 保留）。
 
 ### 兼容层纪律（不保留旧形态支持）
 
@@ -1417,7 +1419,7 @@ DataModuleDef("我的 LLM 分析", "llm_my_analysis",
 >
 > **章节/页签类开关转正目标是独立章 / 事件与摘要组（第四类首例：`holding_change_review` / `event_window_impact` 已按此归入，default 保持 `False`；只给既有页签加层的 `whatif_trade_cost` 按同一判据归入持仓与交易组）**：判据落在「产物形态」——独立章节/页签类能力验证通过后的归宿按作用域入独立章节与回放 / 分析增强组：`default` 保持 `False`（默认产物字节不因转正变化，读者拿到的报告不因转正多出章节），面板入口随分组自动延续，`--experiment` 取值域随 `experimental` 摘除同步退出，产物自述与启用统计随实验身份移除（「质量可能不稳定」警示只属于未验证功能，统计的观测使命随转正完成）。转正定义因此为「**摘除 experimental 身份，作用域变则同时改 group**」。
 >
-> **刻意不转正的两类（判据的反面）**：**写盘积累型**——`decision_reflection` / `report_qa` 仍标 `experimental=True`（账本结算样本尚不足以判转正，撤销死线见 plan.md）。`signal_ledger`（确定性信号沉淀）不再单独设开关：其真实积累已验证（账本有存量数据、写盘幂等开销可忽略），并入 `deterministic_signal` 转正（摘除实验身份）。**调用次数放大型**——`llm_debate_procon` 把一次 `expert_review` 调用换成最多三次（pro → con → synthesis），默认开启直接改变费用与耗时量级，保持默认关、由用户按需开启。集中度问答不再受开关控制（原 `llm_debate_qa_concentration` 已撤销），改为辩论流程内建段落（阈值触发）。实验功能的真实使用情况可用 `core/experiment_stats.py`（启用计数）加 `doctor` 账本概览观测，作为转正/撤销的客观数据。
+> **刻意不转正的两类（判据的反面）**：**写盘积累型**——`decision_reflection` / `report_qa` 仍标 `experimental=True`（账本结算样本尚不足以判转正，撤销死线见 plan.md）。`signal_ledger`（确定性信号沉淀）不再单独设开关：其真实积累已验证（账本有存量数据、写盘幂等开销可忽略），并入 `deterministic_signal` 转正（摘除实验身份）。**调用次数放大型**——`llm_debate_procon` 把一次 `expert_review` 调用换成最多三次（pro → con → synthesis），默认开启直接改变费用与耗时量级，保持默认关、由用户按需开启。集中度问答不受开关控制，是辩论流程的内建段落（阈值触发）。实验功能的真实使用情况可用 `core/experiment_stats.py`（启用计数）加 `doctor` 账本概览观测，作为转正/撤销的客观数据。
 
 > **生命周期单一事实位**：全部 `experimental=True` 开关的「实验目的 / 判据来源 / 转正条件 / 撤销条件 / 观察数据源 / 当前态」以 `technical.md` §6.9「实验项生命周期表」为**单一事实位**——立项（新增实验项）、转正（摘 `experimental`）、撤销（删注册表条目与机制）任一发生时**必须同步刷新该表**；判据详文仍留在 `plan.md` 死线条目与版本归档的评估记录（两者回链 `technical.md` §6.9「实验项生命周期表」，表内不复制全文，避免两处口径漂移）。上文的转正判据分类学讲「怎么判」，`technical.md` §6.9 记录「当前每个实验项处在哪一步」。
 
@@ -1489,7 +1491,7 @@ class ComputModuleDef:
 
 **重算归因有两条路径，新增模块两条都要覆盖**：预检侧（`_compute_module_cache_info` 覆盖的四个基础模块）与骨架侧（`skeleton.generate_llm_content`，覆盖键在上游产出后才确定的模块如 `self_review`）。只加一条会让 `recompute_reasons` 的 `ttl_expired` 占比失真，据此调 TTL 会判错。同理，命中/未命中**计数**也要两条路径都记（骨架路径已计入），且汇聚器必须在「LLM+新闻」阶段**之前**绑定——预检在该阶段内部，晚绑即丢每次进程重启后首份报告的全部样本。
 
-`budget_status()` 只返回 `{enabled, exceeded, display}`：三渠道读 `exceeded` 作硬闸、前端读 `display` 整行直出。新增消费方只读这三个键，不要另加金额字段——那会让同一份数据出现两套格式（此前前端自拼 `low`/`symbol` 字段，后端改多币种后 `.toFixed()` 直接抛错）。
+`budget_status()` 只返回 `{enabled, exceeded, display}`：三渠道读 `exceeded` 作硬闸、前端读 `display` 整行直出。新增消费方只读这三个键，不要另加金额字段——那会让同一份数据出现两套格式，且前端自拼金额字段在多币种下会直接抛错。
 
 ### 无需手动维护的派生产出
 
@@ -1564,7 +1566,7 @@ registry 的测试在 `src/test/unit/core/test_registry.py`，验证 TTL 默认�
 
 ## 版本发布流程
 
-> **plan.md「已完成（待发布归档）」区的节头必须带完成标记**（`✅` / `❌` / 已完成 / 已落地 / 已实现 / 已交付）：归档步只认这些标记，缺标记的节**不会**被搬进计划归档，也不会有任何提示（实测曾一整批 9 项静默漏档）。`release.py prepare`（及单跑的 `archive`）现已在归档前兜底：发现缺标记即中止并点名 `plan-N`，报错里给出可照抄的写法。
+> **plan.md「已完成（待发布归档）」区的节头必须带完成标记**（`✅` / `❌` / 已完成 / 已落地 / 已实现 / 已交付）：归档步只认这些标记，缺标记的节**不会**被搬进计划归档、也不会有任何提示。`release.py prepare`（及单跑的 `archive`）在归档前兜底：发现缺标记即中止并点名 `plan-N`，报错里给出可照抄的写法。
 
 发布版本时，按以下六步顺序执行：
 

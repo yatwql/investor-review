@@ -1,6 +1,7 @@
 """把「内部建 py_mini_racer(V8) 上下文」的 akshare 调用放进子进程执行。
 
-**为什么必须隔离**：akshare 若干接口（`tool_trade_date_hist_sina`、`stock_fund_flow_industry`）
+**为什么必须隔离**：akshare 若干接口（逻辑名 `tool_trade_date_hist_sina`、`stock_fund_flow_industry`——
+实际接口名经 `core/akshare_compat.py` 候选链解析，akshare 改名不影响本模块）
 在函数体内就地 `py_mini_racer.MiniRacer()` 建 V8 上下文。V8 平台的初始化是进程级的且与线程
 绑定，实测三种崩法都拦不住（原生崩溃/死锁，`try/except` 与 pytest 均无效）：
 
@@ -31,9 +32,12 @@ import subprocess
 import sys
 from typing import Callable
 
+from src.python.core.akshare_compat import candidate_names
+
 logger = logging.getLogger("invest")
 
 #: 允许在子进程中调用的 akshare 接口（白名单：只有这些名字会被拼进子进程脚本）
+#: 与 `core/akshare_compat.py` 对齐：白名单收**逻辑名**，子进程按候选链取第一个存在的接口
 _ALLOWED_FUNCTIONS: frozenset[str] = frozenset({"tool_trade_date_hist_sina", "stock_fund_flow_industry"})
 
 #: 子进程输出标记（结果 JSON 紧随其后一行）
@@ -55,7 +59,11 @@ if __import__("os").environ.get({OFFLINE_ENV!r}, "") == "1":
 
 try:
     import akshare as ak
-    df = getattr(ak, payload["func"])(**payload.get("kwargs", {{}}))
+    _names = payload.get("names") or [payload["func"]]
+    _fn = next((getattr(ak, n) for n in _names if hasattr(ak, n)), None)
+    if _fn is None:
+        raise AttributeError("akshare 无该接口（已试：" + ", ".join(_names) + "）")
+    df = _fn(**payload.get("kwargs", {{}}))
     records = df.to_dict("records") if hasattr(df, "to_dict") else list(df or [])
     print({_RESULT_MARKER!r} + json.dumps(records, ensure_ascii=False, default=str))
 except Exception as exc:
@@ -84,7 +92,7 @@ def _validated_payload(func: str, kwargs: dict | None) -> dict:
         json.dumps(params, ensure_ascii=False)
     except TypeError as exc:
         raise ValueError(f"参数不可 JSON 序列化（子进程只收纯数据）: {exc}") from exc
-    return {"func": func, "kwargs": params}
+    return {"func": func, "names": list(candidate_names(func)), "kwargs": params}
 
 
 def _parse_child_output(proc: subprocess.CompletedProcess) -> list[dict]:

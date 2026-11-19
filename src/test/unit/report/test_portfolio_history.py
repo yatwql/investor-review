@@ -131,6 +131,27 @@ class TestCalculateForHolding(unittest.TestCase):
         self.assertEqual(mock_fetch.call_args_list[1][0][0], "history_fund_otc")
 
     @patch("src.python.report.portfolio_history.fetch_with_incremental_fallback")
+    def test_confirmed_otc_fund_skips_stock_chain_next_time(self, mock_fetch):
+        """同一实例内已确认走净值链路 → 后续调用不再白试一次 K 线。
+
+        回归背景：`易方达蓝筹精选(005827)` 名称不含基金关键词、`is_a_share_stock` 判为
+        A 股，于是先走 `history_stock`（必空）再降级 `history_fund_otc`；同一轮里该代码
+        会被多处消费（走势 + 风险指标），每次重试一次必然失败的链路，实测每次 0.4~2s。
+        """
+        mock_fetch.side_effect = [
+            None,  # 第 1 次：history_stock 失败
+            [{"date": "2026-07-01", "nav": 1.2345}],  # history_fund_otc 成功
+            [{"date": "2026-07-01", "nav": 1.2345}],  # 第 2 次调用直接走净值链路
+        ]
+        calc = self._make_calculator()
+        assert calc.calculate_for_holding("005827", "易方达蓝筹精选", 1000) is not None
+        assert calc.calculate_for_holding("005827", "易方达蓝筹精选", 1000) is not None
+        chains = [call[0][0] for call in mock_fetch.call_args_list]
+        assert chains[0] == "history_stock", "首次仍按代码类型先试 K 线（不改既有优先序）"
+        assert chains.count("history_stock") == 1, "第二次调用不得再试 history_stock（已确认走不通 K 线）"
+        assert "history_fund_otc" in chains
+
+    @patch("src.python.report.portfolio_history.fetch_with_incremental_fallback")
     def test_kline_success_no_fallback(self, mock_fetch):
         """00 代码但 K 线成功 → 不降级。"""
         mock_fetch.return_value = [{"date": "2026-07-01", "close": 12.50}]

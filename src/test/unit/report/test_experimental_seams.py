@@ -499,7 +499,10 @@ class TestFacadeWiringOrder:
         )
         order: list[str] = []
         for call in calls:
-            name = call.func.id
+            func = call.func
+            if not isinstance(func, ast.Name):  # 类型收窄：`calls` 只存 Call，`func` 仍声明为 ast.expr
+                continue
+            name = func.id
             if name in stages:
                 order.extend(self._seams_in(tree, name))
             elif name in _SEAM_ORDER:
@@ -514,7 +517,9 @@ class TestFacadeWiringOrder:
         """
         tree = ast.parse(self._source())
         main = next(
-            node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == "_generate_report_full"
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.FunctionDef) and node.name == "_generate_report_full"
         )
         call_lines = {
             node.func.id: node.lineno

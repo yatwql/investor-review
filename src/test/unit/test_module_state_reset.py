@@ -1,9 +1,9 @@
 """模块级会话态复位契约：任何 ``global`` 改写的单例都要有测试复位入口。
 
-为什么是个契约测试而不是逐条手写：``conftest`` 里那串复位调用是**约定**，靠人记住
-「新增模块级状态时顺手加一行」必然漏；漏了的表现是测试顺序相关（xdist 换分片随机红），
+为什么是个契约测试而不是逐条手写：``conftest`` 及相关实现模块（``_conftest_*.py``）里那串
+复位调用是**约定**，靠人记住「新增模块级状态时顺手加一行」必然漏；漏了的表现是测试顺序相关（xdist 换分片随机红），
 而本地单进程顺序常常看不出来。本用例反向枚举 `src/python` 里所有经 ``global`` 改写的
-模块级变量，要求所在模块提供复位入口**且**该入口被 ``conftest`` 调用——新增状态忘了
+模块级变量，要求所在模块提供复位入口**且**该入口被 ``conftest``（含其实现模块）调用——新增状态忘了
 接线就直接红，不必等某次 CI 分片炸。
 
 复位接线有两种形态，判据都认：调用模块的 ``reset_*()``，或在 fixture 里快照后
@@ -27,6 +27,9 @@ pytestmark = [pytest.mark.unit, pytest.mark.unit_core]
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _PY_ROOT = _REPO_ROOT / "src" / "python"
 _CONFTEST = _REPO_ROOT / "src" / "test" / "conftest.py"
+#: 夹具实现按域拆在 `src/test/_conftest_*.py`，复位接线散落其中——按 glob 汇总，
+#: 新增实现模块自动纳入（不写死文件清单）
+_CONFTEST_IMPL_GLOB = "_conftest_*.py"
 
 #: 复位函数名口径（与 conftest 里那一串调用同源命名）
 _RESET_NAME = re.compile(r"(reset|clear|invalidate|reload|discard|close)", re.IGNORECASE)
@@ -84,7 +87,9 @@ class TestModuleStateResetContract:
     """每个持有运行期模块状态的模块都必须有复位入口，且该入口被 conftest 调用。"""
 
     def test_every_stateful_module_is_reset_by_conftest(self):
-        conftest_source = _CONFTEST.read_text(encoding="utf-8")
+        parts = [_CONFTEST.read_text(encoding="utf-8")]
+        parts += [p.read_text(encoding="utf-8") for p in sorted(_CONFTEST.parent.glob(_CONFTEST_IMPL_GLOB))]
+        conftest_source = "\n".join(parts)
         offenders: list[str] = []
         for rel, names in _modules_with_global_state().items():
             if rel in _INIT_TIME_CONSTANTS:

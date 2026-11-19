@@ -349,10 +349,10 @@ class TestFetchIndexHistory(unittest.TestCase):
     @patch("src.python.core.provider_registry.get_registry")
     @patch("src.python.fetcher.chain.fetch_with_incremental_fallback")
     def test_session_cache_hit_skips_chain(self, mock_fetch, mock_get_reg):
-        """会话缓存命中 → 不调 chain（会话级复用）。"""
+        """会话缓存命中 → 不调 chain（会话级复用；条目形态为 (days, bars)）。"""
         cached = [self._SAMPLE_KLINE_1, self._SAMPLE_KLINE_2]
         mock_reg = MagicMock()
-        mock_reg.session_cache_get.return_value = cached
+        mock_reg.session_cache_get.return_value = (365, cached)
         mock_get_reg.return_value = mock_reg
 
         from src.python.fetcher.index import fetch_index_history

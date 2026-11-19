@@ -438,7 +438,6 @@ def _build_template_context(
     # 目录分组导航：按「基础信息/基金深度分析/行动建议/历史/LLM/附录」六组折叠（_sv_fn 闭包过滤不可见章节）
     section_groups = _build_section_nav_groups(order, _sv_fn, section_numbers)
 
-
     context = TemplateContext(
         flow_display=_build_flow_display(fund_flow_data),
         purchase_status_display=purchase_status_display,
@@ -533,7 +532,8 @@ def _build_template_context(
         schedule_replay_view=schedule_replay_view,
         financial_report_digest_data=financial_report_digest_data,
         financial_indicator_data=financial_indicator_data,
-        summary_highlights_data=summary_highlights_data,    )
+        summary_highlights_data=summary_highlights_data,
+    )
     return context, _code_display_map
 
 

@@ -207,9 +207,7 @@ def _get_trading_calendar() -> set[str]:
             # 主进程内无论用什么线程调度都可能段错误或退出死锁（三种崩法见
             # core/v8_subprocess.py 说明）。子进程退出即回收全部 V8 状态。
             rows = run_akshare_v8("tool_trade_date_hist_sina")
-            dates: set[str] = {
-                str(row.get("trade_date"))[:10] for row in rows if row.get("trade_date") is not None
-            }
+            dates: set[str] = {str(row.get("trade_date"))[:10] for row in rows if row.get("trade_date") is not None}
             if dates:
                 cache.set(_TRADING_CALENDAR_CACHE_KEY, sorted(dates))
                 _calendar_memo_store(dates)

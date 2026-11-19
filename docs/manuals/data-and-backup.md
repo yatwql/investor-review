@@ -106,7 +106,7 @@ Compress-Archive -Path data\holdings,data\config,data\history -DestinationPath "
 - **旧 `config.json` 缺新键怎么办？** 不用手补：程序按「配置文件不必须存在」的惯例处理，缺失键回落出厂默认；`features.json` 里新增的开关同理。
 - **结构版本不符怎么办？** `llm_settings.json` / `logger.json` / `llm_pricing_ref.json` 带 `version`，且程序**只认当前结构**：版本不符会拒绝加载并提示重新生成——删掉该文件重启即按当前模板重建（个人设置需按手册重设；`.bak` 可回退）。`config.json` / `features.json` 无版本门槛，逐键回落默认。
 - **升级后报告多/少了几章？** 先看变更日志里「新增开关默认值」；再确认 `[C]`/`[S]` 里的章节与开关状态（新开关默认值可能是「关」）。
-- **升级后想回退？** `git checkout <旧 tag>` + 重跑启动脚本；`data/` 一般不需要回退（程序对旧数据向后兼容），但**持仓与配置先备份**更稳妥。
+- **升级后想回退？** 先备份 `data/`（持仓与配置），再 `git checkout <目标版本 tag>` + 重跑启动脚本。程序**只认当前数据结构**：回退时请把 `data/` 一并换回同版本备份，否则两个版本会各自按自己的结构读对方的数据而缺字段/报错。
 
 ## 5. 重置与卸载
 

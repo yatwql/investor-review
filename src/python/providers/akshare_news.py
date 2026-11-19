@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 
+from src.python.core.akshare_compat import resolve
 from src.python.core.constants import BEIJING_TZ
 from datetime import datetime
 from typing import Any
@@ -122,7 +123,7 @@ def _fetch_cctv_news(date_str: str | None = None) -> list[dict[str, Any]]:
     try:
         # 显式 Any：akshare 的部分接口在类型存根里被标注成不可达返回（NoReturn），
         # 直接推断会让下游 `df.iterrows()` 报 "NoReturn is not iterable"
-        df: Any = ak.news_cctv(date=date_str)
+        df: Any = resolve(ak, "news_cctv")(date=date_str)
     except Exception as e:
         logger.warning("CCTV 新闻 (akshare) 获取失败: %s", e)
         return []

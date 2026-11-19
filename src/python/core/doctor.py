@@ -121,8 +121,6 @@ _LOGS_DIR = os.path.join(PROJECT_ROOT, "logs")
 _DEFAULT_OUTPUT_DIR = os.path.join(PROJECT_ROOT, "reports")
 
 
-
-
 def _check_python_version() -> dict[str, Any]:
     current = sys.version_info
     version = f"{current.major}.{current.minor}.{current.micro}"

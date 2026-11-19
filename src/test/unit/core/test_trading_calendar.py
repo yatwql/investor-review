@@ -18,6 +18,7 @@ from src.python.core.trading_calendar import count_trading_days_elapsed
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_core]
 
+
 def _patch_v8_failure(monkeypatch) -> None:
     """把 akshare 日历取数桩成「子进程不可用」（主链路现走 core.v8_subprocess）。"""
     from src.python.core import v8_subprocess

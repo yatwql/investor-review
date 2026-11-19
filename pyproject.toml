@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "investor-review"
-version = "0.18.5"
+version = "0.18.6"
 description = "投资复盘助手：读取持仓 Excel，生成 Excel/HTML 投资分析报告（含行情、穿透、基金业绩、财经热点关联关联分析与 LLM 深度复盘）"
 requires-python = ">=3.11"
 dependencies = [
@@ -92,6 +92,10 @@ extraPaths = ["scripts"]
 # 由 pytest 运行时守卫（同理不追求 src/test 零告警）。
 include = ["src/python", "scripts"]
 exclude = ["**/__pycache__", "src/test", "src/static", ".venv", "build", "dist"]
+# 测试域刻意不入类型域（正确性由 pytest 运行时守卫）；但编辑器/LSP 打开 src/test 文件时
+# 仍会按项目配置解析兄弟模块，对「不改解析语义」的排除目录报「导入无法解析」。把这些
+# 文件加入 ignore：只静默诊断，受检域仍是 include 里的 src/python + scripts。
+ignore = ["src/test"]
 pythonVersion = "3.11"
 # 依赖解析走项目虚拟环境（否则 pandas/akshare/flask 等第三方导入判为缺失）
 venvPath = "."

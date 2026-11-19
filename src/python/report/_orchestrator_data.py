@@ -615,6 +615,9 @@ def compute_valuation_data(
                     try:
                         _val = _fut.result()
                     except Exception:
+                        # 逐代码记一行：单只估值取数异常与「该标的本来无估值」必须可区分，
+                        # 否则报告里只是少一行，排障时与「该标的本来无估值」不可区分
+                        logger.warning("[valuation] %s 估值取数异常，该标的按无估值处理", code, exc_info=True)
                         _val = None
                     if _val:
                         by_code[code] = _val

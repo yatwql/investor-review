@@ -109,6 +109,58 @@ class TestAIndicesSessionReuse:
         assert calls["tencent"] == calls_after_first, "第二轮仍请求上游——会话缓存未生效"
 
 
+class TestIndexHistorySessionCacheShape:
+    """`history_index` 会话缓存只认 `(days, bars)` 二元组：其它形态当未命中重新取数。"""
+
+    class _Registry:
+        def __init__(self, payload):
+            self._payload = payload
+            self.written: list[tuple] = []
+
+        def session_cache_get(self, _domain, _code):
+            return self._payload
+
+        def session_cache_set(self, _domain, _code, value, **_kw):
+            self.written.append(value)
+
+    def _run(self, monkeypatch, payload):
+        from src.python.fetcher import index as index_mod
+
+        reg = self._Registry(payload)
+        calls: list[int] = []
+
+        def _chain(_name, _code, days, **_kw):
+            calls.append(days)
+            return [{"date": "2026-07-01", "close": 1.0}]
+
+        monkeypatch.setattr("src.python.core.provider_registry.get_registry", lambda: reg)
+        monkeypatch.setattr("src.python.fetcher.chain.fetch_with_incremental_fallback", _chain)
+        monkeypatch.setattr(index_mod, "cache_get", lambda *a, **k: None)
+        result = index_mod.fetch_index_history("sh000300", days=30)
+        return result, calls, reg
+
+    def test_bare_list_entry_is_treated_as_miss(self, monkeypatch):
+        """非二元组的脏/非本版本条目不得当作可用序列（不保留其他形态的分支）。"""
+        bare = [{"date": "2026-06-01", "close": 0.5}] * 40
+        result, calls, reg = self._run(monkeypatch, bare)
+        assert calls, "条目形态不符时应重新取数"
+        assert result != bare, "不得把非二元组条目原样返回给调用方"
+        assert reg.written and isinstance(reg.written[0], tuple), "写回形态固定为 (days, bars)"
+
+    def test_smaller_window_entry_is_refetched(self, monkeypatch):
+        """窗口小于本次需求时不复用（防短窗口先取者把后取者钉在更短序列）。"""
+        payload = (5, [{"date": "2026-06-01", "close": 0.5}])
+        _result, calls, _reg = self._run(monkeypatch, payload)
+        assert calls == [30]
+
+    def test_covering_window_entry_is_reused(self, monkeypatch):
+        """窗口被子满足时直接复用，不再打上游。"""
+        payload = (60, [{"date": "2026-06-01", "close": 0.5}])
+        result, calls, _reg = self._run(monkeypatch, payload)
+        assert calls == []
+        assert result == payload[1]
+
+
 class TestStaleFallbackDoesNotCountMiss:
     """陈旧兜底读取只作降级判定，第二次读同一键不得再记一次未命中。"""
 

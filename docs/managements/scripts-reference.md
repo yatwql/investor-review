@@ -998,7 +998,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 | 层次 | 载体 | 挡住的失效 |
 |:-----|:-----|:-----------|
-| 纯函数单测 | `test_release_archive.py::TestLedgerArchive` | 表块搬运丢行/幂等破坏/占位与头部派生错/完成节误判/目录树连接符错位 |
+| 纯函数单测 | `test_release_archive.py::TestLedgerArchive` | 表块搬运丢行（含表格被空行切块）/幂等破坏/占位与头部派生错/完成节误判/目录树连接符错位/同版重复迁档长出第二个批次节（现按 rf 编号去重升序并入同一节） |
 | **真实归档格式契约** | `test_release_archive.py::TestRealArchiveContract`（只读读仓库真实归档） | 脚本格式与磁盘既有归档漂移（自创批次标题、占位句变体、索引行不可识别、完成标记判定漏「✅ 主体交付」这类后缀形态）——尺子先量真实数据，格式常量一漂就红 |
 | 门禁断言 | `gate` 前置 + `check` 前置 | 漏迁档（表未搬空/缺批次节）、仍是开发版、新小版本 train 缺归档文件或目录树块 |
 

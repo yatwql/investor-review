@@ -19,9 +19,13 @@ from __future__ import annotations
 import ast
 import inspect
 import re
+import sys
+import types
 from pathlib import Path
 
 import pytest
+
+from src.python.core.akshare_compat import candidate_names
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_core]
 
@@ -93,12 +97,55 @@ class TestAkshareV8CallSitesAreRouted:
         )
 
     def test_known_v8_interfaces_are_detected(self):
-        """检测逻辑本身有效：已知 V8 接口被判定为 True，已知纯 HTTP 接口为 False。"""
+        """检测逻辑本身有效：已知 V8 接口被判定为 True，已知纯 HTTP 接口为 False。
+
+        按**逻辑名**的整条候选链判定：akshare 会就地重命名接口（如
+        `tool_trade_date_hist_sina` 与 `stock_fund_flow_industry` 都换过名），只查单一名字
+        会让本用例在依赖解析到另一种名字的机器上假红（真因是接口名，不是检测能力）。
+        """
         try:
             import akshare
         except ImportError:
             pytest.skip("akshare 未安装")
 
-        assert _uses_v8(akshare, "stock_fund_flow_industry") is True
-        assert _uses_v8(akshare, "tool_trade_date_hist_sina") is True
+        def _detected(logical_name: str) -> bool:
+            return any(_uses_v8(akshare, name) for name in candidate_names(logical_name))
+
+        assert _detected("stock_fund_flow_industry") is True
+        assert _detected("tool_trade_date_hist_sina") is True
         assert _uses_v8(akshare, "stock_financial_abstract") is False
+
+    def test_detection_logic_on_synthetic_sources(self, tmp_path):
+        """检测能力的**确定性**回归：不依赖 akshare 当前实现（版本一变就假红/假绿）。"""
+        source = (
+            "import py_mini_racer\n\n"
+            "def v8_api():\n"
+            "    ctx = py_mini_racer.MiniRacer()\n"
+            "    return ctx\n\n"
+            "def _helper():\n"
+            "    return py_mini_racer.MiniRacer()\n\n"
+            "def indirect_via_helper():\n"
+            "    return _helper()\n\n"
+            "def plain_http_api():\n"
+            "    return {'ok': True}\n"
+        )
+        module_path = tmp_path / "fake_akshare.py"
+        module_path.write_text(source, encoding="utf-8")
+
+        # 直接编译成模块对象（文件名指向真实文件，`inspect.getsource` 才读得到源码）：
+        # 不走「按路径 import」的样板，避免测试里出现第二处脚本加载器
+        fake = types.ModuleType("fake_akshare")
+        fake.__file__ = str(module_path)
+        sys.modules["fake_akshare"] = fake
+        try:
+            try:
+                exec(compile(source, str(module_path), "exec"), fake.__dict__)
+            except ImportError:  # py_mini_racer 未安装：替身模块导入失败即无法造样本
+                pytest.skip("py_mini_racer 未安装")
+
+            assert _uses_v8(fake, "v8_api") is True, "直接建 V8 上下文的接口必须被识别"
+            assert _uses_v8(fake, "indirect_via_helper") is True, "经同文件辅助函数间接取 V8 的接口同样必须被识别"
+            assert _uses_v8(fake, "plain_http_api") is False, "纯 HTTP 接口不得误判为 V8"
+            assert _uses_v8(fake, "no_such_api") is False, "接口不存在时不得报错或误判"
+        finally:
+            sys.modules.pop("fake_akshare", None)

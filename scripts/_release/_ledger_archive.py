@@ -107,38 +107,40 @@ def _rf_section_or_none(text: str, dev_version: str) -> tuple[int, int] | None:
     return m.end(), end
 
 
-def split_section_table(section_body: str) -> tuple[str, str, str] | None:
-    """节正文切成 (表前散文, 表格块, 表后散文)；无表格行返回 None。
+def _table_blocks(lines: list[str]) -> list[tuple[int, int]]:
+    """正文内**全部**表格块（连续 `|` 行的 [起, 止) 区间），按出现顺序返回。
 
-    表块 = 从第一条 `|` 行起、连续 `|` 行为止——**原样**返回（含分隔行与所有行），
-    不按 `rf-N` 前缀筛选，避免漏搬合并行/续行；表外散文由调用方保留在原位。
+    只认首块会让「表格被空行/散文切成多块」的台账只搬走第一块，剩下的行既留在
+    主台账、又不被 `count_rf_rows` 计入（门禁因此误判「已搬空」）——每轮 `archive`
+    再追加一个同名批次节，归档里就会长出多个 `## 已修复（X.Y.Z）`。
     """
-    lines = section_body.splitlines()
-    start = next((i for i, line in enumerate(lines) if _TABLE_LINE_RE.match(line)), None)
-    if start is None:
-        return None
-    end = start
-    while end < len(lines) and _TABLE_LINE_RE.match(lines[end]):
-        end += 1
-    return (
-        "\n".join(lines[:start]),
-        "\n".join(lines[start:end]),
-        "\n".join(lines[end:]),
-    )
+    blocks: list[tuple[int, int]] = []
+    i = 0
+    while i < len(lines):
+        if _TABLE_LINE_RE.match(lines[i]):
+            j = i
+            while j < len(lines) and _TABLE_LINE_RE.match(lines[j]):
+                j += 1
+            blocks.append((i, j))
+            i = j
+        else:
+            i += 1
+    return blocks
 
 
-def extract_rf_table(section_body: str) -> str | None:
-    """取已解决表格块原文（含原表头与分隔行）；已迁档（只剩占位）或无 rf 行时 None。"""
-    parts = split_section_table(section_body)
-    if parts is None or not _RF_ROW_RE.search(parts[1]):
-        return None
-    return parts[1]
+def _rf_row_number(line: str) -> int:
+    """台账行里的 rf 编号（非 rf 行返回 -1，排序时落在最前）。"""
+    m = re.search(r"\*\*rf-(\d+)\*\*", line)
+    return int(m.group(1)) if m else -1
 
 
 def count_rf_rows(section_body: str) -> int:
-    """未迁档的已解决条目数（门禁断言用；0 表示已迁档或本节为空）。"""
-    table = extract_rf_table(section_body)
-    return 0 if table is None else sum(1 for line in table.splitlines() if _RF_ROW_RE.match(line))
+    """未迁档的已解决条目数（门禁断言用；0 表示已迁档或本节为空）。
+
+    按节正文**全量**清点（不限首个表格块）：表格被空行切块时，只数首块会让门禁
+    把「还剩 N 条」误判为已搬空。
+    """
+    return sum(1 for line in section_body.splitlines() if _RF_ROW_RE.match(line))
 
 
 def apply_rf_archive(main_text: str, archive_text: str, version: str, date: str) -> tuple[str, str, int]:
@@ -146,6 +148,12 @@ def apply_rf_archive(main_text: str, archive_text: str, version: str, date: str)
 
     本版节缺失时**回落到「已解决」区直属层表**：条目漏写 `### 开发期已修复（X-dev）`
     节头时不再静默跳过，而是按本版归位（漏写是书写失误，条目本身仍是本周期产出）。
+
+    两处回归口径（都曾真实发生）：
+      - 节内表格被空行/散文切成多块时**逐块全搬**（只搬首块会让余行滞留，且
+        `count_rf_rows` 按首块计数→门禁误判已搬空）；
+      - 归档已有本版批次节时**并入同一节**（按 rf 编号去重升序），不再追加第二个
+        同名 `## 已修复（X.Y.Z）`（重复标题违文档结构性冗余守护）。
     """
     bounds = _rf_section_or_none(main_text, version)
     healed_head = bounds is None  # 漏写版本节头：归位后补出节头，台账版式与常规批次一致
@@ -154,39 +162,93 @@ def apply_rf_archive(main_text: str, archive_text: str, version: str, date: str)
     if bounds is None:  # 本版无自审条目：无待迁档内容，原样返回（幂等）
         return main_text, archive_text, 0
     start, end = bounds
-    parts = split_section_table(main_text[start:end])
-    if parts is None or not _RF_ROW_RE.search(parts[1]):
+    section_lines = main_text[start:end].splitlines()
+    blocks = _table_blocks(section_lines)
+    move_blocks = [(bs, be) for bs, be in blocks if any(_RF_ROW_RE.match(line) for line in section_lines[bs:be])]
+    if not move_blocks:
         # 「节在、表也在，但行不是 `| **rf-N** |` 形态」以前静默返回 0，表现为
         # 「该版本已迁档，跳过」——发布就此漏搬。这里至少留一条可诊断告警。
-        if parts is not None and any(line.strip().startswith("|") for line in parts[1].splitlines()):
+        if blocks:
             logger.warning(
                 "review-findings「开发期已修复（%s-dev）」表内没有 `| **rf-N** |` 形态的行，归档跳过（编号需加粗）",
                 version,
             )
         return main_text, archive_text, 0
-    before, table, after = parts
-    moved = sum(1 for line in table.splitlines() if _RF_ROW_RE.match(line))
+
+    rows, prose = _split_move_blocks(section_lines, move_blocks)
+    moved = sum(1 for line in rows if _RF_ROW_RE.match(line))
 
     placeholder = RF_PLACEHOLDER.format(version=version)
-    kept_prose = [block.strip("\n") for block in (before, after) if block.strip()]
-    body = "\n\n".join([*kept_prose, placeholder]) + "\n\n"
+    body = ("\n".join([*prose, "", placeholder]) if prose else placeholder) + "\n\n"
     if healed_head:
         body = f"### 开发期已修复（{version}-dev）\n\n" + body
     new_main = main_text[:start] + "\n\n" + body + main_text[end:].lstrip("\n")
 
-    section = (
-        _RF_ARCHIVE_HEAD_FMT.format(version=version)
-        + "\n\n"
-        + RF_SECTION_NOTE.format(version=version, date=date)
-        + "\n\n"
-        + table
-        + "\n"
-    )
-    new_archive = archive_text.rstrip("\n") + "\n\n" + section
+    new_archive = _merge_rf_into_archive(archive_text, version, date, rows)
     new_archive = _bump_archive_header(new_archive, version, date)
     new_main = _bump_index_range(new_main, date)
     new_main = _collapse_superseded_placeholders(new_main, keep_version=version)
     return new_main, new_archive, moved
+
+
+def _split_move_blocks(section_lines: list[str], move_blocks: list[tuple[int, int]]) -> tuple[list[str], list[str]]:
+    """待迁档行与留在主台账的散文各归一边。
+
+    待迁档行：首个表格块的**全部行**（表头/分隔行原样带走）+ 后续块的数据行
+    （后续块的表头不重复搬，同一张表在归档里只留一份表头）。散文行按原顺序
+    保留（连续空行收敛为一行），供调用方拼回主台账。
+    """
+    rows: list[str] = []
+    for pos, (bs, be) in enumerate(move_blocks):
+        for line in section_lines[bs:be]:
+            if _RF_ROW_RE.match(line) or pos == 0:
+                rows.append(line)
+
+    moved_lines = {i for bs, be in move_blocks for i in range(bs, be)}
+    prose: list[str] = []
+    for idx, line in enumerate(section_lines):
+        if idx in moved_lines:
+            continue
+        if not line.strip():
+            if prose and prose[-1] != "":
+                prose.append("")
+            continue
+        prose.append(line)
+    while prose and not prose[-1].strip():
+        prose.pop()
+    return rows, prose
+
+
+def _merge_rf_into_archive(archive_text: str, version: str, date: str, rows: list[str]) -> str:
+    """把本批台账行并入归档的**本版批次节**（无则新建），保证同名节唯一。
+
+    同版重复运行（`prepare` 后再单跑 `archive`，或表格被切块后多轮迁移）以前会每次
+    追加一个新的 `## 已修复（X.Y.Z）`，直接违反文档结构性冗余守护（重复标题）；
+    这里以 rf 编号为键并入既有节（去重 + 编号升序），不再追新节。
+    """
+    head = _RF_ARCHIVE_HEAD_FMT.format(version=version)
+    lines = archive_text.splitlines()
+    if head not in archive_text:
+        section = "\n\n".join([head, RF_SECTION_NOTE.format(version=version, date=date), "\n".join(rows)])
+        return archive_text.rstrip("\n") + "\n\n" + section + "\n"
+
+    idx = next(i for i, line in enumerate(lines) if line.strip() == head)
+    end = next((j for j in range(idx + 1, len(lines)) if lines[j].startswith("## ")), len(lines))
+    section_lines = lines[idx:end]
+    existing_rows = [line for line in section_lines if _TABLE_LINE_RE.match(line)]
+    prose = [line for line in section_lines[1:] if line.strip() and not _TABLE_LINE_RE.match(line)]
+
+    merged: dict[int, str] = {_rf_row_number(line): line for line in existing_rows if _RF_ROW_RE.match(line)}
+    for line in rows:
+        if _RF_ROW_RE.match(line):
+            merged.setdefault(_rf_row_number(line), line)
+    head_rows = [line for line in existing_rows if not _RF_ROW_RE.match(line)]  # 既有表头/分隔行
+    if not merged:
+        return archive_text
+    table = head_rows + [merged[key] for key in sorted(merged)]
+    new_section = [head, "", *prose, "", *table, ""]
+    rebuilt = "\n".join(lines[:idx] + new_section + lines[end:])
+    return rebuilt if rebuilt.endswith("\n") else rebuilt + "\n"
 
 
 def _collapse_superseded_placeholders(text: str, keep_version: str | None) -> str:
@@ -446,9 +508,7 @@ def unmarked_completed_plan_sections(text: str) -> list[str]:
     section = rest[: end.start()] if end else rest
     marked = {m.group(0) for m in _PLAN_DONE_HEAD_RE.finditer(section)}
     return [
-        m.group(1)
-        for m in _PLAN_DONE_ITEM_RE.finditer(section)
-        if not any(m.group(1) in heading for heading in marked)
+        m.group(1) for m in _PLAN_DONE_ITEM_RE.finditer(section) if not any(m.group(1) in heading for heading in marked)
     ]
 
 

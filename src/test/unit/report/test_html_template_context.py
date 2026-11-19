@@ -162,7 +162,11 @@ class TestRenderForwarding:
         context = TemplateContext()
         context.section_numbers = {"summary": 1}
 
-        with patch.object(hw._ENV, "get_template", return_value=MagicMock(render=MagicMock(return_value=f"X{hw._SECTION_ORDER_PLACEHOLDER}Y"))):
+        with patch.object(
+            hw._ENV,
+            "get_template",
+            return_value=MagicMock(render=MagicMock(return_value=f"X{hw._SECTION_ORDER_PLACEHOLDER}Y")),
+        ):
             html = hw._render_template(context)
 
         assert html == "X<style>#sec-summary{order:1}</style>Y"
@@ -170,5 +174,9 @@ class TestRenderForwarding:
     def test_no_injection_without_section_numbers(self):
         context = TemplateContext()
         context.section_numbers = {}
-        with patch.object(hw._ENV, "get_template", return_value=MagicMock(render=MagicMock(return_value=f"X{hw._SECTION_ORDER_PLACEHOLDER}Y"))):
+        with patch.object(
+            hw._ENV,
+            "get_template",
+            return_value=MagicMock(render=MagicMock(return_value=f"X{hw._SECTION_ORDER_PLACEHOLDER}Y")),
+        ):
             assert hw._render_template(context) == f"X{hw._SECTION_ORDER_PLACEHOLDER}Y"

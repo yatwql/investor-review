@@ -38,7 +38,7 @@ class TestWhitelist:
             run_akshare_v8("tool_trade_date_hist_sina", {"obj": object()}, runner=lambda *a: [])
 
     def test_payload_shape_passed_to_runner(self):
-        """传给执行器的载荷是 {func, kwargs}，参数原样保留。"""
+        """传给执行器的载荷是 {func, names, kwargs}，参数原样保留。"""
         captured: list[dict] = []
 
         def _runner(payload, timeout):
@@ -48,7 +48,23 @@ class TestWhitelist:
         rows = run_akshare_v8("stock_fund_flow_industry", {"symbol": "即时"}, runner=_runner)
 
         assert rows == [{"trade_date": "2026-09-17"}]
-        assert captured == [{"func": "stock_fund_flow_industry", "kwargs": {"symbol": "即时"}}]
+        assert captured == [
+            {
+                "func": "stock_fund_flow_industry",
+                "names": ["stock_fund_flow_industry", "stock_fund_flow_industry_ths"],
+                "kwargs": {"symbol": "即时"},
+            }
+        ]
+
+    def test_candidate_names_cover_renamed_interface(self):
+        """akshare 重命名接口时必须同时试候选链里的两个名字（否则只认一个名字的机器上取数静默失效）。"""
+        names = v8_subprocess.candidate_names("stock_fund_flow_industry")
+        assert "stock_fund_flow_industry_ths" in names, "新版 akshare 的改名后接口名必须在内"
+        assert names[0] == "stock_fund_flow_industry", "旧名仍可用的环境优先走旧名（同一函数，不改语义）"
+        assert v8_subprocess.candidate_names("tool_trade_date_hist_sina") == (
+            "tool_trade_date_hist_sina",
+            "calendar_trade_date_hist_sina",
+        )
 
     def test_none_kwargs_becomes_empty_dict(self):
         seen: list[dict] = []
