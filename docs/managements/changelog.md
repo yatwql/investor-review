@@ -11,6 +11,8 @@
 
 （本次发布内容见下方归档索引）
 
+- **发布台账按版本汇总**：新增只读脚本 `scripts/probe-release-ledger.py`（`--last N` / `--version` / `--json` / `-v`），按版本切段输出每版墙钟、分步耗时、会话 token 增量与失败步；token 列口径明确标注为「相邻台账行之间的会话增量」，不是发布命令本身的成本；配 11 条用例（`rf-1187`）。
+
 ## 归档
 
 - [`archived_changelog.0.18.x.md`](../archive/v0.18.x/archived_changelog.0.18.x.md) — v0.18.0 ~ v0.18.6（2026-11-12 ~ 2026-11-19）
