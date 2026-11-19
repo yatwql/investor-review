@@ -1,5 +1,5 @@
 # 投资复盘助手 - 自我审查问题记录
-> 文档版本：0.18.6-dev
+> 文档版本：0.18.6
 > **编号源**：`rf-next = 1187`（新增问题提出后更新为 +1；已用最大 rf-1186，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
@@ -61,26 +61,10 @@
 
 > 本表为本开发周期已修条目的**摘要行**（详情见 `changelog.md` 对应段）；发布时由 `release.py prepare` 的 archive 步原表搬入版本归档并在此留占位。
 
-| **rf-1178** | `release.py archive` 对同一版本不幂等、且只搬节内**首个**表格块：主台账表格被空行/散文切块后，每轮 `archive` 只搬首块并在归档追加一个 `## 已修复（X.Y.Z）`，余行既滞留主台账、又因 `count_rf_rows` 只看首块被门禁误判「已搬空」；实测 v0.18.5 发布时归档长出两个同名批次节，被 `check-doc-traces`（重复标题）拦下 | ① `apply_rf_archive` 改为节内**逐块全搬**（`_table_blocks` 枚举全部 `|` 块，首块连表头、后续块只取数据行），表外散文按原序留主台账；② `count_rf_rows` 改按节内全量清点（门禁据实测判定）；③ 新增 `_merge_rf_into_archive`：归档已有本版批次节时按 rf 编号去重升序**并入同一节**（同版只留一个批次节）；④ 配 2 条回归用例（多块一次搬全并留散文 / 既有批次节并入且二次运行零改动） |
-
-| **rf-1179** | GitHub CI 三条 job 红：① akshare 1.20.65（CI 依赖解析落点）**就地重命名了四个导出接口**且不留别名（`tool_trade_date_hist_sina`→`calendar_trade_date_hist_sina`、`stock_fund_flow_industry`→`stock_fund_flow_industry_ths`、`news_cctv`→`alternative_news_cctv`、`stock_sector_fund_flow_rank`→`stock_fund_flow_sector_rank_em`），依赖声明是区间 `>=1.16,<2.0` → 新装机器上交易日历/行业资金流/央视新闻三条链路 `AttributeError` 被降级吞掉、数据静默缺失，本机 1.20.42 因旧名仍在而全程未暴露；② `test_v8_call_sites` 的「已知 V8 接口」断言写死旧名，在 CI 假红；③ `ruff format --check` 有 14 个文件早已漂移（CI `format` job 长期红） | ① 新增 `core/akshare_compat.py`（逻辑名→候选链，`resolve()` 取第一个存在的接口；旧名与改名后名字并存时优先走旧名，行为不变），`core/v8_subprocess.py` 子进程按候选链解析、`providers/akshare_news.py`/`providers/akshare_extras.py` 改走 `resolve()`；② 该断言改为按候选链整条判定，另加「合成模块」确定性用例（判定不依赖 akshare 当前实现）；③ 新增 `test_akshare_compat.py`（10 例：候选链/旧名优先/改名回落/不可调用跳过/调用点不得硬引旧名）；④ 14 个漂移文件 `ruff format` 归位，全仓 `format --check` 恢复零告警 |
-
-| **rf-1180** | 全仓核查「旧结构兼容」残留（旧数据结构/旧数据文件/旧缓存结构/旧缓存文件/旧配置/旧配置项/旧内部 API）：运行期仍有三处为旧形态留分支——① `fetcher/index.py` 的 `history_index` 会话缓存对裸列表（旧条目形态）按「窗口未知」放行；② `providers/akshare_extras.py` 的通道失败负缓存把整源单字符串当作「全通道同源失败」；③ `report/_snapshot.capture_snapshot` 的 `**extra` 是无调用方的扩展透传口。其余「兼容」注释均为第三方变体容错（§9.2 形状容错归属）或单据版本拒载护栏，不属跳版本兼容 | ① 会话缓存只认 `(days, bars)` 二元组，其它形态一律当未命中重新取数（写回形态固定）；② 负缓存只认 `{通道: 失败类型}`，非 dict 载荷按空处理；③ 删 `**extra` 与 `pipeline_data.update(extra)`；④ 配 4 条回归用例（裸列表当未命中并回写二元组 / 窗口不足重取 / 窗口足够复用 / 单字符串负缓存按空） |
-
-| **rf-1181** | 近 8 小时变更审计（14 提交）：① `scripts/_release/_ledger_archive.py` 的 `split_section_table` / `extract_rf_table` 在迁档改为「逐块全搬」后已无生产调用方，只剩 3 条用例引用——死生产码靠测试续命，且用例断言的是内部辅助而非真实产出；② `core/akshare_compat.resolve` 的 `# type: ignore[no-any-return]` 在该返回注解下并不触发，属新增噪音；③ `core/v8_subprocess.py` 模块 docstring 把两个 V8 接口写成具体名，未标「逻辑名，实际名经候选链解析」，与同文件的 `_ALLOWED_FUNCTIONS` 注释口径不一 | ① 删除两个死辅助与 `release.py` 的再导出，3 条用例改写为断言 `apply_rf_archive` 的真实产出（表头/分隔行/非 rf 行随块搬入归档、占位台账零改动）；② 去掉多余的 `type: ignore`（类型检查仍零错）；③ docstring 补「逻辑名 + 候选链解析」口径 |
-
-| **rf-1182** | `test_cache_core.py` 的等值断言依赖缓存目录里的**实际文件条数**：`os.remove` 用固定长度 `side_effect=[OSError, None]`，并行档下目录里 `price_` 文件多于 2 个时第三次调用抛 `StopIteration`（本轮 dev-verify 即因此单点假红，单跑必过）；同文件另有三处 `len(os.listdir(...)) == 5` / `count == 2` 绝对值断言，属同类脆弱写法 | `os.remove` 改函数式 side_effect（首个失败、其余成功，不看文件数）；计数断言改为由前置清单派生（`count == len(expected)` / 前后条数不变 / `count == len(attempts)-1` 且 `len(attempts) >= 2`）——断言结构关系而非绝对值 |
-
-| **rf-1183** | `src/test/conftest.py` 单文件 1199 行（顶到测试域 1200 行红线），且内容跨五类互不相关的职责——敏感路径隔离、33 个模块状态自动复位、cassette 回放、外网阻断、收集期校验混在一处，新增任一域都要在千行文件里定位。 | 按域拆为 `src/test/_conftest_{isolation,state_reset,cassette,network,hooks}.py`，入口只留标记注册与会话级兜底、把夹具/钩子显式 import 回来注册（pytest 只认入口命名空间，故 import 不可删）；`test_module_state_reset.py` 的复位接线判据改按 `conftest.py` + `_conftest_*.py` 全量汇总（glob 派生，新增实现模块自动纳入）；conftest.py 1199 → 176 行 |
-
-| **rf-1184** | 近 6 小时变更审计（13 提交）：conftest 拆分后 `src/test` 内的兄弟模块导入在编辑器/LSP 侧持续报「Import 无法解析」——`[tool.pyright]` 的 `exclude` 只把测试域移出受检程序，不静默打开文件时的解析诊断，每次改动都会在测试域刷出 5~7 条假红（命令行 pyright 与 `check-types.py` 均为 0 错）。其余核对无新增债务：窗口内无死私有函数（全仓 0）、无近重复函数（5 组同形对均为不同输入/不同 SUT 的并行覆盖）、拆分前后 conftest 的 53 个顶层函数零丢失零重复 | `pyproject.toml [tool.pyright]` 增 `ignore = ["src/test"]`（只静默诊断、不改受检域），并在 `scripts/check-types.py` 文档与 developer-guide 类型检查行同步说明该键的作用与边界 |
-
-| **rf-1185** | 实测报告（128.8s/11 持仓）日志分析出两处浪费：① 财报摘要 25.1s（数据准备 55%）里，`_locate_from_fulltext` 在全文**无任一偏好关键词**时退化为 `content[:max_chars]`（封面/目录/公司简介）——既把无关文本当摘要展示，又因「有正文」绕过 `SYMBOL_MISS` 负缓存，下一轮继续逐篇白探；② `portfolio_history` 把 `00` 前缀但名称不含基金关键词的场外基金（实测 `005827 易方达蓝筹精选`）按 A 股派给 K 线链，必空后才降级净值链，同一轮多处消费该代码即重复白试（每次 0.4~2s） | ① 全文阶只认关键词命中，无命中即返回空并落 DEBUG 说明，使该标的走「确定性缺失」负缓存；② 实例内记忆「已确认只能走净值链路」的代码集合，后续调用直接走净值链（首次仍保留既有优先序）；③ 配 2 条回归用例（无关键词全文判缺失 / 二次调用只走净值链），并同步 `technical.md` 的两阶取数口径 |
-
-| **rf-1186** | 近 35 小时变更审计（40 提交）：`compute_valuation_data` 的并发 futures 循环 `except Exception: _val = None` 把单只标的的估值取数异常静默吞掉——报告里只是少一行，排障时与「该标的本来无估值」不可区分（与 rf-1171 已修的逐品种 K 线同一类）：窗口内 105 个改动 py 文件逐项扫过，其余维度未见债务（全仓无引用私有函数 0、无新近重复函数、无未测新模块、新公开函数无死引用） | 异常分支补一行 WARNING（点名代码 + `exc_info`）再按无估值剔除；配 1 条回归用例（一只异常、另一只照常计入，且日志点名异常代码） |
+（本版开发期已修复项已随 v0.18.6 发布迁入归档档案）
 
 ### 归档档案
-- [`archived_review-findings.0.18.x.md`](../archive/v0.18.x/archived_review-findings.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-18）
+- [`archived_review-findings.0.18.x.md`](../archive/v0.18.x/archived_review-findings.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-19）
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-10）
 - [`archived_review-findings.0.16.x.md`](../archive/v0.16.x/archived_review-findings.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-11-03）
 - [`archived_review-findings.0.15.x.md`](../archive/v0.15.x/archived_review-findings.0.15.x.md) — v0.15.x（2026-10-24 ~ 2026-10-25）
