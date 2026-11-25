@@ -30,9 +30,10 @@
 
 ### 测试
 
-- **analysis / llm 残差分支补齐（覆盖率推进批次）**：`analysis._math_utils`（t 分布端点、样本不足与基准零方差）、`analysis._factor_formulas`（非法收盘价、有效对不足、标量 NaN 铺满、量价背离符号、60 日收益偏度、横截面日均值成分数下限）、`llm`（熔断状态展示面、盘中复用归因、证据索引、档位解析降级）等模块的不可达/降级分支补测。
+- **第 12 批（残差分支收尾，覆盖率 99.4% → 99.6%）**：`analysis._math_utils`（t 分布端点、样本不足与基准零方差）、`analysis._factor_formulas`（非法收盘价、有效对不足、标量 NaN 铺满、量价背离符号、60 日收益偏度、横截面日均值成分数下限）、`llm`（熔断状态展示面、盘中复用归因、证据索引、档位解析降级）等模块的不可达/降级分支补测。
 
-- **测试覆盖率 92.1% → 98.1%（十一个批次）**：接入 `pytest-cov` 后按「失败路径优先、只值一测的分支也不放过」逐批补齐；本轮收尾时 `cli/_handlers`、`report/news_correlation`、`cache/operations`、`report/llm_content`、`report/summary`、`report/_orchestrator_data`、`report/html_jinja_env`、`report/whatif_writer`、`report/pipeline_data_builder`、`report/_run_scope`、`providers/news_dedup_anchor_store`、`tui/handlers_log`、`tui/progress`、`providers/tiantian_base`、`report/_report_health`、`report/excel_news_warning`、`cache/_paths`、`cache/_store`、`cache/_cleanup` 等模块均达 100%（`llm/skeleton` 99%，保留 1 行早退后的不可达防御分支）。逐批口径：
+- **测试覆盖率 92.1% → 99.6%（十二个批次）**：接入 `pytest-cov` 后按「失败路径优先、只值一测的分支也不放过」逐批补齐；本轮收尾时 `cli/_handlers`、`report/news_correlation`、`cache/operations`、`report/llm_content`、`report/summary`、`report/_orchestrator_data`、`report/html_jinja_env`、`report/whatif_writer`、`report/pipeline_data_builder`、`report/_run_scope`、`providers/news_dedup_anchor_store`、`tui/handlers_log`、`tui/progress`、`providers/tiantian_base`、`report/_report_health`、`report/excel_news_warning`、`cache/_paths`、`cache/_store`、`cache/_cleanup` 等模块均达 100%（`llm/skeleton` 99%，保留 1 行早退后的不可达防御分支）。逐批口径：
+  - **第 1 批（92.1% → 92.9%）**：可靠性/边界类零散守卫与接口回显分支（首轮补齐后的收尾段）。
   - **第 2 批（92.9% → 93.5%）**：analysis guard 分支、缓存刷新编排、config 写路径/校验分区、pricing 解析、akshare 扩展、东财净值历史、回撤页签、HTML 构建阶段埋点、TUI 入口分支。
   - **第 3 批（93.5% → 93.9%）**：Excel 页签写入隔离、HTML 渲染降级、新浪解析回落、提示词表格分支、CLI 命令簇。
   - **第 4 批（93.9% → 94.7%）**：医生检查项故障、行情时段官方层、因子目录探测、缓存面板分支、API 响应解析、提示词数据块、新闻去重锚点策略、基金业绩、穿透页签、调度回放面板、LLM 用量小结、Web 错误分支与持仓编辑校验。
