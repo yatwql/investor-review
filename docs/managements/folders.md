@@ -14,12 +14,12 @@
 | 架构图示 | SVG | 4 | 396 | `src/static/` README 架构图（architecture 三渠道→引擎→双报告、llm-chain Provider 链式分发、capabilities 九大功能域总览、owl-mascot 吉祥物猫头鹰「守望」）+ 截图 7 张 PNG（报告实景 `report-overview`/`report-toc`/`report-charts` + 界面实景 `tui-menu`/`web-workbench`/`web-config`/`cli-report`，不计入本行） |
 | 辅助脚本 | Python | 150 | 31,446 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评测与因子目录评测、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、视觉资产（社交预览图/架构图体检）、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
 | 源代码合计 | — | 630 | 160,836 | 主程序 + 模板 + 脚本 + SVG |
-| 测试代码 | Python | 819 | 218,010 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
-| 测试用例 | — | — | 15,086 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
+| 测试代码 | Python | 822 | 218,630 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
+| 测试用例 | — | — | 15,139 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 15 | 7,088 | 含 README.md；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 14 | 6,851 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 223 | 75,263 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 14,513 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 223 | 75,267 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 14,517 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 200 | 59,038 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 9 | ~1616 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + TUI 交互改进（议题 + 第一/二批实施方案） + PanWatch 借鉴分析（含评估政策单源化与 LLM 复盘契约两份设计） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -1178,6 +1178,7 @@ investor-review/
 │       │   │   ├── test_whatif_operations.py      #   调仓 What-if 操作共享层测试
 │       │   │   ├── test_history_policy.py         #   历史走势获取策略解析测试（off/auto/prompt × 有无交互）
 │       │   │   ├── test_whatif_writer.py          #   调仓 What-if 报告输出（固定名+日期归档+清理 + 成本页签/裁剪/双端一致）
+│       │   │   ├── test_whatif_writer_branches.py #   调仓边角分支（匿名模式缺省/off 恒等/写失败带目标路径/归档清理仅告警）
 │       │   │   ├── test_whatif_cost_panel.py      #   交易成本面板装配（成本契约/impact 手算/基准对齐/门控/换手翻转回归）
 │       │   │   ├── test_whatif_cost_panel_edge.py #   交易成本面板边缘（空变动/快照缺失/取数异常/比值越界降级）
 │       │   │   ├── test_drawdown_html_excel.py    #   回撤明细 HTML/Excel 呈现
@@ -1204,6 +1205,7 @@ investor-review/
 │       │   │   ├── test_html_writer_edge.py       #   HTML 写入器边缘场景
 │       │   │   ├── test_html_stage_breakdown.py   #   HTML 生成阶段子步骤细分（渲染/资产内嵌/匿名化/落盘四步归因）
 │       │   │   ├── test_jinja_bytecode_cache.py   #   Jinja 模板字节码缓存（目录随缓存根、首次编译、命中缓存零编译）
+│       │   │   ├── test_jinja_env_filters_and_faults.py # Jinja 缓存故障面（读/写/清理失败降级）+ 过滤器脏值兜底与匿名代码折叠
 │       │   │   ├── test_market_sentiment.py      #   市场情绪报告层装配（开关门禁/凭据门禁/取数缓存/契约装配）
 │       │   │   ├── test_market_sentiment_wiring.py # 市场情绪接线回归（full 路径契约注入与 HTML 透传/双端渲染载体）
 │       │   │   ├── test_report_output_spans.py # full 路径 HTML/Excel 阶段埋点回归（阶段计时补回/异常仍收口/无上下文零行为变化）
@@ -1253,6 +1255,7 @@ investor-review/
 │       │   │   ├── test_orchestrator_generate_report_both.py        #   orchestrator both 路径（HTML+Excel）
 │       │   │   ├── test_report_both_stage_contract.py # both 路径结构契约（阶段名与序列/start-stop 配对/运行边界/双产物成败/快照命名空间透传/健康检查收尾）
 │       │   │   ├── test_run_integrity.py      #   运行一致性守卫（中断收口/原子落盘/已中断状态/guard_run）
+│       │   │   ├── test_run_integrity_faults.py # 中断收口五步逐步容错（预清扫/删除/清理/落记录/提示/健康收敛单步失败不阻断）
 │       │   │   ├── test_stage_cancel.py       #   阶段边界协作式取消（令牌/边界生效/编排层收口与异常传播）
 │       │   │   ├── test_summary.py                #   摘要生成测试
 │       │   │   ├── test_summary_sheet.py                            #   汇总页签整体输出（各区块组合）
