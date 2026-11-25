@@ -129,15 +129,15 @@ class TestTokenDelta:
 
 
 class TestCli:
-    def test_load_skips_broken_lines_and_missing_file(self, tmp_path):
+    def test_ledger_read_skips_broken_lines_and_missing_file(self, tmp_path):
         mod = _probe_module()
-        assert mod._load(tmp_path / "nope.jsonl") == []
+        assert mod._read_ledger(tmp_path / "nope.jsonl") == []
         ledger = tmp_path / "release.jsonl"
         ledger.write_text(
             json.dumps(_rec("0.18.6", "check")) + "\n{不是 json}\n\n",
             encoding="utf-8",
         )
-        assert len(mod._load(ledger)) == 1
+        assert [row["command"] for row in mod._read_ledger(ledger)] == ["check"]
 
     def test_version_filter_and_last(self, tmp_path, capsys):
         mod = _probe_module()

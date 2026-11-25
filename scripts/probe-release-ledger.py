@@ -37,28 +37,10 @@ from collections import defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 共享设施包（_shared/checklib）
+from _release._timing import read_ledger_records as _read_ledger  # noqa: E402 — 台账读取单一入口
 from _shared.checklib import REPO_ROOT  # noqa: E402
 
 DEFAULT_LEDGER = REPO_ROOT / "logs" / "release.jsonl"
-
-
-def _load(ledger: Path) -> list[dict]:
-    """读台账；文件不存在视为空（首次使用），单行损坏跳过。"""
-    if not ledger.exists():
-        return []
-    records: list[dict] = []
-    text = ledger.read_text(encoding="utf-8", errors="replace")
-    for line in text.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            record = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(record, dict) and record.get("command"):
-            records.append(record)
-    return records
 
 
 def _as_float(value: object) -> float:
@@ -187,7 +169,7 @@ def main(argv: list[str] | None = None) -> int:
 
     ledger = Path(args.ledger)
     try:
-        records = _load(ledger)
+        records = _read_ledger(ledger)
     except OSError as exc:
         print(f"[ERR] 台账不可读：{exc}", file=sys.stderr)
         return 1

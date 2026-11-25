@@ -4,7 +4,8 @@
 测试目标：
   - `_get_eps_text` / `_get_dividend_text` 的命中与缺省两态
   - `_load_profit_forecast_safe` / `_load_dividend_data_safe` 的异常降级（返回空 + False）
-  - `build_penetration_data_status` 的行业失败类型分支（no_a_share 不记降级）
+  - `build_penetration_data_status` 按 `industry_status` 枚举分流（ok / empty / no_a_share / unreachable），
+    且预期行为分支复位本域遗留失败计数
   - `write_penetration_sheet` 在 valuation_data 非 None 时的 11 列写入（估值列 + 免责声明）
   - `_num_formats` 的 11 列表头分支
 """
@@ -16,6 +17,7 @@ from unittest.mock import Mock, patch
 import pytest
 from openpyxl import Workbook
 
+from src.python.core.degradation import DegradationTracker
 from src.python.report import penetration_sheet as ps
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
@@ -111,14 +113,13 @@ class TestSafeLoaders:
 
 class TestDataStatus:
     def test_industry_no_a_share_is_not_degraded(self):
-        """全为非 A 股穿透资产属预期行为，不记降级项。"""
+        """全为非 A 股穿透资产属预期行为，不记降级项，且清掉遗留计数。"""
         tracker = Mock()
         with patch.object(ps, "_tracker", return_value=tracker):
-            status = ps.build_penetration_data_status(
-                _penetration_result(industry_success=False, industry_failure_type="no_a_share")
-            )
+            status = ps.build_penetration_data_status(_penetration_result(industry_status="no_a_share"))
         assert status == {}
         tracker.record.assert_not_called()
+        tracker.reset.assert_called_once_with("penetration_industry")
 
     def test_industry_unreachable_records_cache_age(self):
         tracker = Mock()
@@ -128,9 +129,7 @@ class TestDataStatus:
             patch.object(ps, "get_cache_age_by_data_type", return_value=7200.0),
             patch.object(ps, "get_ttl", return_value=86400),
         ):
-            status = ps.build_penetration_data_status(
-                _penetration_result(industry_success=False, industry_failure_type="unreachable")
-            )
+            status = ps.build_penetration_data_status(_penetration_result(industry_status="unreachable"))
         kwargs = tracker.record.call_args.kwargs
         assert kwargs["failure_type"] == "unreachable"
         assert kwargs["cache_age_hours"] == pytest.approx(2.0)
@@ -138,6 +137,61 @@ class TestDataStatus:
         assert status["industry"]["available"] is False
         assert status["industry"]["tier"] == "T3"
         assert status["industry"]["message"] == ps.STATUS_MESSAGES["industry_unavailable"]
+
+    def test_status_routes_empty_to_degrade_and_expected_states_to_reset(self):
+        """消费方只看 `industry_status`：empty 记降级；ok / no_a_share 不记并复位计数。"""
+        empty_tracker = Mock()
+        empty_tracker.record.return_value = (False, 1, 3)
+        with (
+            patch.object(ps, "_tracker", return_value=empty_tracker),
+            patch.object(ps, "get_cache_age_by_data_type", return_value=None),
+            patch.object(ps, "get_ttl", return_value=None),
+        ):
+            ps.build_penetration_data_status(_penetration_result(industry_status="empty"))
+        assert empty_tracker.record.call_args.kwargs["failure_type"] == "empty"
+        empty_tracker.reset.assert_not_called()
+
+        for expected in ("ok", "no_a_share"):
+            quiet_tracker = Mock()
+            with patch.object(ps, "_tracker", return_value=quiet_tracker):
+                assert ps.build_penetration_data_status(_penetration_result(industry_status=expected)) == {}
+            quiet_tracker.record.assert_not_called()
+            quiet_tracker.reset.assert_called_once_with("penetration_industry")
+
+
+class TestIndustryCounterHygiene:
+    """预期行为与非预期行为交替时，历史失败计数不得污染下一次判定。"""
+
+    def test_no_a_share_clears_previous_empty_counts(self, tmp_path, monkeypatch):
+        """上一轮两次 empty → 本轮 no_a_share → 再切回 empty：最后一次不因遗留计数提前降级。
+
+        上一轮的计数直接调 `record` 种入而不走消费方回放：回放需旧的双字段编码
+        （正是被 `industry_status` 取代的那套），种入与「跨报告累积遗留」等价
+        （`_counts` 是进程级单例状态，只跨报告累积、不跨进程持久化）。
+        """
+        tracker = DegradationTracker(persist_path=str(tmp_path / "degradation.json"))
+        monkeypatch.setattr(ps, "_tracker", lambda: tracker)
+        # 缓存 48h / TTL 24h（正常过期） → T3 empty 阈值保持基准 3，两次 empty 不降级
+        monkeypatch.setattr(ps, "get_cache_age_by_data_type", lambda *args, **kwargs: 172800.0)
+        monkeypatch.setattr(ps, "get_ttl", lambda *args, **kwargs: 86400)
+
+        for _ in range(2):
+            degraded, count, _eff = tracker.record(
+                "penetration_industry",
+                "T3",
+                success=False,
+                failure_type="empty",
+                cache_age_hours=48,
+                cache_ttl_hours=24,
+            )
+            assert not degraded, f"阈值 3，第 {count} 次 empty 不降级"
+
+        assert ps.build_penetration_data_status(_penetration_result(industry_status="no_a_share")) == {}
+        assert tracker.get_counts("penetration_industry") == {}, "全为非 A 股须清掉遗留下来的 empty 计数"
+
+        assert ps.build_penetration_data_status(_penetration_result(industry_status="empty")) == {}, (
+            "复位后从 1 重新计数，不因上一轮的两次 empty 凑满 3 次而提前报降级"
+        )
 
 
 class TestValuationColumn:

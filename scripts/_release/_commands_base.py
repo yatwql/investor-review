@@ -7,7 +7,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import re
 import sys
@@ -23,6 +22,7 @@ from _release._timing import (
     build_record as _build_record,
     format_agent as _format_agent,
     format_tokens as _format_tokens,
+    read_ledger_records as _read_ledger_records,
     release_token_usage as _release_token_usage,
     session_usage as _session_usage,
 )
@@ -180,14 +180,16 @@ def _finish_timing(command: str, rc: int, env) -> None:
     agent_text = _format_agent(agent)
     if agent_text:
         print(f"[..] 执行环境：{agent_text}")
-    # 发布窗口 token 统计：以「上一次 devbump」为界，避免把开发期对话算进发布成本
+    # 发布窗口 token 统计：以「上一次 devbump」为界，避免把开发期对话算进发布成本。
+    # 读取走 `_timing.read_ledger_records`（与 probe 同源口径）：脏行/缺 `command`
+    # 的行跳过而不是让整段统计失效。
     try:
-        rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        rows = _read_ledger_records(path)
         used = _release_token_usage(rows)
         text = _format_tokens(used)
         if text:
             print(f"[..] 本次发布累计 token：{text}")
-    except (OSError, ValueError, TypeError):
+    except (OSError, TypeError):
         print("[!] token 统计读取失败（不影响本次结果）")
 
 

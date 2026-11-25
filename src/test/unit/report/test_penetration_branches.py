@@ -181,11 +181,14 @@ class TestIndustryPrefetch:
 
 
 class TestIndustryAvailabilityFlag:
-    """行业取数全空时须报降级（`industry_success=False` + failure_type）。
+    """行业分类状态以单字段 `industry_status` 枚举表达（ok / empty / no_a_share / unreachable）。
 
     生产场景：行业链路熔断（`batch_fetch_industry_data` 直接回空）或批量全败
     （只回填成功项），两段取数均为空。此前判据放在 `remaining` 非空之外，
     该分支永不成立，`penetration_sheet` 的「行业分类不可用」降级从未被触发。
+
+    状态必须一个字段说清：同一事实若拆成「成功标志 + 失败类型」两字段，只看成功
+    标志的消费方会把「全为非 A 股」这种预期行为记成数据降级。
     """
 
     def test_prefetch_and_batch_both_empty_marks_industry_failed(self, monkeypatch):
@@ -203,8 +206,7 @@ class TestIndustryAvailabilityFlag:
         )
 
         assert calls == [["600519"], ["600519"]], "预取为空后须按需补取"
-        assert result["industry_success"] is False, "两段取数全空须标记行业不可用"
-        assert result["industry_failure_type"] == "empty"
+        assert result["industry_status"] == "empty", "两段取数全空须报 empty"
 
     def test_partial_batch_success_keeps_industry_available(self, monkeypatch):
         calls: list[list[str]] = []
@@ -222,16 +224,23 @@ class TestIndustryAvailabilityFlag:
             [_detail("600519")],
         )
 
-        assert result["industry_success"] is True, "补取有命中即不算取数失败"
-        assert "industry_failure_type" not in result
+        assert result["industry_status"] == "ok", "补取有命中即不算取数失败"
         assert {item["name"]: item["sector"] for item in result["top10"]}["贵州茅台"] == "白酒"
 
-    def test_no_a_share_codes_marks_failure_type_without_degrade(self):
+    def test_no_a_share_codes_reports_expected_status_without_degrade(self):
         result = penetration._compute_penetration_top10_uncached(
             [_holding("腾讯控股", "00700")],
             [_detail("00700", name="腾讯控股")],
         )
 
-        assert result["industry_success"] is False, "置 False 才能让上游读到失败类型"
-        assert result["industry_failure_type"] == "no_a_share"
+        assert result["industry_status"] == "no_a_share", "无 A 股属预期行为，以独立枚举值表达"
         assert penetration_sheet.build_penetration_data_status(result) == {}, "无 A 股属预期行为，不记降级"
+
+    def test_status_field_replaces_legacy_success_flag(self):
+        result = penetration._compute_penetration_top10_uncached(
+            [_holding("腾讯控股", "00700")],
+            [_detail("00700", name="腾讯控股")],
+        )
+
+        assert "industry_success" not in result, "成功标志不得与状态枚举并存"
+        assert "industry_failure_type" not in result, "失败类型并入 industry_status，不得另设字段"

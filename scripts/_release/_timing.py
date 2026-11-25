@@ -230,6 +230,30 @@ def session_usage(session_file: str | Path | None) -> dict:
     return acc if seen else {}
 
 
+def read_ledger_records(path: str | Path) -> list[dict]:
+    """读取 `logs/release.jsonl` 台账行（唯一的台账读取入口）。
+
+    容错口径（埋点是观测面，脏行不得让汇总整体失效）：文件不存在视为空（首次使用）；
+    空行、损坏 JSON、非 dict 行、无 ``command`` 的行一律跳过。文件不可读（如路径是
+    目录）的 ``OSError`` 照常抛给调用方自decide 提示。
+    """
+    ledger = Path(path)
+    if not ledger.exists():
+        return []
+    records: list[dict] = []
+    for line in ledger.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(record, dict) and record.get("command"):
+            records.append(record)
+    return records
+
+
 def release_token_usage(records: list[dict]) -> dict:
     """按台账记录推算「上一次 devbump 之后」的发布窗口 token 用量。
 

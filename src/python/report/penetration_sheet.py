@@ -203,7 +203,7 @@ def build_penetration_data_status(
     仅当超过阈值时才标记为不可用。
 
     Args:
-        result: compute_penetration_top10 返回的结果字典
+        result: compute_penetration_top10 返回的结果字典（读 `industry_status` 枚举分流）
         profit_success: 盈利预测 API 是否成功
         dividend_success: 分红 API 是否成功
 
@@ -212,35 +212,36 @@ def build_penetration_data_status(
     """
     status: DataStatus = {}
 
-    # 行业分类（T3，push2）
-    if not result.get("industry_success", True):
-        # 读取实际的失败类型，避免将"无A股代码"误记为不可用
-        industry_failure_type = result.get("industry_failure_type", "unreachable")
-        # "no_a_share" 是预期行为（全为非 A 股穿透资产），不视为降级
-        if industry_failure_type == "no_a_share":
-            pass
-        else:
-            # 行业缓存按股票代码存储，取第一个可用代码检查缓存新鲜度
-            _first_code = next(
-                (_code for _entry in result.get("top10", []) for _code in (_entry.get("codes") or [])),
-                None,
+    # 行业分类（T3，push2）——按 `industry_status` 枚举一次分流
+    industry_status = result.get("industry_status", "ok")
+    if industry_status in ("empty", "unreachable"):
+        # 行业缓存按股票代码存储，取第一个可用代码检查缓存新鲜度
+        _first_code = next(
+            (_code for _entry in result.get("top10", []) for _code in (_entry.get("codes") or [])),
+            None,
+        )
+        cache_age = get_cache_age_by_data_type("industry", _first_code) if _first_code else None
+        _ind_ttl = get_ttl("industry")
+        degraded, _, _ = _tracker().record(
+            "penetration_industry",
+            "T3",
+            success=False,
+            failure_type=industry_status,
+            cache_age_hours=cache_age / 3600 if cache_age else None,
+            cache_ttl_hours=_ind_ttl / 3600 if _ind_ttl else 24,
+        )
+        if degraded:
+            status["industry"] = DataStatusItem(
+                available=False,
+                tier="T3",
+                message=STATUS_MESSAGES["industry_unavailable"],
             )
-            cache_age = get_cache_age_by_data_type("industry", _first_code) if _first_code else None
-            _ind_ttl = get_ttl("industry")
-            degraded, _, _ = _tracker().record(
-                "penetration_industry",
-                "T3",
-                success=False,
-                failure_type=industry_failure_type,
-                cache_age_hours=cache_age / 3600 if cache_age else None,
-                cache_ttl_hours=_ind_ttl / 3600 if _ind_ttl else 24,
-            )
-            if degraded:
-                status["industry"] = DataStatusItem(
-                    available=False,
-                    tier="T3",
-                    message=STATUS_MESSAGES["industry_unavailable"],
-                )
+    else:
+        # ok / no_a_share 都不登记降级；但都要清一次本域遗留失败计数：
+        # 本域计数是跨报告累积的（T3 空数据阈值 3 次），预期行为（全为非 A 股）
+        # 与非预期行为交替出现时，历史计数不得污染下一次判定——否则上一轮的
+        # empty 会让之后一次 empty 提前触发「行业分类不可用」。
+        _tracker().reset("penetration_industry")
 
     # 盈利预测（T4，akshare）
     if not profit_success:
