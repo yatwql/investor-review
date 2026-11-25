@@ -334,3 +334,64 @@ class TestTrackingBaselineSurvivesMaintenance:
 
         assert [r["is_first_check"] for r in results] == [False]
         assert [r["alert_level"] for r in results] == ["正常"]
+
+
+class TestManagerChangeDateFallbacks:
+    """start_date 不可解析 / 缺席时的变更时段判定分支。"""
+
+    def test_unparsable_start_date_marks_all_windows(self):
+        """经理已变更且 start_date 无法解析 → 1/3/6 月窗口全部保守标记。"""
+        with (
+            patch(
+                "src.python.report.fund_manager_analysis._load_snapshot",
+                return_value={"110011": {"manager_name": "旧经理"}},
+            ),
+            patch("src.python.report.fund_manager_analysis._update_snapshot"),
+            patch(
+                "src.python.report.fund_manager_analysis.fetch_fund_manager",
+                return_value={"manager_name": "新经理", "start_date": "坏日期", "tenure_days": 3},
+            ),
+        ):
+            rows = detect_manager_changes([_make_holding("110011", "易方达优质精选混合")])
+
+        row = rows[0]
+        assert (row["changed_1m"], row["changed_3m"], row["changed_6m"]) == (True, True, True)
+        assert row["alert_level"] == "紧急"
+
+    def test_missing_start_date_marks_three_and_six_month_windows(self):
+        """经理已变更但无 start_date → 只标 3/6 月窗口（1 月窗口不臆断）。"""
+        with (
+            patch(
+                "src.python.report.fund_manager_analysis._load_snapshot",
+                return_value={"110011": {"manager_name": "旧经理"}},
+            ),
+            patch("src.python.report.fund_manager_analysis._update_snapshot"),
+            patch(
+                "src.python.report.fund_manager_analysis.fetch_fund_manager",
+                return_value={"manager_name": "新经理", "start_date": "", "tenure_days": 0},
+            ),
+        ):
+            rows = detect_manager_changes([_make_holding("110011", "易方达优质精选混合")])
+
+        row = rows[0]
+        assert (row["changed_1m"], row["changed_3m"], row["changed_6m"]) == (False, True, True)
+
+    def test_first_check_with_unparsable_start_date_marks_nothing(self):
+        """新基金（无历史快照）start_date 无法解析 → 不标记任何窗口。"""
+        with (
+            patch(
+                "src.python.report.fund_manager_analysis._load_snapshot",
+                return_value={"110011": {"manager_name": "旧经理"}},
+            ),
+            patch("src.python.report.fund_manager_analysis._update_snapshot"),
+            patch(
+                "src.python.report.fund_manager_analysis.fetch_fund_manager",
+                return_value={"manager_name": "新经理", "start_date": "坏日期", "tenure_days": 0},
+            ),
+        ):
+            rows = detect_manager_changes(
+                [_make_holding("110011", "易方达优质精选混合"), _make_holding("161725", "招商中证白酒")]
+            )
+
+        row = next(r for r in rows if r["code"] == "161725")
+        assert (row["changed_1m"], row["changed_3m"], row["changed_6m"]) == (False, False, False)

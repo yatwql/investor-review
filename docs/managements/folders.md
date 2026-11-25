@@ -14,12 +14,12 @@
 | 架构图示 | SVG | 4 | 396 | `src/static/` README 架构图（architecture 三渠道→引擎→双报告、llm-chain Provider 链式分发、capabilities 九大功能域总览、owl-mascot 吉祥物猫头鹰「守望」）+ 截图 7 张 PNG（报告实景 `report-overview`/`report-toc`/`report-charts` + 界面实景 `tui-menu`/`web-workbench`/`web-config`/`cli-report`，不计入本行） |
 | 辅助脚本 | Python | 150 | 31,446 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评测与因子目录评测、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、视觉资产（社交预览图/架构图体检）、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
 | 源代码合计 | — | 630 | 160,866 | 主程序 + 模板 + 脚本 + SVG |
-| 测试代码 | Python | 917 | 233,423 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
-| 测试用例 | — | — | 16,232 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
+| 测试代码 | Python | 919 | 233,694 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
+| 测试用例 | — | — | 16,243 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 15 | 7,088 | 含 README.md；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 14 | 6,851 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 223 | 75,387 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 14,637 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 223 | 75,389 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 14,639 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 200 | 59,038 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 9 | ~1616 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + TUI 交互改进（议题 + 第一/二批实施方案） + PanWatch 借鉴分析（含评估政策单源化与 LLM 复盘契约两份设计） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -1290,6 +1290,7 @@ investor-review/
 │       │   │   ├── test_run_scope_observation_faults.py # 运行边界分步故障注入（九步复位各自失败不阻断）+ 单轮复用并发/跨轮失效
 │       │   │   ├── test_market_value.py           #   市值计算测试
 │       │   │   ├── test_market_value_edge.py      #   市值边缘场景
+│       │   │   ├── test_market_value_fallback_branches.py # 市值降级分支（溢价占位/CACHE_ONLY 陈旧缓存降级/并行取价单条异常）
 │       │   │   ├── test_market_value_premium.py   #   市值溢价率与今日盈亏分支测试
 │       │   │   ├── test_market_value_premium_branches.py # 今日盈亏来源分支（腾讯恒真/非交易日东财/边界/溢价占位/外币市值）
 │       │   │   ├── test_holdings_detail_sheet.py  #   持仓明细与分类页签测试（两区块 + 合并等价）
@@ -1334,6 +1335,7 @@ investor-review/
 │       │   │   ├── test_orchestrator_generate_report_both.py        #   orchestrator both 路径（HTML+Excel）
 │       │   │   ├── test_report_aux_metrics_branches.py # 编排辅助降级（温度估值输入缺席/相关性开关与矩阵异常/情绪上报/景气度四环节降级）
 │       │   │   ├── test_report_both_stage_contract.py # both 路径结构契约（阶段名与序列/start-stop 配对/运行边界/双产物成败/快照命名空间透传/健康检查收尾）
+│       │   │   ├── test_report_both_stage_optional_branches.py # both 可选块装配（个股基本面开关注入/快照 checkpoint 告警/市场情绪挂载）
 │       │   │   ├── test_run_integrity.py      #   运行一致性守卫（中断收口/原子落盘/已中断状态/guard_run）
 │       │   │   ├── test_run_integrity_faults.py # 中断收口五步逐步容错（预清扫/删除/清理/落记录/提示/健康收敛单步失败不阻断）
 │       │   │   ├── test_stage_cancel.py       #   阶段边界协作式取消（令牌/边界生效/编排层收口与异常传播）
