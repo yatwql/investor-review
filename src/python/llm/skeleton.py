@@ -546,6 +546,49 @@ def write_back_module_cache(
     return True
 
 
+def _attribute_recompute_reason(
+    sink: Any,
+    module_key: str,
+    precheck_key: str,
+    prev_key: str | None,
+) -> None:
+    """记录本模块的重算原因（纯观测，不改控制流）。
+
+    此路径覆盖预检未覆盖的模块（self_review 等由上游产出内容寻址、在预检之后才确定键）
+    ——否则重算原因统计会漏掉它们，据此判断 TTL 是否放宽会系统性低估。
+
+    判据：与上一轮该模块的缓存键相同 ⇒ 内容没变、只是 TTL 到点；不同 ⇒ 内容变了
+    （内容寻址模块换键）；无上轮记录 ⇒ 保守记 `cache_miss`。预检已归因的基础模块
+    不二次归因：进程重启后本进程无「上一轮键」记忆，再记一次会把 `ttl_expired`
+    覆盖成 `cache_miss`（TTL 判据被污染）。
+
+    Args:
+        sink: 观测汇聚器（None 时跳过）。
+        module_key: 模块键。
+        precheck_key: 本轮实际读写的缓存键。
+        prev_key: **本轮赋值前**的上一轮键（须在写基线前取，否则两个分支恒不可达）。
+    """
+    if sink is None or not hasattr(sink, "note_recompute_reason"):
+        return
+    already_attributed = bool(
+        hasattr(sink, "module_recompute_reasons") and module_key in (sink.module_recompute_reasons() or {})
+    )
+    if already_attributed:
+        return
+    from src.python.llm.observation import (
+        RECOMPUTE_CACHE_MISS,
+        RECOMPUTE_FINGERPRINT_CHANGED,
+        RECOMPUTE_TTL_EXPIRED,
+    )
+
+    if prev_key is None:
+        sink.note_recompute_reason(module_key, RECOMPUTE_CACHE_MISS)
+    elif prev_key == precheck_key:
+        sink.note_recompute_reason(module_key, RECOMPUTE_TTL_EXPIRED)
+    else:
+        sink.note_recompute_reason(module_key, RECOMPUTE_FINGERPRINT_CHANGED)
+
+
 def generate_llm_content(
     llm_config: dict,
     cache_key: str,
@@ -587,6 +630,9 @@ def generate_llm_content(
     _reuse_blocked = cache_enabled and not force and intraday_reuse_blocked(module_key or precheck_key, _hit_sink)
     # 基线记账与是否复用无关：每份报告都要记下本轮键，否则盘中跳过读之后
     # 「上一轮键」停留在更早的收盘档，下次归因会把换键误报成 ttl_expired。
+    # 归因判据必须取**赋值前**的值：先写基线再比对会让「无上轮记录」与「换键」
+    # 两个分支恒不可达（恒判 ttl_expired，把内容变化误标成「放宽 TTL 能省钱」）。
+    _prev_key_before = _PREV_MODULE_CACHE_KEY.get(module_key) if module_key else None
     if module_key:
         _PREV_MODULE_CACHE_KEY[module_key] = precheck_key
     if cache_enabled and not force and not _reuse_blocked:
@@ -594,34 +640,7 @@ def generate_llm_content(
         if _hit_sink is not None and hasattr(_hit_sink, "note_cache"):
             _hit_sink.note_cache(bool(cached))
         if not cached and module_key:
-            # 归因（观测，不改控制流）：此路径覆盖预检未覆盖的模块（self_review 等
-            # 由上游产出内容寻址、在预检之后才确定键）——否则重算原因统计会漏掉
-            # 它们，据此判断 TTL 是否放宽会系统性低估。
-            # 原因判定：与上一轮该模块的缓存键相同 ⇒ 内容没变、只是 TTL 到点；
-            # 不同 ⇒ 内容变了（内容寻址模块换键）；无上轮记录 ⇒ 保守记 `cache_miss`。
-            # 预检已归因的四个基础模块不再二次归因：进程重启后本进程无「上一轮键」
-            # 记忆，再记一次会把 `ttl_expired` 覆盖成 `cache_miss`（TTL 判据被污染）。
-            _sink = _hit_sink
-            _already_attributed = bool(
-                _sink is not None
-                and hasattr(_sink, "module_recompute_reasons")
-                and module_key in (_sink.module_recompute_reasons() or {})
-            )
-            if _sink is not None and hasattr(_sink, "note_recompute_reason") and not _already_attributed:
-                from src.python.llm.observation import (
-                    RECOMPUTE_CACHE_MISS,
-                    RECOMPUTE_FINGERPRINT_CHANGED,
-                    RECOMPUTE_TTL_EXPIRED,
-                )
-
-                _prev = _PREV_MODULE_CACHE_KEY.get(module_key)
-                if _prev is None:
-                    _reason = RECOMPUTE_CACHE_MISS
-                elif _prev == precheck_key:
-                    _reason = RECOMPUTE_TTL_EXPIRED
-                else:
-                    _reason = RECOMPUTE_FINGERPRINT_CHANGED
-                _sink.note_recompute_reason(module_key, _reason)
+            _attribute_recompute_reason(_hit_sink, module_key, precheck_key, _prev_key_before)
         if cached:
             return (
                 _handle_cache_hit(
