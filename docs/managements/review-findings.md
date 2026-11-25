@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.18.7-dev
-> **编号源**：`rf-next = 1188`（新增问题提出后更新为 +1；已用最大 rf-1187，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1189`（新增问题提出后更新为 +1；已用最大 rf-1188，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -62,6 +62,7 @@
 > 本表为本开发周期已修条目的**摘要行**（详情见 `changelog.md` 对应段）；发布时由 `release.py prepare` 的 archive 步原表搬入版本归档并在此留占位。
 
 | **rf-1187** | 发布台账只能读「至今累计 token」（跨会话累加），无法回答「这一版发布花了多少墙钟 / 多少 token」：`logs/release.jsonl` 每命令一行、`session_usage` 为 agent 会话累计值，靠人工翻 465 行对不出单版成本 | 新增只读汇总脚本 `scripts/probe-release-ledger.py`（按 `version` 去 `-dev` 切段 → 每版墙钟/分步耗时/会话 token 增量/失败步，`--last`、`--version`、`--json`、`-v`；只读，不改台账写入路径与发布步骤）；配 11 条用例（切段口径/跨版本不串账/同会话取前后差/新会话首行记 0/累计回退记 0/脏行与缺失容错/JSON 与选择器） |
+| **rf-1188** | `config/_llm_schema.apply_flat_updates` 的 runtime 扁平键查表必须与 `flatten` 正向表同向（扁平键 → 字段）：键向若相反，`max_retries` / `daily_cost_limit` 因字段名恰等于扁平键而命中，`llm_max_concurrency` / `llm_max_thinking_concurrency` / `llm_full_fail_retry_delay` / `llm_total_time_budget_sec` 永不命中 → 落到「未映射键原样保留在顶层」，v2 的 `runtime` 段不更新，随后 `flatten()` 用 runtime 段的值压过顶层透传 → 用户设置**静默丢失**（触发：`write_llm_settings` 在 `llm_settings.json` 缺失、`_DEFAULTS_NESTED` 兜底，或同批含 `debate`/`fact_check` dict 更新时走 `apply_flat_updates`） | 反向表改为按扁平键建 `{flat_key: field for field, flat_key in RUNTIME_FIELDS}`（查表方向与 `flatten` 正向表对齐）；补落点敏感回归——`runtime` 段落值 + 顶层无扁平键残留 + 六个运行时字段从 `RUNTIME_FIELDS` 参数化派生 + 写盘级直接解析落盘 JSON（`llm_settings.json` 缺失路径）；既有往返用例补落点位断言（`runtime` 段取值 + 顶层无扁平键残留） |
 
 ### 归档档案
 - [`archived_review-findings.0.18.x.md`](../archive/v0.18.x/archived_review-findings.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-19）
