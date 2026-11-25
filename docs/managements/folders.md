@@ -14,12 +14,12 @@
 | 架构图示 | SVG | 4 | 396 | `src/static/` README 架构图（architecture 三渠道→引擎→双报告、llm-chain Provider 链式分发、capabilities 九大功能域总览、owl-mascot 吉祥物猫头鹰「守望」）+ 截图 7 张 PNG（报告实景 `report-overview`/`report-toc`/`report-charts` + 界面实景 `tui-menu`/`web-workbench`/`web-config`/`cli-report`，不计入本行） |
 | 辅助脚本 | Python | 150 | 31,446 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评测与因子目录评测、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、视觉资产（社交预览图/架构图体检）、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
 | 源代码合计 | — | 630 | 160,859 | 主程序 + 模板 + 脚本 + SVG |
-| 测试代码 | Python | 858 | 225,380 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
-| 测试用例 | — | — | 15,636 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
+| 测试代码 | Python | 860 | 225,621 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
+| 测试用例 | — | — | 15,651 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 15 | 7,088 | 含 README.md；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 14 | 6,851 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 223 | 75,320 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 14,570 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 223 | 75,322 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 14,572 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 200 | 59,038 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 9 | ~1616 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + TUI 交互改进（议题 + 第一/二批实施方案） + PanWatch 借鉴分析（含评估政策单源化与 LLM 复盘契约两份设计） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -1431,6 +1431,7 @@ investor-review/
 │       │   │   ├── __init__.py      #       包标记（空文件）
 │       │   │   ├── test_upload.py   #       上传安全模块（校验/生命周期/清理）
 │       │   │   ├── test_upload_edge.py #    上传安全边缘（zip-bomb/伪装/路径穿越变体）
+│       │   │   ├── test_upload_and_run_generation_guards.py # 上传清理与执行体降级（过期清理计数/落盘失败/预检映射 BAD_FILE/正式模式严重退出/异常不冒泡）
 │       │   │   ├── test_progress.py #       Web 进度报告器（事件缓冲/seq/增量）
 │       │   │   ├── test_runs.py     #       RunManager（状态机/队列/保留/单例重置）
 │       │   │   ├── test_handlers.py #       Flask 路由 handler（全链路/错误信封/穿越拒绝/系统信息组装）
@@ -1457,6 +1458,7 @@ investor-review/
 │       │   │   ├── test_web_theme.py #   工作台暗色主题与组件状态矩阵静态断言（防闪/同键对表/矩阵选择器/空态挂类）
 │       │   │   ├── test_server.py   #       启动防护（output_dir 写锁检测/端口占用）
 │       │   │   ├── test_server_main.py #       主入口启动硬闸与写锁释放时序
+│       │   │   ├── test_server_lock_and_port_guards.py # 启动防护探测（pid 存活三态/陈旧锁抢占失败/端口占用/sys.path 补入）
 │       │   │   ├── test_scheduler.py #     Web 定时生成调度（解析/触发窗评估/账本/API/面板接线）
 │       │   │   ├── test_web_completion_notify.py # Web 收尾完成通知接线（门控前置/载荷/吞异常/包装器委托）
 │       │   │   └── test_smoke_web.py #      Web 冒烟脚本载体（test_client 全链路断言）
