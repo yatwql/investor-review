@@ -14,12 +14,12 @@
 | 架构图示 | SVG | 4 | 396 | `src/static/` README 架构图（architecture 三渠道→引擎→双报告、llm-chain Provider 链式分发、capabilities 九大功能域总览、owl-mascot 吉祥物猫头鹰「守望」）+ 截图 7 张 PNG（报告实景 `report-overview`/`report-toc`/`report-charts` + 界面实景 `tui-menu`/`web-workbench`/`web-config`/`cli-report`，不计入本行） |
 | 辅助脚本 | Python | 150 | 31,446 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评测与因子目录评测、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、视觉资产（社交预览图/架构图体检）、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
 | 源代码合计 | — | 630 | 160,855 | 主程序 + 模板 + 脚本 + SVG |
-| 测试代码 | Python | 842 | 222,697 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
-| 测试用例 | — | — | 15,419 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
+| 测试代码 | Python | 848 | 223,934 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
+| 测试用例 | — | — | 15,513 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 15 | 7,088 | 含 README.md；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 14 | 6,851 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 223 | 75,301 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 14,551 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 223 | 75,307 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 14,557 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 200 | 59,038 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 9 | ~1616 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + TUI 交互改进（议题 + 第一/二批实施方案） + PanWatch 借鉴分析（含评估政策单源化与 LLM 复盘契约两份设计） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -1410,7 +1410,13 @@ investor-review/
 │       │   │   ├── test_error_tail.py       #   错误尾巴形状与动作短语键位可执行性
 │       │   │   ├── test_text_layout.py      #   文本宽度与盒线面板等宽不变式（中英混排行宽一致）
 │       │   │   ├── test_handlers_log.py     #   日志可视化命令处理测试（查看日志/健康历史）
-│       │   │   └── test_handlers_log_branches.py # 诊断面板交互分支（无效键留守/配置读写失败/窄档渲染/自检异常）
+│       │   │   ├── test_handlers_log_branches.py # 诊断面板交互分支（无效键留守/配置读写失败/窄档渲染/自检异常）
+│       │   │   ├── test_handlers_holdings_prompt_branches.py # 持仓录入取消与降级通道（各提示 Esc 取消/行情取数失败降级/场外折算净值日期回显）
+│       │   │   ├── test_handlers_qa_report_prompt_branches.py # 报告追问入口（HTML 转纯文本压空行/报告时间取失败降级/[Q] 开关门控）
+│       │   │   ├── test_tui_handlers_flow_branches.py # 菜单调度公共链路（用量回显降级/持仓准备与流水回显/报告收尾顺序/越界编号）
+│       │   │   ├── test_tui_keys_byte_stream_branches.py # 读键字节流边角（续字节 OSError/半截序列补全/Windows 映射/非 TTY 回退）
+│       │   │   ├── test_tui_main_loop_branches.py # TUI 主循环非交互分支（启动降级/游标夹紧/筛选态导航/__main__ 收尾）
+│       │   │   └── test_tui_menu_config_branches.py # 配置面板回显（文件状态/匿名化与隐私/LLM 单链与多链/任意键 Ctrl+C）
 │       │   └── web/                  #   Web 模式单元测试
 │       │   │   ├── __init__.py      #       包标记（空文件）
 │       │   │   ├── test_upload.py   #       上传安全模块（校验/生命周期/清理）
