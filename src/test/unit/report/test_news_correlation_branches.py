@@ -125,6 +125,7 @@ class TestSourceStatusDegradation:
         with (
             patch("src.python.fetcher.news.aggregate_news", return_value=[dict(_ITEM)]),
             patch("src.python.fetcher.news.build_holding_keywords", return_value=["长江电力"]),
+            patch("src.python.fetcher.industry.batch_fetch_industry_data", return_value={}),
             patch(
                 "src.python.fetcher.news.get_last_source_status",
                 MagicMock(side_effect=RuntimeError("probe fault")),
@@ -142,6 +143,7 @@ class TestSourceStatusDegradation:
         with (
             patch("src.python.fetcher.news.aggregate_news", return_value=[]),
             patch("src.python.fetcher.news.build_holding_keywords", return_value=["长江电力"]),
+            patch("src.python.fetcher.industry.batch_fetch_industry_data", return_value={}),
             patch(
                 "src.python.fetcher.news.get_last_source_status",
                 MagicMock(side_effect=RuntimeError("probe fault")),

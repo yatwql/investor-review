@@ -12,7 +12,13 @@ import pytest
 
 from src.python.report import _report_health
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
+pytestmark = [
+    pytest.mark.unit,
+    pytest.mark.unit_report,
+    # 健康检查探针会起线程真实体检（网络 + akshare）：用例验的是收口容错，
+    # 取数本身不是测试目标，统一挂离线桩（失败即刻返回，不再等真网络）
+    pytest.mark.usefixtures("offline_external_sources"),
+]
 
 
 class _Future:
@@ -37,7 +43,12 @@ class TestSpawn:
 
         assert "启动健康检查失败" in caplog.text
 
-    def test_returns_future(self):
+    def test_returns_future(self, monkeypatch):
+        """启动成功 → 返回可收取的 Future（探针本身换空实现，不把真网络带进用例）。"""
+        import src.python.core.check_sources as check_sources
+
+        monkeypatch.setattr(check_sources, "run_health_checks", lambda: [])
+
         future = _report_health._spawn_health_checks()
 
         assert future is not None

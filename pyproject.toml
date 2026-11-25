@@ -37,6 +37,7 @@ test = [
     "pytest-xdist>=3.6",
     "pytest-html>=4.2",
     "pytest-timeout>=2.3",
+    "pytest-cov>=6.0",
     "ruff==0.15.20",
     "types-colorama",
 ]
