@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 
 import pytest
@@ -147,7 +148,9 @@ class TestEmitFault:
         """进度通道没有 warn（静默报告器）→ 静默跳过，不记错误。"""
         ri._emit(object(), "提示")
 
-        assert caplog.text == "", "无 warn 通道属正常配置，不得留下错误痕迹"
+        assert not [r for r in caplog.records if r.levelno >= logging.WARNING], (
+            "无 warn 通道属正常配置，不得记告警及以上日志"
+        )
 
 
 class TestHandleInterruptionSteps:

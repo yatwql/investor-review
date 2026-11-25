@@ -10,6 +10,8 @@
 
 ### 修复
 
+- **t 分布 CDF 在 t=-∞ 处返回 0.0（rf-1196）**：`analysis/_math_utils._t_cdf` 的`if x <= 0` 分支（仅在 `|t|` 溢出为无穷时命中）恒返回 1.0，-∞ 处 CDF 应归 0；现按 `t` 符号取两侧极限（`t < 0` → 0.0，否则 1.0），`correlation` 的 `2*(1-CDF)` 与 `metrics_risk` 的 p 值在 t 统计量负向溢出时取左侧极限（0）。
+
 - **自检目录探针的用例断言到隔离替身（rf-1195）**：`test_doctor_branch_faults.TestProbeTargets` 改为在收集期捕获真实 `_probe_targets` 引用并按其实现断言——`get_config` 给出 `output_dir` 时探针目标即该目录，配置读取失败时回落 `_DEFAULT_OUTPUT_DIR`；附目录探针「空 `.xlsx` 目录」与复盘账本概览「依赖模块导入失败」两态降级用例。
 
 - **t 分布 CDF 在 t=0 处返回 0.0（rf-1194）**：`analysis/_math_utils._t_cdf` 的 `x >= 1` 分支（仅在 `t == 0` 命中）返回 0.5，中位数处 CDF 与 `t→0⁺`（0.5004）连续；`correlation` 的 `2*(1-CDF)` 与 `metrics_risk` 的 p 值在「无相关 / Beta 恰为 0」时读到 0.5 对应的 p=1.0，不再出现 p=2.0 这类越界读数。

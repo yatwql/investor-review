@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.18.7-dev
-> **编号源**：`rf-next = 1196`（新增问题提出后更新为 +1；已用最大 rf-1194，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1197`（新增问题提出后更新为 +1；已用最大 rf-1196，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -62,6 +62,8 @@
 
 > 本表为本开发周期已修条目的**摘要行**（详情见 `changelog.md` 对应段）；发布时由 `release.py prepare` 的 archive 步原表搬入版本归档并在此留占位。
 
+| # | 问题 | 修复方向 |
+|---|------|----------|
 | **rf-1187** | 发布台账只能读「至今累计 token」（跨会话累加），无法回答「这一版发布花了多少墙钟 / 多少 token」：`logs/release.jsonl` 每命令一行、`session_usage` 为 agent 会话累计值，靠人工翻 465 行对不出单版成本 | 新增只读汇总脚本 `scripts/probe-release-ledger.py`（按 `version` 去 `-dev` 切段 → 每版墙钟/分步耗时/会话 token 增量/失败步，`--last`、`--version`、`--json`、`-v`；只读，不改台账写入路径与发布步骤）；配 11 条用例（切段口径/跨版本不串账/同会话取前后差/新会话首行记 0/累计回退记 0/脏行与缺失容错/JSON 与选择器） |
 | **rf-1188** | `config/_llm_schema.apply_flat_updates` 的 runtime 扁平键查表必须与 `flatten` 正向表同向（扁平键 → 字段）：键向若相反，`max_retries` / `daily_cost_limit` 因字段名恰等于扁平键而命中，`llm_max_concurrency` / `llm_max_thinking_concurrency` / `llm_full_fail_retry_delay` / `llm_total_time_budget_sec` 永不命中 → 落到「未映射键原样保留在顶层」，v2 的 `runtime` 段不更新，随后 `flatten()` 用 runtime 段的值压过顶层透传 → 用户设置**静默丢失**（触发：`write_llm_settings` 在 `llm_settings.json` 缺失、`_DEFAULTS_NESTED` 兜底，或同批含 `debate`/`fact_check` dict 更新时走 `apply_flat_updates`） | 反向表改为按扁平键建 `{flat_key: field for field, flat_key in RUNTIME_FIELDS}`（查表方向与 `flatten` 正向表对齐）；补落点敏感回归——`runtime` 段落值 + 顶层无扁平键残留 + 六个运行时字段从 `RUNTIME_FIELDS` 参数化派生 + 写盘级直接解析落盘 JSON（`llm_settings.json` 缺失路径）；既有往返用例补落点位断言（`runtime` 段取值 + 顶层无扁平键残留） |
 | **rf-1189** | 敏感缓存清理遇畸形 `_ts` 中断整轮：`cache/_cleanup.clean_sensitive` 用 `ts = payload.get("_ts", 0)` 直接参与 `now - ts`，任何字符串/None 时间戳抛 `TypeError` 并被导入期兜底吞掉 → 该轮清理中止，盘上其余过期持仓/穿透/基金缓存全部漏清（`cleanup_expired` 同期已有类型容错，两入口口径不一致） | 抽出共享 `_payload_ts(payload)`（缺失/非数值一律归 0.0），两入口同源；敏感缓存按「无法判定年龄 = 极旧」处理（宁可多清不可留存），单文件畸形不影响后续扫描；补 1 条回归（畸形 `_ts` + 正常过期文件同目录，断言两者都被处理）＋ 补齐清理/存储/运行边界/管线构建 5 个模块故障分支的 78 条用例 |
@@ -70,6 +72,7 @@
 | **rf-1193** | `report/_generation_full.py` 的 `_fetch_sector_flow` 三态里，空载荷分支登记 `mark_data_unavailable("fund_flow", …)`，而陈旧回退与异常两态登记 `"ff_sector_flow"` → 同一「行业资金流向不可用」信号的失败态按原因分裂成两个 `source_key`，且 `fund_flow` 匹配不上矩阵任何行前缀（「资金流向」行前缀为 `ff_`）⇒ 空载荷降级事件在数据源矩阵里彻底失联，用户看不到「资金流向不可用」 | 空载荷分支改登记 `ff_sector_flow`（`failure_type` 仍由 `sector_flow_failure()` 推导、message 与告警不变），三态同键；补 2 条回归——空载荷与异常两态登记键相等且非 `fund_flow`、登记键经 `data_source_matrix` 归属落到「资金流向」行（`fund_flow`） |
 | **rf-1194** | `analysis/_math_utils._t_cdf` 在 `t == 0` 处 `x = df/(df+t²)` 恰为 1，命中 `if x >= 1: return 0.0` → 中位数处 CDF 返回 0.0 而非 0.5，与 t→0⁺（0.5004）不连续：`correlation` 的 `2*(1-CDF)` 与 `metrics_risk` 的 p 值在「无相关 / Beta 恰为 0」这一最不显著的取值上给出 p=2.0 这类越界读数 | `x >= 1` 分支返回 0.5（该支只在 t==0 命中，语义即中位数）；补 1 条回归断言 `_t_cdf(0.0, 10) == 0.5`，并保留 `_t_cdf(±10, 100)` 的尾部极限断言确保两侧连续性未变 |
 | **rf-1195** | `doctor._probe_targets` 在测试中从未被执行：`src/test/_path_isolation.py` 的 autouse 隔离 fixture 把 `doctor._probe_targets` 替换成固定替身，而 `test_doctor_branch_faults.TestProbeTargets` 仍经 `doctor._probe_targets()` 断言，实际断言的是隔离替身（`doctor_probe0/reports`）——生产实现「配置了 output_dir 就取它」这一被调用方依赖的行为在测试里既未被验证，也让该函数整段（try/except 兜底 + 返回）实测零覆盖 | 用例改为在收集期捕获真实函数引用（`_REAL_PROBE_TARGETS`）并按实现断言：`get_config` 返回 `output_dir` 时目标即该目录、异常时回落 `_DEFAULT_OUTPUT_DIR`；并补目录探针空目录态与账本概览导入失败兜底两条用例 |
+| **rf-1196** | `analysis/_math_utils._t_cdf` 在 `t = -inf` 时 `x = df/(df+t²)` 下溢为 0，命中 `if x <= 0: return 1.0`，-∞ 处 CDF 返回 1.0 | 该分支按 `t` 符号取两侧极限（`t < 0` → 0.0，否则 1.0）；相关性/风控 p 值在 t 统计量负向溢出时取左侧极限 |
 
 ### 归档档案
 - [`archived_review-findings.0.18.x.md`](../archive/v0.18.x/archived_review-findings.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-19）

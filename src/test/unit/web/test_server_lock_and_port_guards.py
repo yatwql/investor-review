@@ -11,7 +11,7 @@
 
 from __future__ import annotations
 
-import importlib
+import importlib.util
 import socket
 import sys
 from types import SimpleNamespace
@@ -99,10 +99,21 @@ class TestPortInUse:
 
 
 class TestProjectRootOnSysPath:
-    def test_module_reload_reinserts_project_root(self, monkeypatch):
+    def test_fresh_module_load_reinserts_project_root(self, monkeypatch):
+        """项目根不在 sys.path 时，模块导入期自行补入（直接执行本文件的情形）。"""
         root = server._project_root
         monkeypatch.setattr(sys, "path", [entry for entry in sys.path if entry != root])
 
-        importlib.reload(server)
+        probe_name = "_server_project_root_probe"
+        spec = importlib.util.spec_from_file_location(probe_name, server.__file__)
+        assert spec is not None and spec.loader is not None
+        probe = importlib.util.module_from_spec(spec)
+        try:
+            spec.loader.exec_module(probe)
 
-        assert root in sys.path, "直接执行本文件（项目根不在 sys.path）时须自动补入"
+            assert probe._project_root == root
+            assert root in sys.path, "直接执行本文件（项目根不在 sys.path）时须自动补入"
+        finally:
+            sys.modules.pop(probe_name, None)
+            while root in sys.path:
+                sys.path.remove(root)

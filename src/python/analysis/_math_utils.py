@@ -118,7 +118,8 @@ def _t_cdf(t: float, df: int) -> float:
 
     x = df / (df + t * t)
     if x <= 0:
-        return 1.0
+        # |t| 溢出为无穷时 x 下溢为 0：CDF 取两侧极限——左侧 0.0，右侧 1.0
+        return 0.0 if t < 0 else 1.0
     if x >= 1:
         # t == 0 时 x 恰为 1（df>0）：中位数处 CDF 必须为 0.5，与 t→0⁺/0⁻ 两侧极限连续
         return 0.5

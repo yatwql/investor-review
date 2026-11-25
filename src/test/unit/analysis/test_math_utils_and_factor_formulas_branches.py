@@ -2,7 +2,8 @@
 
 覆盖：
   - `_math_utils`：`_log_beta` 闭式值、`_incomplete_beta_cf` 端点短路、
-    `_t_cdf(t=0)` 中位数 CDF（0.5，与两侧极限连续）、`_t_critical_95` 自由度下溢、
+    `_t_cdf(t=0)` 中位数 CDF（0.5，与两侧极限连续）、`_t_cdf(±inf)` 两侧极限、
+    `_t_critical_95` 自由度下溢、
     `_beta_se` 样本不足与基准零方差两种退化
   - `_factor_formulas`：`_closes` 非法收盘价转 NaN、`_pearson` 有效对不足、
     `compute_factor_values` 空 bars / 标量 NaN 铺满 / 量价背离符号 / 收益偏度、
@@ -54,6 +55,14 @@ def test_t_cdf_at_zero_is_median():
     from src.python.analysis._math_utils import _t_cdf
 
     assert _t_cdf(0.0, 10) == pytest.approx(0.5, abs=1e-12)
+
+
+def test_t_cdf_infinite_takes_side_limits():
+    """t 溢出为无穷时 CDF 取两侧极限：-∞ → 0.0，+∞ → 1.0。"""
+    from src.python.analysis._math_utils import _t_cdf
+
+    assert _t_cdf(float("-inf"), 10) == pytest.approx(0.0, abs=1e-12)
+    assert _t_cdf(float("inf"), 10) == pytest.approx(1.0, abs=1e-12)
 
 
 def test_t_critical_95_underflows_to_first_table_row():
