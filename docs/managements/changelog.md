@@ -10,6 +10,8 @@
 
 ### 修复
 
+- **自检目录探针的用例断言到隔离替身（rf-1195）**：`test_doctor_branch_faults.TestProbeTargets` 改为在收集期捕获真实 `_probe_targets` 引用并按其实现断言——`get_config` 给出 `output_dir` 时探针目标即该目录，配置读取失败时回落 `_DEFAULT_OUTPUT_DIR`；附目录探针「空 `.xlsx` 目录」与复盘账本概览「依赖模块导入失败」两态降级用例。
+
 - **t 分布 CDF 在 t=0 处返回 0.0（rf-1194）**：`analysis/_math_utils._t_cdf` 的 `x >= 1` 分支（仅在 `t == 0` 命中）返回 0.5，中位数处 CDF 与 `t→0⁺`（0.5004）连续；`correlation` 的 `2*(1-CDF)` 与 `metrics_risk` 的 p 值在「无相关 / Beta 恰为 0」时读到 0.5 对应的 p=1.0，不再出现 p=2.0 这类越界读数。
 
 - **资金流向不可用信号在数据源矩阵里无行可落（rf-1193）**：`report/_generation_full._fetch_sector_flow` 的空载荷与异常两态统一登记 `source_key="ff_sector_flow"`，故「行业资金流向不可用」这一信号无论因空载荷还是调用异常退化，都归入矩阵「资金流向」行（该行前缀为 `ff_`，匹配规则 `key == prefix or key.startswith(prefix)`）；配 2 条回归：两态登记键相等且非 `fund_flow`、登记键经矩阵归属落到 `fund_flow` 行。
