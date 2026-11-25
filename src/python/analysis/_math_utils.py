@@ -120,7 +120,8 @@ def _t_cdf(t: float, df: int) -> float:
     if x <= 0:
         return 1.0
     if x >= 1:
-        return 0.0
+        # t == 0 时 x 恰为 1（df>0）：中位数处 CDF 必须为 0.5，与 t→0⁺/0⁻ 两侧极限连续
+        return 0.5
 
     p = _incomplete_beta_cf(df / 2, 0.5, x)
     if t >= 0:

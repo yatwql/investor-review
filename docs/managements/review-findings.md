@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.18.7-dev
-> **编号源**：`rf-next = 1194`（新增问题提出后更新为 +1；已用最大 rf-1193，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1195`（新增问题提出后更新为 +1；已用最大 rf-1194，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -68,6 +68,7 @@
 | **rf-1190** | 后置模块的重算原因归因恒判 `ttl_expired`：`llm/skeleton.generate_llm_content` 先把本轮键写入 `_PREV_MODULE_CACHE_KEY` 再做原因判定，判定读到的「上一轮键」永远等于本轮键 → 「无上轮记录 → cache_miss」与「换键 → fingerprint_changed」两个分支不可达，内容变化被系统性误标成「TTL 到期」，据此决策放宽 TTL 会得出错误结论 | 归因改取**写基线之前**的上一轮键（`_prev_key_before`），并把归因块抽成 `_attribute_recompute_reason()`（单一职责 + 降低骨架圈复杂度）；补 6 条回归（三态归因、已归因不覆盖、无汇聚器、端到端两轮判 `fingerprint_changed`） |
 | **rf-1191** | 穿透表「行业分类不可用」降级在生产里不可达：`report/penetration._compute_penetration_top10_uncached` 第三阶段的 `remaining_data` 只在 `if remaining:` 内赋值，判据 `not prefetched and not remaining` 中 `remaining` 为「未预取覆盖的代码集」——行业链路熔断（`fetcher/industry.py` 直接回空）或批量全败（只回填成功项）时 `prefetched={}`、`remaining` 非空 ⇒ 判据恒假，`industry_success` 恒 True、`industry_failure_type` 永不写入，`penetration_sheet.build_penetration_data_status` 的降级分支在生产中永不触发；另外 `no_a_share` 只写 `industry_failure_type` 未联动 `industry_success`，同函数 220 行的 `no_a_share` 分支因此也不可达 | `remaining_data: dict = {}` 提到 `if remaining:` 之前初始化，判据改为「预取与补取均为空」（`not prefetched and not remaining_data`），保持既有 `industry_success=False` + `failure_type="empty"` 语义；无 A 股代码时一并置 `industry_success=False` 并写 `no_a_share`，使上游按类型区分「预期不降级」与真实失败有统一入口；补 3 条回归（预取+补取双空判 `empty` / 补取部分命中仍算可用 / 无 A 股不改降级结论） |
 | **rf-1193** | `report/_generation_full.py` 的 `_fetch_sector_flow` 三态里，空载荷分支登记 `mark_data_unavailable("fund_flow", …)`，而陈旧回退与异常两态登记 `"ff_sector_flow"` → 同一「行业资金流向不可用」信号的失败态按原因分裂成两个 `source_key`，且 `fund_flow` 匹配不上矩阵任何行前缀（「资金流向」行前缀为 `ff_`）⇒ 空载荷降级事件在数据源矩阵里彻底失联，用户看不到「资金流向不可用」 | 空载荷分支改登记 `ff_sector_flow`（`failure_type` 仍由 `sector_flow_failure()` 推导、message 与告警不变），三态同键；补 2 条回归——空载荷与异常两态登记键相等且非 `fund_flow`、登记键经 `data_source_matrix` 归属落到「资金流向」行（`fund_flow`） |
+| **rf-1194** | `analysis/_math_utils._t_cdf` 在 `t == 0` 处 `x = df/(df+t²)` 恰为 1，命中 `if x >= 1: return 0.0` → 中位数处 CDF 返回 0.0 而非 0.5，与 t→0⁺（0.5004）不连续：`correlation` 的 `2*(1-CDF)` 与 `metrics_risk` 的 p 值在「无相关 / Beta 恰为 0」这一最不显著的取值上给出 p=2.0 这类越界读数 | `x >= 1` 分支返回 0.5（该支只在 t==0 命中，语义即中位数）；补 1 条回归断言 `_t_cdf(0.0, 10) == 0.5`，并保留 `_t_cdf(±10, 100)` 的尾部极限断言确保两侧连续性未变 |
 
 ### 归档档案
 - [`archived_review-findings.0.18.x.md`](../archive/v0.18.x/archived_review-findings.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-19）

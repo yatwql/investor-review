@@ -10,6 +10,8 @@
 
 ### 修复
 
+- **t 分布 CDF 在 t=0 处返回 0.0（rf-1194）**：`analysis/_math_utils._t_cdf` 的 `x >= 1` 分支（仅在 `t == 0` 命中）返回 0.5，中位数处 CDF 与 `t→0⁺`（0.5004）连续；`correlation` 的 `2*(1-CDF)` 与 `metrics_risk` 的 p 值在「无相关 / Beta 恰为 0」时读到 0.5 对应的 p=1.0，不再出现 p=2.0 这类越界读数。
+
 - **资金流向不可用信号在数据源矩阵里无行可落（rf-1193）**：`report/_generation_full._fetch_sector_flow` 的空载荷与异常两态统一登记 `source_key="ff_sector_flow"`，故「行业资金流向不可用」这一信号无论因空载荷还是调用异常退化，都归入矩阵「资金流向」行（该行前缀为 `ff_`，匹配规则 `key == prefix or key.startswith(prefix)`）；配 2 条回归：两态登记键相等且非 `fund_flow`、登记键经矩阵归属落到 `fund_flow` 行。
 - **穿透表「行业分类不可用」降级在行业取数全空时可触发（rf-1191）**：`report/penetration._compute_penetration_top10_uncached` 第三阶段把 `remaining_data` 提到 `if remaining:` 之外初始化为 `{}`，判据改为「预取与补取均为空」（`not prefetched and not remaining_data`）——行业链路熔断（`fetcher/industry.batch_fetch_industry_data` 回空）或批量全败（只回填成功项）时写入 `industry_success=False` + `industry_failure_type="empty"`，`penetration_sheet.build_penetration_data_status` 的降级分支由此可触发；无 A 股代码时实现一并置 `industry_success=False` 并写 `no_a_share`，让上游按类型区分「预期不降级」与真实失败有统一入口（该类型在状态构建处仍按预期行为跳过，不记降级）。补 3 条回归：预取+补取双空判 `empty`、补取部分命中仍算可用、无 A 股不改降级结论。
 - **后置模块的重算原因归因恒判 `ttl_expired`（rf-1190）**：`llm/skeleton.generate_llm_content` 先把本轮键写入 `_PREV_MODULE_CACHE_KEY` 再做原因判定，判定读到的「上一轮键」永远等于本轮键 → 「无上轮记录 → `cache_miss`」与「换键 → `fingerprint_changed`」两个分支不可达，内容变化被系统性误标成「TTL 到期」，据此判断「放宽 TTL 能省钱」会得出错误结论；归因改取写基线**之前**的键，并把该块抽为 `_attribute_recompute_reason()`（单一职责，同时降低骨架圈复杂度），补 6 条回归（三态归因 / 已归因不覆盖 / 无汇聚器 / 端到端两轮判 `fingerprint_changed`）。
@@ -21,6 +23,8 @@
 - **发布台账按版本汇总（rf-1187）**：新增只读脚本 `scripts/probe-release-ledger.py`（`--last N` / `--version` / `--json` / `-v`），按版本切段输出每版墙钟、分步耗时、会话 token 增量与失败步；token 列口径明确标注为「相邻台账行之间的会话增量」，不是发布命令本身的成本；配 11 条用例（切段口径/跨版本不串账/同会话取前后差/新会话首行记 0/累计回退记 0/脏行与缺失容错/JSON 与选择器）。
 
 ### 测试
+
+- **analysis / llm 残差分支补齐（覆盖率推进批次）**：`analysis._math_utils`（t 分布端点、样本不足与基准零方差）、`analysis._factor_formulas`（非法收盘价、有效对不足、标量 NaN 铺满、量价背离符号、60 日收益偏度、横截面日均值成分数下限）、`llm`（熔断状态展示面、盘中复用归因、证据索引、档位解析降级）等模块的不可达/降级分支补测。
 
 - **测试覆盖率 92.1% → 98.1%（十一个批次）**：接入 `pytest-cov` 后按「失败路径优先、只值一测的分支也不放过」逐批补齐；本轮收尾时 `cli/_handlers`、`report/news_correlation`、`cache/operations`、`report/llm_content`、`report/summary`、`report/_orchestrator_data`、`report/html_jinja_env`、`report/whatif_writer`、`report/pipeline_data_builder`、`report/_run_scope`、`providers/news_dedup_anchor_store`、`tui/handlers_log`、`tui/progress`、`providers/tiantian_base`、`report/_report_health`、`report/excel_news_warning`、`cache/_paths`、`cache/_store`、`cache/_cleanup` 等模块均达 100%（`llm/skeleton` 99%，保留 1 行早退后的不可达防御分支）。逐批口径：
   - **第 2 批（92.9% → 93.5%）**：analysis guard 分支、缓存刷新编排、config 写路径/校验分区、pricing 解析、akshare 扩展、东财净值历史、回撤页签、HTML 构建阶段埋点、TUI 入口分支。
