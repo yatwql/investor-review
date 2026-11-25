@@ -14,12 +14,12 @@
 | 架构图示 | SVG | 4 | 396 | `src/static/` README 架构图（architecture 三渠道→引擎→双报告、llm-chain Provider 链式分发、capabilities 九大功能域总览、owl-mascot 吉祥物猫头鹰「守望」）+ 截图 7 张 PNG（报告实景 `report-overview`/`report-toc`/`report-charts` + 界面实景 `tui-menu`/`web-workbench`/`web-config`/`cli-report`，不计入本行） |
 | 辅助脚本 | Python | 150 | 31,446 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评测与因子目录评测、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、视觉资产（社交预览图/架构图体检）、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
 | 源代码合计 | — | 630 | 160,865 | 主程序 + 模板 + 脚本 + SVG |
-| 测试代码 | Python | 889 | 230,979 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
-| 测试用例 | — | — | 16,052 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
+| 测试代码 | Python | 903 | 231,599 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
+| 测试用例 | — | — | 16,095 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 15 | 7,088 | 含 README.md；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 14 | 6,851 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 223 | 75,354 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 14,604 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 223 | 75,368 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 14,618 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 200 | 59,038 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 9 | ~1616 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + TUI 交互改进（议题 + 第一/二批实施方案） + PanWatch 借鉴分析（含评估政策单源化与 LLM 复盘契约两份设计） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -1122,11 +1122,23 @@ investor-review/
 │       │   │   ├── test_qa_telemetry_branches.py # 埋点容错分支（费用估算失败/报告名净化/币种混合容错/空行与坏时间戳/失败码行）
 │       │   │   └── test_qa_context_parser_guards.py # 上下文解析守卫（script 跳过/未闭合行容错/br 断行/数值与持仓表守卫/空章节排除）
 │       │   ├── report/              #   报告单元测试
+│       │   │   ├── test_benchmark_branches.py     # 基准归一化：缺 date 的 bar 丢弃/整段早于组合起算日跳过/单点时波动率 0
+│       │   │   ├── test_category_dividend_branches.py # 成本分档「未分档」与分红取数/登记异常降级
+│       │   │   ├── test_cli_progress_verbose_branches.py # 耗时毫秒口径与 --verbose stderr 通道（warn/error/排行/摘要）
+│       │   │   ├── test_debate_utils_branches.py  # 辩论模式标签：debate_info 原样返回与 procon 开关回退
 │       │   │   ├── test_drawdown_sheet_branches.py # 走势与回撤页签分支（基准对照列/危机回放双层表/风险调整超额降级）
+│       │   │   ├── test_fund_rating_branches.py   # 超额收益阈值配置兜底/评分追加/中间分段评级不变
+│       │   │   ├── test_fund_style_base_branches.py # tencent_style Provider 惰性注册幂等
 │       │   │   ├── test_html_builders_perf_branches.py # 基金业绩条目构建分支（预取排名 vs 单只取数 × 明细行有无 + 收益率解析降级）
 │       │   │   ├── __init__.py      #       子包标记
 │       │   │   ├── test_design_doc.py #   设计语言契约（DESIGN.md 骨架/护栏对偶/引用存在）结构守卫
 │       │   │   ├── test_design_tokens.py #   双面设计 token 同名对表（共享角色/旧名映射/品牌蓝 token 化）守卫
+│       │   │   ├── test_html_writer_status_branches.py # 评级标签收集与历史走势状态/告警关键词映射
+│       │   │   ├── test_llm_contract_block_branches.py # 无契约载体时 HTML 折叠块与 Excel 小节行空产物
+│       │   │   ├── test_market_sentiment_branches.py # 连板梯队 boards 非 dict 时成员数按 0
+│       │   │   ├── test_position_overlap_branches.py # 空集合相似度 0 与空标的行跳过
+│       │   │   ├── test_privacy_notice_branches.py # 首次运行标记读失败按首次处理/写失败只记 debug
+│       │   │   ├── test_report_helpers_validation_branches.py # 可选区块注入降级/prep 类型告警/匿名行原样返回
 │       │   │   ├── test_report_type_scale.py #   报告字阶/行高 token/表格数字排版/正文限宽/WCAG 对比度契约
 │       │   │   ├── test_responsive_contract.py #   四档断点/触控 44px/首列冻结/移动阅读防护契约（DESIGN Responsive）
 │       │   │   ├── test_report_empty_states.py #   三档空态族/二元文案口径/状态观感分工/DESIGN 同源契约（Data States）
@@ -1154,6 +1166,8 @@ investor-review/
 │       │   │   ├── test_excel_fund_deep_analysis.py  #   Excel 基金深度分析页签测试
 │       │   │   ├── test_excel_format_edge.py      #   Excel 格式边缘场景
 │       │   │   ├── test_excel_generator.py        #   Excel 生成测试
+│       │   │   ├── test_signal_record_unavailable_branches.py # 五类信号数据不可用空返回与脏条目过滤
+│       │   │   ├── test_snapshot_extended_history_branches.py # 长窗取数配置兜底与危机回放指数层跳过
 │       │   │   ├── test_summary_llm_usage_contract.py # 用量页签结构化契约埋点行（有字段出行 / 无字段零变化）
 │       │   │   ├── test_summary_llm_usage_sections.py # 用量页签排版分支（自检清单块/缓存命中行/辩论模式/命中率区块/明细全空不写）
 │       │   │   ├── test_excel_generator_llm_usage.py # LLM 用量页签状态判定（缓存/成功/禁用/失败四态 + 表头行内容契约）
