@@ -14,12 +14,12 @@
 | 架构图示 | SVG | 4 | 396 | `src/static/` README 架构图（architecture 三渠道→引擎→双报告、llm-chain Provider 链式分发、capabilities 九大功能域总览、owl-mascot 吉祥物猫头鹰「守望」）+ 截图 7 张 PNG（报告实景 `report-overview`/`report-toc`/`report-charts` + 界面实景 `tui-menu`/`web-workbench`/`web-config`/`cli-report`，不计入本行） |
 | 辅助脚本 | Python | 150 | 31,446 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评测与因子目录评测、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、视觉资产（社交预览图/架构图体检）、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
 | 源代码合计 | — | 630 | 160,866 | 主程序 + 模板 + 脚本 + SVG |
-| 测试代码 | Python | 923 | 234,705 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
-| 测试用例 | — | — | 16,339 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
+| 测试代码 | Python | 929 | 235,337 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
+| 测试用例 | — | — | 16,394 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 15 | 7,088 | 含 README.md；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 14 | 6,851 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 223 | 75,396 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 14,646 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 223 | 75,402 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 14,652 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 200 | 59,038 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 9 | ~1616 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + TUI 交互改进（议题 + 第一/二批实施方案） + PanWatch 借鉴分析（含评估政策单源化与 LLM 复盘契约两份设计） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -872,6 +872,7 @@ investor-review/
 │       │   │   ├── test_text_safety.py      #   文本安全边界（孤立代理项→U+FFFD/代理对折叠/请求体递归净化）
 │       │   │   ├── test_trading_calendar.py  #   交易日历原语测试（交易日区间计数/长假与周末不误计/日历不可用回退/akshare 经 V8 子进程取数）
 │       │   │   ├── test_core_defensive_branches.py # core 防御分支（日历 memo 过期与冷却/自然日兜底/系统信息与日志配置降级）
+│       │   │   ├── test_core_degradation_branches.py # core 降级分支（探针异常收口/决策头畸形载荷/新鲜度与并发档位回落/桌面能力探测）
 │       │   │   ├── test_akshare_compat.py    #   akshare 接口名兼容层（候选链解析/旧名优先/改名回落/调用点不得硬引旧名）
 │       │   │   ├── test_v8_call_sites.py     #   契约：主进程不得直接调 py_mini_racer 系 akshare 接口（须经 core.v8_subprocess）
 │       │   │   ├── test_v8_subprocess.py     #   V8 子进程隔离测试（白名单/JSON 契约/错误与超时降级）
@@ -1059,6 +1060,7 @@ investor-review/
 │       │   │   ├── test_prompts_optional_blocks.py # 提示词可选段落与降级（指标表可选行/未知币种归其他/零市值白名单/情景-口径块/配置不可读降级）
 │       │   │   ├── test_rate_caliber.py      #   收益率口径标签与提示词文本版本进指纹测试
 │       │   │   ├── test_llm_session_usage.py       #   会话用量管理测试
+│       │   │   ├── test_llm_input_guards.py #   LLM 输入防御（信号行无依据省括号/档位分布方向/同比方向/叙事非字典行/排名数字与近并列空串）
 │       │   │   ├── test_news_parse_failure_contract.py # 新闻关联批量解析失败收口（整批不可解析=失败：不计分析条数/不写缓存/仍计费）
 │       │   │   ├── test_news_usage_status.py       #   新闻关联用量台账↔模块状态一致性（零产出不记「成功」/全缓存仍标缓存）
 │       │   │   ├── test_log_sanitize.py        #   日志清洗测试
@@ -1110,6 +1112,7 @@ investor-review/
 │       │   │   ├── test_tencent_edge.py       #   腾讯财经边缘场景
 │       │   │   ├── test_tencent_branches.py   #   腾讯财经分支（字段内含等号/不支持品种跳过/指数行情三类失败/K 线体不可迭代）
 │       │   │   ├── test_news_sources.py       #   新闻源适配器（子源导入降级/新浪预算耗尽与空页收尾/跨分类去重）
+│       │   │   ├── test_provider_input_guards.py # providers 输入防御（限购与费率空白为 None/非字符串载荷/DataSink 配置与配额降级）
 │       │   │   ├── test_tiantian.py           #   天天基金 API 测试（含基金持仓三跳阶梯次序与目标 ETF 锚点解析）
 │       │   │   ├── test_tiantian_ranking_branches.py # 天天基金排名分支（日期采样拒绝面/净值日期载荷异常/评级越界/取数失败）
 │       │   │   ├── test_tiantian_nav.py       #   历史净值解析（JS 变量提取/毫秒时间戳北京时间口径/双净值合并）
@@ -1250,6 +1253,7 @@ investor-review/
 │       │   │   ├── test_decision_book.py # 决策书装配与双端同源契约（开关/匿名化/无契约三态）
 │       │   │   ├── test_decision_basis.py   #   判断依据章内块（信号清单三态标注/可信度仲裁四枚举/回测结论登记/开关/零参数/零 LLM/双端同源）
 │       │   │   ├── test_decision_basis_settlement_branches.py #   结算展示块对畸形账本条目的容错（非 dict/非整数视界/缺字段）
+│       │   │   ├── test_report_fallbacks.py #   报告层兜底（非数值配置默认值/回测采样日 OSError 兜底/账本记录容错/金额与因子名缺省）
 │       │   │   ├── test_signal_record.py          #   确定性信号沉淀适配器（五类抽取/不可用跳过/实时-非实时判定/幂等与开关）
 │       │   │   ├── test_whatif_html.py            #   调仓 What-if 独立 HTML 页呈现
 │       │   │   ├── test_whatif_sheet.py           #   调仓 What-if Excel 三页签呈现
@@ -1460,6 +1464,7 @@ investor-review/
 │       │   │   ├── test_design_tui_doc.py   #   终端交互契约（DESIGN-TUI.md 骨架/键表/护栏对偶/术语表/引用存在）结构守卫
 │       │   │   ├── test_narrow_panel_render.py  #  窄屏 40 列底线全景机检（逐面板逐行断言不超宽）
 │       │   │   ├── test_tui_edge.py         #   TUI 边缘场景
+│       │   │   ├── test_text_layout_and_artifact_open_branches.py # TUI 产物打开延迟导入（stdin 非 TTY 兜底/桌面能力与读键出口取真实实现）
 │       │   │   ├── test_report_artifacts.py #   报告收尾产物清单与单键确认（默认 N/Esc 跳过/Ctrl+C 退出）
 │       │   │   ├── test_tui_handlers.py     #   TUI 事件处理测试
 │       │   │   ├── test_handlers_config_fault_branches.py # 配置面板中断/筛选/页脚支路（Esc 不落盘/调优与匿名化筛选跳行/页脚上屏/指数池中断）
@@ -1521,6 +1526,7 @@ investor-review/
 │       │   │   ├── test_web_theme.py #   工作台暗色主题与组件状态矩阵静态断言（防闪/同键对表/矩阵选择器/空态挂类）
 │       │   │   ├── test_server.py   #       启动防护（output_dir 写锁检测/端口占用）
 │       │   │   ├── test_server_main.py #       主入口启动硬闸与写锁释放时序
+│       │   │   ├── test_entry_points_and_error_handlers.py # Web 入口与错误处理（模块入口退出码/__main__ 三退出路径/413 与 500 中文 JSON）
 │       │   │   ├── test_server_lock_and_port_guards.py # 启动防护探测（pid 存活三态/陈旧锁抢占失败/端口占用/sys.path 补入）
 │       │   │   ├── test_scheduler.py #     Web 定时生成调度（解析/触发窗评估/账本/API/面板接线）
 │       │   │   ├── test_web_completion_notify.py # Web 收尾完成通知接线（门控前置/载荷/吞异常/包装器委托）
