@@ -13,48 +13,21 @@ import httpx
 import pytest
 
 from src.python.providers import tiantian_base
+from src.test._fixtures.http import FakeClient, FakeResponse
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_providers]
 
 
-class _Resp:
-    def __init__(self, text: str = "", *, status_error: Exception | None = None) -> None:
-        self.text = text
-        self.encoding = ""
-        self._status_error = status_error
-
-    def raise_for_status(self) -> None:
-        if self._status_error is not None:
-            raise self._status_error
-
-
-class _Client:
-    def __init__(self, resp=None, *, error: Exception | None = None) -> None:
-        self._resp = resp
-        self._error = error
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *exc_info):
-        return False
-
-    def get(self, *args, **kwargs):
-        if self._error is not None:
-            raise self._error
-        return self._resp
-
-
 def _client_factory(resp=None, *, error: Exception | None = None):
     def _make(*args, **kwargs):
-        return _Client(resp, error=error)
+        return FakeClient(resp, error=error)
 
     return _make
 
 
 class TestFundHtml:
     def test_success_reads_text(self, monkeypatch):
-        monkeypatch.setattr(tiantian_base, "make_http_client", _client_factory(_Resp("<html>ok</html>")))
+        monkeypatch.setattr(tiantian_base, "make_http_client", _client_factory(FakeResponse("<html>ok</html>")))
 
         assert tiantian_base._request_fund_html("000001") == "<html>ok</html>"
 
@@ -73,7 +46,7 @@ class TestFundHtml:
 
 class TestPingzhongData:
     def test_success_reads_text(self, monkeypatch):
-        monkeypatch.setattr(tiantian_base, "make_http_client", _client_factory(_Resp("var x = 1;")))
+        monkeypatch.setattr(tiantian_base, "make_http_client", _client_factory(FakeResponse("var x = 1;")))
 
         assert tiantian_base._request_pingzhong_data("000001") == "var x = 1;"
 
@@ -86,7 +59,7 @@ class TestPingzhongData:
         """429/404 等状态码异常单独一路：不得与连接错误混为一谈（日志要带状态码）。"""
         request = httpx.Request("GET", "https://fund.eastmoney.com/pingzhongdata/000001.js")
         response = httpx.Response(429, request=request)
-        resp = _Resp(status_error=httpx.HTTPStatusError("too many", request=request, response=response))
+        resp = FakeResponse(raise_status=httpx.HTTPStatusError("too many", request=request, response=response))
         monkeypatch.setattr(tiantian_base, "make_http_client", _client_factory(resp))
 
         assert tiantian_base._request_pingzhong_data("000001") is None
@@ -106,7 +79,7 @@ class TestQuarterlyApi:
     def test_success_decodes_js_escapes(self, monkeypatch):
         payload = "<table>持仓</table>"
         monkeypatch.setattr(
-            tiantian_base, "make_http_client", _client_factory(_Resp(_api_text(payload.replace('"', '\\"'))))
+            tiantian_base, "make_http_client", _client_factory(FakeResponse(_api_text(payload.replace('"', '\\"'))))
         )
 
         assert tiantian_base._request_quarterly_api("000001", "jjcc") == payload
@@ -117,19 +90,19 @@ class TestQuarterlyApi:
         assert tiantian_base._request_quarterly_api("000001", "jjcc") is None
 
     def test_missing_content_field_returns_none(self, monkeypatch):
-        monkeypatch.setattr(tiantian_base, "make_http_client", _client_factory(_Resp("var apidata={};")))
+        monkeypatch.setattr(tiantian_base, "make_http_client", _client_factory(FakeResponse("var apidata={};")))
 
         assert tiantian_base._request_quarterly_api("000001", "jjcc") is None
 
     def test_blank_content_returns_none(self, monkeypatch):
         """无持仓的季度里 API 返回空 content：按「无数据」跳过，不当解析失败。"""
-        monkeypatch.setattr(tiantian_base, "make_http_client", _client_factory(_Resp(_api_text("   "))))
+        monkeypatch.setattr(tiantian_base, "make_http_client", _client_factory(FakeResponse(_api_text("   "))))
 
         assert tiantian_base._request_quarterly_api("000001", "jjcc") is None
 
     def test_invalid_json_escape_returns_none(self, monkeypatch):
         """content 内含非法转义（`\\x`）→ JSONDecodeError 归 None，不抛给调用方。"""
-        monkeypatch.setattr(tiantian_base, "make_http_client", _client_factory(_Resp(_api_text(r"a\x b"))))
+        monkeypatch.setattr(tiantian_base, "make_http_client", _client_factory(FakeResponse(_api_text(r"a\x b"))))
 
         assert tiantian_base._request_quarterly_api("000001", "jjcc") is None
 

@@ -25,6 +25,7 @@ from src.python.providers.tiantian_fund_fee import (
     parse_fee_page,
     stamp_fee_payload,
 )
+from src.test._fixtures.http import FakeClient, FakeResponse
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_providers]
 
@@ -171,47 +172,12 @@ class TestPayloadAdmission:
 # ============================================================
 
 
-class _FakeResponse:
-    """httpx.Response 最小桩：文本 + raise_for_status 契约。"""
-
-    def __init__(self, text: str, status_error: BaseException | None = None) -> None:
-        self.text = text
-        self.encoding = "utf-8"
-        self._status_error = status_error
-
-    def raise_for_status(self) -> None:
-        if self._status_error is not None:
-            raise self._status_error
-
-
-class _FakeClient:
-    """make_http_client 最小桩：记录请求并返回预置响应。"""
-
-    def __init__(self, response: _FakeResponse | None = None, request_error: BaseException | None = None):
-        self._response = response
-        self._request_error = request_error
-        self.calls: list[dict[str, Any]] = []
-
-    def __enter__(self) -> _FakeClient:
-        return self
-
-    def __exit__(self, exc_type: object, exc: object, tb: object) -> bool:
-        return False
-
-    def get(self, url: str, headers: dict | None = None) -> _FakeResponse:
-        self.calls.append({"url": url, "headers": headers})
-        if self._request_error is not None:
-            raise self._request_error
-        assert self._response is not None
-        return self._response
-
-
 class TestDirectFetch:
     """fetch_fund_fee_page — 经调用点 make_http_client 的抓取路径。"""
 
     def test_gets_fee_page_with_headers_and_parses(self, monkeypatch: pytest.MonkeyPatch):
         """请求 jjfl 页 + Referer/UA 头 + 解析出赎回与申购行。"""
-        client = _FakeClient(response=_FakeResponse(_page_html()))
+        client = FakeClient(response=FakeResponse(_page_html()))
         monkeypatch.setattr(tf, "make_http_client", lambda **_kwargs: client)
         payload = tf.fetch_fund_fee_page("002943")
         assert payload is not None
@@ -223,7 +189,7 @@ class TestDirectFetch:
 
     def test_parse_failure_returns_none(self, monkeypatch: pytest.MonkeyPatch):
         """页面无赎回表 → 代码级空结果（None，不计熔断）。"""
-        client = _FakeClient(response=_FakeResponse(_page_html(with_redemption=False)))
+        client = FakeClient(response=FakeResponse(_page_html(with_redemption=False)))
         monkeypatch.setattr(tf, "make_http_client", lambda **_kwargs: client)
         assert tf.fetch_fund_fee_page("561910") is None
 

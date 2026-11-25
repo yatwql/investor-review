@@ -21,48 +21,9 @@ import pytest
 
 from src.python.providers import cninfo as cn
 from src.python.providers import utils as pu
+from src.test._fixtures.http import FakeClient, FakeResponse
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_providers]
-
-
-class _FakeResp:
-    def __init__(self, status_code: int = 200, payload=None, content: bytes = b"", json_error: bool = False) -> None:
-        self.status_code = status_code
-        self._payload = payload
-        self.content = content
-        self._json_error = json_error
-
-    def json(self):
-        if self._json_error:
-            raise ValueError("not json")
-        return self._payload
-
-
-class _FakeClient:
-    """按 URL 后缀分派响应；记录调用供断言。"""
-
-    def __init__(self, post_map: dict[str, _FakeResp] | None = None, get_resp: _FakeResp | None = None) -> None:
-        self._post_map = post_map or {}
-        self._get_resp = get_resp
-        self.posts: list[tuple[str, dict]] = []
-        self.gets: list[str] = []
-
-    def post(self, url, data=None, headers=None, timeout=None):
-        self.posts.append((url, dict(data or {})))
-        for suffix, resp in self._post_map.items():
-            if url.endswith(suffix):
-                return resp
-        return _FakeResp(status_code=404)
-
-    def get(self, url, headers=None):
-        self.gets.append(url)
-        return self._get_resp or _FakeResp(status_code=404)
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *exc):
-        return False
 
 
 @pytest.fixture(autouse=True)
@@ -93,8 +54,8 @@ def _patch_client(monkeypatch, client) -> None:
     monkeypatch.setattr(cn, "make_http_client", lambda **_kw: client)
 
 
-def _list_payload(items: list[dict]) -> _FakeResp:
-    return _FakeResp(payload={"announcements": items})
+def _list_payload(items: list[dict]) -> FakeResponse:
+    return FakeResponse(json_body={"announcements": items})
 
 
 def _ann(title: str, ann_id: str = "121", adjunct: str = "finalpage/2026-03-28/121.PDF") -> dict:
@@ -110,9 +71,11 @@ class TestResolveOrgId:
     """orgId 解析（列表查询的必需参数）。"""
 
     def test_resolves_and_caches(self, monkeypatch, _isolate):
-        client = _FakeClient(
-            post_map={
-                "/topSearch/query": _FakeResp(payload={"keyBoardList": [{"code": "601398", "orgId": "gssh0601398"}]})
+        client = FakeClient(
+            by_url={
+                "/topSearch/query": FakeResponse(
+                    json_body={"keyBoardList": [{"code": "601398", "orgId": "gssh0601398"}]}
+                )
             }
         )
         _patch_client(monkeypatch, client)
@@ -122,7 +85,9 @@ class TestResolveOrgId:
         assert len(client.posts) == 1
 
     def test_missing_org_id_returns_none(self, monkeypatch, _isolate):
-        _patch_client(monkeypatch, _FakeClient(post_map={"/topSearch/query": _FakeResp(payload={"keyBoardList": []})}))
+        _patch_client(
+            monkeypatch, FakeClient(by_url={"/topSearch/query": FakeResponse(json_body={"keyBoardList": []})})
+        )
         assert cn.resolve_org_id("601398") is None
 
     def test_empty_code(self, _isolate):
@@ -145,9 +110,11 @@ class TestResolveOrgId:
         assert _isolate[cn.ORGID_MISS_PREFIX + "600900"] == "连接失败"
 
         # 网络恢复正常也不立即重试（负缓存生效，未发出新请求）
-        client = _FakeClient(
-            post_map={
-                "/topSearch/query": _FakeResp(payload={"keyBoardList": [{"code": "600900", "orgId": "gssh0600900"}]})
+        client = FakeClient(
+            by_url={
+                "/topSearch/query": FakeResponse(
+                    json_body={"keyBoardList": [{"code": "600900", "orgId": "gssh0600900"}]}
+                )
             }
         )
         _patch_client(monkeypatch, client)
@@ -156,30 +123,30 @@ class TestResolveOrgId:
 
     def test_missing_record_negative_reason(self, monkeypatch, _isolate):
         """源侧无该代码档案与网络失败分开记（前者不是网络问题）。"""
-        _patch_client(monkeypatch, _FakeClient(post_map={"/topSearch/query": _FakeResp(payload={"keyBoardList": []})}))
+        _patch_client(
+            monkeypatch, FakeClient(by_url={"/topSearch/query": FakeResponse(json_body={"keyBoardList": []})})
+        )
         assert cn.resolve_org_id("600900") is None
         assert _isolate[cn.ORGID_MISS_PREFIX + "600900"] == "源侧无该代码档案"
 
 
-class _SlowClient(_FakeClient):
+class _SlowClient(FakeClient):
     """post 故意慢于墙钟预算：验证端到端截止（而非 httpx 分阶段超时）生效。"""
 
-    def __init__(self, delay: float = 0.3) -> None:
-        super().__init__()
-        self._delay = delay
-
-    def post(self, url, data=None, headers=None, timeout=None):
-        time.sleep(self._delay)
-        return super().post(url, data=data, headers=headers)
+    def post(self, *args, **kwargs):
+        time.sleep(0.3)
+        return super().post(*args, **kwargs)
 
 
 class TestFetchReportListings:
     """:func:`cninfo.fetch_report_listings` —— 公告列表归一为与主源同一形状。"""
 
-    def _client(self, announcements: list[dict]) -> _FakeClient:
-        return _FakeClient(
-            post_map={
-                "/topSearch/query": _FakeResp(payload={"keyBoardList": [{"code": "601398", "orgId": "gssh0601398"}]}),
+    def _client(self, announcements: list[dict]) -> FakeClient:
+        return FakeClient(
+            by_url={
+                "/topSearch/query": FakeResponse(
+                    json_body={"keyBoardList": [{"code": "601398", "orgId": "gssh0601398"}]}
+                ),
                 "/hisAnnouncement/query": _list_payload(announcements),
             }
         )
@@ -264,10 +231,10 @@ class TestFetchReportListings:
     def test_http_failure_returns_none(self, monkeypatch, _isolate):
         _patch_client(
             monkeypatch,
-            _FakeClient(
-                post_map={
-                    "/topSearch/query": _FakeResp(payload={"keyBoardList": [{"code": "601398", "orgId": "x"}]}),
-                    "/hisAnnouncement/query": _FakeResp(status_code=500),
+            FakeClient(
+                by_url={
+                    "/topSearch/query": FakeResponse(json_body={"keyBoardList": [{"code": "601398", "orgId": "x"}]}),
+                    "/hisAnnouncement/query": FakeResponse(status_code=500),
                 }
             ),
         )
@@ -278,7 +245,7 @@ class TestFetchReportText:
     """:func:`cninfo.fetch_report_text` —— PDF 下载 + 文本解析 + 缓存。"""
 
     def test_downloads_parses_and_caches(self, monkeypatch, _isolate):
-        client = _FakeClient(get_resp=_FakeResp(content=b"%PDF-1.4 fake"))
+        client = FakeClient(response=FakeResponse(content=b"%PDF-1.4 fake"))
         _patch_client(monkeypatch, client)
         parsed: list[bytes] = []
         monkeypatch.setattr(cn, "_parse_pdf_text", lambda b: parsed.append(b) or "全文正文内容")
@@ -290,7 +257,7 @@ class TestFetchReportText:
         assert len(parsed) == 1
 
     def test_absolute_url_used_as_is(self, monkeypatch, _isolate):
-        client = _FakeClient(get_resp=_FakeResp(content=b"%PDF"))
+        client = FakeClient(response=FakeResponse(content=b"%PDF"))
         _patch_client(monkeypatch, client)
         monkeypatch.setattr(cn, "_parse_pdf_text", lambda b: "x")
         cn.fetch_report_text("1002", "http://static.cninfo.com.cn/a.PDF")
@@ -301,11 +268,11 @@ class TestFetchReportText:
         assert cn.fetch_report_text("1003", "") == ""
 
     def test_download_failure_returns_empty(self, monkeypatch, _isolate):
-        _patch_client(monkeypatch, _FakeClient(get_resp=_FakeResp(status_code=404)))
+        _patch_client(monkeypatch, FakeClient(response=FakeResponse(status_code=404)))
         assert cn.fetch_report_text("1004", "a.PDF") == ""
 
     def test_parse_failure_returns_empty(self, monkeypatch, _isolate):
-        _patch_client(monkeypatch, _FakeClient(get_resp=_FakeResp(content=b"broken")))
+        _patch_client(monkeypatch, FakeClient(response=FakeResponse(content=b"broken")))
         monkeypatch.setattr(cn, "_parse_pdf_text", lambda b: "")
         assert cn.fetch_report_text("1005", "a.PDF") == ""
 
@@ -338,12 +305,14 @@ class TestGuards:
         acquired: list[str] = []
         limiter = type("L", (), {"acquire": lambda self, name: acquired.append(name)})()
         monkeypatch.setattr(cn, "_get_limiter", lambda: limiter)
-        _patch_client(monkeypatch, _FakeClient(post_map={"/topSearch/query": _FakeResp(payload={"keyBoardList": []})}))
+        _patch_client(
+            monkeypatch, FakeClient(by_url={"/topSearch/query": FakeResponse(json_body={"keyBoardList": []})})
+        )
         cn.resolve_org_id("601398")
         assert acquired == [cn.SOURCE_ID]
 
     def test_non_json_response_returns_none(self, monkeypatch, _isolate):
-        _patch_client(monkeypatch, _FakeClient(post_map={"/topSearch/query": _FakeResp(json_error=True)}))
+        _patch_client(monkeypatch, FakeClient(by_url={"/topSearch/query": FakeResponse(json_error=True)}))
         assert cn.resolve_org_id("601398") is None
 
     def test_429_retries_once_then_succeeds(self, monkeypatch, _isolate):
@@ -354,8 +323,8 @@ class TestGuards:
             def post(self, url, data=None, headers=None, timeout=None):
                 self.calls += 1
                 if self.calls == 1:
-                    return _FakeResp(status_code=429)
-                return _FakeResp(payload={"keyBoardList": [{"code": "601398", "orgId": "ok"}]})
+                    return FakeResponse(status_code=429)
+                return FakeResponse(json_body={"keyBoardList": [{"code": "601398", "orgId": "ok"}]})
 
             def __enter__(self):
                 return self
@@ -385,26 +354,26 @@ class _FlakyClient:
 
     def __init__(
         self,
-        resp: _FakeResp | None = None,
+        resp: FakeResponse | None = None,
         *,
         exc: Exception | None = None,
         fail_times: int | None = 1,
     ) -> None:
-        self._resp = resp if resp is not None else _FakeResp(payload={"keyBoardList": []})
+        self._resp = resp if resp is not None else FakeResponse(json_body={"keyBoardList": []})
         self._exc = exc if exc is not None else httpx.ConnectTimeout("timed out")
         self._fail_times = fail_times
         self.calls = 0
 
-    def _do(self) -> _FakeResp:
+    def _do(self) -> FakeResponse:
         self.calls += 1
         if self._fail_times is None or self.calls <= self._fail_times:
             raise self._exc
         return self._resp
 
-    def post(self, url, data=None, headers=None, timeout=None) -> _FakeResp:
+    def post(self, url, data=None, headers=None, timeout=None) -> FakeResponse:
         return self._do()
 
-    def get(self, url, headers=None) -> _FakeResp:
+    def get(self, url, headers=None) -> FakeResponse:
         return self._do()
 
     def __enter__(self):
@@ -431,7 +400,9 @@ class TestTransientConnectRetry:
 
     def test_post_json_retries_once_then_succeeds(self, monkeypatch, _isolate):
         """首次连接失败 → 退避一次后成功返回 JSON。"""
-        client = _FlakyClient(resp=_FakeResp(payload={"keyBoardList": [{"code": "600900", "orgId": "gssh0600900"}]}))
+        client = _FlakyClient(
+            resp=FakeResponse(json_body={"keyBoardList": [{"code": "600900", "orgId": "gssh0600900"}]})
+        )
         sleeps = self._patch_flaky(monkeypatch, client)
 
         payload = cn._post_json("/new/information/topSearch/query", {"keyWord": "600900"})
@@ -451,7 +422,7 @@ class TestTransientConnectRetry:
 
     def test_get_bytes_retries_once_then_succeeds(self, monkeypatch, _isolate):
         """公告 PDF 下载同样退避重试一次。"""
-        client = _FlakyClient(resp=_FakeResp(content=b"%PDF-1.4 fake"))
+        client = _FlakyClient(resp=FakeResponse(content=b"%PDF-1.4 fake"))
         sleeps = self._patch_flaky(monkeypatch, client)
 
         assert cn._get_bytes("http://static.cninfo.com.cn/a.PDF") == b"%PDF-1.4 fake"
@@ -470,7 +441,7 @@ class TestTransientConnectRetry:
     def test_retries_survive_two_consecutive_cold_start_failures(self, monkeypatch, _isolate):
         """连续两次冷启动失败后第 3 次成功（实测工况：首个连接常被丢弃）。"""
         client = _FlakyClient(
-            resp=_FakeResp(payload=[{"code": "600900", "orgId": "gssh0600900"}]),
+            resp=FakeResponse(json_body=[{"code": "600900", "orgId": "gssh0600900"}]),
             fail_times=2,
         )
         sleeps = self._patch_flaky(monkeypatch, client)
@@ -492,16 +463,16 @@ class TestTopSearchListShape:
 
     def test_post_json_passes_list_payload_through(self, monkeypatch, _isolate):
         items = [{"code": "600900", "orgId": "gssh0600900", "zwjc": "长江电力"}]
-        _patch_client(monkeypatch, _FakeClient(post_map={"/topSearch/query": _FakeResp(payload=items)}))
+        _patch_client(monkeypatch, FakeClient(by_url={"/topSearch/query": FakeResponse(json_body=items)}))
         assert cn._post_json("/new/information/topSearch/query", {"keyWord": "600900"}) == items
 
     def test_resolve_org_id_from_list_response(self, monkeypatch, _isolate):
         _patch_client(
             monkeypatch,
-            _FakeClient(
-                post_map={
-                    "/topSearch/query": _FakeResp(
-                        payload=[{"code": "600900", "orgId": "gssh0600900", "zwjc": "长江电力"}]
+            FakeClient(
+                by_url={
+                    "/topSearch/query": FakeResponse(
+                        json_body=[{"code": "600900", "orgId": "gssh0600900", "zwjc": "长江电力"}]
                     )
                 }
             ),
@@ -512,10 +483,10 @@ class TestTopSearchListShape:
         """历史/其他部署可能包一层 dict（keyBoardList）——保持兼容。"""
         _patch_client(
             monkeypatch,
-            _FakeClient(
-                post_map={
-                    "/topSearch/query": _FakeResp(
-                        payload={"keyBoardList": [{"code": "600900", "orgId": "gssh0600900"}]}
+            FakeClient(
+                by_url={
+                    "/topSearch/query": FakeResponse(
+                        json_body={"keyBoardList": [{"code": "600900", "orgId": "gssh0600900"}]}
                     )
                 }
             ),
@@ -672,7 +643,7 @@ class TestRateLimitWaitFormula:
 
             def post(self, *a, **k):
                 calls_counter[0] += 1
-                return _FakeResp(status_code=429 if calls_counter[0] == 1 else 200, payload={"keyBoardList": []})
+                return FakeResponse(status_code=429 if calls_counter[0] == 1 else 200, json_body={"keyBoardList": []})
 
         client = TwoPhaseClient()
         _patch_client(monkeypatch, client)

@@ -25,6 +25,7 @@ from src.python.providers.tiantian_purchase import (
     parse_purchase_table,
     stamp_purchase_payload,
 )
+from src.test._fixtures.http import FakeClient, FakeResponse
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_providers]
 
@@ -38,41 +39,6 @@ def _fixture_text() -> str:
 
 
 # ── 传输桩（调用点注入，零出网） ──────────────────────────────
-
-
-class _FakeResponse:
-    """httpx.Response 的最小桩：文本 + raise_for_status 契约。"""
-
-    def __init__(self, text: str, status_error: BaseException | None = None) -> None:
-        self.text = text
-        self.encoding = "utf-8"
-        self._status_error = status_error
-
-    def raise_for_status(self) -> None:
-        if self._status_error is not None:
-            raise self._status_error
-
-
-class _FakeClient:
-    """make_http_client 的最小桩：记录请求参数并返回预置响应。"""
-
-    def __init__(self, response: _FakeResponse | None = None, request_error: BaseException | None = None):
-        self._response = response
-        self._request_error = request_error
-        self.calls: list[dict[str, Any]] = []
-
-    def __enter__(self) -> _FakeClient:
-        return self
-
-    def __exit__(self, *exc_info: object) -> bool:
-        return False
-
-    def get(self, url: str, params: dict | None = None, headers: dict | None = None) -> _FakeResponse:
-        self.calls.append({"url": url, "params": params, "headers": headers})
-        if self._request_error is not None:
-            raise self._request_error
-        assert self._response is not None
-        return self._response
 
 
 class _FakeDataFrame:
@@ -284,7 +250,7 @@ class TestDirectFetch:
 
     def test_gets_endpoint_with_headers_and_parses(self, monkeypatch: pytest.MonkeyPatch):
         """请求端点 + Referer/UA 头 + 剥前缀解析出载荷。"""
-        client = _FakeClient(response=_FakeResponse(_fixture_text()))
+        client = FakeClient(response=FakeResponse(_fixture_text()))
         monkeypatch.setattr(tp, "make_http_client", lambda **_kwargs: client)
         payload = tp.fetch_fund_purchase_table()
         assert payload is not None

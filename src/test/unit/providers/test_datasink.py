@@ -19,40 +19,13 @@ import pytest
 
 from src.python.providers import datasink as ds
 from src.python.providers import utils as pu
+from src.test._fixtures.http import FakeClient, FakeResponse
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_providers]
 
 
-class _FakeResp:
-    def __init__(self, status_code: int = 200, payload=None, json_error: bool = False) -> None:
-        self.status_code = status_code
-        self._payload = payload
-        self._json_error = json_error
-
-    def json(self):
-        if self._json_error:
-            raise ValueError("not json")
-        return self._payload
-
-
-class _FakeClient:
-    def __init__(self, resp: _FakeResp) -> None:
-        self._resp = resp
-        self.calls: list[dict] = []
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *args):
-        return False
-
-    def get(self, url, params=None, headers=None):
-        self.calls.append({"url": url, "params": params or {}, "headers": headers or {}})
-        return self._resp
-
-
-def _prepare(monkeypatch, resp: _FakeResp) -> _FakeClient:
-    client = _FakeClient(resp)
+def _prepare(monkeypatch, resp: FakeResponse) -> FakeClient:
+    client = FakeClient(resp)
     monkeypatch.setattr(ds, "make_http_client", lambda **_kw: client)
     monkeypatch.setattr(ds, "credential_value", lambda _sid: "test-key")
     monkeypatch.setattr(ds, "missing_credential", lambda _sid: None)
@@ -84,14 +57,14 @@ class TestPlanLimits:
 
 class TestGuards:
     def test_missing_credential_skips_without_http(self, monkeypatch):
-        client = _FakeClient(_FakeResp(payload={"items": []}))
+        client = FakeClient(FakeResponse(json_body={"items": []}))
         monkeypatch.setattr(ds, "make_http_client", lambda **_kw: client)
         monkeypatch.setattr(ds, "missing_credential", lambda _sid: object())
         assert ds._request("/documents", {}) is None
         assert client.calls == []
 
     def test_limiter_acquired_before_request(self, monkeypatch):
-        client = _prepare(monkeypatch, _FakeResp(payload={"items": []}))
+        client = _prepare(monkeypatch, FakeResponse(json_body={"items": []}))
         acquired: list[str] = []
         monkeypatch.setattr(ds, "_get_limiter", lambda: type("L", (), {"acquire": lambda _s, p: acquired.append(p)})())
         ds._request("/documents", {})
@@ -99,14 +72,14 @@ class TestGuards:
         assert len(client.calls) == 1
 
     def test_quota_exhausted_skips_request(self, monkeypatch):
-        client = _prepare(monkeypatch, _FakeResp(payload={"items": []}))
+        client = _prepare(monkeypatch, FakeResponse(json_body={"items": []}))
         monkeypatch.setattr(ds, "resolve_daily_quota", lambda: 1)
         monkeypatch.setattr(ds, "_read_quota", lambda: (date.today().isoformat(), 1))
         assert ds._request("/documents", {}) is None
         assert client.calls == []
 
     def test_quota_consumed_then_allows(self, monkeypatch, tmp_path):
-        _prepare(monkeypatch, _FakeResp(payload={"items": []}))
+        _prepare(monkeypatch, FakeResponse(json_body={"items": []}))
         monkeypatch.setattr(ds, "_QUOTA_FILE", str(tmp_path / "quota.json"))
         monkeypatch.setattr(ds, "resolve_daily_quota", lambda: 2)
         assert ds._request("/documents", {}) is not None
@@ -118,7 +91,7 @@ class TestGuards:
 
 class TestRequestStatus:
     def test_200_returns_dict(self, monkeypatch):
-        client = _prepare(monkeypatch, _FakeResp(payload={"items": [{"id": 1}]}))
+        client = _prepare(monkeypatch, FakeResponse(json_body={"items": [{"id": 1}]}))
         data = ds._request("/documents", {"symbol": "600519.SS"})
         assert data == {"items": [{"id": 1}]}
         assert client.calls[0]["params"]["apikey"] == "test-key"
@@ -126,11 +99,11 @@ class TestRequestStatus:
 
     @pytest.mark.parametrize("status", [401, 403, 429, 500])
     def test_error_statuses_return_none(self, monkeypatch, status):
-        _prepare(monkeypatch, _FakeResp(status_code=status, payload={}))
+        _prepare(monkeypatch, FakeResponse(status_code=status, json_body={}))
         assert ds._request("/documents", {}) is None
 
     def test_non_json_returns_none(self, monkeypatch):
-        _prepare(monkeypatch, _FakeResp(payload=None, json_error=True))
+        _prepare(monkeypatch, FakeResponse(json_body=None, json_error=True))
         assert ds._request("/documents", {}) is None
 
     def test_network_error_retries_then_raises(self, monkeypatch):
@@ -145,13 +118,13 @@ class TestRequestStatus:
         sleeps: list[float] = []
         attempts = {"n": 0}
 
-        class _TimeoutClient(_FakeClient):
+        class _TimeoutClient(FakeClient):
             def get(self, url, params=None, headers=None):
                 attempts["n"] += 1
                 client.calls.append({"url": url, "params": params or {}})
                 raise httpx.ConnectTimeout("handshake operation timed out")
 
-        client = _TimeoutClient(_FakeResp())
+        client = _TimeoutClient(FakeResponse())
         monkeypatch.setattr(ds, "make_http_client", lambda **_kw: client)
         monkeypatch.setattr(ds, "credential_value", lambda _sid: "test-key")
         monkeypatch.setattr(ds, "missing_credential", lambda _sid: None)
@@ -170,15 +143,15 @@ class TestRequestStatus:
         sleeps: list[float] = []
         attempts = {"n": 0}
 
-        class _FlakyClient(_FakeClient):
+        class _FlakyClient(FakeClient):
             def get(self, url, params=None, headers=None):
                 attempts["n"] += 1
                 client.calls.append({"url": url, "params": params or {}})
                 if attempts["n"] == 1:
                     raise httpx.ConnectTimeout("first handshake dropped")
-                return _FakeResp(payload={"items": [{"id": 1}]})
+                return FakeResponse(json_body={"items": [{"id": 1}]})
 
-        client = _FlakyClient(_FakeResp())
+        client = _FlakyClient(FakeResponse())
         monkeypatch.setattr(ds, "make_http_client", lambda **_kw: client)
         monkeypatch.setattr(ds, "credential_value", lambda _sid: "test-key")
         monkeypatch.setattr(ds, "missing_credential", lambda _sid: None)
@@ -205,13 +178,13 @@ class TestRequestStatus:
             clock["t"] += 0.15  # 每次读时钟推进：进入 0.15 / 离开 0.30 → 本次尝试耗时 0.15s（预算 0.2s 的一半以上）
             return clock["t"]
 
-        class _HangClient(_FakeClient):
+        class _HangClient(FakeClient):
             def get(self, url, params=None, headers=None):
                 attempts["n"] += 1
                 raise httpx.ConnectTimeout("handshake operation timed out")
 
         monkeypatch.setattr(ds, "_CONTENT_TIMEOUT", 0.2)
-        monkeypatch.setattr(ds, "make_http_client", lambda **_kw: _HangClient(_FakeResp()))
+        monkeypatch.setattr(ds, "make_http_client", lambda **_kw: _HangClient(FakeResponse()))
         monkeypatch.setattr(ds, "credential_value", lambda _sid: "test-key")
         monkeypatch.setattr(ds, "missing_credential", lambda _sid: None)
         monkeypatch.setattr(ds, "_get_limiter", lambda: type("L", (), {"acquire": lambda _s, _p: None})())
@@ -248,18 +221,18 @@ class TestRequestStatus:
             clock["t"] += 0.01
             return clock["t"]
 
-        class _FlakyClient(_FakeClient):
+        class _FlakyClient(FakeClient):
             def get(self, url, params=None, headers=None):
                 attempts["n"] += 1
                 if attempts["n"] == 1:
                     raise httpx.ConnectTimeout("first handshake dropped")
-                return _FakeResp(payload={"items": [{"id": 1}]})
+                return FakeResponse(json_body={"items": [{"id": 1}]})
 
         class _SlowLimiter:
             def acquire(self, _sid, _p=None):
                 clock["t"] += 100.0  # 远超超时预算：计入 elapsed 会误判挂起
 
-        monkeypatch.setattr(ds, "make_http_client", lambda **_kw: _FlakyClient(_FakeResp()))
+        monkeypatch.setattr(ds, "make_http_client", lambda **_kw: _FlakyClient(FakeResponse()))
         monkeypatch.setattr(ds, "credential_value", lambda _sid: "test-key")
         monkeypatch.setattr(ds, "missing_credential", lambda _sid: None)
         monkeypatch.setattr(ds, "_get_limiter", lambda: _SlowLimiter())
@@ -273,12 +246,12 @@ class TestRequestStatus:
         sleeps: list[float] = []
         attempts = {"n": 0}
 
-        class _BadClient(_FakeClient):
+        class _BadClient(FakeClient):
             def get(self, url, params=None, headers=None):
                 attempts["n"] += 1
                 raise ValueError("bad params")
 
-        monkeypatch.setattr(ds, "make_http_client", lambda **_kw: _BadClient(_FakeResp()))
+        monkeypatch.setattr(ds, "make_http_client", lambda **_kw: _BadClient(FakeResponse()))
         monkeypatch.setattr(ds, "credential_value", lambda _sid: "test-key")
         monkeypatch.setattr(ds, "missing_credential", lambda _sid: None)
         monkeypatch.setattr(ds, "_get_limiter", lambda: type("L", (), {"acquire": lambda _s, _p: None})())
@@ -291,7 +264,7 @@ class TestRequestStatus:
 
     def test_section_probe_404_logged_debug_not_warning(self, monkeypatch, caplog):
         """章节名探测 404（预期内落空）只记 DEBUG，不刷 WARNING 噪音。"""
-        _prepare(monkeypatch, _FakeResp(status_code=404, payload={}))
+        _prepare(monkeypatch, FakeResponse(status_code=404, json_body={}))
         with caplog.at_level("DEBUG"):
             assert ds._request("/documents/7", {"section": "管理层讨论与分析"}) is None
         assert any(r.levelname == "DEBUG" and "探测未命中" in r.message for r in caplog.records)
@@ -299,7 +272,7 @@ class TestRequestStatus:
 
     def test_sections_endpoint_404_logged_debug(self, monkeypatch, caplog):
         """/sections 清单探测 404 同样只记 DEBUG（该文档章节未被源侧解析）。"""
-        _prepare(monkeypatch, _FakeResp(status_code=404, payload={}))
+        _prepare(monkeypatch, FakeResponse(status_code=404, json_body={}))
         with caplog.at_level("DEBUG"):
             assert ds._request("/documents/7/sections", {}) is None
         assert any(r.levelname == "DEBUG" and "探测未命中" in r.message for r in caplog.records)
@@ -307,13 +280,13 @@ class TestRequestStatus:
 
     def test_document_level_404_still_warns(self, monkeypatch, caplog):
         """文档级 404（不带 section，非 /sections 探测）仍记 WARNING。"""
-        _prepare(monkeypatch, _FakeResp(status_code=404, payload={}))
+        _prepare(monkeypatch, FakeResponse(status_code=404, json_body={}))
         with caplog.at_level("DEBUG"):
             assert ds._request("/documents/7", {}) is None
         assert any(r.levelname == "WARNING" and "返回 HTTP 404" in r.message for r in caplog.records)
 
     def test_key_not_in_logs(self, monkeypatch, caplog):
-        _prepare(monkeypatch, _FakeResp(status_code=401, payload={}))
+        _prepare(monkeypatch, FakeResponse(status_code=401, json_body={}))
         with caplog.at_level("WARNING"):
             ds._request("/documents", {})
         assert "test-key" not in caplog.text
@@ -324,15 +297,15 @@ class TestRequestStatus:
 
 class TestFetchPrimitives:
     def test_documents_returns_items(self, monkeypatch):
-        _prepare(monkeypatch, _FakeResp(payload={"items": [{"id": 7, "symbol": "600519.SS"}]}))
+        _prepare(monkeypatch, FakeResponse(json_body={"items": [{"id": 7, "symbol": "600519.SS"}]}))
         assert ds.fetch_report_documents("600519.SS", doc_type="annual") == [{"id": 7, "symbol": "600519.SS"}]
 
     def test_documents_missing_items_returns_none(self, monkeypatch):
-        _prepare(monkeypatch, _FakeResp(payload={"total": 0}))
+        _prepare(monkeypatch, FakeResponse(json_body={"total": 0}))
         assert ds.fetch_report_documents("600519.SS") is None
 
     def test_document_passes_section(self, monkeypatch):
-        client = _prepare(monkeypatch, _FakeResp(payload={"id": 7, "content": "# x"}))
+        client = _prepare(monkeypatch, FakeResponse(json_body={"id": 7, "content": "# x"}))
         data = ds.fetch_report_document(7, section="管理层讨论与分析")
         assert data is not None, "成功响应必须返回文档对象"
         assert data["id"] == 7
@@ -398,13 +371,13 @@ class TestEmptyReasonSelfReport:
 
     def test_section_404_reports_missing_section(self, monkeypatch):
         """带 section 的 404（该文档没有这一节）→ 原因含章节名。"""
-        _prepare(monkeypatch, _FakeResp(status_code=404, payload={}))
+        _prepare(monkeypatch, FakeResponse(status_code=404, json_body={}))
         assert ds._request("/documents/7", {"section": "管理层讨论与分析"}) is None
         assert "管理层讨论与分析" in self._reason()
 
     def test_sections_list_404_reports_unparsed(self, monkeypatch):
         """/sections 清单 404（该文档章节未被源侧解析）→ 原因指明这一点。"""
-        _prepare(monkeypatch, _FakeResp(status_code=404, payload={}))
+        _prepare(monkeypatch, FakeResponse(status_code=404, json_body={}))
         assert ds._request("/documents/7/sections", {}) is None
         assert "章节清单" in self._reason()
 
@@ -414,7 +387,7 @@ class TestEmptyReasonSelfReport:
         assert "凭据" in self._reason()
 
     def test_document_level_http_error_reports_status(self, monkeypatch):
-        _prepare(monkeypatch, _FakeResp(status_code=500, payload={}))
+        _prepare(monkeypatch, FakeResponse(status_code=500, json_body={}))
         assert ds._request("/documents", {}) is None
         assert "500" in self._reason()
 
@@ -442,7 +415,7 @@ class TestRateLimitWaitFormula:
 
             def get(self, url, params=None, headers=None):
                 counter[0] += 1
-                return _FakeResp(status_code=429 if counter[0] == 1 else 200, payload={"ok": True})
+                return FakeResponse(status_code=429 if counter[0] == 1 else 200, json_body={"ok": True})
 
         client = TwoPhaseClient()
         monkeypatch.setattr(ds, "make_http_client", lambda **_kw: client)
