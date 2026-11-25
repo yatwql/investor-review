@@ -14,12 +14,12 @@
 | 架构图示 | SVG | 4 | 396 | `src/static/` README 架构图（architecture 三渠道→引擎→双报告、llm-chain Provider 链式分发、capabilities 九大功能域总览、owl-mascot 吉祥物猫头鹰「守望」）+ 截图 7 张 PNG（报告实景 `report-overview`/`report-toc`/`report-charts` + 界面实景 `tui-menu`/`web-workbench`/`web-config`/`cli-report`，不计入本行） |
 | 辅助脚本 | Python | 150 | 31,446 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评测与因子目录评测、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、视觉资产（社交预览图/架构图体检）、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
 | 源代码合计 | — | 630 | 160,836 | 主程序 + 模板 + 脚本 + SVG |
-| 测试代码 | Python | 813 | 217,073 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
-| 测试用例 | — | — | 15,018 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
+| 测试代码 | Python | 819 | 218,010 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
+| 测试用例 | — | — | 15,086 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 15 | 7,088 | 含 README.md；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 14 | 6,851 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 223 | 75,256 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 14,506 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 223 | 75,263 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 14,513 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 200 | 59,038 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 9 | ~1616 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + TUI 交互改进（议题 + 第一/二批实施方案） + PanWatch 借鉴分析（含评估政策单源化与 LLM 复盘契约两份设计） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -861,6 +861,7 @@ investor-review/
 │       │   │   ├── __init__.py      #       子包标记
 │       │   │   ├── _cache_fixtures.py        # 缓存测试共享夹具（指定写入时刻/年龄落盘、北京时间取刻）
 │       │   │   ├── test_ttl_alignment.py    # TTL 三处对齐（默认值唯一来源/清理与读侧同值·无抖动/精确键用逻辑键/未注册键告警）
+│       │   │   ├── test_cache_paths_permissions.py # 缓存目录权限自检（权限过宽收紧到 0o700/chmod 与 makedirs 失败降级/目录覆盖解析）
 │       │   │   ├── test_ttl_business_matrix.py # 缓存 TTL 业务矩阵（时段 × 类型 × 覆盖层 + 读写清理同源 + 业务场景）
 │       │   │   ├── test_cache_stamp_and_cleanup.py # 版本戳迁移（旧戳不可读仍按类型 TTL 清理）+ 逐类型清理判定
 │       │   │   ├── test_cache_cleanup_sensitive_faults.py # 清理故障与敏感缓存（目录不可读/畸形 _ts 不中断整轮/gz 与 json 同口径/删除失败跳过）
@@ -1067,6 +1068,7 @@ investor-review/
 │       │   │   ├── test_tencent_edge.py       #   腾讯财经边缘场景
 │       │   │   ├── test_tiantian.py           #   天天基金 API 测试（含基金持仓三跳阶梯次序与目标 ETF 锚点解析）
 │       │   │   ├── test_tiantian_nav.py       #   历史净值解析（JS 变量提取/毫秒时间戳北京时间口径/双净值合并）
+│       │   │   ├── test_tiantian_base_faults.py # 天天基金公共 HTTP 故障面（超时/状态码/连接错误/JS 解析全归 None）
 │       │   │   ├── test_tiantian_holdings_edge.py # 基金持仓取数阶梯与目标 ETF 锚点边缘场景
 │       │   │   ├── test_tiantian_holdings_quarter.py # 季报探测：空季度负缓存与 jjcc 对冲并发
 │       │   │   ├── test_tiantian_fund_fee.py   #   F10 费用页解析（赎回阶梯/优惠费率列/每笔固定费/载荷准入/akshare 备链）
@@ -1206,6 +1208,8 @@ investor-review/
 │       │   │   ├── test_market_sentiment_wiring.py # 市场情绪接线回归（full 路径契约注入与 HTML 透传/双端渲染载体）
 │       │   │   ├── test_report_output_spans.py # full 路径 HTML/Excel 阶段埋点回归（阶段计时补回/异常仍收口/无上下文零行为变化）
 │       │   │   ├── test_run_scope.py # 报告运行边界（降级事件只清本轮、失败计数/上次成功保留、自检载体重置、用量基线 delta）
+│       │   │   ├── test_report_health_branches.py # 健康检查收口容错（启动/收集/形状校验失败均不阻断报告）
+│       │   │   ├── test_excel_news_warning_branches.py # 新闻页签降级（模块缺失/取数失败仍占位写入）
 │       │   │   ├── test_run_scope_observation_faults.py # 运行边界分步故障注入（九步复位各自失败不阻断）+ 单轮复用并发/跨轮失效
 │       │   │   ├── test_market_value.py           #   市值计算测试
 │       │   │   ├── test_market_value_edge.py      #   市值边缘场景
@@ -1378,10 +1382,12 @@ investor-review/
 │       │   │   ├── test_keystroke_baseline.py #   主路径击键数基线（动线击键数快照守卫；防新增确认屏/闸门把主路径拉长）
 │       │   │   ├── test_tui_layout_baseline.py #   主菜单宽/窄两档版式逐行基线 + 管道输出无控制字符（布局不动护栏）
 │       │   │   ├── test_live_status.py      #   长任务状态条（正文拼装/环境判据/覆写与挂起恢复序列）
+│       │   │   ├── test_tui_progress_live_bar.py # 状态条接线（启用判据/单帧绘制容错/落地行挂起恢复/错误汇总）
 │       │   │   ├── test_live_status_edge.py #   状态条边缘（心跳线程生命周期与中止键轮询容错）
 │       │   │   ├── test_error_tail.py       #   错误尾巴形状与动作短语键位可执行性
 │       │   │   ├── test_text_layout.py      #   文本宽度与盒线面板等宽不变式（中英混排行宽一致）
-│       │   │   └── test_handlers_log.py     #   日志可视化命令处理测试（查看日志/健康历史）
+│       │   │   ├── test_handlers_log.py     #   日志可视化命令处理测试（查看日志/健康历史）
+│       │   │   └── test_handlers_log_branches.py # 诊断面板交互分支（无效键留守/配置读写失败/窄档渲染/自检异常）
 │       │   └── web/                  #   Web 模式单元测试
 │       │   │   ├── __init__.py      #       包标记（空文件）
 │       │   │   ├── test_upload.py   #       上传安全模块（校验/生命周期/清理）
