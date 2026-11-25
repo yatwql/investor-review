@@ -14,12 +14,12 @@
 | 架构图示 | SVG | 4 | 396 | `src/static/` README 架构图（architecture 三渠道→引擎→双报告、llm-chain Provider 链式分发、capabilities 九大功能域总览、owl-mascot 吉祥物猫头鹰「守望」）+ 截图 7 张 PNG（报告实景 `report-overview`/`report-toc`/`report-charts` + 界面实景 `tui-menu`/`web-workbench`/`web-config`/`cli-report`，不计入本行） |
 | 辅助脚本 | Python | 150 | 31,446 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评测与因子目录评测、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、视觉资产（社交预览图/架构图体检）、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
 | 源代码合计 | — | 630 | 160,823 | 主程序 + 模板 + 脚本 + SVG |
-| 测试代码 | Python | 769 | 206,822 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
-| 测试用例 | — | — | 14,113 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
+| 测试代码 | Python | 778 | 209,646 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
+| 测试用例 | — | — | 14,377 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 15 | 7,088 | 含 README.md；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 14 | 6,851 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 223 | 75,206 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 14,456 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 223 | 75,216 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 14,466 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 200 | 59,038 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 9 | ~1616 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + TUI 交互改进（议题 + 第一/二批实施方案） + PanWatch 借鉴分析（含评估政策单源化与 LLM 复盘契约两份设计） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -907,6 +907,7 @@ investor-review/
 │       │   │   ├── __init__.py      #       子包标记
 │       │   │   ├── test_handlers_cache.py  #   缓存管理命令处理测试
 │       │   │   ├── test_handlers_config.py #   命令处理器配置测试
+│       │   │   ├── test_handlers_config_panels_branches.py # 配置面板分支：会话撤销/编辑派发/[G] 与各子面板
 │       │   │   ├── test_handlers_config_switch.py                   #   [S] 章节内容面板（编号派生/只读信息/切换/实验开关/写路径三通道）
 │       │   │   ├── test_config_session.py                           #   配置面板会话快照（u 撤销/U 全还原/写失败不记录）
 │       │   │   ├── test_handlers_report_chapters.py                #   [C] 章节显隐面板（四块渲染/四来源写入/子项闸门/只读详情）
@@ -941,6 +942,7 @@ investor-review/
 │       │   │   ├── test_debate_conditional.py #   辩论条件触发测试
 │       │   │   ├── test_debate_edge.py        #   辩论边缘场景
 │       │   │   ├── test_debate_generators.py  #   辩论提示词生成测试
+│       │   │   ├── test_debate_router_install.py # 辩论路由装配：两级回退与辩论信息容器清空
 │       │   │   ├── test_debate_prompts.py     #   辩论提示词模板测试
 │       │   │   ├── test_debate_qa.py          #   辩论 Q&A 测试
 │       │   │   ├── test_debate_token_budget.py #   辩论 Token 预算测试
@@ -1043,6 +1045,7 @@ investor-review/
 │       │   │   ├── test_tencent.py            #   腾讯财经 API 测试
 │       │   │   ├── test_tencent_edge.py       #   腾讯财经边缘场景
 │       │   │   ├── test_tiantian.py           #   天天基金 API 测试（含基金持仓三跳阶梯次序与目标 ETF 锚点解析）
+│       │   │   ├── test_tiantian_nav.py       #   历史净值解析（JS 变量提取/毫秒时间戳北京时间口径/双净值合并）
 │       │   │   ├── test_tiantian_holdings_edge.py # 基金持仓取数阶梯与目标 ETF 锚点边缘场景
 │       │   │   ├── test_tiantian_holdings_quarter.py # 季报探测：空季度负缓存与 jjcc 对冲并发
 │       │   │   ├── test_tiantian_fund_fee.py   #   F10 费用页解析（赎回阶梯/优惠费率列/每笔固定费/载荷准入/akshare 备链）
@@ -1099,6 +1102,7 @@ investor-review/
 │       │   │   ├── test_experimental_seams.py     #   管线实验挂载点（开关关闭无感/开启生效/下游异常只告警不外抛 + 顶层导入接线守卫）
 │       │   │   ├── test_feature_interactive.py    #   交互图表 Feature Flag + JS 资产内嵌（单文件自包含，不产出松散副本）测试
 │       │   │   ├── test_fund_deep_analysis_sheet_edge.py # 基金深度分析页签边缘场景
+│       │   │   ├── test_fund_deep_analysis_sheets_branches.py # 基金深度分析页签分支（重合度有效率/集中度/风格因子降级）
 │       │   │   ├── test_fund_candidate.py         #   候选基金比较测试（基金业绩分析章候选比较子表）
 │       │   │   ├── test_fund_concentration.py     #   基金集中度测试
 │       │   │   ├── test_fund_manager_analysis.py  #   基金经理分析测试
@@ -1205,6 +1209,8 @@ investor-review/
 │       │   │   ├── test_security_edge.py          #   证券边缘场景
 │       │   │   ├── test_orchestrator.py           #   报告编排器单元测试
 │       │   │   ├── test_factor_metrics_parallel.py # 因子暴露取数并发与单路慢告警
+│       │   │   ├── test_factor_metrics_orchestration_branches.py # 风格因子/行业 Beta 编排降级分支
+│       │   │   ├── test_module_loader_fallbacks.py # 报告模块加载 ImportError 兜底（逐模块降级/excel_writer 硬失败）
 │       │   │   ├── test_factor_metrics_missing_deps_edge.py # 计算层依赖缺失时因子/行业 Beta 区块降级
 │       │   │   ├── test_orchestrator_snapshot.py # capture_snapshot / fetch_history_data 快照与历史走势
 │       │   │   ├── test_orchestrator_generate_report.py # 报告生成主流程落盘与快照比对测试
@@ -1320,6 +1326,7 @@ investor-review/
 │       │   │   ├── test_prompt_text.py #   提示语模板用例（四成分/默认项写动作名/帮助文案）
 │       │   │   ├── test_prompt_contract.py #   提示语契约机检（panel_loop 必须模板化 / 禁止回车取消藏括注 / input_choice 须声明回车 / 术语表禁上屏 / 闸门白名单）
 │       │   │   ├── test_tui_keys.py              #   TUI 键盘输入测试
+│       │   │   ├── test_tui_keys_branches.py     #   按键底层分支（UTF-8 解码/拆包序列补全/Windows 行输入）
 │       │   │   ├── test_design_tui_doc.py   #   终端交互契约（DESIGN-TUI.md 骨架/键表/护栏对偶/术语表/引用存在）结构守卫
 │       │   │   ├── test_narrow_panel_render.py  #  窄屏 40 列底线全景机检（逐面板逐行断言不超宽）
 │       │   │   ├── test_tui_edge.py         #   TUI 边缘场景
@@ -1334,6 +1341,7 @@ investor-review/
 │       │   │   ├── test_pager_edge.py                               #   分页边缘（极矮终端/超长行/未知键/原地重绘）
 │       │   │   ├── test_symbols.py                                  #   符号表与 ASCII 降级（宽度不变式/代理流/幂等安装）
 │       │   │   ├── test_handlers_holdings.py                        #   持仓录入面板（P/B 只进内存不动文件、S 确认后才写、场外按金额需净值已公布）
+│       │   │   ├── test_handlers_holdings_branches.py               #   持仓录入交互分支（选择/收集/重复防线/保存/退出守卫）
 │       │   │   ├── test_keystroke_baseline.py #   主路径击键数基线（动线击键数快照守卫；防新增确认屏/闸门把主路径拉长）
 │       │   │   ├── test_tui_layout_baseline.py #   主菜单宽/窄两档版式逐行基线 + 管道输出无控制字符（布局不动护栏）
 │       │   │   ├── test_live_status.py      #   长任务状态条（正文拼装/环境判据/覆写与挂起恢复序列）
@@ -1368,6 +1376,7 @@ investor-review/
 │       │   │   ├── test_web_static_serving.py # Web 静态资产回归（/static/* 固定路径）+ 五区页签/What-if/缓存卡结构契约
 │       │   │   ├── test_web_theme.py #   工作台暗色主题与组件状态矩阵静态断言（防闪/同键对表/矩阵选择器/空态挂类）
 │       │   │   ├── test_server.py   #       启动防护（output_dir 写锁检测/端口占用）
+│       │   │   ├── test_server_main.py #       主入口启动硬闸与写锁释放时序
 │       │   │   ├── test_scheduler.py #     Web 定时生成调度（解析/触发窗评估/账本/API/面板接线）
 │       │   │   ├── test_web_completion_notify.py # Web 收尾完成通知接线（门控前置/载荷/吞异常/包装器委托）
 │       │   │   └── test_smoke_web.py #      Web 冒烟脚本载体（test_client 全链路断言）

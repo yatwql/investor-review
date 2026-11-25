@@ -38,6 +38,7 @@ _EXTRAS_ONLY = {
     "pytest-mock": "开发/工具依赖（pyproject extras「test」）",
     "pytest-xdist": "开发/工具依赖（pyproject extras「test」）",
     "pytest-html": "开发/工具依赖（pyproject extras「test」）",
+    "pytest-cov": "开发/工具依赖（覆盖率实测，scripts/test-runner 之外按需手动跑）",
 }
 
 _REQ_LINE = re.compile(r"^(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)(?P<extras>\[[^\]]*\])?\s*(?P<spec>.*)$")
