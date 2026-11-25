@@ -63,3 +63,49 @@ class TestBuildSettlementSummaryMalformedEntries:
         summary = build_settlement_summary([{"settlements": {"5": {"settle_date": "2026-01-05", "raw_return": "--"}}}])
 
         assert summary["batches"] == []
+
+
+class _FlakyFloat(float):
+    """首次 float() 抛错的数值对象（模拟账本里取不出的脏数值）。"""
+
+    def __new__(cls, value: float) -> "_FlakyFloat":
+        obj = super().__new__(cls, value)
+        obj._raise_next = True
+        return obj
+
+    def __float__(self) -> float:
+        if self._raise_next:
+            self._raise_next = False
+            raise ValueError("bad float")
+        return super().__float__()
+
+
+class TestBuildSettlementSummaryUncoercibleValues:
+    """结算摘要对「数值形态但不可转换」脏值的容错。"""
+
+    def test_uncoercible_raw_return_is_skipped(self):
+        summary = build_settlement_summary(
+            [{"settlements": {"5": {"settle_date": "2026-01-05", "raw_return": _FlakyFloat(0.05)}}}]
+        )
+
+        assert summary["batches"] == [], "换算不了的收益不得进均值（避免 NaN 污染整批）"
+
+    def test_uncoercible_bench_return_only_drops_excess(self):
+        summary = build_settlement_summary(
+            [
+                {
+                    "settlements": {
+                        "5": {
+                            "settle_date": "2026-01-05",
+                            "raw_return": 0.05,
+                            "bench_return": _FlakyFloat(0.02),
+                        }
+                    }
+                }
+            ]
+        )
+
+        cell = summary["batches"][0]["cells"][0]
+        assert cell["n"] == 1
+        assert cell["mean_return_pct"] == pytest.approx(5.0)
+        assert cell["mean_excess_pct"] is None, "基准换算失败时只丢超额，收益均值照常计入"

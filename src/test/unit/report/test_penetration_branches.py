@@ -19,12 +19,17 @@ import pytest
 
 from src.python.core.models import Holding
 from src.python.report import penetration
+from src.python.report.market_value import DetailRow
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
 
 
 def _holding(name: str, code: str, *, account: str = "证券") -> Holding:
     return Holding(account=account, name=name, code=code, shares=100, cost_price=10.0)
+
+
+def _detail(code: str, name: str = "贵州茅台", market_value: float = 1000.0) -> DetailRow:
+    return DetailRow(account="证券", name=name, code=code, market_value=market_value, cost=market_value)
 
 
 class TestSectorKeywordTable:
@@ -109,3 +114,67 @@ class TestApplyIndustryData:
         assert penetration._apply_industry_data(merged, {"600519": {"industry": "白酒"}}) == ""
         assert "sector_api" not in merged["平安银行"]
         assert "concepts" not in merged["平安银行"]
+
+
+class TestIndustryPrefetch:
+    """行业预取与补取的两段口径。"""
+
+    def _fund_layer(self, merged_entry: dict):
+        from types import SimpleNamespace
+
+        return SimpleNamespace(
+            merged={merged_entry["name"]: merged_entry},
+            unknown_mv=0.0,
+            failed_count=0,
+            failed_details=[],
+            stale_count=0,
+            stale_details=[],
+            period_details={},
+        )
+
+    def test_prefetch_exception_falls_back_to_on_demand_fetch(self, monkeypatch):
+        calls: list[list[str]] = []
+
+        def _batch(codes):
+            calls.append(list(codes))
+            if len(calls) == 1:
+                raise RuntimeError("prefetch boom")
+            return {}
+
+        monkeypatch.setattr("src.python.fetcher.industry.batch_fetch_industry_data", _batch)
+
+        result = penetration._compute_penetration_top10_uncached(
+            [_holding("贵州茅台", "600519")],
+            [_detail("600519")],
+        )
+
+        assert calls == [["600519"], ["600519"]], "预取异常后须按需补取（不得直接放弃行业分类）"
+        assert result["top10"]
+
+    def test_prefetched_and_remaining_codes_are_both_applied(self, monkeypatch):
+        calls: list[list[str]] = []
+
+        def _batch(codes):
+            calls.append(list(codes))
+            if len(calls) == 1:
+                return {"600519": {"industry": "白酒"}}
+            return {"000858": {"industry": "食品饮料"}}
+
+        monkeypatch.setattr(
+            penetration,
+            "_merge_fund_layer",
+            lambda funds, detail_map: self._fund_layer(
+                {"name": "五粮液", "codes": {"000858"}, "mv": 500.0, "funds": ["易方达"], "sector": "--"}
+            ),
+        )
+        monkeypatch.setattr("src.python.fetcher.industry.batch_fetch_industry_data", _batch)
+
+        result = penetration._compute_penetration_top10_uncached(
+            [_holding("贵州茅台", "600519")],
+            [_detail("600519")],
+        )
+
+        assert calls == [["600519"], ["000858"]], "只补取预取未覆盖的代码"
+        sectors = {item["name"]: item["sector"] for item in result["top10"]}
+        assert sectors["贵州茅台"] == "白酒", "预取命中的代码须写入分类结果"
+        assert sectors["五粮液"] == "食品饮料", "预取未覆盖的代码补取后也须写入"

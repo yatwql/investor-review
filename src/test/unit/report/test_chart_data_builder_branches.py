@@ -131,3 +131,28 @@ class TestCorrRollingDataset:
 
         assert chart["labels"] == ["2026-01-05", "2026-01-06"]
         assert [ds["label"] for ds in chart["datasets"]] == ["组合平均 60日"]
+
+
+class TestCorrRollingCommonStart:
+    """相关性滚动图的公共起点长度门槛。"""
+
+    def test_common_start_leaving_single_point_yields_empty(self):
+        data = {
+            "rolling": {
+                "portfolio": {
+                    "60": [
+                        {"date": "2026-01-05", "value": 0.1},
+                        {"date": "2026-01-06", "value": 0.2},
+                    ]
+                },
+                "focus_pairs": [
+                    {
+                        "name_a": "甲",
+                        "name_b": "乙",
+                        "series": {"60": [{"date": "2026-01-06", "value": 0.9}]},
+                    }
+                ],
+            }
+        }
+
+        assert cdb._build_corr_rolling_dataset(data) == {}, "公共起点后不足 2 点整图不产出"

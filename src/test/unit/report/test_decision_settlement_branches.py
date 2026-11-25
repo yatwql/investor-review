@@ -90,3 +90,39 @@ class TestSettleFromSeries:
         assert bench_ret is None
         assert outcome is not None
         assert isinstance(hit, bool)
+
+
+class TestSettleMissingBaseline:
+    """无结算基线的决策按视界暂缓（不猜方向、不落账）。"""
+
+    def test_missing_baseline_defers_every_target_horizon(self, tmp_path):
+        from src.python.config.features import reset_feature_flags, set_feature_enabled
+        from src.test._relative_dates import day
+
+        set_feature_enabled("decision_reflection", True)
+        try:
+            ledger = str(tmp_path / "ledger.jsonl")
+            report_date = day(0)
+            dl.append_decision(
+                code="600000",
+                name="test",
+                direction=dl.DIRECTION_LONG,
+                carrier=dl.CARRIER_DISCIPLINE,
+                report_date=report_date,
+                baseline_close=None,
+                path=ledger,
+            )
+
+            result = ds.settle_pending_decisions(
+                report_date=report_date,
+                ledger_path=ledger,
+                price_series_fn=lambda *_a: _bars([(report_date, 10.0)]),
+                index_series_fn=lambda *_a: None,
+            )
+        finally:
+            reset_feature_flags()
+
+        expected_deferred = len({max(int(h), dl.MIN_SETTLE_BARS) for h in dl.SETTLE_HORIZONS})
+        assert result["settled"] == 0
+        assert result["deferred"] == expected_deferred, "无基线的登记按目标视界各计一次暂缓"
+        assert result["summary"] == []

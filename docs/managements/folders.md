@@ -14,12 +14,12 @@
 | 架构图示 | SVG | 4 | 396 | `src/static/` README 架构图（architecture 三渠道→引擎→双报告、llm-chain Provider 链式分发、capabilities 九大功能域总览、owl-mascot 吉祥物猫头鹰「守望」）+ 截图 7 张 PNG（报告实景 `report-overview`/`report-toc`/`report-charts` + 界面实景 `tui-menu`/`web-workbench`/`web-config`/`cli-report`，不计入本行） |
 | 辅助脚本 | Python | 150 | 31,446 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评测与因子目录评测、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、视觉资产（社交预览图/架构图体检）、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
 | 源代码合计 | — | 630 | 160,855 | 主程序 + 模板 + 脚本 + SVG |
-| 测试代码 | Python | 835 | 221,086 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
-| 测试用例 | — | — | 15,331 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
+| 测试代码 | Python | 842 | 222,697 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
+| 测试用例 | — | — | 15,419 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 15 | 7,088 | 含 README.md；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 14 | 6,851 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 223 | 75,294 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 14,544 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 223 | 75,301 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 14,551 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 200 | 59,038 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 9 | ~1616 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + TUI 交互改进（议题 + 第一/二批实施方案） + PanWatch 借鉴分析（含评估政策单源化与 LLM 复盘契约两份设计） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -1124,6 +1124,7 @@ investor-review/
 │       │   │   ├── test_summary_llm_usage_sections.py # 用量页签排版分支（自检清单块/缓存命中行/辩论模式/命中率区块/明细全空不写）
 │       │   │   ├── test_excel_generator_llm_usage.py # LLM 用量页签状态判定（缓存/成功/禁用/失败四态 + 表头行内容契约）
 │       │   │   ├── test_excel_generator_edge.py   #   Excel 生成边缘场景
+│       │   │   ├── test_excel_llm_usage_branches.py # LLM 章节与用量页签降级（模块缺失/生成异常/无用量/页签未建/写入异常）
 │       │   │   ├── test_excel_market_data.py      #   成本流水 fund_flow_data 组装 + 注入测试
 │       │   │   ├── test_excel_navigation.py       #   Excel 导航三件套（页签分组配色/汇总页章节导航/返回汇总链接 + 双端导航一致性）
 │       │   │   ├── test_excel_report_structure.py #   Excel 报告结构测试
@@ -1142,6 +1143,8 @@ investor-review/
 │       │   │   ├── test_fund_performance_sheet.py                   #   业绩分析页签写入器（评级/业绩/候选不可得）
 │       │   │   ├── test_fund_performance_branches.py # 基金业绩页签分支（评级深绿标色/排名全失败降级/候选比较子表四种标注行）
 │       │   │   ├── test_fund_style.py             #   基金风格判定测试
+│       │   │   ├── test_fund_style_classify_branches.py # 基金风格判定降级（无市值代码段估算/扩展取数异常/行业 PE 降级/批量预取单路异常）
+│       │   │   ├── test_history_snapshot_branches.py # 快照持久化故障与空态（目录建失败/原子写失败/保留期与数量兜底删除/列举降级）
 │       │   │   ├── test_history_snapshot_namespace.py      #   历史快照命名空间测试
 │       │   │   ├── test_history_snapshot_namespace_edge.py #   历史快照命名空间边缘场景
 │       │   │   ├── test_holdings_freshness.py      #   持仓报告期时效判定测试（写法兼容/季度数边界/阈值）
@@ -1169,6 +1172,7 @@ investor-review/
 │       │   │   ├── test_financial_indicator.py #   财务指标章装配与接线（数据契约/质量档·趋势·PE·PB/开关/编排接缝）
 │       │   │   ├── test_action_html.py            #   行动建议章节 + 智囊团深度复盘「行动摘要」HTML 呈现（单源计算断言）
 │       │   │   ├── test_action_sheet.py           #   行动建议 Excel 页签呈现（含景气度框架诊断块）
+│       │   │   ├── test_action_sheet_branches.py # 行动建议页签分支（约束不可用空态/行动不可用仍渲章内块/情绪事件分列/判断依据旧契约回落）
 │       │   │   ├── test_fund_roe_estimate.py  #   基金重仓股 ROE 加权估算（加权纯计算/陈旧闸门/非 A 股过滤/known_roe 免取数）
 │       │   │   ├── test_prosperity_framework_wiring.py # 景气度框架接线（开关门控 + Excel/HTML 块显隐）
 │       │   │   ├── test_decision_record.py        #   决策复盘·确定性载体登记（卖出建议入账/基线价守门/同日去重）
@@ -1189,6 +1193,7 @@ investor-review/
 │       │   │   ├── test_whatif_writer_branches.py #   调仓边角分支（匿名模式缺省/off 恒等/写失败带目标路径/归档清理仅告警）
 │       │   │   ├── test_whatif_cost_panel.py      #   交易成本面板装配（成本契约/impact 手算/基准对齐/门控/换手翻转回归）
 │       │   │   ├── test_whatif_cost_panel_edge.py #   交易成本面板边缘（空变动/快照缺失/取数异常/比值越界降级）
+│       │   │   ├── test_whatif_cost_panel_branches.py # 交易成本面板分支（基准对齐容错/锚点非正/空码与不变腿/缺省注入回落/费率取数失败）
 │       │   │   ├── test_drawdown_html_excel.py    #   回撤明细 HTML/Excel 呈现
 │       │   │   ├── test_tail_risk_wiring.py       #   尾部风险统计接线（pipeline 注入 + Excel 五行 + HTML 卡 + 图下说明）
 │       │   │   ├── test_html_builders.py          #   HTML 构建器测试
@@ -1248,6 +1253,7 @@ investor-review/
 │       │       ├── test_purchase_status.py          # 申购限购状态展示层测试（契约/陈旧阶梯/单元格/脚注/模板条件渲染）
 │       │       ├── test_purchase_status_edge.py     # 申购限购状态边缘场景（0 元限额→限额未知/时间不可解析/过期档）
 │       │   │   ├── test_pipeline_utils.py          #   管线工具函数测试
+│       │   │   ├── test_portfolio_history_branches.py # 组合历史走势降级（QDII 路由/空时间线/单只异常隔离/终点回填格式/区间截断/基准降级）
 │       │   │   ├── test_portfolio_history_order.py # 历史走势并发取数的汇总顺序（并发抓、按输入持仓顺序汇总/浮点累加顺序固定）
 │       │   │   ├── test_portfolio_history.py      #   组合历史走势测试
 │       │   │   ├── test_progress.py               #   进度跟踪测试
@@ -1264,6 +1270,7 @@ investor-review/
 │       │   │   ├── test_orchestrator_generate_report.py # 报告生成主流程落盘与快照比对测试
 │       │   │   ├── test_orchestrator_generate_report_full.py        #   orchestrator full 路径（含 LLM 编排）
 │       │   │   ├── test_orchestrator_generate_report_both.py        #   orchestrator both 路径（HTML+Excel）
+│       │   │   ├── test_report_aux_metrics_branches.py # 编排辅助降级（温度估值输入缺席/相关性开关与矩阵异常/情绪上报/景气度四环节降级）
 │       │   │   ├── test_report_both_stage_contract.py # both 路径结构契约（阶段名与序列/start-stop 配对/运行边界/双产物成败/快照命名空间透传/健康检查收尾）
 │       │   │   ├── test_run_integrity.py      #   运行一致性守卫（中断收口/原子落盘/已中断状态/guard_run）
 │       │   │   ├── test_run_integrity_faults.py # 中断收口五步逐步容错（预清扫/删除/清理/落记录/提示/健康收敛单步失败不阻断）
