@@ -389,3 +389,35 @@ class TestSwitchPanelOperations:
 
         out = capsys.readouterr().out
         assert "未知编号或键名" in out and "键名=on|off" in out
+
+
+class TestSwitchDetailExperimentUsage:
+    """`? 键名` 详情里的实验项启用统计（次数 + 最近日期）。"""
+
+    def test_detail_shows_enabled_count_and_last_date(self, capsys, monkeypatch):
+        """实验项有启用记录时，详情补「启用 N 次 · 最近 MM-DD」（纯只读）。"""
+        from src.python.tui.handlers_switch import show_switch_detail
+
+        monkeypatch.setattr(
+            "src.python.core.experiment_stats.load_experiment_usage",
+            lambda: {"decision_reflection": {"enabled_count": 5, "last_enabled_date": "2026-10-13"}},
+        )
+
+        show_switch_detail("? decision_reflection", [(1, "decision_reflection", "决策跨期反思闭环", False)])
+
+        out = capsys.readouterr().out
+        assert "实验项" in out
+        assert "启用 5 次" in out
+        assert "最近 10-13" in out
+
+    def test_detail_without_record_omits_usage_suffix(self, capsys, monkeypatch):
+        """无启用记录（空统计）时详情只标实验项，不拼 0 次/空日期。"""
+        from src.python.tui.handlers_switch import show_switch_detail
+
+        monkeypatch.setattr("src.python.core.experiment_stats.load_experiment_usage", dict)
+
+        show_switch_detail("? decision_reflection", [(1, "decision_reflection", "决策跨期反思闭环", True)])
+
+        out = capsys.readouterr().out
+        assert "实验项" in out
+        assert "启用" not in out and "最近" not in out

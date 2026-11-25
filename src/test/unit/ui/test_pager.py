@@ -163,3 +163,107 @@ class TestSearch:
         )
         pager.run()
         assert out[-1].endswith("第 1-10 / 40 行） ──"), out[-1]
+
+
+class TestViewEntryPaths:
+    """`view()` 的入口分支：一屏放得下 / 空内容 / 原地重绘判定。"""
+
+    def test_content_fitting_one_screen_prints_all(self, monkeypatch):
+        """TTY 且一屏放得下：整段直打（不进分页状态机）。"""
+        monkeypatch.setattr("src.python.tui.pager._stdout_is_tty", lambda: True)
+        out: list[str] = []
+        view("标题", ["a", "b", "c"], rows=12, key_reader=lambda: pytest.fail("不应读键"), echo=out.append)
+        assert out[1:] == ["a", "b", "c"]
+
+    def test_empty_content_returns_without_output(self, monkeypatch):
+        """空内容直接返回（不发标题、不读键）。"""
+        monkeypatch.setattr("src.python.tui.pager._stdout_is_tty", lambda: True)
+        out: list[str] = []
+        view("标题", [], rows=12, key_reader=lambda: pytest.fail("不应读键"), echo=out.append)
+        assert out == []
+
+    def test_tty_probe_failure_treated_as_non_tty(self, monkeypatch):
+        """`isatty()` 异常按非 TTY 处理（退化直打，不因探测失败崩）。"""
+
+        def _boom():
+            raise OSError("no stdout")
+
+        monkeypatch.setattr("sys.stdout.isatty", _boom)
+        out: list[str] = []
+        view("标题", _LINES, rows=12, key_reader=lambda: pytest.fail("不应读键"), echo=out.append)
+        assert out[1:] == _LINES
+
+    def test_inplace_defaults_to_posix_tty(self, monkeypatch):
+        """POSIX + TTY：默认原地重绘（上移清屏序列可见）。"""
+        import os
+
+        monkeypatch.setattr("src.python.tui.pager._stdout_is_tty", lambda: True)
+        monkeypatch.setattr(os, "name", "posix")
+        out: list[str] = []
+        seq = iter([" ", "q"])
+        view("标题", _LINES, rows=12, key_reader=lambda: next(seq), echo=out.append)
+        assert any(line.startswith("\x1b[12A") for line in out), "POSIX+TTY 应默认原地重绘"
+
+    def test_inplace_defaults_to_append_on_non_posix(self, monkeypatch):
+        """非 POSIX（Windows）：逐页追加，不输出光标上移序列。"""
+        import os
+
+        monkeypatch.setattr("src.python.tui.pager._stdout_is_tty", lambda: True)
+        monkeypatch.setattr(os, "name", "nt")
+        out: list[str] = []
+        seq = iter([" ", "q"])
+        view("标题", _LINES, rows=12, key_reader=lambda: next(seq), echo=out.append)
+        assert not any(line.startswith("\x1b[") for line in out), "非 POSIX 不得原地重绘"
+
+
+class TestSearchInterrupt:
+    """搜索输入被中断 / 留空时的状态口径。"""
+
+    def _drive(self, line_reader) -> list[str]:
+        out: list[str] = []
+        seq = iter(["/", "q"])
+        Pager(
+            "标题",
+            _LINES,
+            rows=12,
+            key_reader=lambda: next(seq),
+            line_reader=line_reader,
+            echo=out.append,
+            inplace=False,
+        ).run()
+        return out
+
+    def test_search_input_interrupted_keeps_view(self):
+        """读取搜索词时 EOF/中断：回到分页视图，不抛不退出。"""
+
+        def _raise(_prompt=""):
+            raise EOFError
+
+        out = self._drive(_raise)
+        assert out[-1].endswith("第 1-10 / 40 行） ──"), out[-1]
+
+    def test_blank_keyword_clears_hit_note(self):
+        """空关键词：清除上一次命中提示，位置不变。"""
+        out = self._drive(lambda _prompt="": "   ")
+        assert not any("命中" in line for line in out)
+        assert out[-1].endswith("第 1-10 / 40 行） ──"), out[-1]
+
+
+class TestScrollGuards:
+    """已在边界时的翻页/跳转键不重绘（避免无意义闪烁）。"""
+
+    @pytest.mark.parametrize("key", [" ", KEY_UP, "g"])
+    def test_boundary_keys_do_not_redraw(self, key):
+        """首页按 空格/b/g 均不产生第二屏。"""
+        out = _drive([key, "q"])
+        assert len([line for line in out if "第 1-10" in line]) == 1
+
+    def test_space_on_last_page_does_not_redraw(self):
+        """末屏按下翻：停在末屏，不重绘、不越界。"""
+        out = _drive(["G", " ", "q"])
+        assert len([line for line in out if "第 31-40 / 40 行" in line]) == 1, "末屏再下翻不应重绘（无第二屏）"
+
+    def test_G_on_last_page_does_not_redraw(self):
+        """已在末屏再按 G：不重绘。"""
+        out = _drive(["G", "G", "q"])
+        assert len([line for line in out if "第 31-40 / 40 行" in line]) == 1
