@@ -14,12 +14,12 @@
 | 架构图示 | SVG | 4 | 396 | `src/static/` README 架构图（architecture 三渠道→引擎→双报告、llm-chain Provider 链式分发、capabilities 九大功能域总览、owl-mascot 吉祥物猫头鹰「守望」）+ 截图 7 张 PNG（报告实景 `report-overview`/`report-toc`/`report-charts` + 界面实景 `tui-menu`/`web-workbench`/`web-config`/`cli-report`，不计入本行） |
 | 辅助脚本 | Python | 150 | 31,446 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评测与因子目录评测、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、视觉资产（社交预览图/架构图体检）、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
 | 源代码合计 | — | 630 | 160,836 | 主程序 + 模板 + 脚本 + SVG |
-| 测试代码 | Python | 822 | 218,630 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
-| 测试用例 | — | — | 15,139 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
+| 测试代码 | Python | 825 | 219,231 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
+| 测试用例 | — | — | 15,181 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 15 | 7,088 | 含 README.md；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 14 | 6,851 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 223 | 75,267 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 14,517 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 223 | 75,271 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 14,521 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 200 | 59,038 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 9 | ~1616 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + TUI 交互改进（议题 + 第一/二批实施方案） + PanWatch 借鉴分析（含评估政策单源化与 LLM 复盘契约两份设计） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -1000,6 +1000,7 @@ investor-review/
 │       │   │   ├── test_llm_api_multi_edge.py #   多 Provider 边缘场景
 │       │   │   ├── test_llm_api_retry_errors.py # call_llm_with_retry 错误分支测试（HTTP/响应/内容过滤/截断与响应桩助手）
 │       │   │   ├── test_llm_content.py        #   LLM 内容写入测试
+│       │   │   ├── test_llm_content_branches.py # 写入边角（游离文本分段/未知失败原因占位/实验模式注解/契约小节/未建页签跳过）
 │       │   │   ├── test_llm_fallback.py       #   LLM 降级回退策略
 │       │   │   ├── test_generate_all_llm.py     #   generate_all_llm 编排入口
 │       │   │   ├── test_generate_all_llm_contract.py # 编排入口结构契约（返回位序/块实例单次渲染/门面 patch 点/生成后一遍顺序）
@@ -1245,6 +1246,7 @@ investor-review/
 │       │   │   ├── test_qdii_timezone_edge.py     #   QDII 时区边缘场景
 │       │   │   ├── test_security_edge.py          #   证券边缘场景
 │       │   │   ├── test_orchestrator.py           #   报告编排器单元测试
+│       │   │   ├── test_orchestrator_data_branches.py # 编排数据域逐域降级（预取失败/因子目录占位/估值编排异常/真实分位回落）
 │       │   │   ├── test_factor_metrics_parallel.py # 因子暴露取数并发与单路慢告警
 │       │   │   ├── test_factor_metrics_orchestration_branches.py # 风格因子/行业 Beta 编排降级分支
 │       │   │   ├── test_module_loader_fallbacks.py # 报告模块加载 ImportError 兜底（逐模块降级/excel_writer 硬失败）
@@ -1258,6 +1260,7 @@ investor-review/
 │       │   │   ├── test_run_integrity_faults.py # 中断收口五步逐步容错（预清扫/删除/清理/落记录/提示/健康收敛单步失败不阻断）
 │       │   │   ├── test_stage_cancel.py       #   阶段边界协作式取消（令牌/边界生效/编排层收口与异常传播）
 │       │   │   ├── test_summary.py                #   摘要生成测试
+│       │   │   ├── test_summary_degradation_branches.py # 汇总降级渲染（市值全零警示条/温度字段不全/指数降级状态/温度段接线）
 │       │   │   ├── test_summary_sheet.py                            #   汇总页签整体输出（各区块组合）
 │       │   │   ├── test_summary_highlights.py     #   摘要区首页执行摘要卡（降级判据/指标派生/排序截断/hhi 行级降级/新字段链路/模板双态）
 │       │   │   ├── test_summary_module_rows.py    #   摘要模块数据行与 LLM 用量深度行测试
