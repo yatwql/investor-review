@@ -10,6 +10,10 @@
 
 ### 修复
 
+- **数据源 HTTP 替身单源（rf-1200）**：`src/test/_fixtures/http.py` 提供 `FakeResponse` / `FakeClient`——`FakeResponse(text, status_code, *, json_body, raise_status, encoding, content, json_error)` 覆盖 `.text` / `.content` / `.status_code` / `.encoding` / `.json()` / `.raise_for_status()`，`FakeClient(response, *, by_url, error)` 覆盖上下文管理器、`get` / `post`、按 URL 后缀或包含匹配分派、传输级异常注入与逐次请求记录（`calls` / `posts` / `gets`）。`test_cninfo` / `test_hithink` / `test_datasink` / `test_tiantian_fund_fee` / `test_tiantian_purchase` / `test_tiantian_base_faults` 六个用例文件共用这一份替身，本地 12 类替身定义删除，各文件断言与被 patch 目标保持一致；巨潮用例的「慢 post」时序桩由 3 行 `FakeClient` 子类表达。
+
+- **TUI 入口覆盖以委托断言与子进程表达（rf-1201）**：`test_tui_main_loop_branches.py` 的入口覆盖分两处——包入口用例经 `importlib.import_module("src.python.tui.__main__")` 断言 `__main__` 直接绑定 `tui.main`；`__main__` 的 Ctrl+C 收尾用例在子进程里执行（`sys.executable -c`，子进程内摘掉项目根后经 runpy 走真实入口，断言 `returncode == 0` 与 stdout 告别语），本进程的 `sys.path` / `sys.modules` 在用例前后保持一致。
+
 - **发布台账读取面单源（rf-1202）**：`logs/release.jsonl` 的读取统一由 `scripts/_release/_timing.read_ledger_records(path)` 提供（文件缺失视为空台账；空行、损坏 JSON、非 dict、缺 `command` 的行跳过，单行损坏只影响自己那一行）；`scripts/probe-release-ledger.py` 与发布编排尾行的 token 统计（`_release/_commands_base._finish_timing`）同调该入口，两边的台账行口径只剩一处定义，probe 的输出格式与 `--last` / `--version` / `--json` / `-v` CLI 面不变。
 
 - **穿透行业分类状态以单字段表述（rf-1199）**：`report/penetration._compute_penetration_top10_uncached` 的结果用 `industry_status` 一个字段表达四种状态——`ok`（取到行业数据）、`empty`（有 A 股代码但预取与补取均为空）、`no_a_share`（穿透资产全为非 A 股，预期行为）、`unreachable`（取数异常，产出侧当前不写该值）；消费处 `report/penetration_sheet.build_penetration_data_status` 按枚举一次分流（`empty` / `unreachable` 登记降级，`ok` / `no_a_share` 不登记），任何新消费方读同一字段即得正确口径，「全为非 A 股」不会被记成数据降级。

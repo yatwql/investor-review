@@ -10,7 +10,8 @@
 
 from __future__ import annotations
 
-import runpy
+import importlib
+import subprocess
 import sys
 from pathlib import Path
 
@@ -213,28 +214,45 @@ class TestFilteredNavigation:
         assert final_cursor != harness.cursors[0], "方向键须真正移动游标（不留在隐藏项上）"
 
 
+# 入口 `__main__` 分支（Ctrl+C 收尾）只能经真实入口触达：在子进程里跑，本进程不重跑模块、
+# 不改写 sys.path / sys.modules。子进程先摘掉项目根，顺带覆盖入口的自动补路径。
+_ENTRY_CHILD_CODE = f"""
+import runpy, sys
+from pathlib import Path
+
+import src.python.core.doctor as doctor
+
+root = Path.cwd().resolve()
+sys.path[:] = [entry for entry in sys.path if Path(entry or '.').resolve() != root]
+
+
+def _interrupt():
+    raise KeyboardInterrupt
+
+
+doctor.interpreter_preflight_error = _interrupt
+runpy.run_path({tui_mod.__file__!r}, run_name="__main__")
+"""
+
+
 class TestMainGuard:
-    def test_keyboard_interrupt_prints_farewell_and_exits_zero(self, monkeypatch, capsys):
+    def test_keyboard_interrupt_prints_farewell_and_exits_zero(self):
         """直接运行入口（`__main__`）时 Ctrl+C → 打印告别语并以退出码 0 结束。
 
-        顺带覆盖「项目根不在 sys.path」时的自动补路径（直接执行脚本的现场）。
+        子进程执行：入口分支不在本进程重跑整套 TUI 导入（不改写 ``sys.path``/
+        ``sys.modules``）；子进程内同样先摘掉项目根，覆盖入口的自动补路径。
         """
-        root = Path(tui_mod.__file__).resolve().parents[3]
-        saved = list(sys.path)
+        completed = subprocess.run(
+            [sys.executable, "-c", _ENTRY_CHILD_CODE],
+            cwd=str(Path(tui_mod.__file__).resolve().parents[3]),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=180,
+        )
 
-        def _interrupt() -> None:
-            raise KeyboardInterrupt
-
-        monkeypatch.setattr("src.python.core.doctor.interpreter_preflight_error", _interrupt)
-        sys.path[:] = [entry for entry in sys.path if Path(entry).resolve() != root]
-        try:
-            with pytest.raises(SystemExit) as exc:
-                runpy.run_path(tui_mod.__file__, run_name="__main__")
-        finally:
-            sys.path[:] = saved
-
-        assert exc.value.code == 0
-        assert "感谢使用，再见！" in capsys.readouterr().out
+        assert completed.returncode == 0, completed.stderr
+        assert "感谢使用，再见！" in completed.stdout
 
 
 def test_default_menu_key_lands_on_matching_item(monkeypatch):
@@ -249,11 +267,15 @@ def test_default_menu_key_lands_on_matching_item(monkeypatch):
     assert harness.cursors[0] == expected
 
 
-def test_tui_package_entry_delegates_to_main(monkeypatch):
-    """`python -m src.python.tui` 的包入口：转调 `tui.main()`，不自行处理返回值。"""
-    called: list[int] = []
-    monkeypatch.setattr(tui_mod, "main", lambda: called.append(1))
+def test_tui_package_entry_binds_tui_main(monkeypatch):
+    """`python -m src.python.tui` 的包入口：以 `tui.main` 为入口（不另行包装返回值）。"""
 
-    runpy.run_module("src.python.tui", run_name="__main__")
+    def _stub() -> None:
+        return None
 
-    assert called == [1], "包入口须调用 tui.main 一次"
+    monkeypatch.setattr(tui_mod, "main", _stub)
+    monkeypatch.delitem(sys.modules, "src.python.tui.__main__", raising=False)
+
+    entry = importlib.import_module("src.python.tui.__main__")
+
+    assert entry.main is _stub, "包入口须直接绑定 tui.main（导入期取模块属性）"
