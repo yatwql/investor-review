@@ -154,3 +154,99 @@ def test_holding_change_row_appears_when_it_ran():
     assert entry["status"] == "success"
     assert entry["total_tokens"] == 280
     assert entry["cost_display"] == "¥0.0020"
+
+
+class TestFailureReasonAndModuleKeys(unittest.TestCase):
+    """模块失败原因提取与模块键拼装的分支口径。"""
+
+    def test_failure_reason_dict_form(self):
+        """多链 dict 形态：final_status=success → None；其余状态原样返回。"""
+        from src.python.report.llm_module_info import get_llm_module_failure_reason
+
+        self.assertIsNone(get_llm_module_failure_reason({"m": {"attempted": ["a"], "final_status": "success"}}, "m"))
+        self.assertEqual(
+            get_llm_module_failure_reason({"m": {"attempted": ["a"], "final_status": "timeout"}}, "m"),
+            "timeout",
+        )
+        self.assertEqual(get_llm_module_failure_reason({"m": "circuit_open"}, "m"), "circuit_open")
+        self.assertIsNone(get_llm_module_failure_reason({}, "m"))
+
+    def test_module_keys_dedup_optional_already_declared(self):
+        """可选模块键已在固定清单内时不重复追加（去重闸门）。"""
+        from unittest.mock import patch
+
+        from src.python.llm.self_review import SELF_REVIEW_MODULE_KEY
+        from src.python.report import llm_module_info as lmi
+
+        with patch.object(lmi, "_MODULE_KEYS", [SELF_REVIEW_MODULE_KEY]):
+            self.assertEqual(lmi._module_keys({}, {}), [SELF_REVIEW_MODULE_KEY])
+
+
+class TestBuildModuleInfoDebateLabel(unittest.TestCase):
+    """辩论模式：命中实验开关的模块状态标签覆盖为实验模式标签。"""
+
+    def test_debate_label_overrides_success_label(self):
+        from src.python.report.llm_module_info import build_llm_module_info
+
+        info = build_llm_module_info(
+            {},
+            {"global_macro": {"input_tokens": 1, "output_tokens": 2}},
+            debate_enabled_modules={"global_macro", "llm_debate_procon"},
+        )
+        entry = next(e for e in info if e["key"] == "global_macro")
+        self.assertEqual(entry["status_label"], "辩论模式")
+        self.assertEqual(entry["total_tokens"], 3)
+
+    def test_no_debate_flag_keeps_success_label(self):
+        from src.python.report.llm_module_info import build_llm_module_info
+
+        info = build_llm_module_info({}, {"global_macro": {"input_tokens": 1, "output_tokens": 2}})
+        entry = next(e for e in info if e["key"] == "global_macro")
+        self.assertEqual(entry["status_label"], "成功")
+
+
+class TestEndpointDisplayConfigUnavailable(unittest.TestCase):
+    """全局 LLM 配置不可用 → 多端点降级为无标注拼接（不误标主备）。"""
+
+    def test_config_load_failure_falls_back_without_labels(self):
+        from unittest.mock import patch
+
+        with patch("src.python.config.get_llm_config", side_effect=RuntimeError("no config")):
+            result = build_llm_endpoint_display(_info(_MAIN, _BACKUP))
+        self.assertEqual(result, f"{_MAIN} / {_BACKUP}")
+
+
+class TestFailReasonImportFallback(unittest.TestCase):
+    """llm 包导入失败时的兜底常量（报告仍可渲染失败原因文本）。"""
+
+    def test_import_error_fallback_constants(self):
+        import importlib
+        from unittest.mock import patch
+
+        from src.python.report import llm_module_info as lmi
+
+        try:
+            with patch.dict("sys.modules", {"src.python.llm": None}):
+                mod = importlib.reload(lmi)
+            self.assertEqual(mod.FAIL_REASON_DISABLED, "disabled")
+            self.assertEqual(mod.FAIL_REASON_NOT_CONFIGURED, "disabled")
+            self.assertEqual(mod.FAIL_REASON_API_ERROR, "error")
+            self.assertEqual(mod.FAIL_REASON_TIMEOUT, "error")
+            self.assertEqual(mod.FAIL_REASON_CIRCUIT_OPEN, "error")
+        finally:
+            importlib.reload(lmi)
+
+
+class TestDisabledReasonEntry(unittest.TestCase):
+    """已禁用模块 → 状态 disabled、标签「已禁用」、用量字段归零。"""
+
+    def test_disabled_entry_fields(self):
+        from src.python.llm import FAIL_REASON_DISABLED
+        from src.python.report.llm_module_info import build_llm_module_info
+
+        info = build_llm_module_info({"global_macro": FAIL_REASON_DISABLED}, {})
+        entry = next(e for e in info if e["key"] == "global_macro")
+        self.assertEqual(entry["status"], "disabled")
+        self.assertEqual(entry["status_label"], "已禁用")
+        self.assertEqual(entry["total_tokens"], 0)
+        self.assertEqual(entry["endpoint"], "")

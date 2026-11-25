@@ -540,3 +540,117 @@ class TestBaselineNotePropagation:
 
         view = build_holding_change_view({"available": True, "period_count": 3, "event_count": 0})
         assert view["baseline_note"] == ""
+
+
+class TestMetricsLinesBranches:
+    """_metrics_lines 的日历口径与贡献覆盖分支。"""
+
+    def test_non_trading_calendar_mode_uses_natural_days(self):
+        """交易日历不可用 → 频率行改按自然日口径表述。"""
+        from src.python.report.holding_change_panel import _metrics_lines
+
+        lines = _metrics_lines(
+            {
+                "trading_day_mode": "natural",
+                "trading_days": 30,
+                "events_per_period": 2,
+                "events_per_trading_day": 0.07,
+            }
+        )
+        assert "按自然日 30 天计" in lines[0]
+        assert "交易日历口径" not in lines[0]
+
+    def test_skipped_events_note_appended(self):
+        """贡献分解有跳过事件 → 追加覆盖说明行（只呈现可判定部分）。"""
+        from src.python.report.holding_change_panel import _metrics_lines
+
+        lines = _metrics_lines({"contribution": {"skipped_count": 3}})
+        assert any("3 条事件缺份额或价格快照" in ln for ln in lines)
+
+
+class TestFormatHelpers:
+    """展示格式化辅助（None / 非法值一律「—」，不虚构事实）。"""
+
+    def test_fmt_signed_none_and_invalid(self):
+        from src.python.report.holding_change_panel import _fmt_signed
+
+        assert _fmt_signed(None) == "—"
+        assert _fmt_signed("abc") == "—"
+        assert _fmt_signed(1234.5) == "+1,234.50"
+
+    def test_ts_label_iso_and_unparsable(self):
+        from src.python.report.holding_change_panel import _ts_label
+
+        assert _ts_label("2026-07-01") == "07-01"
+        assert _ts_label("20260701") == "07-01"
+        assert _ts_label("") == "—"
+
+    def test_ts_date_iso_and_invalid(self):
+        """ISO 日期解析成 date；非法月份走 ValueError 兜底为 None。"""
+        from datetime import date
+
+        from src.python.report.holding_change_panel import _ts_date
+
+        assert _ts_date("2026-07-01") == date(2026, 7, 1)
+        assert _ts_date("20260701") == date(2026, 7, 1)
+        assert _ts_date("2026-13-01") is None
+        assert _ts_date("") is None
+
+    def test_ymd_label_unparsable_kept(self):
+        from src.python.report.holding_change_panel import _ymd_label
+
+        assert _ymd_label("20260701") == "07-01"
+        assert _ymd_label("bad") == "bad"
+
+
+class TestPromptBlockAndSheetBranches:
+    """提示词块空契约与页签写入的可选分支。"""
+
+    def test_prompt_block_empty_when_unavailable(self):
+        """契约不可用 → 提示词块为空串（附录零贡献，逐字节回退）。"""
+        from src.python.report.holding_change_panel import _build_events_prompt_block
+
+        assert _build_events_prompt_block({"available": False}) == ""
+
+    def _view(self, **extra):
+        from src.python.report.holding_change_panel import EVENT_HEADER
+
+        view = {
+            "available": True,
+            "reason": "",
+            "window_lines": ["复盘窗口：2026-06-01 → 2026-07-01"],
+            "event_header": list(EVENT_HEADER),
+            "event_rows": [["2026-06-01", "2026-07-01", "甲基金(110022)", "110022", "加仓", "+100", "+1,000.00"]],
+            "limitations_note": "口径说明：区间净额推断",
+            "baseline_note": "",
+            "metrics_lines": [],
+            "intent_rows": [],
+            "intent_lines": [],
+            "llm_review_paragraphs": [],
+            "llm_review_footer": "",
+        }
+        view.update(extra)
+        return view
+
+    def _write(self, view) -> list[str]:
+        from unittest.mock import patch
+
+        from openpyxl import Workbook
+
+        from src.python.report.holding_change_panel import write_holding_change_sheet
+
+        ws = Workbook().active
+        with patch("src.python.report.holding_change_panel.build_holding_change_view", return_value=view):
+            write_holding_change_sheet(ws, {"whatever": True})
+        return [str(c.value) for row in ws.iter_rows() for c in row if c.value is not None]
+
+    def test_baseline_note_written_with_event_table(self):
+        """基线切换说明与事件表同现，避免被误读为真实调仓。"""
+        flat = self._write(self._view(baseline_note="基线已切换：仅做口径对齐，非真实调仓"))
+        assert any("基线已切换" in v for v in flat)
+
+    def test_unavailable_view_writes_placeholder_only(self):
+        """契约不可用 → 只写占位文本，不写事件表。"""
+        flat = self._write(self._view(available=False, reason="快照不足两期"))
+        assert any("快照不足两期" in v for v in flat)
+        assert not any("加仓" in v for v in flat)

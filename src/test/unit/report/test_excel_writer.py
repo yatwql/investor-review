@@ -333,3 +333,93 @@ class TestWriteStatusTitle(unittest.TestCase):
         ew._write_status_title(self.ws, 3, 5)
         cell_val = self.ws.cell(row=3, column=1).value
         self.assertEqual(cell_val, "数据加载状态")
+
+
+class TestEnsureReportsDirArchiveBranch(unittest.TestCase):
+    """_ensure_reports_dir 存档子目录权限探测分支。"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_archive_subdir_not_writable_raises(self):
+        """根目录可写但存档子目录不可写 → 报存档子目录无权限（定位到失败层）。"""
+        real_open = open
+        calls = {"n": 0}
+
+        def _open(path, *args, **kwargs):
+            calls["n"] += 1
+            if calls["n"] == 2:  # 第 2 次即存档子目录探测
+                raise PermissionError("denied")
+            return real_open(path, *args, **kwargs)
+
+        with patch("builtins.open", side_effect=_open):
+            with self.assertRaises(PermissionError) as ctx:
+                ew._ensure_reports_dir(self.tmp.name)
+        self.assertIn("存档子目录", str(ctx.exception))
+
+
+class TestCleanupOldArchives(unittest.TestCase):
+    """_cleanup_old_archives — 过期归档目录清理与异常兜底。"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+
+    def _mkdir(self, name):
+        path = os.path.join(self.tmp.name, name)
+        os.makedirs(path, exist_ok=True)
+        return path
+
+    def test_old_archive_dir_removed_and_others_kept(self):
+        """超过保留期的 YYYYMMDD 目录被删；非 8 位数字目录与非日期名一律保留。"""
+        from datetime import datetime, timedelta
+
+        old = (datetime.now() - timedelta(days=400)).strftime("%Y%m%d")
+        fresh = datetime.now().strftime("%Y%m%d")
+        old_path = self._mkdir(old)
+        fresh_path = self._mkdir(fresh)
+        notes_path = self._mkdir("notes")
+
+        ew._cleanup_old_archives(self.tmp.name, max_days=180)
+
+        self.assertFalse(os.path.exists(old_path))
+        self.assertTrue(os.path.exists(fresh_path))
+        self.assertTrue(os.path.exists(notes_path))
+
+    def test_invalid_date_dir_skipped(self):
+        """8 位数字但非法日期 → ValueError 分支跳过，目录保留且不抛出。"""
+        bad = self._mkdir("99999999")
+        ew._cleanup_old_archives(self.tmp.name, max_days=180)
+        self.assertTrue(os.path.exists(bad))
+
+    def test_listdir_exception_swallowed(self):
+        """扫描目录异常（非关键路径）→ 记 warning 后返回，不向上抛出。"""
+        with patch("os.listdir", side_effect=OSError("boom")):
+            with self.assertLogs("invest", level="WARNING") as captured:
+                ew._cleanup_old_archives(self.tmp.name, max_days=180)
+        self.assertTrue(any("归档清理过程异常" in line for line in captured.output))
+
+
+class TestSaveWorkbookLatestPermissionError(unittest.TestCase):
+    """最新版落盘权限异常：记 error 后向上抛出（调用方需感知未保存）。"""
+
+    def test_latest_permission_error_raised(self):
+        wb = ew.create_workbook()
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(ew, "_save_workbook_atomic", side_effect=PermissionError("locked")):
+                with self.assertRaises(PermissionError):
+                    ew.save_workbook(wb, output_dir=tmp)
+
+
+class TestWriteHeaderRowTypeError(unittest.TestCase):
+    """write_header_row 参数契约：row 非 int 时快速失败并给出调用签名提示。"""
+
+    def test_non_int_row_raises_type_error(self):
+        wb = ew.create_workbook()
+        ws = wb.active
+        with self.assertRaises(TypeError) as ctx:
+            ew.write_header_row(ws, "3", ["A", "B"])
+        self.assertIn("write_header_row", str(ctx.exception))

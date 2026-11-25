@@ -650,3 +650,131 @@ class TestExcelRollingTrend(unittest.TestCase):
         flat = self._flat(self._write(_correlation_data(rolling=_rolling_data(available=False))))
         self.assertFalse(any("滚动趋势" in v for v in flat), flat)
         self.assertTrue(any("配对明细" in v for v in flat), flat)
+
+
+class TestHeatFillAndCellStyle:
+    """重合度热力色与相关性格样式的档位边界。"""
+
+    @pytest.mark.parametrize(
+        ("pct", "attr"),
+        [
+            (0.62, "_FILL_RED"),
+            (0.35, "_FILL_ORANGE"),
+            (0.18, "_FILL_YELLOW"),
+            (0.01, "_FILL_GREEN"),
+            (0.0, None),
+        ],
+    )
+    def test_heat_fill_tiers(self, pct, attr):
+        """比重落在哪档就返回该档填充色；0 比重不着色。"""
+        from src.python.report import position_structure_sheet as pss
+
+        expected = getattr(pss, attr) if attr else None
+        assert pss._heat_fill(pct) is expected
+
+    @pytest.mark.parametrize(
+        ("r", "p", "fill_attr", "font_attr"),
+        [
+            (None, None, "_FILL_NA", "_FONT_GREY"),
+            (0.9, None, "_FILL_INSIGNIFICANT", "_FONT_GREY"),
+            (0.4, 0.01, "_FILL_POS_MEDIUM", "_FONT_BODY"),
+            (0.2, 0.01, "_FILL_POS_WEAK", "_FONT_BODY"),
+            (-0.4, 0.01, "_FILL_NEG_MEDIUM", "_FONT_BODY"),
+            (-0.6, 0.01, "_FILL_NEG_STRONG", "_FONT_STRONG"),
+        ],
+    )
+    def test_cell_style_tiers(self, r, p, fill_attr, font_attr):
+        """r/p 各档位对应固定填充色与字体；N/A 与不显著统一灰字。"""
+        from src.python.report import position_structure_sheet as pss
+
+        fill, font = pss._cell_style(r, p)
+        assert fill is getattr(pss, fill_attr)
+        assert font is getattr(pss, font_attr)
+
+
+class TestLabelBranches(unittest.TestCase):
+    """变化标签与标识列文本的分档口径。"""
+
+    def test_change_label_branches(self):
+        """无对比意义 / 基线已记录 / 升 / 降 / 持平各返回对应文案。"""
+        from src.python.report.position_structure_sheet import _change_label
+
+        assert _change_label(None, period_unchanged=True) == "无对比意义"
+        assert _change_label(None) == "基线已记录"
+        assert _change_label(1.234) == "↑ +1.23%"
+        assert _change_label(-1.234) == "↓ -1.23%"
+        assert _change_label(0.0) == "→ +0.00%"
+
+    def test_flag_label_branches(self):
+        """首期 / 报告期未推进 / 紧急 / 关注 / 正常各返回对应标识。"""
+        from src.python.report.position_structure_sheet import _flag_label
+
+        assert _flag_label(True, "紧急") == "📋 基线已记录"
+        assert _flag_label(False, "紧急", period_unchanged=True) == "⎯ 报告期未推进"
+        assert _flag_label(False, "紧急") == "🔴 紧急"
+        assert _flag_label(False, "关注") == "⚠️ 关注"
+        assert _flag_label(False, "正常") == "✅ 正常"
+
+
+class TestCorrelationBlockSkips(unittest.TestCase):
+    """相关性区块的跳过分支：合并格与空滚动序列。"""
+
+    def _block(self, data: dict, row: int, ncols: int, ws=None):
+        from openpyxl import Workbook
+
+        from src.python.report.position_structure_sheet import _write_correlation_block
+
+        if ws is None:
+            ws = Workbook().active
+        return ws, _write_correlation_block(ws, row, data, ncols)
+
+    def test_merged_subordinate_cells_skipped(self):
+        """矩阵区被合并吞掉的从属格只读跳过，不影响后续行的对角格。"""
+        data = _correlation_data(
+            codes=["a", "b", "c"],
+            names={"a": "资产A", "b": "资产B", "c": "资产C"},
+            matrix=[[1.0, None, None], [-0.5, 1.0, None], [0.2, 0.1, 1.0]],
+            p_values=[[None, None, None], [0.01, None, None], [0.02, 0.03, None]],
+            pairs=[],
+        )
+        from openpyxl import Workbook
+
+        ws = Workbook().active
+        # 标题行 1、表头行 2 → 首个矩阵行（i=0）落在第 4 行；预先合并该行第 2~4 列制造从属格
+        ws.merge_cells(start_row=4, start_column=2, end_row=4, end_column=4)
+
+        self._block(data, 1, 5, ws=ws)
+
+        from openpyxl.cell.cell import MergedCell
+
+        assert isinstance(ws.cell(row=4, column=3), MergedCell)
+        assert ws.cell(row=4, column=3).value is None  # 从属格未被写入
+        # 未合并的下一行矩阵照常写入：j<i 在左侧格、对角线为 1.00
+        assert ws.cell(row=5, column=2).value == -0.5
+        assert ws.cell(row=5, column=3).value == 1.0
+
+    def test_empty_window_points_and_missing_focus_series_skipped(self):
+        """窗口端点为空 / 焦点品对缺 60 日序列 → 该行不写，其余行照常。"""
+        rolling = {
+            "available": True,
+            "portfolio": {"60": [{"value": 0.8}], "120": []},
+            "windows": ["60", "120"],
+            "coverage": {"full_window_from": {"60": "2026-07-01"}},
+            "focus_pairs": [
+                {"code_a": "a", "name_a": "资产A", "code_b": "b", "name_b": "资产B", "series": {}},
+                {
+                    "code_a": "a",
+                    "name_a": "资产A",
+                    "code_b": "b",
+                    "name_b": "资产B",
+                    "series": {"60": [{"value": 0.5}, {"value": 0.7}]},
+                },
+            ],
+            "notes": [],
+        }
+        ws, _ = self._block(_correlation_data(rolling=rolling), 1, 6)
+        flat = [str(c.value) if c.value is not None else "" for row in ws.iter_rows() for c in row]
+
+        assert "60 日" in flat
+        assert "120 日" not in flat  # 端点为空 → 整行跳过
+        assert sum(1 for v in flat if v.startswith("重点品对：")) == 1  # 缺 60 日序列的品对跳过

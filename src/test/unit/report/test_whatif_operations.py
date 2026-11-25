@@ -418,3 +418,91 @@ class TestCostPanelSwitchRegistry:
         assert sw.default is False
         assert sw.affects_report is True
         assert is_feature_enabled("whatif_trade_cost") is False
+
+
+class TestBuildWhatifBacktest:
+    """build_whatif_backtest — 生效日时序回测构建（行情与指标计算全替身）。"""
+
+    @staticmethod
+    def _holding(code: str, name: str, shares: float):
+        from src.python.core.models import Holding
+
+        return Holding(account="A", name=name, code=code, shares=shares, cost_price=1.0)
+
+    def test_no_effective_date_returns_none(self):
+        """未指定生效日（None/空）→ 返回 None，主 whatif 不加 backtest 键。"""
+        from src.python.report.whatif_operations import build_whatif_backtest
+
+        base = [self._holding("600519", "贵州茅台", 10.0)]
+        assert build_whatif_backtest(base, base) is None
+        assert build_whatif_backtest(base, base, "") is None
+
+    def test_invalid_effective_date_returns_unavailable(self):
+        """生效日无法折算天数 → available:False 契约，不抛出。"""
+        from src.python.report.whatif_operations import build_whatif_backtest
+
+        base = [self._holding("600519", "贵州茅台", 10.0)]
+        with patch("src.python.report.whatif_operations.compute_backtest_days", return_value=None):
+            out = build_whatif_backtest(base, base, "2030-01-05")
+
+        assert out is not None
+        assert out["available"] is False
+        assert out["status"] == "unavailable"
+        assert out["effective_date"] == "2030-01-05"
+        assert "2030-01-05" in out["reason"]
+
+    def test_empty_side_returns_unavailable(self):
+        """任一测无品种 → available:False 契约，且不构建行情计算器。"""
+        from src.python.report.whatif_operations import build_whatif_backtest
+
+        base = [self._holding("600519", "贵州茅台", 10.0)]
+        with (
+            patch("src.python.report.whatif_operations.compute_backtest_days", return_value=30),
+            patch("src.python.report.whatif_operations.PortfolioHistoryCalculator") as mock_cls,
+        ):
+            out = build_whatif_backtest(base, [], "2026-01-05")
+
+        assert out is not None
+        assert out["available"] is False
+        assert "两侧持仓均有品种" in out["reason"]
+        mock_cls.assert_not_called()
+
+    def test_happy_path_uses_both_series_and_metrics(self):
+        """两侧时序与状态位透传指标计算函数，会话缓存透传计算器。"""
+        from src.python.report.whatif_operations import build_whatif_backtest
+
+        base = [self._holding("600519", "贵州茅台", 10.0)]
+        candidate = [self._holding("601398", "工商银行", 200.0)]
+        calc = MagicMock()
+        calc.get_combined_timeseries.side_effect = [
+            {"bars": [{"d": 1}], "status": "ok"},
+            {"bars": [{"d": 2}], "status": "partial"},
+        ]
+        with (
+            patch("src.python.report.whatif_operations.compute_backtest_days", return_value=30),
+            patch("src.python.report.whatif_operations.PortfolioHistoryCalculator", return_value=calc) as mock_cls,
+            patch(
+                "src.python.report.whatif_operations.compute_backtest_metrics",
+                return_value={"available": True, "status": "ok"},
+            ) as mock_metrics,
+        ):
+            out = build_whatif_backtest(base, candidate, "2026-01-05", session_cache={"c": 1})
+
+        assert out == {"available": True, "status": "ok"}
+        assert mock_cls.call_args.kwargs["session_cache"] == {"c": 1}
+        assert calc.get_combined_timeseries.call_count == 2
+        first, second = calc.get_combined_timeseries.call_args_list
+        assert first.args[0] == [("600519", "贵州茅台", 10.0)]
+        assert second.args[0] == [("601398", "工商银行", 200.0)]
+        assert first.kwargs["days"] == 30
+        assert mock_metrics.call_args.args[0] == [{"d": 1}]
+        assert mock_metrics.call_args.args[1] == [{"d": 2}]
+        assert mock_metrics.call_args.args[2] == "2026-01-05"
+        assert mock_metrics.call_args.kwargs == {"base_status": "ok", "cand_status": "partial"}
+
+
+def test_unavailable_message_prefixes_shared_wording():
+    """失败原因统一拼成渠道同款提示行（三渠道只换输出方式，不换措辞）。"""
+    from src.python.report.whatif_operations import WHATIF_UNAVAILABLE, whatif_unavailable_message
+
+    assert whatif_unavailable_message("目标持仓读取失败") == f"{WHATIF_UNAVAILABLE}: 目标持仓读取失败"

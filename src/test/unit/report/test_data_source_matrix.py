@@ -587,3 +587,159 @@ class _EmptyTracker:
 
     def get_log(self):
         return []
+
+
+class TestMatrixHelpersAndFallbacks:
+    """矩阵/说明表的纯辅助函数与配置读取兜底分支。"""
+
+    def test_match_category_unknown_returns_none(self):
+        """无前缀归属的 source_key → None（走「其他数据源」归集）。"""
+        from src.python.report.data_source_matrix import _match_category
+
+        assert _match_category("totally_unknown_key") is None
+        # 已知前缀仍按前缀命中归属类别
+        assert _match_category("price_600900") is not None
+
+    def test_failure_entry_prefers_message_then_failure_type(self):
+        """有可读原因用 message，缺失回落到失败类型短标识。"""
+        from src.python.report.data_source_matrix import _failure_entry
+
+        assert (
+            _failure_entry("price_600900", {"detail": {"message": "连接超时"}, "failure_type": "unreachable"})
+            == "price_600900: 连接超时"
+        )
+        assert _failure_entry("ff_sector_flow", {"failure_type": "empty"}) == "ff_sector_flow: empty"
+
+    def test_providers_text_dash_when_no_hits(self):
+        """无 provider 归属（本次全部命中缓存）→ 展示「—」。"""
+        from src.python.report.data_source_matrix import _providers_text
+
+        assert _providers_text({}) == "—"
+
+    def test_datasink_plan_reads_config_and_falls_back(self, monkeypatch):
+        """读 config.json 的 datasink.plan；读取异常回退 free。"""
+        from src.python.report import data_source_matrix as dsm
+
+        monkeypatch.setattr("src.python.config.get_config", lambda: {"datasink": {"plan": " Pro "}})
+        assert dsm._datasink_plan() == "pro"
+
+        monkeypatch.setattr("src.python.config.get_config", lambda: {"datasink": {}})
+        assert dsm._datasink_plan() == "free"
+
+    def test_datasink_plan_swallows_config_exception(self, monkeypatch):
+        """配置读取抛错 → 回退 free，不阻断说明表。"""
+        from src.python.report import data_source_matrix as dsm
+
+        def _boom():
+            raise RuntimeError("no config")
+
+        monkeypatch.setattr("src.python.config.get_config", _boom)
+        assert dsm._datasink_plan() == "free"
+
+    def test_catalog_billing_branches(self, monkeypatch):
+        """行内显式声明优先；datasink 套餐按 plan 变化；其余记免费。"""
+        from src.python.report import data_source_matrix as dsm
+
+        assert dsm._catalog_billing({"billing": "按量计费"}, "free") == "按量计费"
+        ds = dsm._catalog_billing({"billing_provider": "datasink"}, "pro")
+        assert ds and ds != dsm._FREE_BILLING
+        assert dsm._catalog_billing({}, "free") == dsm._FREE_BILLING
+
+
+class TestMatrixUnmatchedAndEmpty:
+    """矩阵对未归类源的归集与「无任何信号」的空结果。"""
+
+    def test_unmatched_only_events_collected_into_extra_row(self, monkeypatch):
+        """仅未归类源有事件 → 追加「其他数据源」行并计入计数。"""
+        from src.python.core.degradation import DegradationEvent, get_tracker
+        from src.python.report import data_source_matrix as dsm
+
+        tracker = get_tracker()
+        tracker._events.clear()
+        tracker._events.append(
+            DegradationEvent(
+                source_key="totally_unknown_key",
+                tier="T2",
+                success=True,
+                failure_type="",
+                degraded=False,
+                count=1,
+                effective_threshold=1,
+                timestamp=1000.0,
+            )
+        )
+        monkeypatch.setattr(dsm, "get_provider_usage", lambda: {})
+        rows = {r["key"]: r for r in dsm.build_data_source_matrix()}
+
+        assert "_unmatched" in rows
+        assert rows["_unmatched"]["total"] == 1
+        assert rows["_unmatched"]["ok"] == 1
+        tracker._events.clear()
+
+
+class TestMatrixObservationFallbacks:
+    """限流观测读取/装配失败与凭据就绪读取失败均降级，不阻断矩阵。"""
+
+    def test_push2_count_read_failure_treated_as_no_hit(self, monkeypatch):
+        """限流计数读取抛错 → 按无命中处理，无其他信号时矩阵为空。"""
+        from src.python.report import data_source_matrix as dsm
+
+        monkeypatch.setattr(dsm, "get_tracker", lambda: _EmptyTracker())
+        monkeypatch.setattr(dsm, "get_provider_usage", lambda: {})
+
+        def _boom():
+            raise RuntimeError("state unavailable")
+
+        monkeypatch.setattr("src.python.core.rate_limit_state.push2_limited", _boom)
+        assert dsm.build_data_source_matrix() == []
+
+    def test_push2_row_assembly_failure_keeps_matrix(self, monkeypatch):
+        """观测行装配失败 → 只记 debug，既有类别行照常返回。"""
+        from src.python.core.degradation import DegradationEvent, get_tracker
+        from src.python.report import data_source_matrix as dsm
+
+        tracker = get_tracker()
+        tracker._events.clear()
+        tracker._events.append(
+            DegradationEvent(
+                source_key="price_600900",
+                tier="T2",
+                success=True,
+                failure_type="",
+                degraded=False,
+                count=1,
+                effective_threshold=1,
+                timestamp=1000.0,
+            )
+        )
+        monkeypatch.setattr(dsm, "get_provider_usage", lambda: {})
+
+        calls = {"n": 0}
+
+        def _push2():
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return {"count": 1}
+            raise RuntimeError("assembled row failed")
+
+        monkeypatch.setattr("src.python.core.rate_limit_state.push2_limited", _push2)
+        rows = {r["key"]: r for r in dsm.build_data_source_matrix()}
+
+        assert "price" in rows
+        assert "_push2_limited" not in rows
+        tracker._events.clear()
+
+    def test_catalog_survives_credential_readiness_failure(self, monkeypatch):
+        """凭据就绪矩阵读取失败 → 说明表照常产出，只是不附就绪态。"""
+        from src.python.report import data_source_matrix as dsm
+
+        monkeypatch.setattr(dsm, "get_tracker", lambda: _EmptyTracker())
+        monkeypatch.setattr(dsm, "get_provider_usage", lambda: {})
+
+        def _boom():
+            raise RuntimeError("readiness unavailable")
+
+        monkeypatch.setattr("src.python.core.datasource_credential.credential_readiness", _boom)
+        rows = dsm.build_data_source_catalog()
+        assert rows
+        assert all("auth_readiness" not in str(r.get("note", "")) for r in rows)
