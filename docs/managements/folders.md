@@ -14,12 +14,12 @@
 | 架构图示 | SVG | 4 | 396 | `src/static/` README 架构图（architecture 三渠道→引擎→双报告、llm-chain Provider 链式分发、capabilities 九大功能域总览、owl-mascot 吉祥物猫头鹰「守望」）+ 截图 7 张 PNG（报告实景 `report-overview`/`report-toc`/`report-charts` + 界面实景 `tui-menu`/`web-workbench`/`web-config`/`cli-report`，不计入本行） |
 | 辅助脚本 | Python | 150 | 31,446 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评测与因子目录评测、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、视觉资产（社交预览图/架构图体检）、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
 | 源代码合计 | — | 630 | 160,859 | 主程序 + 模板 + 脚本 + SVG |
-| 测试代码 | Python | 860 | 225,621 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
-| 测试用例 | — | — | 15,651 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
+| 测试代码 | Python | 869 | 227,436 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
+| 测试用例 | — | — | 15,794 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 15 | 7,088 | 含 README.md；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 14 | 6,851 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 223 | 75,324 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 14,574 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 223 | 75,333 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 14,583 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 200 | 59,038 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 9 | ~1616 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + TUI 交互改进（议题 + 第一/二批实施方案） + PanWatch 借鉴分析（含评估政策单源化与 LLM 复盘契约两份设计） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -746,6 +746,7 @@ investor-review/
 │       │   │   ├── __init__.py      #       子包标记
 │       │   │   ├── test_anonymizer.py        #   持仓匿名化模块测试（4 模式/回退/配置读写）
 │       │   │   ├── test_edit_ops.py          #   配置编辑共享层测试（白名单结构/值规则/写入与备份）
+│       │   │   ├── test_logging_and_edit_ops_faults.py #   日志配置读写错误路径与配置编辑校验拒绝面（未知键/未知写入原语/动作型键/未知调度字段）
 │       │   │   ├── test_config.py            #   配置管理核心测试
 │       │   │   ├── test_config_atomic.py     #   配置原子操作测试
 │       │   │   ├── test_config_atomic_edge.py #   配置原子操作边缘场景
@@ -770,11 +771,13 @@ investor-review/
 │       │   │   ├── test_config_validation.py     #   配置校验函数测试
 │       │   │   ├── test_feature_registry.py   #   开关注册表派生一致性（分组/域/面板覆盖与编号连续/默认值单源/实验项派生）
 │       │   │   ├── test_json_patch.py         #   含注释 JSON 编辑引擎（缩进探测/注释与字符串感知边界/替换与追加删除后仍可解析）
+│       │   │   ├── test_json_patch_and_validation_faults.py #   JSONC patch 扫描器边界（转义/块注释/未闭合注释）与配置校验回落链（参数范围、出厂默认、缓存类型注册表不可用）
 │       │   │   ├── test_json_patch_edge.py    #   编辑引擎异常输入（括号不平衡/未闭合注释/单行对象/CRLF/无法插入报错）
 │       │   │   ├── test_chapter_registry.py   #   报告章节注册表结构测试（四块划分/编号派生/来源注册表同源/写键可达）
 │       │   │   ├── test_features.py           #   功能开关测试（注册表不变量：五字段齐备/分组覆盖全集/默认值遵循分组；实验清单按分组过滤；开关名解析与取值归并）
 │       │   │   ├── test_features_edge.py      #   功能开关解析边缘场景（空串/空白/大小写/缺等号/多余等号/取值不可识别）
 │       │   │   ├── test_llm_settings.py       #   LLM 定价/时段/时区设置解析测试（峰谷定价时段可配置）
+│       │   │   ├── test_llm_config_file_faults.py #   LLM 三份配置文件解析与落盘容错（debate 段回退、设置文件创建失败只告警、凭据目录不可建须报错、计价参考回退内置价）
 │       │   │   └── test_local_state.py           #   机器本地状态读写测试
 │       │   ├── core/                #   核心模块单元测试
 │       │   │   ├── test_guard_branch_coverage.py # 核心层守卫分支集中补齐（原子写失败/通知门控与掩码/项目根回退/凭据与日志工具降级）
@@ -820,6 +823,7 @@ investor-review/
 │       │   │   ├── test_jsonl_store.py      #   JSONL 原子追加/容错读取原语测试（含 perf/decision_ledger 委托行为不变）
 │       │   │   ├── test_perf_stage_eta.py   #   阶段状态与 ETA 预估测试（中位数剩余/历史不足/异常静默降级/阶段广播隔离）
 │       │   │   ├── test_perf_observation.py #   运行观测面测试（子项累加与并发安全/父阶段归集/诊断计数与错误封顶/日志采集与摘除/口径不参与总耗时）
+│       │   │   ├── test_perf_ledger_and_health_faults.py #   性能台账与健康历史读取容错（坏行/空行/不可读文件跳过、并发预算观测失败不阻断计时、模块费用汇总形状校验）
 │       │   │   ├── test_concurrency_governor.py #   进程级并发预算（预算解析/缩容告警/同名幂等/释放/快照计数）
 │       │   │   ├── test_error_hints.py     #   异常→用户提示映射（类型优先/JSON 语法/网络关键词/堆栈标记）
 │       │   │   ├── test_num_utils.py        #   数值归一原语（合法输入口径/bool 拒绝/int 原样返回/非有限值归零/尺寸格式化）
@@ -843,10 +847,13 @@ investor-review/
 │       │   │   ├── test_ledger_common.py    #   账本共用原语（开关判定委托/秒级 ISO/单调不降/两账本薄封装同口径）
 │       │   │   ├── test_experiment_verdicts.py # 实验项裁决（项集合派生/四态判定/撤销优先/无读数不臆造/doctor 接线）
 │       │   │   ├── test_degradation_report_summary.py # 本轮降级汇总（去重计数/排序/溢出/读取失败降级/渲染上下文与模板条件块/CLI 两态）
+│       │   │   ├── test_degradation_state_faults.py   #   降级追踪器状态容错（持久化加载失败按空状态、落盘失败不推进节流、非法 tier 拒绝、层级配置告警）
 │       │   │   ├── test_cross_layer_constants.py # 跨层常量单源守卫（退出码/东方财富端点/年化交易日/份额容差）
 │       │   │   ├── test_provider_registry.py #   数据源注册中心测试
+│       │   │   ├── test_registry_breaker_state_faults.py #   熔断状态加载容错（状态文件损坏/条目过期/未注册 Provider）、链式冷却恢复、文件缓存回退与日期失配标记
 │       │   │   ├── test_reader.py           #   持仓文件读取测试
 │       │   │   ├── test_reader_flows.py                             #   流水页签解析与空持仓闸门
+│       │   │   ├── test_reader_and_log_probe_faults.py              #   持仓读取与日志自检探针容错（目录不可读/单行解析失败/流水页签逐行跳过、四项日志探针失败转失败行）
 │       │   │   ├── test_reader_workbook.py                          #   工作簿解析与持仓读取
 │       │   │   ├── test_registry.py         #   中央注册表测试
 │       │   │   ├── test_registry_edge.py    #   注册表边缘场景
@@ -877,7 +884,8 @@ investor-review/
 │       │   │   ├── test_cache_operations_branches.py # 分市场明细去重与 pending/清理与统计分支/目录统计容错/预热逐项失败
 │       │   │   ├── test_cache_refresh_routing.py # 缓存刷新路由测试（00 重叠区场外基金不按 A 股取行业/分红/扩展数据）
 │       │   │   ├── test_cache_refresh_orchestration_branches.py # 缓存刷新编排分支（结果退出码/公共与扩展缓存成败/行情异常归类）
-│       │   │   └── test_holdings_tracker.py #   持仓快照缓存追踪器
+│       │   │   ├── test_holdings_tracker.py #   持仓快照缓存追踪器
+│       │   │   └── test_holdings_tracker_refresh_faults.py #   持仓变更检测的关联缓存刷新分支（无缓存可清、指纹未变不清缓存、上轮缺 codes 全算新增）
 │       │   ├── fetcher/             #   数据获取单元测试
 │       │   │   ├── __init__.py      #       子包标记
 │       │   │   ├── test_fetcher_api_edge.py  #   API 获取边缘场景
@@ -1372,7 +1380,8 @@ investor-review/
 │       │   │   └── test_probe_report_claims.py # 报告数值声称体检（报告选取/核对聚合/CLI 退出码）
 │       │   ├── startup/              #   首次运行引导单元测试
 │       │   │   ├── __init__.py       #       子包标记
-│       │   │   └── test_startup_wizard.py  #   首次运行引导向导测试
+│       │   │   ├── test_startup_wizard.py  #   首次运行引导向导测试
+│       │   │   └── test_startup_wizard_io_faults.py #   首次运行引导 IO 与终端探测容错（标记读写失败、isatty 异常、Key 输入空回车与 EOF 两条退出路径）
 │       │   ├── cli/                 #   CLI 命令行模式单元测试
 │       │   │   ├── __init__.py      #       子包标记
 │       │   │   ├── test_cli.py               #   CLI 命令行模式单元测试（解析/开关/主流程）
