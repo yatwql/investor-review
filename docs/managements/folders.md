@@ -14,12 +14,12 @@
 | 架构图示 | SVG | 4 | 396 | `src/static/` README 架构图（architecture 三渠道→引擎→双报告、llm-chain Provider 链式分发、capabilities 九大功能域总览、owl-mascot 吉祥物猫头鹰「守望」）+ 截图 7 张 PNG（报告实景 `report-overview`/`report-toc`/`report-charts` + 界面实景 `tui-menu`/`web-workbench`/`web-config`/`cli-report`，不计入本行） |
 | 辅助脚本 | Python | 150 | 31,446 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评测与因子目录评测、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、视觉资产（社交预览图/架构图体检）、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
 | 源代码合计 | — | 630 | 160,859 | 主程序 + 模板 + 脚本 + SVG |
-| 测试代码 | Python | 849 | 224,378 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
-| 测试用例 | — | — | 15,548 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
+| 测试代码 | Python | 858 | 225,380 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
+| 测试用例 | — | — | 15,636 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 15 | 7,088 | 含 README.md；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 14 | 6,851 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 223 | 75,311 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 14,561 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 223 | 75,320 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 14,570 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 200 | 59,038 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 9 | ~1616 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + TUI 交互改进（议题 + 第一/二批实施方案） + PanWatch 借鉴分析（含评估政策单源化与 LLM 复盘契约两份设计） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -945,11 +945,14 @@ investor-review/
 │       │   │   ├── test_circuit_breaker_edge.py  #   LLM 熔断器边缘场景
 │       │   │   ├── test_circuit_breaker_recovery.py # 熔断恢复测试
 │       │   │   ├── test_cost_forecast.py    #   事前费用预估与日预算（预估三态/预算边界/摘要分支）
+│       │   │   ├── test_cost_forecast_degradation.py # 预估降级分支（配置/历史不可读、模型三级回落、记录形状容错、无价模块不可预估）
 │       │   │   ├── test_prompts_data_blocks_branches.py # 提示词数据段落（环比明细/降级清单/归因三态/概念集中度三档/再平衡与竞争语境/数值守卫）
 │       │   │   ├── test_cost_tracker.py     #   Token 成本跟踪测试
+│       │   │   ├── test_cost_tracker_branches.py # 预算闸分支（首超告警一次/重复返回真/耗时两档/两套摘要的缓存命中行）
 │       │   │   ├── test_depth_profile.py    #   报告深度档位（档位表结构/非法回落/只收窄不放大/新闻下界）
 │       │   │   ├── test_research_contract.py # 结构化契约（证据索引/解析校验矩阵/提示词门控/展示与后遍接线）
 │       │   │   ├── test_self_review.py      #   生成后自检（开关零调用/失败隔离/注册纪律/指纹内容寻址）
+│       │   │   ├── test_self_review_verification_guards.py # 自检百分比核对容错（逐条跳过/派生容差与分项上限/账本与登记失败不阻断）
 │       │   │   ├── test_cross_module_claims.py #   跨模块收益率口径冲突（确定性检查/方向补齐/容差/区块排序）
 │       │   │   ├── test_force_scope.py       #   模块级强刷范围（键集注册表一致性/粒度优先/未知键校验/共享层接线/CLI 解析）
 │       │   │   ├── test_holding_change_injection.py #   持仓变动提示词注入链路 + 章内归因编排（提取同源/附录含块/指纹条件并入/归因准入与写回）
@@ -967,6 +970,8 @@ investor-review/
 │       │   │   ├── test_module_outcome_logging.py  # LLM 模块结果行分级（成功/关开关/预算跳过 INFO、真失败 ERROR）+ 失败原因文案单源
 │       │   │   ├── test_fact_checker.py       #   事实校验器测试
 │       │   │   ├── test_fact_checker_coverage.py #   数值校验覆盖率（已比对/不符/跳过原因分桶 + 复位）
+│       │   │   ├── test_fact_checker_scope_guards.py # 数值步骤语境守卫（市场口径主体失败/多代码归因/指数句/非持仓与叙述语境让位）
+│       │   │   ├── test_fact_checker_correction_guards.py # 自动修正守卫（同值异义/畸形数值整批放弃/代码纠正三条件与空表原样返回）
 │       │   │   ├── test_fact_checker_ranking.py                     #   事实校验：排名正确性与整体运行
 │       │   │   ├── test_fact_checker_symbols.py                     #   事实校验：代码/名称存在性
 │       │   │   ├── test_fact_checker_context.py #   事实校验器上下文归属与自动纠错测试
@@ -994,6 +999,7 @@ investor-review/
 │       │   │   ├── test_llm_api_base.py       #   LLM API 基类测试
 │       │   │   ├── test_llm_token_usage.py     #   Token 用量日志计量口径（跨协议归一/缓存命中回显）
 │       │   │   ├── test_llm_pacing.py         #   端点级节流/并发治理测试（策略解析/注册/间隔/并发上限/403 不重试/429 诊断归属与行数上限）
+│       │   │   ├── test_pacing_policy_tolerance.py # 节流策略逐字段容错 + 429 诊断降级（配置不可读回默认/策略装载失败按未配置）
 │       │   │   ├── test_llm_observation.py    #   运行观测汇聚测试（等待/重试/降级/缓存/选路累加与快照裁剪/并发安全/绑定生命周期）
 │       │   │   ├── test_llm_api_base_edge.py  #   API 基类边缘场景
 │       │   │   ├── test_llm_api_edge.py       #   API 边缘场景
@@ -1020,6 +1026,7 @@ investor-review/
 │       │   │   ├── test_prompts_signals_edge.py #  信号预消化边缘场景（畸形数据/非有限值）
 │       │   │   ├── test_prompts_structured_header.py # 结构化决策头提示词契约（开关关闭逐字节不变/契约可解析/指纹换键）
 │       │   │   ├── test_prompts_tables_branches.py # 提示词表格构建器分支（情景分析/国别敞口/净值基准/白名单退化）
+│       │   │   ├── test_prompts_optional_blocks.py # 提示词可选段落与降级（指标表可选行/未知币种归其他/零市值白名单/情景-口径块/配置不可读降级）
 │       │   │   ├── test_rate_caliber.py      #   收益率口径标签与提示词文本版本进指纹测试
 │       │   │   ├── test_llm_session_usage.py       #   会话用量管理测试
 │       │   │   ├── test_news_parse_failure_contract.py # 新闻关联批量解析失败收口（整批不可解析=失败：不计分析条数/不写缓存/仍计费）
@@ -1078,7 +1085,7 @@ investor-review/
 │       │   │   ├── test_tiantian_fund_fee_edge.py # F10 费用页解析边缘（缺表/百分号变体/荒谬费率拒绝/异常输入）
 │       │   │   ├── test_tiantian_purchase.py  #   申购状态总表解析（四类代表行契约/akshare 备链路映射/直连抓取传输桩）
 │       │   │   └── test_tiantian_purchase_edge.py # 申购状态解析失败与载荷准入值域体检边缘场景
-│       │   ├── qa/                 #   报告对话式追问单元测试（4 测试文件 + 1 夹具）
+│       │   ├── qa/                 #   报告对话式追问单元测试（6 测试文件 + 1 夹具）
 │       │   │   ├── __init__.py      #       子包标记
 │       │   │   ├── conftest.py      #       共享夹具（双样本报告 HTML：锚点/表头映射/噪声/超长数据章）
 │       │   │   ├── test_report_qa_context.py # 上下文提取（分章/表头名映射/摘要截断/生成条件声明）
@@ -1086,7 +1093,9 @@ investor-review/
 │       │   │   ├── test_report_qa_session.py # 会话服务（编排/历史折叠/用量记账/事实核对/并发隔离）
 │       │   │   ├── test_report_qa_session_edge.py # 会话边缘（轮数硬上限/输入软上限/三层路径防御）
 │       │   │   ├── test_report_qa_ask.py #   Web 路由 /api/qa/ask（开关门 403/参数 400/状态码映射/信封契约）
-│       │   │   └── test_qa_telemetry.py #   埋点（字段/隐私/容错/汇总口径/转正判据/ask 接线）
+│       │   │   ├── test_qa_telemetry.py #   埋点（字段/隐私/容错/汇总口径/转正判据/ask 接线）
+│       │   │   ├── test_qa_telemetry_branches.py # 埋点容错分支（费用估算失败/报告名净化/币种混合容错/空行与坏时间戳/失败码行）
+│       │   │   └── test_qa_context_parser_guards.py # 上下文解析守卫（script 跳过/未闭合行容错/br 断行/数值与持仓表守卫/空章节排除）
 │       │   ├── report/              #   报告单元测试
 │       │   │   ├── test_drawdown_sheet_branches.py # 走势与回撤页签分支（基准对照列/危机回放双层表/风险调整超额降级）
 │       │   │   ├── test_html_builders_perf_branches.py # 基金业绩条目构建分支（预取排名 vs 单只取数 × 明细行有无 + 收益率解析降级）
