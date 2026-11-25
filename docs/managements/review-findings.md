@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.18.7-dev
-> **编号源**：`rf-next = 1193`（新增问题提出后更新为 +1；已用最大 rf-1192，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1194`（新增问题提出后更新为 +1；已用最大 rf-1193，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -19,6 +19,7 @@
 | # | 问题 | 修复方向 |
 | --- | --- | --- |
 | `rf-1192` | `report/penetration_sheet.py:219-220` 的 `no_a_share` 分支直接 `pass`，不复位 `penetration_industry` 降级追踪器上遗留的 `empty` 计数——跨会话序列「有 A 股且行业取数为空」→「全为非 A 股」→「再切回有 A 股」时，T3 阈值判断读到的仍是上一次会话累积的 `empty`，可能提前一次触发「行业分类不可用」降级 | `no_a_share` 分支内调一次 `_tracker().reset("penetration_industry")` 清空该通道计数；展示语义不变（无 A 股仍不记降级、`build_penetration_data_status` 仍返回空字典） |
+| `rf-1193` | `report/_generation_full.py:75-80` 的空载荷分支登记 `mark_data_unavailable("fund_flow", …)`，而同一信号的异常分支（:86）登记 `"ff_sector_flow"` → 同一个「行业资金流向不可用」信号有两种失败态落到不同 `source_key`，数据源矩阵会按失败原因（空载荷 / 调用异常）把同一信号归到不同的行 | 两个分支统一到同一个 `source_key`（择一为单源，另一处改为同键），使「信号 → 来源行」的对应关系与失败原因解耦；改后需同步核对数据源矩阵的行归属 |
 
 ### P3 — 持续监控：兼容残留
 

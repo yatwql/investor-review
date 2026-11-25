@@ -14,12 +14,12 @@
 | 架构图示 | SVG | 4 | 396 | `src/static/` README 架构图（architecture 三渠道→引擎→双报告、llm-chain Provider 链式分发、capabilities 九大功能域总览、owl-mascot 吉祥物猫头鹰「守望」）+ 截图 7 张 PNG（报告实景 `report-overview`/`report-toc`/`report-charts` + 界面实景 `tui-menu`/`web-workbench`/`web-config`/`cli-report`，不计入本行） |
 | 辅助脚本 | Python | 150 | 31,446 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评测与因子目录评测、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、视觉资产（社交预览图/架构图体检）、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
 | 源代码合计 | — | 630 | 160,859 | 主程序 + 模板 + 脚本 + SVG |
-| 测试代码 | Python | 883 | 230,376 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
-| 测试用例 | — | — | 16,013 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
+| 测试代码 | Python | 889 | 230,960 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
+| 测试用例 | — | — | 16,050 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 15 | 7,088 | 含 README.md；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 14 | 6,851 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 223 | 75,347 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 14,597 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 223 | 75,355 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 14,605 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 200 | 59,038 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 9 | ~1616 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + TUI 交互改进（议题 + 第一/二批实施方案） + PanWatch 借鉴分析（含评估政策单源化与 LLM 复盘契约两份设计） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -781,6 +781,7 @@ investor-review/
 │       │   │   ├── test_chapter_registry.py   #   报告章节注册表结构测试（四块划分/编号派生/来源注册表同源/写键可达）
 │       │   │   ├── test_features.py           #   功能开关测试（注册表不变量：五字段齐备/分组覆盖全集/默认值遵循分组；实验清单按分组过滤；开关名解析与取值归并）
 │       │   │   ├── test_features_edge.py      #   功能开关解析边缘场景（空串/空白/大小写/缺等号/多余等号/取值不可识别）
+│       │   │   ├── test_features_fault_branches.py # 覆写文件降级（非对象文档/非法补丁拒写/未登记开关不生效/非 bool 值只告警/恢复默认清残留键）
 │       │   │   ├── test_llm_settings.py       #   LLM 定价/时段/时区设置解析测试（峰谷定价时段可配置）
 │       │   │   ├── test_llm_config_file_faults.py #   LLM 三份配置文件解析与落盘容错（debate 段回退、设置文件创建失败只告警、凭据目录不可建须报错、计价参考回退内置价）
 │       │   │   └── test_local_state.py           #   机器本地状态读写测试
@@ -823,9 +824,11 @@ investor-review/
 │       │   │   ├── test_datasource_credential_edge.py # 凭据声明边缘场景（空表/缺 env_var/各类空白字符/重复注册/清空回落）
 │       │   │   ├── test_cassette.py         #   数据源记录-回放引擎测试（请求键归一/存取/回放未命中/录制会话/校验）
 │       │   │   ├── test_cassette_edge.py    #   记录-回放边缘场景（畸形 URL/版本号类型/结构破坏/重复键/空交互）
+│       │   │   ├── test_cassette_fault_branches.py # 记录-回放故障支路（读不可读转 CassetteError/写盘失败上抛/索引并发删除降级/录制传输读全再录）
 │       │   │   ├── test_http_client.py      #   HTTP 客户端测试
 │       │   │   ├── test_json_comments.py     #   JSONC 注释剥离叶子模块（字符串内标记不误伤/统一解析入口/导入边界）
 │       │   │   ├── test_jsonl_store.py      #   JSONL 原子追加/容错读取原语测试（含 perf/decision_ledger 委托行为不变）
+│       │   │   ├── test_jsonl_store_fault_branches.py # JSONL 降级支路（既有文件不可读重建/读取与裁剪不可读按空/裁剪保留非对象行）
 │       │   │   ├── test_perf_stage_eta.py   #   阶段状态与 ETA 预估测试（中位数剩余/历史不足/异常静默降级/阶段广播隔离）
 │       │   │   ├── test_perf_observation.py #   运行观测面测试（子项累加与并发安全/父阶段归集/诊断计数与错误封顶/日志采集与摘除/口径不参与总耗时）
 │       │   │   ├── test_perf_ledger_and_health_faults.py #   性能台账与健康历史读取容错（坏行/空行/不可读文件跳过、并发预算观测失败不阻断计时、模块费用汇总形状校验）
@@ -885,6 +888,7 @@ investor-review/
 │       │   │   ├── test_cache_report_boundary.py # 报告级缓存隔离（用量增量/输入域/强制重生成/盘中→盘后跃变）
 │       │   │   ├── test_cache_engine_scenarios.py # 缓存引擎场景（TTL 边界/压缩往返/损坏载荷含截断 gzip/原子并发写/键版本升级/目录不可写）
 │       │   │   ├── test_cache_io.py         #   缓存 IO 测试
+│       │   │   ├── test_cache_io_fault_branches.py # 缓存 IO 降级支路（清理失败仍当无缓存/replace 被锁删后 rename/chmod 不支持/清旧 .gz）
 │       │   │   ├── test_cache_operations.py #   缓存编排下沉测试（update_all 最大努力/warm 预热/stats 载荷单源）
 │       │   │   ├── test_cache_operations_branches.py # 分市场明细去重与 pending/清理与统计分支/目录统计容错/预热逐项失败
 │       │   │   ├── test_cache_refresh_routing.py # 缓存刷新路由测试（00 重叠区场外基金不按 A 股取行业/分红/扩展数据）
@@ -1424,6 +1428,8 @@ investor-review/
 │       │   │   ├── test_tui_edge.py         #   TUI 边缘场景
 │       │   │   ├── test_report_artifacts.py #   报告收尾产物清单与单键确认（默认 N/Esc 跳过/Ctrl+C 退出）
 │       │   │   ├── test_tui_handlers.py     #   TUI 事件处理测试
+│       │   │   ├── test_handlers_config_fault_branches.py # 配置面板中断/筛选/页脚支路（Esc 不落盘/调优与匿名化筛选跳行/页脚上屏/指数池中断）
+│       │   │   ├── test_handlers_report_chapters_branches.py # [C] 面板支路（费用摘要与详情费用行/窄档备注/撤回消费/子项键名帮助/实验用量/中断收会话）
 │       │   │   ├── test_tui_menu.py         #   TUI 菜单测试
 │       │   │   ├── test_tui_menu_loop.py                            #   TUI 主循环退出通道与窄屏直达导航
 │       │   │   ├── test_tui_menu_status.py                          #   TUI 页头状态行与 LLM 状态渲染
