@@ -465,3 +465,183 @@ class TestEffectiveDateEscCancel(unittest.TestCase):
             assert handlers_whatif._prompt_effective_date() == ""
         assert prompts, "未捕获到生效日提示"
         assert "回车=跳过" in prompts[0]
+
+
+class TestCopyBaseAsTemplate(unittest.TestCase):
+    """_copy_base_as_template — 复制基准文件为目标模板（同名追加序号）。"""
+
+    def _run(self, holdings_dir, base_file, exists=None, copy_side=None):
+        from src.python.tui import handlers_whatif as hw
+
+        exists = exists or (lambda p: False)
+        with (
+            patch.object(hw, "get_config_cache", return_value={"holdings_dir": holdings_dir}),
+            patch.object(hw, "emit_error") as mock_err,
+            patch.object(hw.os.path, "isdir", return_value=bool(holdings_dir)),
+            patch.object(hw.os.path, "exists", side_effect=exists),
+            patch.object(hw.shutil, "copy2", side_effect=copy_side) as mock_copy,
+            patch("builtins.print"),
+        ):
+            result = hw._copy_base_as_template(base_file)
+        return result, mock_err, mock_copy
+
+    def test_holdings_dir_unusable_reports_error(self):
+        """持仓目录未配置/不存在 → 报错并返回 None（不落任何副本）。"""
+        result, mock_err, mock_copy = self._run("", "/x/基准.xlsx")
+        assert result is None
+        mock_err.assert_called_once()
+        mock_copy.assert_not_called()
+
+    def test_collision_appends_sequence_suffix(self):
+        """同名模板已存在 → 追加 ``-1`` 序号，避免覆盖用户已编辑的模板。"""
+        result, _err, mock_copy = self._run("/holdings", "/x/基准.xlsx", exists=lambda p: p.endswith("调仓后模板.xlsx"))
+        assert result is not None
+        assert result.endswith("基准-调仓后模板-1.xlsx")
+        mock_copy.assert_called_once()
+
+    def test_copy_failure_returns_none(self):
+        """复制抛 OSError → 报错并返回 None（流程可退回手动输入）。"""
+        result, mock_err, _copy = self._run("/holdings", "/x/基准.xlsx", copy_side=OSError("disk full"))
+        assert result is None
+        assert "复制基准文件失败" in mock_err.call_args.args[0]
+
+
+class TestManualInputPath(unittest.TestCase):
+    """_manual_input_path — 取消与异常一律返回 None。"""
+
+    def test_eof_returns_none(self):
+        from src.python.tui import handlers_whatif as hw
+
+        with (
+            patch.object(hw, "input_choice", side_effect=EOFError),
+            patch("builtins.print"),
+        ):
+            assert hw._manual_input_path() is None
+
+    def test_cancel_returns_none(self):
+        from src.python.tui import handlers_whatif as hw
+
+        with patch.object(hw, "input_choice", return_value=None):
+            assert hw._manual_input_path() is None
+
+
+class TestInputCandidatePath(unittest.TestCase):
+    """_input_candidate_path — 无候选文件时的引导分支。"""
+
+    def test_eof_returns_none(self):
+        from src.python.tui import handlers_whatif as hw
+
+        with (
+            patch.object(hw, "emit_error"),
+            patch.object(hw, "input_choice", side_effect=EOFError),
+            patch("builtins.print"),
+        ):
+            assert hw._input_candidate_path("/x/基准.xlsx") is None
+
+    def test_cancel_returns_none(self):
+        from src.python.tui import handlers_whatif as hw
+
+        with (
+            patch.object(hw, "emit_error"),
+            patch.object(hw, "input_choice", return_value=None),
+            patch("builtins.print"),
+        ):
+            assert hw._input_candidate_path("/x/基准.xlsx") is None
+
+
+class TestSelectCandidateCancelAndInvalid(unittest.TestCase):
+    """_select_candidate_file — Esc 取消与无效编号。"""
+
+    def _run(self, choice):
+        from src.python.tui import handlers_whatif as hw
+
+        with (
+            patch.object(hw, "list_xlsx_files", return_value=["/h/甲.xlsx", "/h/乙.xlsx", "/h/丙.xlsx"]),
+            patch.object(hw, "get_config_cache", return_value={"holdings_dir": "/h"}),
+            patch.object(hw, "input_choice", return_value=choice),
+            patch.object(hw, "get_xlsx_info", return_value={"accounts": 1}),
+            patch.object(hw.os.path, "getsize", return_value=1024),
+            patch.object(hw.os.path, "getmtime", return_value=1_700_000_000.0),
+            patch("builtins.print"),
+        ):
+            return hw._select_candidate_file("/h/甲.xlsx")
+
+    def test_esc_returns_none(self):
+        assert self._run(None) is None
+
+    def test_out_of_range_returns_none(self):
+        assert self._run("9") is None
+
+
+class TestCmdWhatifErrorBranches(unittest.TestCase):
+    """_cmd_whatif 目标持仓不可读与运行异常两条降级分支。"""
+
+    @patch("src.python.tui.handlers_whatif.get_config_cache")
+    @patch("src.python.report.whatif_operations.run_whatif_simulation")
+    @patch("src.python.tui.handlers_whatif.read_holdings")
+    @patch("src.python.tui.handlers_whatif._select_candidate_file")
+    @patch("src.python.tui.handlers_whatif.select_holdings_file")
+    def test_unreadable_target_reports_and_stops(
+        self,
+        mock_select_base: MagicMock,
+        mock_select_cand: MagicMock,
+        mock_read: MagicMock,
+        mock_run: MagicMock,
+        mock_config: MagicMock,
+    ) -> None:
+        """目标持仓读不出条目 → 报目标不可读并中止，不进入模拟。"""
+        from src.python.report.whatif_operations import WHATIF_TARGET_HOLDINGS_UNREADABLE
+        from src.python.tui.handlers_whatif import _cmd_whatif
+
+        mock_config.return_value = {"output_dir": "reports"}
+        mock_select_base.return_value = "d/base.xlsx"
+        mock_select_cand.return_value = "d/target.xlsx"
+        mock_read.side_effect = lambda p: [{"code": "000001", "name": "测试"}]
+
+        def _read(path):
+            return [] if path.endswith("target.xlsx") else [{"code": "000001", "name": "测试"}]
+
+        mock_read.side_effect = _read
+        with (
+            patch("src.python.tui.handlers_whatif.emit_error") as mock_err,
+            patch("sys.stdout", __import__("io").StringIO()),
+        ):
+            _cmd_whatif()
+
+        mock_err.assert_called_once()
+        self.assertIn(WHATIF_TARGET_HOLDINGS_UNREADABLE, mock_err.call_args.args[0])
+        mock_run.assert_not_called()
+
+    @patch("src.python.tui.handlers_whatif._prompt_effective_date")
+    @patch("src.python.tui.handlers_whatif.get_config_cache")
+    @patch("src.python.report.whatif_operations.run_whatif_simulation")
+    @patch("src.python.tui.handlers_whatif.read_holdings")
+    @patch("src.python.tui.handlers_whatif._select_candidate_file")
+    @patch("src.python.tui.handlers_whatif.select_holdings_file")
+    def test_simulation_exception_error_hint(
+        self,
+        mock_select_base: MagicMock,
+        mock_select_cand: MagicMock,
+        mock_read: MagicMock,
+        mock_run: MagicMock,
+        mock_config: MagicMock,
+        mock_prompt_eff: MagicMock,
+    ) -> None:
+        """模拟抛异常 → 记日志并给出统一失败提示，不向 TUI 抛出。"""
+        from src.python.tui.handlers_whatif import _cmd_whatif
+
+        mock_config.return_value = {"output_dir": "reports"}
+        mock_select_base.return_value = "d/base.xlsx"
+        mock_select_cand.return_value = "d/target.xlsx"
+        mock_read.return_value = [{"code": "000001", "name": "测试"}]
+        mock_prompt_eff.return_value = ""
+        mock_run.side_effect = RuntimeError("boom")
+
+        with (
+            patch("src.python.tui.handlers_whatif.print_error_with_hint") as mock_hint,
+            patch("sys.stdout", __import__("io").StringIO()),
+        ):
+            _cmd_whatif()
+
+        mock_hint.assert_called_once()
+        self.assertEqual(mock_hint.call_args.args[1], "调仓 What-if 模拟失败")
