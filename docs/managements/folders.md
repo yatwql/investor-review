@@ -18,8 +18,8 @@
 | 测试用例 | — | — | 16,541 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 15 | 7,088 | 含 README.md；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 14 | 6,851 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 223 | 75,443 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 14,693 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 223 | 75,460 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 14,710 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 200 | 59,038 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 9 | ~1616 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + TUI 交互改进（议题 + 第一/二批实施方案） + PanWatch 借鉴分析（含评估政策单源化与 LLM 复盘契约两份设计） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -670,13 +670,14 @@ investor-review/
 │       │   ├── test_ruff_exclude_contract.py #   ruff 排除域契约（docs 归档冻结 / force-exclude 对显式路径生效）
 │       │   ├── test_subprocess_text_encoding_contract.py #   子进程文本模式必须显式 encoding（portability 档回归守卫）
 │       │   ├── analysis/             #   分析计算单元测试
-│       │   │   ├── test_guard_branch_coverage.py # 分析层守卫分支集中补齐（类型识别/统计早退/因子与财务解析守卫/再平衡与尾部风险降级）
 │       │   │   ├── __init__.py       #       子包标记
+│       │   │   ├── # 覆盖率补测族（_edge / _branches / _faults / _guards）——按被测域分组，与功能用例同目录
 │       │   │   ├── test_bond_yield.py         #   无风险利率获取
 │       │   │   ├── test_bond_yield_edge.py    #   无风险利率边缘场景
 │       │   │   ├── test_circuit_breaker_wrapper.py #   断路器包装器测试
 │       │   │   ├── test_circuit_breaker_wrapper_branches.py # 断路器状态持久化分支（TTL 清理/降级追踪器缺席/删文件失败）
 │       │   │   ├── test_fx_exposure.py        #   外汇敞口分析
+│       │   │   ├── test_guard_branch_coverage.py # 分析层守卫分支集中补齐（类型识别/统计早退/因子与财务解析守卫/再平衡与尾部风险降级）
 │       │   │   ├── test_portfolio_constraints.py # 集中度/相关性约束判定（开关门控/上限来源/未配置与未评估两态/账本标注）
 │       │   │   ├── test_factor_evaluator.py   #   因子目录编排（池构造/逐因子横截面与原因/评级/编排降级三类/口径一致性）
 │       │   │   ├── test_fee_estimation.py     #   组合综合费率估算（类型归类关键词优先/加权与年化/未知类型默认费率告警/零值剔除）
@@ -695,16 +696,16 @@ investor-review/
 │       │   │   ├── test_liquidity_otc.py      #   流动性分析：场外赎回天数
 │       │   │   ├── test_liquidity_otc_edge.py #   流动性分析：场外边缘场景
 │       │   │   ├── test_rebalance.py          #   再平衡信号计算
-│       │   │   ├── test_rebalance_signals.py                        #   再平衡：信号与误报保护
-│       │   │   ├── test_rebalance_deviation.py                      #   再平衡：目标偏离度与股债偏离
+│       │   │   ├── test_rebalance_signals.py  #   再平衡：信号与误报保护
+│       │   │   ├── test_rebalance_deviation.py # 再平衡：目标偏离度与股债偏离
 │       │   │   ├── test_rebalance_edge.py     #   再平衡边缘场景
 │       │   │   ├── test_rebalance_advisor.py    #   调仓建议可行化层（份额取整/费用/现金缓冲/优先级/守卫）
 │       │   │   ├── test_purchase_feasibility.py #   申购可行性判定（判定矩阵/阈值两侧/无判定入口/话术）
 │       │   │   ├── test_purchase_feasibility_edge.py # 申购可行性边缘样本（非正金额/限额、NaN/Inf、极端量级）
 │       │   │   ├── test_return_attribution.py   #   收益归因（TOP5 贡献占比/正负分列/净额合计/复用断言）
-│       │   │   ├── test_cost_flow.py            #   成本流水分析（XIRR 资金加权收益/成本分档/分红累计）
+│       │   │   ├── test_cost_flow.py          #   成本流水分析（XIRR 资金加权收益/成本分档/分红累计）
 │       │   │   ├── test_cost_flow_branches.py    #   成本流水分支（日期解析拒绝面/二分兜底端点与无解/牛顿退化降级/不可计流水与持仓跳过）
-│       │   │   ├── test_cost_position.py        #   持仓成本区间位置纯计算（百分位/clamp/中性值/窗口切片/序列提取）
+│       │   │   ├── test_cost_position.py      #   持仓成本区间位置纯计算（百分位/clamp/中性值/窗口切片/序列提取）
 │       │   │   ├── test_cost_position_edge.py   #   持仓成本区间位置边缘场景（退化序列/无效成本/非有限值/越界）
 │       │   │   ├── test_scenario_analysis.py       #   情景分析测试
 │       │   │   ├── test_alignment_correction.py #   口径修正因子计算
@@ -730,7 +731,7 @@ investor-review/
 │       │   │   ├── test_correlation_edge.py   #   相关性矩阵边缘场景（NaN/Inf/日期缺口）
 │       │   │   ├── test_crisis_annotation.py   #   危机区间标注（静态表锚点与区间统计 + 回放态双层/指数缺席降级）
 │       │   │   ├── test_benchmark_excess.py    #   风险调整超额计算（IR/TE 数值交叉验证 + 胜率/完整月 + 滚动 + 样本不足降级）
-│       │   │   ├── test_tail_risk.py           #   尾部风险统计（VaR95/99 固定 fixture 精度 + 最大单日跌幅 + 连续下跌 + 恢复三态）
+│       │   │   ├── test_tail_risk.py          #   尾部风险统计（VaR95/99 固定 fixture 精度 + 最大单日跌幅 + 连续下跌 + 恢复三态）
 │       │   │   ├── test_tail_risk_edge.py      #   尾部风险边缘场景（0/负/NaN 跳过、量级、样本边界、持平序列）
 │       │   │   ├── test_portfolio_evolution.py #  组合演进聚合计算（多快照趋势/HHI/TOP 变迁）
 │       │   │   ├── test_snapshot_diff.py      #   快照差异摘要（新增/移除 + HHI 变化 + 超限项 + 无上次快照占位 + 同日去重）
@@ -751,9 +752,9 @@ investor-review/
 │       │   │   ├── test_whatif_backtest.py    #   调仓 What-if 时序回测（天数折算/序列对齐/5 指标/降级）
 │       │   │   └── test_whatif_backtest_edge.py #  时序回测边缘场景（未来日期/单 bar/首值 0/极端涨跌）
 │       │   ├── config/              #   配置单元测试
-│       │   │   ├── test_llm_schema_patch_branches.py # v2 结构分支（校验拒绝/扁平键双向映射与 runtime 落点/文本 patch 扫描器）
-│       │   │   ├── test_validation_sections_branches.py # 配置章节校验降级（非法条目逐条告警累计 issues，不抛错不阻断加载）
 │       │   │   ├── __init__.py      #       子包标记
+│       │   │   ├── # 覆盖率补测族（_edge / _branches / _faults / _guards）——按被测域分组，与功能用例同目录
+│       │   │   ├── test_llm_schema_patch_branches.py # v2 结构分支（校验拒绝/扁平键双向映射与 runtime 落点/文本 patch 扫描器）
 │       │   │   ├── test_anonymizer.py        #   持仓匿名化模块测试（4 模式/回退/配置读写）
 │       │   │   ├── test_edit_ops.py          #   配置编辑共享层测试（白名单结构/值规则/写入与备份）
 │       │   │   ├── test_logging_and_edit_ops_faults.py #   日志配置读写错误路径与配置编辑校验拒绝面（未知键/未知写入原语/动作型键/未知调度字段）
@@ -789,10 +790,11 @@ investor-review/
 │       │   │   ├── test_features_fault_branches.py # 覆写文件降级（非对象文档/非法补丁拒写/未登记开关不生效/非 bool 值只告警/恢复默认清残留键）
 │       │   │   ├── test_llm_settings.py       #   LLM 定价/时段/时区设置解析测试（峰谷定价时段可配置）
 │       │   │   ├── test_llm_config_file_faults.py #   LLM 三份配置文件解析与落盘容错（debate 段回退、设置文件创建失败只告警、凭据目录不可建须报错、计价参考回退内置价）
-│       │   │   └── test_local_state.py           #   机器本地状态读写测试
+│       │   │   ├── test_local_state.py        #   机器本地状态读写测试
+│       │   │   └── test_validation_sections_branches.py # 配置章节校验降级（非法条目逐条告警累计 issues，不抛错不阻断加载）
 │       │   ├── core/                #   核心模块单元测试
-│       │   │   ├── test_guard_branch_coverage.py # 核心层守卫分支集中补齐（原子写失败/通知门控与掩码/项目根回退/凭据与日志工具降级）
 │       │   │   ├── __init__.py      #       子包标记
+│       │   │   ├── # 覆盖率补测族（_edge / _branches / _faults / _guards）——按被测域分组，与功能用例同目录
 │       │   │   ├── test_cache_core.py       #   缓存核心功能测试（含 TTL/目录/常量）
 │       │   │   ├── test_cache_cleanup.py    #   缓存清理与统计测试
 │       │   │   ├── test_cache_format.py     #   缓存格式测试
@@ -806,6 +808,7 @@ investor-review/
 │       │   │   ├── test_code_utils_classification.py # 分类工具测试（ETF/债券基金/QDII/场外判定）
 │       │   │   ├── test_completion_notify.py # 任务完成通知测试（载荷/门控/分发隔离/凭据掩码/通道发送器）
 │       │   │   ├── test_filesystem_edge.py  #   文件系统边缘场景
+│       │   │   ├── test_guard_branch_coverage.py # 核心层守卫分支集中补齐（原子写失败/通知门控与掩码/项目根回退/凭据与日志工具降级）
 │       │   │   ├── test_holding_status.py   #   品种级数据状态标注测试（品种覆盖诊断）
 │       │   │   ├── test_constants_project_root.py # PROJECT_ROOT 环境覆盖（INVEST_PROJECT_ROOT 缺省回落 / 覆盖后持仓与产物随根）
 │       │   │   ├── test_holdings_editor.py #   持仓录入编辑层（账户/行保序、加权平均成本、卖出保留成本、写回保留其他页签、可选交易流水、新账户建页）
@@ -818,7 +821,7 @@ investor-review/
 │       │   │   ├── test_decision_ledger.py  #   决策账本核心测试（事件持久化/结算折叠/同日去重/教训区块）
 │       │   │   ├── test_ledger_retention.py    # 业务账本按龄保留（窗口外丢弃/已结算永留/坏行不吞/幂等不受影响）
 │       │   │   ├── test_decision_ledger_edge.py # 决策账本边缘场景（空账本/损坏行/阈值边界）
-│       │   │   ├── test_eval_status.py         #   回测入口状态与 opt-in 执行（天数派生/提示两态/超时兜底/CLI 开关/doctor 行）
+│       │   │   ├── test_eval_status.py      #   回测入口状态与 opt-in 执行（天数派生/提示两态/超时兜底/CLI 开关/doctor 行）
 │       │   │   ├── test_doctor.py           #   系统自检测试（分组检查/永不抛异常契约/只读探测不留残留/统计与渲染）
 │       │   │   ├── test_module_graph.py       #   模块依赖图无环（顶层 import 三色 DFS + 基座不反向依赖）
 │       │   │   ├── test_doctor_health.py  #   自检「日志与缓存」组（日志级别/体积与 DEBUG 占比/锚点阈值/运行台账告警）
@@ -851,8 +854,8 @@ investor-review/
 │       │   │   ├── test_market_hours_official_layer.py # 市场时段官方层（开关关/周末/缓存命中与实时取数/盘后周级 TTL/口径桶朴素时间）
 │       │   │   ├── test_market_snapshot_bucket.py # 行情口径桶（五时点分档/每份报告判定一次/提示词口径/进键）
 │       │   │   ├── test_models.py           #   数据模型测试
-│       │   │   ├── test_retry.py             #   重试与退避原语（策略算式/瞬时判据/哨兵重试/有界与不重试）
-│       │   │   ├── test_throttle.py          #   按名间隔节流原语（抖动算式/等待量/归属断言：实现只在 core）
+│       │   │   ├── test_retry.py            #   重试与退避原语（策略算式/瞬时判据/哨兵重试/有界与不重试）
+│       │   │   ├── test_throttle.py         #   按名间隔节流原语（抖动算式/等待量/归属断言：实现只在 core）
 │       │   │   ├── test_network_guard.py   #   网络隔离原语（断网错误不可被 except Exception 吞 / 建连被阻但构造可用 / 离线桩覆盖面）
 │       │   │   ├── test_phase_timeout.py    #   阶段超时测试
 │       │   │   ├── test_rate_limit_state.py # 限流观测（特征识别/计数与首条/提示文案/akshare 重试回调接线）
@@ -865,9 +868,9 @@ investor-review/
 │       │   │   ├── test_provider_registry.py #   数据源注册中心测试
 │       │   │   ├── test_registry_breaker_state_faults.py #   熔断状态加载容错（状态文件损坏/条目过期/未注册 Provider）、链式冷却恢复、文件缓存回退与日期失配标记
 │       │   │   ├── test_reader.py           #   持仓文件读取测试
-│       │   │   ├── test_reader_flows.py                             #   流水页签解析与空持仓闸门
-│       │   │   ├── test_reader_and_log_probe_faults.py              #   持仓读取与日志自检探针容错（目录不可读/单行解析失败/流水页签逐行跳过、四项日志探针失败转失败行）
-│       │   │   ├── test_reader_workbook.py                          #   工作簿解析与持仓读取
+│       │   │   ├── test_reader_flows.py     #   流水页签解析与空持仓闸门
+│       │   │   ├── test_reader_and_log_probe_faults.py # 持仓读取与日志自检探针容错（目录不可读/单行解析失败/流水页签逐行跳过、四项日志探针失败转失败行）
+│       │   │   ├── test_reader_workbook.py  #   工作簿解析与持仓读取
 │       │   │   ├── test_registry.py         #   中央注册表测试
 │       │   │   ├── test_registry_edge.py    #   注册表边缘场景
 │       │   │   ├── test_signal_ledger.py    #   确定性信号账本测试（登记/幂等去重/实时-非实时折叠/摘要与缓存后缀）
@@ -878,10 +881,11 @@ investor-review/
 │       │   │   ├── test_core_degradation_branches.py # core 降级分支（探针异常收口/决策头畸形载荷/新鲜度与并发档位回落/桌面能力探测）
 │       │   │   ├── test_akshare_compat.py    #   akshare 接口名兼容层（候选链解析/旧名优先/改名回落/调用点不得硬引旧名）
 │       │   │   ├── test_v8_call_sites.py     #   契约：主进程不得直接调 py_mini_racer 系 akshare 接口（须经 core.v8_subprocess）
-│       │   │   ├── test_v8_subprocess.py     #   V8 子进程隔离测试（白名单/JSON 契约/错误与超时降级）
+│       │   │   └── test_v8_subprocess.py     #   V8 子进程隔离测试（白名单/JSON 契约/错误与超时降级）
 │       │   ├── cache/               #   缓存单元测试
 │       │   │   ├── __init__.py      #       子包标记
-│       │   │   ├── _cache_fixtures.py        # 缓存测试共享夹具（指定写入时刻/年龄落盘、北京时间取刻）
+│       │   │   ├── # 覆盖率补测族（_edge / _branches / _faults / _guards）——按被测域分组，与功能用例同目录
+│       │   │   ├── _cache_fixtures.py       #   缓存测试共享夹具（指定写入时刻/年龄落盘、北京时间取刻）
 │       │   │   ├── test_ttl_alignment.py    # TTL 三处对齐（默认值唯一来源/清理与读侧同值·无抖动/精确键用逻辑键/未注册键告警）
 │       │   │   ├── test_ttl_config_fallback_branches.py # TTL 配置降级（动态指纹键/未注册类型/非正覆盖/配置读取异常回落）
 │       │   │   ├── test_cache_paths_permissions.py # 缓存目录权限自检（权限过宽收紧到 0o700/chmod 与 makedirs 失败降级/目录覆盖解析）
@@ -905,15 +909,16 @@ investor-review/
 │       │   │   └── test_holdings_tracker_refresh_faults.py #   持仓变更检测的关联缓存刷新分支（无缓存可清、指纹未变不清缓存、上轮缺 codes 全算新增）
 │       │   ├── fetcher/             #   数据获取单元测试
 │       │   │   ├── __init__.py      #       子包标记
+│       │   │   ├── # 覆盖率补测族（_edge / _branches / _faults / _guards）——按被测域分组，与功能用例同目录
 │       │   │   ├── test_fetcher_api_edge.py  #   API 获取边缘场景
 │       │   │   ├── test_batch.py            #   批量调度单元测试
 │       │   │   ├── test_batch_branches.py    #   批量调度回退分支（注册表/缓存预检/配置读取失败与并发上限兜底）
 │       │   │   ├── test_bond_yield_branches.py # 无风险利率分支（API 名探测缺失/熔断跳过与过期兜底/pandas 与 akshare 缺席/脏收益率点跳过）
 │       │   │   ├── test_chain.py            #   数据链主链路测试
-│       │   │   ├── test_chain_recovery.py                           #   链路短缓存重取与纠正连击冷却
-│       │   │   ├── test_chain_incremental_branches.py               #   历史增量链路降级分支（重叠比较边界/校验异常与全量刷新/导入失败降级）
-│       │   │   ├── test_chain_fallback.py                           #   链路取数回退（全失败/陈旧缓存/熔断跳过）
-│       │   │   ├── test_chain_overlap_judgement.py                  #   历史增量重叠判据（数值变化才算修正，整窗重叠不重拉）
+│       │   │   ├── test_chain_recovery.py   #   链路短缓存重取与纠正连击冷却
+│       │   │   ├── test_chain_incremental_branches.py # 历史增量链路降级分支（重叠比较边界/校验异常与全量刷新/导入失败降级）
+│       │   │   ├── test_chain_fallback.py   #   链路取数回退（全失败/陈旧缓存/熔断跳过）
+│       │   │   ├── test_chain_overlap_judgement.py # 历史增量重叠判据（数值变化才算修正，整窗重叠不重拉）
 │       │   │   ├── test_chain_edge.py       #   数据链边缘场景
 │       │   │   ├── test_chain_diagnostics.py #  链路失败原因采集与可读渲染（展示名(原因) 条目/熔断分支展示名一致/无诊断器行为不变）
 │       │   │   ├── test_chain_overrides.py  #   调用级源覆盖（preferred/exclude；作用域/边界/优先级/CLI 接入）
@@ -950,6 +955,7 @@ investor-review/
 │       │   │   └── test_credential_gate.py       # 链路凭据预检（缺凭据跳过 provider 落到下一链路、不计入熔断、历史遍历循环同样受控）
 │       │   ├── handlers/            #   命令处理器单元测试
 │       │   │   ├── __init__.py      #       子包标记
+│       │   │   ├── # 覆盖率补测族（_edge / _branches / _faults / _guards）——按被测域分组，与功能用例同目录
 │       │   │   ├── test_handlers_cache.py  #   缓存管理命令处理测试
 │       │   │   ├── test_handlers_cache_branches.py # 缓存管理动线分支（选文件/清缓存四态/更新异常降级/统计页最大文件与快照目录降级）
 │       │   │   ├── test_handlers_config.py #   命令处理器配置测试
@@ -967,19 +973,20 @@ investor-review/
 │       │   │   ├── test_handlers_report.py #   报告生成命令处理测试
 │       │   │   └── test_handlers_whatif.py #   调仓 What-if 命令处理测试
 │       │   ├── llm/                 #   LLM 单元测试
-│       │   │   ├── test_pricing_parse_branches.py # 计价解析与降级（时段/时区/峰谷判定/单价聚合/加载失败保留内置价）
-│       │   │   ├── test_api_responses_branches.py # LLM 响应解析分支（Gemini 截断与正文提取/Anthropic 非串 text 块/usageMetadata 归一）
 │       │   │   ├── __init__.py      #       子包标记
 │       │   │   ├── conftest.py      #       目录级 fixture（llm_cache_dir：缓存目录隔离 + 日志去重复位）
+│       │   │   ├── # 覆盖率补测族（_edge / _branches / _faults / _guards）——按被测域分组，与功能用例同目录
+│       │   │   ├── test_api_responses_branches.py # LLM 响应解析分支（Gemini 截断与正文提取/Anthropic 非串 text 块/usageMetadata 归一）
 │       │   │   ├── test_llm_cache_ttl_single_source.py # 缓存 TTL 单一来源（读侧 == 注册表，逐模块覆盖，内容寻址模块 24h）
 │       │   │   ├── test_llm_cache_ttl_matrix.py # LLM 缓存 TTL × 指纹矩阵（7 模块 × 覆盖层 × 四象限）
-│       │   │   ├── test_llm_cache_multi.py         #   多 Provider 缓存测试
+│       │   │   ├── test_llm_cache_multi.py    #   多 Provider 缓存测试
 │       │   │   ├── test_llm_edge_branches_a.py     #   熔断状态展示面/盘中复用归因/证据索引/档位解析残差分支
 │       │   │   ├── test_llm_api_and_news_edge_branches.py # OpenAI 载荷与抽取器降级/新闻关联安全入口三态/事实校验工具降级/实体命中剔除
 │       │   │   ├── test_circuit_breaker_edge.py  #   LLM 熔断器边缘场景
 │       │   │   ├── test_circuit_breaker_recovery.py # 熔断恢复测试
 │       │   │   ├── test_cost_forecast.py    #   事前费用预估与日预算（预估三态/预算边界/摘要分支）
 │       │   │   ├── test_cost_forecast_degradation.py # 预估降级分支（配置/历史不可读、模型三级回落、记录形状容错、无价模块不可预估）
+│       │   │   ├── test_pricing_parse_branches.py # 计价解析与降级（时段/时区/峰谷判定/单价聚合/加载失败保留内置价）
 │       │   │   ├── test_prompts_data_blocks_branches.py # 提示词数据段落（环比明细/降级清单/归因三态/概念集中度三档/再平衡与竞争语境/数值守卫）
 │       │   │   ├── test_cost_tracker.py     #   Token 成本跟踪测试
 │       │   │   ├── test_cost_tracker_branches.py # 预算闸分支（首超告警一次/重复返回真/耗时两档/两套摘要的缓存命中行）
@@ -1006,8 +1013,8 @@ investor-review/
 │       │   │   ├── test_fact_checker_coverage.py #   数值校验覆盖率（已比对/不符/跳过原因分桶 + 复位）
 │       │   │   ├── test_fact_checker_scope_guards.py # 数值步骤语境守卫（市场口径主体失败/多代码归因/指数句/非持仓与叙述语境让位）
 │       │   │   ├── test_fact_checker_correction_guards.py # 自动修正守卫（同值异义/畸形数值整批放弃/代码纠正三条件与空表原样返回）
-│       │   │   ├── test_fact_checker_ranking.py                     #   事实校验：排名正确性与整体运行
-│       │   │   ├── test_fact_checker_symbols.py                     #   事实校验：代码/名称存在性
+│       │   │   ├── test_fact_checker_ranking.py # 事实校验：排名正确性与整体运行
+│       │   │   ├── test_fact_checker_symbols.py # 事实校验：代码/名称存在性
 │       │   │   ├── test_fact_checker_context.py #   事实校验器上下文归属与自动纠错测试
 │       │   │   ├── test_fact_checker_nonrate_guards.py #   事实校验器非收益率语境守卫（目标位/权重/市场口径/版本盐首尾日志）
 │       │   │   ├── test_fact_checker_replay_context.py #   事实校验器回放语境豁免/回撤紧邻窗口/近并列排名注记/历史代码有效集测试
@@ -1067,12 +1074,13 @@ investor-review/
 │       │   │   ├── test_llm_input_guards.py #   LLM 输入防御（信号行无依据省括号/档位分布方向/同比方向/叙事非字典行/排名数字与近并列空串）
 │       │   │   ├── test_news_parse_failure_contract.py # 新闻关联批量解析失败收口（整批不可解析=失败：不计分析条数/不写缓存/仍计费）
 │       │   │   ├── test_news_usage_status.py       #   新闻关联用量台账↔模块状态一致性（零产出不记「成功」/全缓存仍标缓存）
-│       │   │   ├── test_log_sanitize.py        #   日志清洗测试
+│       │   │   ├── test_log_sanitize.py       #   日志清洗测试
 │       │   │   ├── test_skeleton.py           #   内容骨架生成测试
 │       │   │   ├── test_skeleton_branches.py   # 骨架边角（空输出记失败/用量合并/凭据回落/原始输出过滤/重算原因三态/账本回灌/禁用与未配置）
 │       │   │   └── test_strategy.py           #   策略引擎测试
 │       │   ├── news/                #   新闻单元测试
 │       │   │   ├── __init__.py      #       子包标记
+│       │   │   ├── # 覆盖率补测族（_edge / _branches / _faults / _guards）——按被测域分组，与功能用例同目录
 │       │   │   ├── test_akshare_news.py       #   akshare 新闻源测试
 │       │   │   ├── test_cls_news.py           #   财联社新闻源测试
 │       │   │   ├── test_eastmoney_news.py     #   东方财富新闻源测试
@@ -1093,6 +1101,7 @@ investor-review/
 │       │   │   └── test_wallstreetcn_news.py  #   华尔街见闻新闻源测试
 │       │   ├── providers/           #   数据源提供商单元测试
 │       │   │   ├── __init__.py      #       子包标记
+│       │   │   ├── # 覆盖率补测族（_edge / _branches / _faults / _guards）——按被测域分组，与功能用例同目录
 │       │   │   ├── test_datasink.py           #   DataSinking 财报 provider（符号映射/套餐限额/护栏/HTTP 分支/取数原语/传输级重试与上抛契约）
 │       │   │   ├── test_datasink_probe_miss.py #  章节探测 404 负缓存（命中直接降级不发请求/文档级 404 不入负缓存）
 │       │   │   ├── test_cninfo.py             #   巨潮资讯网备源 provider（orgId 解析/文种归类/报告期推导/PDF 解析接缝/限速与 HTTP 分支）
@@ -1132,6 +1141,7 @@ investor-review/
 │       │   ├── qa/                 #   报告对话式追问单元测试（6 测试文件 + 1 夹具）
 │       │   │   ├── __init__.py      #       子包标记
 │       │   │   ├── conftest.py      #       共享夹具（双样本报告 HTML：锚点/表头映射/噪声/超长数据章）
+│       │   │   ├── # 覆盖率补测族（_edge / _branches / _faults / _guards）——按被测域分组，与功能用例同目录
 │       │   │   ├── test_report_qa_context.py # 上下文提取（分章/表头名映射/摘要截断/生成条件声明）
 │       │   │   ├── test_report_qa_context_edge.py # 上下文边缘（路径净化/锚点缺失/整体上限钉死）
 │       │   │   ├── test_report_qa_session.py # 会话服务（编排/历史折叠/用量记账/事实核对/并发隔离）
@@ -1141,6 +1151,8 @@ investor-review/
 │       │   │   ├── test_qa_telemetry_branches.py # 埋点容错分支（费用估算失败/报告名净化/币种混合容错/空行与坏时间戳/失败码行）
 │       │   │   └── test_qa_context_parser_guards.py # 上下文解析守卫（script 跳过/未闭合行容错/br 断行/数值与持仓表守卫/空章节排除）
 │       │   ├── report/              #   报告单元测试
+│       │   │   ├── __init__.py      #       子包标记
+│       │   │   ├── # 覆盖率补测族（_edge / _branches / _faults / _guards）——按被测域分组，与功能用例同目录
 │       │   │   ├── test_benchmark_branches.py     # 基准归一化：缺 date 的 bar 丢弃/整段早于组合起算日跳过/单点时波动率 0
 │       │   │   ├── test_category_dividend_branches.py # 成本分档「未分档」与分红取数/登记异常降级
 │       │   │   ├── test_cli_progress_verbose_branches.py # 耗时毫秒口径与 --verbose stderr 通道（warn/error/排行/摘要）
@@ -1151,7 +1163,6 @@ investor-review/
 │       │   │   ├── test_fund_style_base_branches.py # tencent_style Provider 惰性注册幂等
 │       │   │   ├── test_generation_shared_usage_delta_branches.py # LLM 用量增量：逐模块币种费用做差与模型清单带出
 │       │   │   ├── test_html_builders_perf_branches.py # 基金业绩条目构建分支（预取排名 vs 单只取数 × 明细行有无 + 收益率解析降级）
-│       │   │   ├── __init__.py      #       子包标记
 │       │   │   ├── test_design_doc.py #   设计语言契约（DESIGN.md 骨架/护栏对偶/引用存在）结构守卫
 │       │   │   ├── test_design_tokens.py #   双面设计 token 同名对表（共享角色/旧名映射/品牌蓝 token 化）守卫
 │       │   │   ├── test_html_writer_status_branches.py # 评级标签收集与历史走势状态/告警关键词映射
@@ -1214,7 +1225,7 @@ investor-review/
 │       │   │   ├── test_fund_manager_analysis.py  #   基金经理分析测试
 │       │   │   ├── test_position_overlap.py       #   持仓重合度计算测试
 │       │   │   ├── test_fund_performance.py       #   基金业绩测试
-│       │   │   ├── test_fund_performance_sheet.py                   #   业绩分析页签写入器（评级/业绩/候选不可得）
+│       │   │   ├── test_fund_performance_sheet.py #   业绩分析页签写入器（评级/业绩/候选不可得）
 │       │   │   ├── test_fund_performance_branches.py # 基金业绩页签分支（评级深绿标色/排名全失败降级/候选比较子表四种标注行）
 │       │   │   ├── test_fund_style.py             #   基金风格判定测试
 │       │   │   ├── test_fund_style_classify_branches.py # 基金风格判定降级（无市值代码段估算/扩展取数异常/行业 PE 降级/批量预取单路异常）
@@ -1329,14 +1340,14 @@ investor-review/
 │       │   │   ├── test_pipeline_data_builder.py    #   管线数据上下文组装测试（危机/尾部风险/快照差分/风险调整超额等键注册）
 │       │   │   ├── test_pipeline_data_builder_branches.py # 构建器注册/校验分支（未知键告警自注册/类型不符只告警/prep 缺省值/merge 四路径）
 │       │   │   ├── test_history_augmented_wiring.py # 历史增强装配接线（开关判定/子块扩展窗取数/full 路径注入/取数 helper）
-│       │       ├── test_purchase_status.py          # 申购限购状态展示层测试（契约/陈旧阶梯/单元格/脚注/模板条件渲染）
+│       │       ├── test_purchase_status.py        #   申购限购状态展示层测试（契约/陈旧阶梯/单元格/脚注/模板条件渲染）
 │       │       ├── test_purchase_status_edge.py     # 申购限购状态边缘场景（0 元限额→限额未知/时间不可解析/过期档）
-│       │   │   ├── test_pipeline_utils.py          #   管线工具函数测试
+│       │   │   ├── test_pipeline_utils.py         #   管线工具函数测试
 │       │   │   ├── test_portfolio_history_branches.py # 组合历史走势降级（QDII 路由/空时间线/单只异常隔离/终点回填格式/区间截断/基准降级）
 │       │   │   ├── test_portfolio_history_order.py # 历史走势并发取数的汇总顺序（并发抓、按输入持仓顺序汇总/浮点累加顺序固定）
 │       │   │   ├── test_portfolio_history.py      #   组合历史走势测试
 │       │   │   ├── test_progress.py               #   进度跟踪测试
-│       │   │   ├── test_cli_run_summary.py         #   CLI 收尾资源摘要（LLM 成本行/缓存命中率行：有观测才输出）
+│       │   │   ├── test_cli_run_summary.py        #   CLI 收尾资源摘要（LLM 成本行/缓存命中率行：有观测才输出）
 │       │   │   ├── test_qdii_timezone_edge.py     #   QDII 时区边缘场景
 │       │   │   ├── test_security_edge.py          #   证券边缘场景
 │       │   │   ├── test_orchestrator.py           #   报告编排器单元测试
@@ -1347,8 +1358,8 @@ investor-review/
 │       │   │   ├── test_factor_metrics_missing_deps_edge.py # 计算层依赖缺失时因子/行业 Beta 区块降级
 │       │   │   ├── test_orchestrator_snapshot.py # capture_snapshot / fetch_history_data 快照与历史走势
 │       │   │   ├── test_orchestrator_generate_report.py # 报告生成主流程落盘与快照比对测试
-│       │   │   ├── test_orchestrator_generate_report_full.py        #   orchestrator full 路径（含 LLM 编排）
-│       │   │   ├── test_orchestrator_generate_report_both.py        #   orchestrator both 路径（HTML+Excel）
+│       │   │   ├── test_orchestrator_generate_report_full.py # orchestrator full 路径（含 LLM 编排）
+│       │   │   ├── test_orchestrator_generate_report_both.py # orchestrator both 路径（HTML+Excel）
 │       │   │   ├── test_report_aux_metrics_branches.py # 编排辅助降级（温度估值输入缺席/相关性开关与矩阵异常/情绪上报/景气度四环节降级）
 │       │   │   ├── test_report_both_stage_contract.py # both 路径结构契约（阶段名与序列/start-stop 配对/运行边界/双产物成败/快照命名空间透传/健康检查收尾）
 │       │   │   ├── test_report_both_stage_optional_branches.py # both 可选块装配（个股基本面开关注入/快照 checkpoint 告警/市场情绪挂载）
@@ -1357,15 +1368,16 @@ investor-review/
 │       │   │   ├── test_stage_cancel.py       #   阶段边界协作式取消（令牌/边界生效/编排层收口与异常传播）
 │       │   │   ├── test_summary.py                #   摘要生成测试
 │       │   │   ├── test_summary_degradation_branches.py # 汇总降级渲染（市值全零警示条/温度字段不全/指数降级状态/温度段接线）
-│       │   │   ├── test_summary_sheet.py                            #   汇总页签整体输出（各区块组合）
+│       │   │   ├── test_summary_sheet.py          #   汇总页签整体输出（各区块组合）
 │       │   │   ├── test_summary_highlights.py     #   摘要区首页执行摘要卡（降级判据/指标派生/排序截断/hhi 行级降级/新字段链路/模板双态）
 │       │   │   ├── test_summary_module_rows.py    #   摘要模块数据行与 LLM 用量深度行测试
-│       │   │   ├── test_llm_module_info.py         #   LLM 模块信息·Endpoint 汇总展示（主备排序标注/未映射不标注/去重）
+│       │   │   ├── test_llm_module_info.py        #   LLM 模块信息·Endpoint 汇总展示（主备排序标注/未映射不标注/去重）
 │       │   │   ├── test_llm_quality.py            #   LLM 输出质量分级（A~F 口径/横幅注入/开关/章节标记与提示词一致性锁）
 │       │   │   ├── test_llm_quality_edge.py       #   LLM 输出质量分级边缘场景（阈值边界/占位优先/非文本输入/幂等）
 │       │   │   └── test_valuation_temperature_wiring.py # 估值分位+市场温度报告层接线测试
 │       │   ├── scripts/              #   工程脚本单元测试（历史痕迹/版本一致性/任务编号/语义命名索引检查工具自检）
 │       │   │   ├── __init__.py       #       子包标记
+│       │   │   ├── # 覆盖率补测族（_edge / _branches / _faults / _guards）——按被测域分组，与功能用例同目录
 │       │   │   ├── test_check_version_consistency.py #   版本号一致性检查脚本测试
 │       │   │   ├── test_check_style_guardrails.py #   设计护栏机检测试（E1/E2/E3 命中与豁免 + W 级观察语义 + 真仓库冒烟）
 │       │   │   ├── test_check_script_contract.py # 脚本契约机检测试（退出码章节解析三格式/规则①②③④命中与豁免/白名单对齐真实声明/真实仓库规则①③④零偏离）
@@ -1378,7 +1390,7 @@ investor-review/
 │       │   │   ├── test_trace_check_doc_domains.py # 文档域专项（目录树行豁免收窄/文件名任务编号/任务记录域复盘痕迹三域）
 │       │   │   ├── test_trace_shared_vocabulary.py # 两脚本共享历史叙述词表单一来源（交集==词表/两侧都引用/源码无写死字面量/多域登记）
 │       │   │   ├── test_trace_check_scripts.py  #   check-code/doc-traces 工具自身豁免+时序模式检出/豁免回归（含测试/源码注释任务编号硬检出）
-│       │   │   ├── test_trace_check_scripts_doc.py                  #   文档域痕迹检查（check-doc-traces）
+│       │   │   ├── test_trace_check_scripts_doc.py # 文档域痕迹检查（check-doc-traces）
 │       │   │   ├── test_trace_domain_exemptions.py #   MAGIC/DASHTASK/UNDERSCORE 合法领域值豁免边界专项覆盖
 │       │   │   ├── test_trace_logging_discipline.py #  日志统一守卫（非交互层 print 检出 / 豁免域 / 白名单完整性）
 │       │   │   ├── test_trace_config_defaults.py #   配置默认值单源守卫（重复兜底检出/类型敏感/豁免域/真实仓库零 finding）
@@ -1443,10 +1455,12 @@ investor-review/
 │       │   │   └── test_probe_report_claims.py # 报告数值声称体检（报告选取/核对聚合/CLI 退出码）
 │       │   ├── startup/              #   首次运行引导单元测试
 │       │   │   ├── __init__.py       #       子包标记
+│       │   │   ├── # 覆盖率补测族（_edge / _branches / _faults / _guards）——按被测域分组，与功能用例同目录
 │       │   │   ├── test_startup_wizard.py  #   首次运行引导向导测试
 │       │   │   └── test_startup_wizard_io_faults.py #   首次运行引导 IO 与终端探测容错（标记读写失败、isatty 异常、Key 输入空回车与 EOF 两条退出路径）
 │       │   ├── cli/                 #   CLI 命令行模式单元测试
 │       │   │   ├── __init__.py      #       子包标记
+│       │   │   ├── # 覆盖率补测族（_edge / _branches / _faults / _guards）——按被测域分组，与功能用例同目录
 │       │   │   ├── test_cli.py               #   CLI 命令行模式单元测试（解析/开关/主流程）
 │       │   │   ├── test_cli_main.py                                 #   CLI 入口/主流程/早退开关测试
 │       │   │   ├── test_cli_cache_whatif.py                         #   CLI 缓存更新与调仓 What-if 子命令测试
@@ -1461,8 +1475,9 @@ investor-review/
 │       │   │   └── test_cli_edge.py          #   CLI 边缘场景测试
 │       │   │   └── test_cli_llm_provider_order.py#   --llm-provider-order 解析与持久化测试
 │       │   └── ui/                  #   UI 单元测试
-│       │   │   ├── test_tui_entry_branches.py # TUI 入口非交互分支（会话用量回显/就地重绘降级/筛选关键词/启动硬闸）
 │       │   │   ├── __init__.py      #       子包标记
+│       │   │   ├── # 覆盖率补测族（_edge / _branches / _faults / _guards）——按被测域分组，与功能用例同目录
+│       │   │   ├── test_tui_entry_branches.py # TUI 入口非交互分支（会话用量回显/就地重绘降级/筛选关键词/启动硬闸）
 │       │   │   ├── test_panel_runtime.py          #   TUI 统一交互运行时（NavState 回绕/Enter 防误触/pick 收集/退出语义矩阵）
 │       │   │   ├── test_panel_runtime_nav_guard_branches.py # 导航谓词与筛选回绕/read 回落/pick return 闭包/无效反馈单源/窄档折行/ASCII 代理
 │       │   │   ├── test_prompt_text.py #   提示语模板用例（四成分/默认项写动作名/帮助文案）
@@ -1505,6 +1520,7 @@ investor-review/
 │       │   │   └── test_tui_menu_config_branches.py # 配置面板回显（文件状态/匿名化与隐私/LLM 单链与多链/任意键 Ctrl+C）
 │       │   └── web/                  #   Web 模式单元测试
 │       │   │   ├── __init__.py      #       包标记（空文件）
+│       │   │   ├── # 覆盖率补测族（_edge / _branches / _faults / _guards）——按被测域分组，与功能用例同目录
 │       │   │   ├── test_upload.py   #       上传安全模块（校验/生命周期/清理）
 │       │   │   ├── test_upload_edge.py #    上传安全边缘（zip-bomb/伪装/路径穿越变体）
 │       │   │   ├── test_upload_and_run_generation_guards.py # 上传清理与执行体降级（过期清理计数/落盘失败/预检映射 BAD_FILE/正式模式严重退出/异常不冒泡）
@@ -1512,8 +1528,8 @@ investor-review/
 │       │   │   ├── test_runs.py     #       RunManager（状态机/队列/保留/单例重置）
 │       │   │   ├── test_handlers.py #       Flask 路由 handler（全链路/错误信封/穿越拒绝/系统信息组装）
 │       │   │   ├── test_handlers_error_branches.py # 路由错误信封（同源拒绝三态/参数枚举/任务 404 与事件流/持仓与调度 500 兜底）
-│       │   │   ├── test_handlers_runs.py                            #   Web 接口：运行事件流与短缓存并发
-│       │   │   ├── test_handlers_system.py                          #   Web 接口：配置回填/健康/系统信息/日志/自检
+│       │   │   ├── test_handlers_runs.py # Web 接口：运行事件流与短缓存并发
+│       │   │   ├── test_handlers_system.py # Web 接口：配置回填/健康/系统信息/日志/自检
 │       │   │   ├── test_config_edit.py #    Web 配置编辑（白名单完备/写分派/校验守卫/备份）
 │       │   │   ├── test_config_edit_edge.py # Web 配置编辑极端输入（edge，*_edge.py 隔离）
 │       │   │   ├── test_config_surface_contract.py # Web 配置面契约（块↔渲染器/元数据覆盖/日志可写/无中文表）
@@ -1562,6 +1578,7 @@ investor-review/
 │       │   ├── __init__.py           #   子包标记
 │       │   ├── basic/               #   基本面场景测试
 │       │   │   ├── __init__.py      #       子包标记
+│       │   │   ├── # 覆盖率补测族（_edge / _branches / _faults / _guards）——按被测域分组，与功能用例同目录
 │       │   │   ├── test_tui_flow_semantics.py      #   TUI 三条主路径动线（击键不增 + 关键语义词上屏；P0 生成主路径 / P2 全量）
 │       │   │   ├── test_scenario_basic_flows.py    #   基础业务链路场景测试
 │       │   │   ├── test_pipeline_metrics_injection.py # 管线指标注入测试
