@@ -14,12 +14,12 @@
 | 架构图示 | SVG | 4 | 396 | `src/static/` README 架构图（architecture 三渠道→引擎→双报告、llm-chain Provider 链式分发、capabilities 九大功能域总览、owl-mascot 吉祥物猫头鹰「守望」）+ 截图 7 张 PNG（报告实景 `report-overview`/`report-toc`/`report-charts` + 界面实景 `tui-menu`/`web-workbench`/`web-config`/`cli-report`，不计入本行） |
 | 辅助脚本 | Python | 150 | 31,450 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评测与因子目录评测、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、视觉资产（社交预览图/架构图体检）、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
 | 源代码合计 | — | 630 | 160,927 | 主程序 + 模板 + 脚本 + SVG |
-| 测试代码 | Python | 932 | 237,634 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
+| 测试代码 | Python | 936 | 237,665 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
 | 测试用例 | — | — | 16,541 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 15 | 7,088 | 含 README.md；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 14 | 6,851 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 223 | 75,417 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 14,667 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 223 | 75,422 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 14,672 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 200 | 59,038 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 9 | ~1616 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + TUI 交互改进（议题 + 第一/二批实施方案） + PanWatch 借鉴分析（含评估政策单源化与 LLM 复盘契约两份设计） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -638,6 +638,9 @@ investor-review/
 │       ├── _holdings_fixture.py      #   持仓 xlsx 测试构造器（账户/流水页签与表头单源，编辑层/面板/边缘用例共用）
 │       ├── conftest.py               #   pytest 入口：标记注册 + 会话级兜底（夹具/钩子按域下沉 `_conftest_*.py` 后 import 回来注册）
 │       ├── helpers.py                #   测试辅助工具
+│       ├── _fixtures/                #   跳文件共享测试替身（按被测协议分文件，避免各文件各写一份）
+│       │   ├── __init__.py           #   包标记（空文件）
+│       │   └── reporters.py          #   进度通道替身（RecordingReporter 记各级播报 / SilentReporter 全静默）
 │       ├── data/                     #   测试数据集
 │       │   ├── cassettes/            #   数据源真实响应录制（git 跟踪，离线回放；刷新需 --run-live --record-cassettes）
 │       │   │   ├── tencent_quote.json          #   腾讯行情（个股实时价）
@@ -1254,7 +1257,9 @@ investor-review/
 │       │   │   ├── test_decision_settlement_branches.py #   决策结算取数降级与不可判定分支（异常降级/空序列/决策日缺失）
 │       │   │   ├── test_decision_review_block.py  #   决策复盘·复盘区块数据组装（available/命中率/近期明细/样本守门）
 │       │   │   ├── test_decision_book.py # 决策书装配与双端同源契约（开关/匿名化/无契约三态）
-│       │   │   ├── test_decision_basis.py   #   判断依据章内块（信号清单三态标注/可信度仲裁四枚举/回测结论登记/开关/零参数/零 LLM/双端同源）
+│       │   │   ├── test_decision_basis_blocks.py #   判断依据章内块的契约与块装配（信号清单三态标注/可信度仲裁四枚举/回测结论登记/开关/零参数/零 LLM/结算摘要）
+│       │   │   ├── test_decision_basis_render.py #   判断依据章头与绩效呈现（summary 文案/分持有期绩效/样本不足结论/双端同源）
+│       │   │   ├── test_decision_basis_risks.py  #   判断依据风险类块（约束标注/纪律明细/风险预算的键值与降级形态）
 │       │   │   ├── test_decision_basis_settlement_branches.py #   结算展示块对畸形账本条目的容错（非 dict/非整数视界/缺字段）
 │       │   │   ├── test_report_fallbacks.py #   报告层兜底（非数值配置默认值/回测采样日 OSError 兜底/账本记录容错/金额与因子名缺省）
 │       │   │   ├── test_signal_record.py          #   确定性信号沉淀适配器（五类抽取/不可用跳过/实时-非实时判定/幂等与开关）
