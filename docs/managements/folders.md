@@ -14,12 +14,12 @@
 | 架构图示 | SVG | 4 | 396 | `src/static/` README 架构图（architecture 三渠道→引擎→双报告、llm-chain Provider 链式分发、capabilities 九大功能域总览、owl-mascot 吉祥物猫头鹰「守望」）+ 截图 7 张 PNG（报告实景 `report-overview`/`report-toc`/`report-charts` + 界面实景 `tui-menu`/`web-workbench`/`web-config`/`cli-report`，不计入本行） |
 | 辅助脚本 | Python | 150 | 31,446 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评测与因子目录评测、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、视觉资产（社交预览图/架构图体检）、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
 | 源代码合计 | — | 630 | 160,859 | 主程序 + 模板 + 脚本 + SVG |
-| 测试代码 | Python | 869 | 227,436 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
-| 测试用例 | — | — | 15,794 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
+| 测试代码 | Python | 878 | 228,432 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
+| 测试用例 | — | — | 15,879 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 15 | 7,088 | 含 README.md；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 14 | 6,851 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 223 | 75,333 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 14,583 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 223 | 75,342 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 14,592 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 200 | 59,038 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 9 | ~1616 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + TUI 交互改进（议题 + 第一/二批实施方案） + PanWatch 借鉴分析（含评估政策单源化与 LLM 复盘契约两份设计） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -672,10 +672,12 @@ investor-review/
 │       │   │   ├── test_bond_yield.py         #   无风险利率获取
 │       │   │   ├── test_bond_yield_edge.py    #   无风险利率边缘场景
 │       │   │   ├── test_circuit_breaker_wrapper.py #   断路器包装器测试
+│       │   │   ├── test_circuit_breaker_wrapper_branches.py # 断路器状态持久化分支（TTL 清理/降级追踪器缺席/删文件失败）
 │       │   │   ├── test_fx_exposure.py        #   外汇敞口分析
 │       │   │   ├── test_portfolio_constraints.py # 集中度/相关性约束判定（开关门控/上限来源/未配置与未评估两态/账本标注）
 │       │   │   ├── test_factor_evaluator.py   #   因子目录编排（池构造/逐因子横截面与原因/评级/编排降级三类/口径一致性）
 │       │   │   ├── test_fee_estimation.py     #   组合综合费率估算（类型归类关键词优先/加权与年化/未知类型默认费率告警/零值剔除）
+│       │   │   ├── test_fee_schedule_model_branches.py # 费率表档位分支（无边界/倒置标签拒绝、末档非开区间、配置档位合法性、档位选择无命中）
 │       │   │   ├── test_factor_evaluator_edge.py # 因子目录边缘场景（全输入不可用/未知字段/NaN·inf 语义/单码池/非 dict 输入）
 │       │   │   ├── test_financial_indicator_extract.py # 财务指标全文解析（真实年报夹具逐字段复现/行文变体/单位换算/精度切分/扣非排除/降级）
 │       │   │   ├── test_financial_indicator_extract_edge.py # 财务指标解析边缘场景（取值窗口边界/异常幅度/越界比率/零基数同比/截断正文）
@@ -698,6 +700,7 @@ investor-review/
 │       │   │   ├── test_purchase_feasibility_edge.py # 申购可行性边缘样本（非正金额/限额、NaN/Inf、极端量级）
 │       │   │   ├── test_return_attribution.py   #   收益归因（TOP5 贡献占比/正负分列/净额合计/复用断言）
 │       │   │   ├── test_cost_flow.py            #   成本流水分析（XIRR 资金加权收益/成本分档/分红累计）
+│       │   │   ├── test_cost_flow_branches.py    #   成本流水分支（日期解析拒绝面/二分兜底端点与无解/牛顿退化降级/不可计流水与持仓跳过）
 │       │   │   ├── test_cost_position.py        #   持仓成本区间位置纯计算（百分位/clamp/中性值/窗口切片/序列提取）
 │       │   │   ├── test_cost_position_edge.py   #   持仓成本区间位置边缘场景（退化序列/无效成本/非有限值/越界）
 │       │   │   ├── test_scenario_analysis.py       #   情景分析测试
@@ -890,6 +893,8 @@ investor-review/
 │       │   │   ├── __init__.py      #       子包标记
 │       │   │   ├── test_fetcher_api_edge.py  #   API 获取边缘场景
 │       │   │   ├── test_batch.py            #   批量调度单元测试
+│       │   │   ├── test_batch_branches.py    #   批量调度回退分支（注册表/缓存预检/配置读取失败与并发上限兜底）
+│       │   │   ├── test_bond_yield_branches.py # 无风险利率分支（API 名探测缺失/熔断跳过与过期兜底/pandas 与 akshare 缺席/脏收益率点跳过）
 │       │   │   ├── test_chain.py            #   数据链主链路测试
 │       │   │   ├── test_chain_recovery.py                           #   链路短缓存重取与纠正连击冷却
 │       │   │   ├── test_chain_fallback.py                           #   链路取数回退（全失败/陈旧缓存/熔断跳过）
@@ -919,6 +924,7 @@ investor-review/
 │       │   │   ├── test_financial_indicator_hithink.py # 财务指标域「同花顺官方报表派生」链路（三表示例归一/非 A 股跳过/主源不可用时序列回退）
 │       │   │   ├── test_fund_edge.py        #   联接基金穿透边缘场景
 │       │   │   ├── test_fund_manager.py     #   基金经理数据测试
+│       │   │   ├── test_fund_manager_branches.py # 基金经理解析分支（纯文本名与「至今」日期回退/首页三类请求结局/档案页表格解析/空负缓存命中）
 │       │   │   ├── test_quote_adapter_parity.py # 行情域适配契约等价性（与既有转换函数逐源比对 + 链两槽选择）
 │       │   │   ├── test_quote_adapter_hithink.py # 行情域同花顺适配器与第三槽链路顺序（别名归一/契约自检/历史 provider 映射）
 │       │   │   ├── test_source_adapter.py       # 数据源适配契约（注册表/三段式/声明式归一）
@@ -1084,7 +1090,10 @@ investor-review/
 │       │   │   ├── test_provider_utils.py    #   providers 共享原语（provider 自陈失败原因载体：消费即清/线程隔离）
 │       │   │   ├── test_tencent.py            #   腾讯财经 API 测试
 │       │   │   ├── test_tencent_edge.py       #   腾讯财经边缘场景
+│       │   │   ├── test_tencent_branches.py   #   腾讯财经分支（字段内含等号/不支持品种跳过/指数行情三类失败/K 线体不可迭代）
+│       │   │   ├── test_news_sources.py       #   新闻源适配器（子源导入降级/新浪预算耗尽与空页收尾/跨分类去重）
 │       │   │   ├── test_tiantian.py           #   天天基金 API 测试（含基金持仓三跳阶梯次序与目标 ETF 锚点解析）
+│       │   │   ├── test_tiantian_ranking_branches.py # 天天基金排名分支（日期采样拒绝面/净值日期载荷异常/评级越界/取数失败）
 │       │   │   ├── test_tiantian_nav.py       #   历史净值解析（JS 变量提取/毫秒时间戳北京时间口径/双净值合并）
 │       │   │   ├── test_tiantian_base_faults.py # 天天基金公共 HTTP 故障面（超时/状态码/连接错误/JS 解析全归 None）
 │       │   │   ├── test_tiantian_holdings_edge.py # 基金持仓取数阶梯与目标 ETF 锚点边缘场景
