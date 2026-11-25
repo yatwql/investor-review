@@ -11,7 +11,6 @@
 
 from __future__ import annotations
 
-import importlib.util
 import socket
 import sys
 from types import SimpleNamespace
@@ -19,6 +18,7 @@ from types import SimpleNamespace
 import pytest
 
 from src.python.web import server
+from src.test._script_loader import load_module_file
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_web]
 
@@ -105,11 +105,8 @@ class TestProjectRootOnSysPath:
         monkeypatch.setattr(sys, "path", [entry for entry in sys.path if entry != root])
 
         probe_name = "_server_project_root_probe"
-        spec = importlib.util.spec_from_file_location(probe_name, server.__file__)
-        assert spec is not None and spec.loader is not None
-        probe = importlib.util.module_from_spec(spec)
         try:
-            spec.loader.exec_module(probe)
+            probe = load_module_file(server.__file__, probe_name)
 
             assert probe._project_root == root
             assert root in sys.path, "直接执行本文件（项目根不在 sys.path）时须自动补入"
