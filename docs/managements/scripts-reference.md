@@ -1149,7 +1149,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 **读数口径**：台账每命令一行、`session_usage` 是 **agent 会话级累加值**，所以单版成本只能靠切段 + 相邻行取增量：`version` 去掉 `-dev` 为所属台账版本（`X.Y.Z-dev` 的 check/prepare 与 `X.Y.Z` 的 publish 同属一版）；token 列 = 同 `agent.session_id` 内 `session_usage.total` 的前后差（新会话首行与累计回退记 0），**含期间的对话与改码，不是发布命令本身的成本**。失败步取自记录的 `ok=false`（含 `failure` 明细）。
 
-**使用逻辑**：`python scripts/probe-release-ledger.py [--last N] [--version X] [--json] [-v] [--ci]`。`-v` 逐命令与逐步骤展开，`--json` 供其他脚本消费（不含原始行）。只读，不改台账写入路径、不动发布步骤。
+**使用逻辑**：`python scripts/probe-release-ledger.py [--last N] [--version X] [--json] [-v] [--ci]`。`-v` 逐命令与逐步骤展开，`--json` 供其他脚本消费（不含原始行）。`--ci` **不是**检查脚本的公共口径：它只隐去说明段（表格/JSON 内容不变），`失败步` 只作台账事实展示、不以退出码 2 表达 finding。只读，不改台账写入路径、不动发布步骤。
 
 **`probe-guard-hits.py` — 守护项命中统计（非门禁）**
 

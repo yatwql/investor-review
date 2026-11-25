@@ -16,9 +16,12 @@ token 增量：同一 `agent.session_id` 内取 `session_usage.total` 的前后�
   python scripts/probe-release-ledger.py --last 10           # 最近 10 版
   python scripts/probe-release-ledger.py --version X.Y.Z     # 只看某一版（可重复）
   python scripts/probe-release-ledger.py --ledger /tmp/x.jsonl
-  python scripts/probe-release-ledger.py -v                  # 逐命令明细
+  python scripts/probe-release-ledger.py -v                  # 逐命令/逐步骤明细
   python scripts/probe-release-ledger.py --ci                # 仅输出表格行（不含说明段）
   python scripts/probe-release-ledger.py --json              # 机器可读
+
+`--ci` 与检查脚本的公共口径不同：只隐去说明段，不改变表格/JSON 内容，也**不以退出码 2
+表达任何 finding**（本脚本不是门禁，它汇总的「失败步」是台账事实，不是本脚本的判断）。
 
 退出码：
   0 — 汇总已输出（本脚本不是门禁，失败步只影响台账统计，不影响退出码）
@@ -34,11 +37,9 @@ from collections import defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 共享设施包（_shared/checklib）
-from _shared.checklib import REPO_ROOT, add_common_args  # noqa: E402
+from _shared.checklib import REPO_ROOT  # noqa: E402
 
 DEFAULT_LEDGER = REPO_ROOT / "logs" / "release.jsonl"
-#: 发布流水意义上的步骤顺序（与 `release.py` 子命令一致），用于表内固定列序
-_STEP_ORDER = ("check", "prepare", "refresh", "evolution", "gate", "publish", "devbump")
 
 
 def _load(ledger: Path) -> list[dict]:
@@ -178,7 +179,10 @@ def main(argv: list[str] | None = None) -> int:
         help="只看指定版本（基号，可重复；与 --last 互斥，给了就忽略 --last）",
     )
     parser.add_argument("--json", action="store_true", help="输出 JSON（机器可读）")
-    add_common_args(parser)
+    # 本脚本不是门禁：`--ci` 只隐去说明段（表格/JSON 内容不变），退出码恒为 0（台账不可读才是 1）；
+    # 故不复用检查脚本的公共 `--ci`（那个口径是「仅输出 文件:描述，发现即退出 2」）。
+    parser.add_argument("-v", "--verbose", action="store_true", help="详细输出（逐命令与逐步骤明细）")
+    parser.add_argument("--ci", action="store_true", help="只输出表格行（略去说明段；本脚本非门禁，恒退出 0）")
     args = parser.parse_args(argv)
 
     ledger = Path(args.ledger)

@@ -160,3 +160,30 @@ class TestCli:
         target = tmp_path / "dir.jsonl"
         target.mkdir()  # 目录当文件读 → OSError
         assert mod.main(["--ledger", str(target)]) == 1
+
+    def test_ci_omits_notes_and_never_reports_findings(self, tmp_path, capsys):
+        """`--ci` 只隐去说明段：表格照出、失败步照列，绝不以退出码 2 表达 finding。
+
+        本脚本不是门禁（失败步是台账事实，不是它的判断），故不复用检查脚本的公共
+        `--ci`（那个口径是「仅输出 文件:描述，发现即退出 2」）。
+        """
+        mod = _probe_module()
+        ledger = tmp_path / "release.jsonl"
+        ledger.write_text(
+            json.dumps(_rec("0.18.6", "publish", ok=False, failure={"step": "gate"})) + "\n",
+            encoding="utf-8",
+        )
+        assert mod.main(["--ledger", str(ledger), "--ci"]) == 0
+        out = capsys.readouterr().out
+        assert "0.18.6" in out and "publish" in out, "表格行照出（含失败步）"
+        assert "注：" not in out, "说明段在 --ci 下隐去"
+
+    def test_ci_help_describes_its_own_semantics(self, capsys):
+        """`--ci` 的帮助文本如实描述本脚本口径（不是检查脚本的「退出码 2」）。"""
+        mod = _probe_module()
+        with pytest.raises(SystemExit) as exc:
+            mod.main(["--help"])
+        assert exc.value.code == 0
+        help_line = next(line for line in capsys.readouterr().out.splitlines() if line.strip().startswith("--ci"))
+        assert "退出码 2" not in help_line, "--ci 不表达 finding，帮助文本不得沿用检查脚本口径"
+        assert "非门禁" in help_line
