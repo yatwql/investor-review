@@ -243,3 +243,37 @@ class TestSharpeCI:
         result = sharpe_ci_propagation(0.50, 0.5)
         assert result["warning"] is not None
         assert "夏普比率置信区间" in result["warning"] and "不足一年" in result["warning"]
+
+
+class TestScenarioEntryAndConcentrationBranches:
+    """单情景条目的 ±1σ/±2σ 波动区间与行业集中度低集中度标注。"""
+
+    def test_sigma_bands_narrow_around_expected_change(self):
+        from src.python.analysis.scenario import _build_scenario_entry
+
+        entry = _build_scenario_entry(
+            market_chg=0.10,
+            portfolio_value=1000.0,
+            beta=1.2,
+            ci_available=True,
+            beta_ci_lower=1.0,
+            beta_ci_upper=1.4,
+            se_available=True,
+            beta_se=0.2,
+        )
+
+        se_pct = 0.2 * abs(0.10)
+        assert entry["expected_change_pct"] == pytest.approx(0.12)
+        assert entry["vol_1sigma_pct"] == pytest.approx(0.12 - se_pct)
+        assert entry["vol_1sigma_upper_pct"] == pytest.approx(0.12 + se_pct)
+        assert entry["vol_2sigma_pct"] == pytest.approx(0.12 - 2 * se_pct)
+        assert entry["vol_2sigma_upper_pct"] == pytest.approx(0.12 + 2 * se_pct)
+
+    def test_low_industry_concentration_is_flagged_as_low_risk(self):
+        from src.python.analysis.scenario import industry_concentration_analysis
+
+        out = industry_concentration_analysis(0.05, 1000.0, "银行")
+
+        assert out["concentration_risk"] == "low"
+        assert out["warning"] == "行业集中度低，行业冲击风险较小"
+        assert out["impact_pct"] == pytest.approx(0.05 * out["shock_pct"])

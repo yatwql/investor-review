@@ -467,3 +467,69 @@ class TestSilencePeriod:
         # 第二次应被静默过滤
         result2 = compute_rebalance_signals(holdings, 1000, config)
         assert len(result2) == 0
+
+
+class TestDeviationFallbackBranches:
+    """偏离信号族的分支收窄：缺持仓的信号原样保留、未分类落 others、上下限两侧措辞、配置回退。"""
+
+    def test_signals_without_matching_holding_pass_through(self):
+        from src.python.analysis._rebalance_deviation import _apply_false_positive_protection
+
+        signals = [{"code": "ZZZ", "type": "security"}]
+
+        out = _apply_false_positive_protection(signals, [{"code": "600519", "shares": 100.0}])
+
+        assert out == signals, "无对应持仓的信号不参与误报防护，原样透传"
+
+    def test_unknown_category_falls_into_others(self, monkeypatch):
+        from src.python.analysis import _rebalance_deviation as rd
+
+        monkeypatch.setattr("src.python.analysis.rebalance.classify_holding", lambda _name, _code: "unknown_cat")
+
+        grouped = rd._categorize_holdings([{"name": "神秘品种", "code": "999999", "market_value": 100.0}])
+
+        assert [row["code"] for row in grouped["others"]] == ["999999"]
+
+    def test_category_below_min_warns_underweight(self):
+        from src.python.analysis._rebalance_deviation import _build_category_deviation_signals
+
+        signals = _build_category_deviation_signals({"equity": 5.0}, {"equity": {"min": 30.0, "max": 60.0}}, 0.05)
+
+        assert len(signals) == 1
+        assert "低于目标下限 30.0%" in signals[0]["action"]
+        assert "低配" in signals[0]["action"]
+
+    def test_security_below_min_warns_underweight(self):
+        from src.python.analysis._rebalance_deviation import _build_security_deviation_signals
+
+        signals = _build_security_deviation_signals(
+            [{"code": "600519", "name": "贵州茅台", "market_value": 10.0}],
+            1000.0,
+            {"600519": {"min": 30.0, "max": 60.0}},
+            0.05,
+        )
+
+        assert len(signals) == 1
+        assert "低于目标下限 30.0%" in signals[0]["action"]
+
+    def test_target_allocation_defaults_to_config(self, monkeypatch):
+        """未传目标配置时从 rebalance.target_allocation 读取（空表则无信号）。"""
+        monkeypatch.setattr(
+            "src.python.analysis._rebalance_deviation.get_config",
+            lambda: {"rebalance": {"target_allocation": {"equity": {"min": 90.0, "max": 100.0}}}},
+        )
+
+        signals = compute_target_deviation([{"name": "贵州茅台", "code": "600519", "market_value": 100.0}], 1000.0)
+
+        assert [s["type"] for s in signals] == ["category"]
+
+    def test_equity_fi_target_defaults_to_config(self, monkeypatch):
+        """未传股债目标时从 rebalance.equity_fixed_income 读取。"""
+        monkeypatch.setattr(
+            "src.python.analysis._rebalance_deviation.get_config",
+            lambda: {"rebalance": {"equity_fixed_income": {"equity": {"min": 90.0, "max": 100.0}}}},
+        )
+
+        signals = equity_fixed_income_deviation([{"name": "贵州茅台", "code": "600519", "market_value": 100.0}], 1000.0)
+
+        assert [s["type"] for s in signals] == ["equity_fixed_income"]

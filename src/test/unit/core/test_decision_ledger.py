@@ -511,3 +511,88 @@ class TestBackfillSettlementHorizons:
 
     def test_missing_file_is_noop(self, tmp_path):
         assert dl.backfill_settlement_horizons(str(tmp_path / "nope.jsonl")) == 0
+
+
+class TestLedgerTolerantPaths:
+    """账本容错：空代码/坏视界/空 decision_id/缺 raw_return 只跳过该条，不影响其余统计。"""
+
+    def test_pending_inaction_exists_false_for_blank_code(self, tmp_path):
+        lp = str(tmp_path / "ledger.jsonl")
+        dl.append_decision(code="600519", name="x", direction=dl.DIRECTION_FLAT, path=lp)
+
+        assert dl.pending_inaction_exists("  ", path=lp) is False, "空代码不匹配任何记录"
+
+    def test_settlement_horizon_falls_back_on_unparsable_value(self):
+        assert dl._settlement_horizon({"target_horizon": "近5日"}) == dl.MIN_SETTLE_BARS
+        assert dl._settlement_horizon({}) == dl.MIN_SETTLE_BARS
+
+    def test_settlement_without_decision_id_is_ignored(self):
+        events = [
+            {"event": dl.EVENT_DECISION, "decision_id": "d1", "direction": dl.DIRECTION_LONG},
+            {"event": dl.EVENT_SETTLEMENT, "decision_id": "", "outcome": dl.OUTCOME_HIT, "raw_return": 0.01},
+        ]
+
+        stats = dl.fold_ledger(events)
+
+        assert stats["counts"][dl.OUTCOME_HIT] == 0, "无 decision_id 的结算事件不归属任何决策"
+        assert stats["pending_count"] == 1
+
+    def test_by_horizon_skips_decisions_without_that_horizon(self):
+        events = [
+            {"event": dl.EVENT_DECISION, "decision_id": "d1", "direction": dl.DIRECTION_LONG},
+            {"event": dl.EVENT_DECISION, "decision_id": "d2", "direction": dl.DIRECTION_SHORT},
+            {
+                "event": dl.EVENT_SETTLEMENT,
+                "decision_id": "d1",
+                "outcome": dl.OUTCOME_HIT,
+                "raw_return": 0.02,
+                "target_horizon": dl.MIN_SETTLE_BARS,
+            },
+            {"event": dl.EVENT_SETTLEMENT, "decision_id": "d2", "outcome": dl.OUTCOME_MISS, "target_horizon": 10},
+        ]
+
+        stats = dl.fold_ledger(events)
+
+        assert stats["by_horizon"][dl.MIN_SETTLE_BARS]["settled"] == 1
+        assert stats["by_horizon"][10]["settled"] == 1, "各视界只统计自身有结算的决策"
+
+    def test_direction_verb_neutral_for_flat(self):
+        assert dl._direction_verb(dl.DIRECTION_FLAT) == "中性"
+
+    def test_short_examples_skip_settlement_without_return(self):
+        events = [
+            {
+                "event": dl.EVENT_DECISION,
+                "decision_id": "d1",
+                "direction": dl.DIRECTION_LONG,
+                "name": "甲",
+                "code": "1",
+            },
+            {"event": dl.EVENT_SETTLEMENT, "decision_id": "d1", "outcome": dl.OUTCOME_HIT},
+        ]
+        resolved = dl.fold_ledger(events)["decisions"]
+
+        assert dl._short_examples(resolved) == [], "无区间涨跌可写的案例不入教训文本"
+
+    def _seed_sufficient_with_alpha(self, lp):
+        """20 条方向性决策 + 基准涨跌 → 样本充足且 alpha 可算。"""
+        for i in range(20):
+            d = dl.append_decision(code=f"60001{i % 10}", name=f"股{i}", direction=dl.DIRECTION_LONG, path=lp)
+            _settle(d, outcome=dl.OUTCOME_HIT, raw=0.03, bench=0.01, hit=True, path=lp)
+
+    def test_lessons_block_reports_percentage_when_sample_sufficient(self, tmp_path):
+        lp = str(tmp_path / "ledger.jsonl")
+        self._seed_sufficient_with_alpha(lp)
+
+        block = dl.lessons_block(path=lp)
+
+        assert "20 次方向性决策方向命中 20 次（命中率 100%）" in block
+        assert "样本不足" not in block
+
+    def test_lessons_block_reports_benchmark_alpha(self, tmp_path):
+        lp = str(tmp_path / "ledger.jsonl")
+        self._seed_sufficient_with_alpha(lp)
+
+        block = dl.lessons_block(path=lp)
+
+        assert "方向性相对基准超额均值 +2.00%" in block

@@ -10,7 +10,7 @@
 
 from __future__ import annotations
 
-import os
+import sys
 from unittest.mock import patch
 
 import pytest
@@ -95,12 +95,25 @@ class TestLlmCredentials:
         assert "未配置 provider 链" in items[0]["message"]
 
 
+#: 真实 `_probe_targets` 的引用：conftest 的路径隔离 fixture 会把模块属性替换成
+#: 固定替身（见 `src/test/_path_isolation.py`），运行期取到的名字恒为替身——
+#: 探针目标函数本身的实现只有在收集期捕获的原始引用上才可达。
+_REAL_PROBE_TARGETS = doctor._probe_targets
+
+
 class TestProbeTargets:
+    def test_configured_output_dir_wins(self, tmp_path):
+        """配置了 output_dir 就取它（替身恒返回隔离目录，故只有真实实现能满足本断言）。"""
+        with patch("src.python.config.get_config", return_value={"output_dir": str(tmp_path)}):
+            targets = _REAL_PROBE_TARGETS()
+        assert targets[0] == ("输出目录", str(tmp_path))
+        assert [label for label, _ in targets[1:]] == ["缓存目录", "日志目录"]
+
     def test_config_failure_falls_back_to_default_output_dir(self):
         with patch("src.python.config.get_config", side_effect=RuntimeError("配置损坏")):
-            targets = doctor._probe_targets()
+            targets = _REAL_PROBE_TARGETS()
         assert targets[0][0] == "输出目录"
-        assert targets[0][1].endswith(os.path.join("doctor_probe0", "reports"))
+        assert targets[0][1] == doctor._DEFAULT_OUTPUT_DIR
         assert [label for label, _ in targets[1:]] == ["缓存目录", "日志目录"]
 
 
@@ -224,3 +237,29 @@ class TestSourceAdapters:
         assert items[0]["ok"] is False
         assert "行情A：缺 defaults" in items[0]["message"]
         assert "1 个未通过自检" in items[0]["message"]
+
+
+class TestDirectoryProbeAndLedgerOverview:
+    """目录探针的空目录态与账本概览的「初始化失败」兜底。"""
+
+    def test_empty_xlsx_free_holdings_dir_is_reported(self, tmp_path):
+        with (
+            patch("src.python.config.get_config", return_value={"holdings_dir": str(tmp_path)}),
+            patch.object(doctor, "_probe_targets", return_value=[]),
+        ):
+            items = doctor._check_directories()
+
+        assert items[0]["label"] == "持仓文件"
+        assert items[0]["ok"] is False
+        assert items[0]["message"] == "目录内无 .xlsx 文件"
+
+    def test_ledger_overview_import_failure_degrades_to_single_item(self, monkeypatch):
+        """账本依赖模块导入失败 → 只留一条「初始化失败」，不抛出。"""
+        monkeypatch.delattr("src.python.core.experiment_stats", raising=False)
+        monkeypatch.setitem(sys.modules, "src.python.core.experiment_stats", None)
+
+        items = doctor._check_review_ledger_overview()
+
+        assert len(items) == 1
+        assert items[0]["ok"] is False
+        assert items[0]["message"].startswith("初始化失败: ")

@@ -276,3 +276,40 @@ class TestComputeTemperatureValuationPath:
         assert data["valuation_percentile"] is None
         assert data["valuation_components"] is None
         assert data["first_factor"] is None
+
+
+class TestSeriesSanitisingBranches:
+    """序列非法值收窄：坏点跳过而非带倒整条温度序列。"""
+
+    def test_erp_empty_when_no_valid_risk_free_point(self):
+        """无有效国债收益率点（0/1/非数值都算无效）→ 空 ERP 序列。"""
+        assert build_erp_series([{"date": "2025-01-02", "pe": 20.0}], [{"date": "2025-01-02", "rate": 0.0}]) == []
+
+    def test_erp_skips_unparsable_and_non_positive_pe(self):
+        pe_rows = [
+            {"date": "2025-01-02", "pe": "n/a"},
+            {"date": "2025-01-03", "pe": 0.0},
+            {"date": "2025-01-06", "pe": 20.0},
+        ]
+        rf_rows = [{"date": "2025-01-02", "rate": 0.02}]
+
+        series = build_erp_series(pe_rows, rf_rows)
+
+        assert series == [pytest.approx(1 / 20.0 - 0.02)], "坏 PE 点被跳过，只留有效点"
+
+    def test_ma_deviation_none_for_non_finite_current(self):
+        assert ma_deviation([10.0] * 25, float("nan")) is None
+
+    def test_volatility_none_when_too_few_valid_returns(self):
+        """相邻价含非有限值时构不成 2 个收益率点 → 无波动率可算。"""
+        assert returns_volatility([10.0, float("nan")]) is None
+
+    def test_compute_temperature_unavailable_when_ma_zero(self):
+        """全零点位序列：分位可算但均线为 0（偏离不可定义）→ 按样本不足不可用。"""
+        bars = [{"date": f"2025-01-{i:02d}", "close": 0.0} for i in range(1, 31)] * 2
+
+        data = compute_temperature(bars)
+
+        assert data["available"] is False
+        assert data["reason"] == "insufficient_samples"
+        assert data["sample_count"] == len(bars)

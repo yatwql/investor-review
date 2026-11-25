@@ -218,3 +218,45 @@ class TestDegradation:
         row = contract["benchmarks"][0]
         assert row["ir_annual"] is None
         assert row["te_annual"] is None
+
+
+class TestInternalAlignmentBranches:
+    """对齐/聚合内部件的坏点分支：坏日期与零基准值跳过，滚动窗口全无效时整块不可用。"""
+
+    def test_align_skips_non_positive_benchmark_value(self):
+        from src.python.analysis.benchmark_excess import _align_excess_pairs
+
+        bars = [{"date": "2025-01-02"}, {"date": "2025-01-03"}, {"date": "2025-01-06"}]
+        bm = {"bars": [{"value": 0.0}, {"value": 1.0}, {"value": 1.5}]}
+
+        pairs = _align_excess_pairs(bars, [0.01, 0.02], bm)
+
+        assert [p[0] for p in pairs] == ["2025-01-06"], "基准起值为 0 的点不构成日收益，直接跳过"
+
+    def test_monthly_win_rates_skips_unparsable_date(self):
+        from src.python.analysis.benchmark_excess import _monthly_win_rates
+
+        excess, bm_returns = _monthly_win_rates([("bad-date", 0.01, 0.0), ("2025-01-06", 0.02, 0.01)])
+
+        assert set(excess) == {(2025, 1)}
+        assert bm_returns == {(2025, 1): pytest.approx(0.01)}
+
+    def test_rolling_excess_unavailable_when_every_window_non_finite(self):
+        """收益率溢出成 inf → 每个窗口的差值都是 NaN → 无点可绘，整块不可用。"""
+        from src.python.analysis.benchmark_excess import _rolling_excess
+
+        pairs = [(f"2025-01-{i % 28 + 1:02d}", 1e308, 0.0) for i in range(ROLLING_WINDOW_DAYS)]
+
+        out = _rolling_excess(pairs, "沪深300")
+
+        assert out["available"] is False
+        assert out["reason"] == "滚动窗口计算结果为空"
+        assert out["points"] == []
+
+    def test_finite_rejects_none_nan_and_inf(self):
+        from src.python.analysis.benchmark_excess import _finite
+
+        assert _finite(None) is None
+        assert _finite(float("nan")) is None
+        assert _finite(float("inf")) is None
+        assert _finite(1.5) == pytest.approx(1.5)

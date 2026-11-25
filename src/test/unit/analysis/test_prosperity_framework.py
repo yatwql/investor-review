@@ -666,3 +666,39 @@ class TestFundTypeFallback:
         # 固收（超短债）25% 进防御侧；QDII/宽基/主动权益均为中性 → 景气 0%
         assert "命中景气关键词的权重 0.00%" in evidence, evidence
         assert "防御/红利关键词 25.00%" in evidence, evidence
+
+
+class TestDimensionExceptionDegradation:
+    """单维计算抛异常时降级为「未验证」，不把整份框架数据带倒。"""
+
+    def test_roe_dimension_exception_becomes_unverified(self, monkeypatch):
+        monkeypatch.setattr(
+            "src.python.analysis.prosperity_framework._score_roe",
+            lambda *_a, **_kw: (_ for _ in ()).throw(RuntimeError("指标表损坏")),
+        )
+
+        data = build_prosperity_framework_data(_details())
+
+        roe = next(d for d in data["dimensions"] if d["key"] == "roe_elasticity")
+        assert roe["status"] == "unverified"
+        assert any("已跳过" in r for r in roe["unverified"])
+
+    def test_concentration_dimension_exception_becomes_unverified(self, monkeypatch):
+        monkeypatch.setattr(
+            "src.python.analysis.prosperity_framework._score_concentration",
+            lambda *_a, **_kw: (_ for _ in ()).throw(RuntimeError("快照损坏")),
+        )
+
+        data = build_prosperity_framework_data(_details())
+
+        dim = next(d for d in data["dimensions"] if d["key"] == "concentration_cycle")
+        assert dim["status"] == "unverified"
+
+    def test_holdings_view_exception_yields_empty_list(self, monkeypatch):
+        from src.python.analysis import prosperity_framework as pf
+
+        monkeypatch.setattr(
+            pf, "_holdings_view", lambda *_a, **_kw: (_ for _ in ()).throw(RuntimeError("视角构建失败"))
+        )
+
+        assert pf._safe_holdings_view(_details(), {}, DEFAULT_CONFIG) == []

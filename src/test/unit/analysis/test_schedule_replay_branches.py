@@ -144,3 +144,23 @@ class TestLotsAndClearing:
 
         assert result["periods"][0]["cost_known"] is True
         assert any("未建模品种" in n for n in result["notes"])
+
+
+class TestRebuyAfterClearing:
+    """清仓后目标权重回升到可成交份额：该腿记「新增」并按当日净值重建成本基准。"""
+
+    def test_cleared_position_rebought_as_new_lot(self):
+        navs = {
+            "A": {"2025-01-02": 10.0, "2025-02-03": 10.0, "2025-03-03": 10.0},
+            "B": {"2025-01-02": 10.0, "2025-02-03": 10.0, "2025-03-03": 20.0},
+        }
+        # A 目标权重极低：期初市值 2000 元折算不足 0.005 份 → 按 0 份清仓；
+        # 第三期 B 净值翻倍使组合市值 4000 元，A 折算回 0.01 份 → 触发回补
+        weights = {"A": 2e-5, "B": 1.0 - 2e-5}
+
+        result = run_schedule_replay(_holdings(), navs, {"target_weights": weights}, **FAST)
+
+        assert result["available"] is True
+        assert result["periods"][0]["trades"] == 2, "首期清仓 A + 加仓 B"
+        assert result["periods"][1]["trades"] == 1, "市值翻倍后只有已清仓的 A 回补，B 目标份额不变"
+        assert result["periods"][1]["turnover"] < 1e-4, "回补腿极小，换手几乎为零"

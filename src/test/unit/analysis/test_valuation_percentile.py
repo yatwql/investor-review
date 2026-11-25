@@ -294,3 +294,28 @@ class TestComputeRealValuation:
     def test_declared_disclaimer_marks_ttm(self):
         assert "TTM" in DISCLAIMER_REAL
         assert "法定披露截止日" in DISCLAIMER_REAL
+
+
+class TestBarCoercionBranches:
+    """K 线取值收窄：非 dict bar / 缺价 bar 一律视作无数据。"""
+
+    def test_extract_closes_skips_non_dict_bar(self):
+        closes = extract_closes([{"close": 1.0}, None, "bad", {"nav": 2.0}])
+
+        assert closes == [pytest.approx(1.0), pytest.approx(2.0)]
+
+    def test_bar_date_and_close_reject_non_dict(self):
+        from src.python.analysis.valuation_percentile import _bar_close, _bar_date
+
+        assert _bar_date(None) is None
+        assert _bar_close([1.0, 2.0]) is None
+
+    def test_no_price_reason_when_last_bar_lacks_close(self):
+        """末位 bar 无收盘价且未显式给当前价 → 无法折算 PE/PB，reason 明确为 no_price。"""
+        recs = _records(("2024-12-31", 1.0, 10.0))
+
+        out = compute_real_valuation([{"date": "2025-05-06"}], recs)
+
+        assert out["available"] is False
+        assert out["reason"] == "no_price"
+        assert out["sample_count"] == 0
