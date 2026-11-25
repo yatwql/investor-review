@@ -21,3 +21,9 @@ def test_contract_html_empty_when_module_has_no_contract(monkeypatch: pytest.Mon
 def test_contract_rows_empty_when_module_has_no_contract(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(lcb, "get_module_contracts", lambda: {})
     assert lcb.contract_rows("summary") == []
+
+
+def test_contract_without_claims_renders_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(lcb, "get_module_contracts", lambda: {"summary": {"verdict": "pass"}})
+    assert lcb.contract_html("summary") == ""
+    assert lcb.contract_rows("summary") == []

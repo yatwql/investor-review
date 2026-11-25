@@ -38,3 +38,20 @@ def test_valuation_rows_without_percentile_are_skipped() -> None:
         }
     }
     assert sr._valuation_signals(payload, "2025-01-02", sr._QualityContext({})) == []
+
+
+def test_available_payloads_missing_required_fields_yield_no_signals() -> None:
+    ctx = sr._QualityContext({})
+    assert sr._temperature_signals({"market_temperature_data": {"available": True}}, "2025-01-02", ctx) == []
+    assert sr._valuation_signals({"valuation_data": {"available": True, "by_code": []}}, "2025-01-02", ctx) == []
+    assert sr._tail_risk_signals({"tail_risk_data": {"available": True, "var95": "非数值"}}, "2025-01-02", ctx) == []
+    assert (
+        sr._style_factor_signals({"style_factor_data": {"available": True, "style_allocation": {}}}, "2025-01-02", ctx)
+        == []
+    )
+    assert sr._overflow_signals({"action_data": {"rebalance_signals": {}}}, "2025-01-02", ctx) == []
+
+
+def test_valuation_row_without_tier_is_skipped() -> None:
+    payload = {"valuation_data": {"available": True, "by_code": {"600519": {"percentile_available": True}}}}
+    assert sr._valuation_signals(payload, "2025-01-02", sr._QualityContext({})) == []

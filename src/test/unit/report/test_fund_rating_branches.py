@@ -35,3 +35,8 @@ def test_rating_comment_appends_excess_score() -> None:
 def test_adjust_rating_keeps_peer_rating_for_middle_score() -> None:
     adjusted = fr._adjust_rating_with_benchmark("稳定", {"categories": ["超额收益"], "data": [60]})
     assert adjusted == "稳定"
+
+
+def test_adjust_rating_keeps_peer_rating_for_non_numeric_score() -> None:
+    adjusted = fr._adjust_rating_with_benchmark("良好", {"categories": ["超额收益"], "data": ["高"]})
+    assert adjusted == "良好"

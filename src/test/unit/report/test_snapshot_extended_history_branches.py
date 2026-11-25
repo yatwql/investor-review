@@ -98,3 +98,8 @@ def test_crisis_index_series_skips_non_dict_history_and_indices() -> None:
     assert snap.fetch_crisis_index_series({"history": "坏配置"}) is None
     assert snap.fetch_crisis_index_series({"history": {"benchmark_indices": "坏配置"}}) is None
     assert snap.fetch_crisis_index_series({"history": {"benchmark_indices": {}}}) is None
+
+
+def test_crisis_index_series_returns_none_when_bars_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("src.python.report.benchmark.fetch_benchmarks", lambda *_a, **_kw: {})
+    assert snap.fetch_crisis_index_series({"history": {"benchmark_indices": {"000300": "沪深300"}}}) is None
