@@ -56,6 +56,27 @@ def _read_cache_data(fpath: str, key: str, dry_run: bool = False) -> dict | None
         return None
 
 
+def payload_timestamp(payload: dict) -> float:
+    """缓存载荷的写入时刻（`_ts`）；缺失/非数值一律归 0.0，由调用方决定 0 的语义。
+
+    「无 `_ts` 包封」与「`_ts` 是字符串/None/字典」属同一类畸形残留，**缓存读写三层
+    （读取 `_store.get`、年龄 `_ttl.get_cache_age`、清理 `_cleanup`）共用这一个解读**：
+    各写一份时一处容忍、另一处拿原始值参与减法就会抛 `TypeError`，把取数链或整轮清理
+    打断（缓存的契约是「坏了就当没缓存」）。
+
+    Args:
+        payload: `_read_cache_data` 返回的载荷字典。
+
+    Returns:
+        写入时刻的秒级时间戳；无法解读时 0.0。
+    """
+    raw_ts = payload.get("_ts")
+    try:
+        return float(raw_ts) if raw_ts is not None else 0.0
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _write_atomic(
     fd: int,
     tmp_path: str,

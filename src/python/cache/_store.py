@@ -15,7 +15,7 @@ import time
 from builtins import set as builtin_set
 from typing import Any
 
-from ._io import _read_cache_data, _write_atomic
+from ._io import _read_cache_data, _write_atomic, payload_timestamp
 from ._paths import _GZIP_SUFFIX, _GZIP_THRESHOLD, _cache_path
 from ._stats import _record_cache_hit, _record_cache_miss
 
@@ -85,7 +85,9 @@ def get(key: str, max_age_seconds: float, *, record_stats: bool = True) -> Any |
                 _record_cache_miss(key)
             return None
 
-        timestamp = data.get("_ts", 0)
+        # `_ts` 非数值（字符串/None/字典）与缺失同处理：归 0 后 age 必然超过上限，
+        # 按「已过期」当未命中——缓存的契约是「坏了就当没缓存」，不得抛 TypeError 打断取数链。
+        timestamp = payload_timestamp(data)
         age = time.time() - timestamp
         if age > max_age_seconds:
             _debug_once("缓存已过期", key, age, max_age_seconds)
