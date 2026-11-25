@@ -374,3 +374,24 @@ class TestFetchNewsInterfaceDegradation(unittest.TestCase):
             fetch_news(num=10)
 
         self.assertTrue(any("源内降级" in line for line in ctx.output))
+
+
+class TestCctvNewsImportGuard(unittest.TestCase):
+    """_fetch_cctv_news 的 akshare 缺失守卫。"""
+
+    def test_cctv_returns_empty_when_akshare_missing(self):
+        """akshare 未安装 → 返回空列表并留 WARNING（交聚合器按源降级，不抛异常）。"""
+        real_import = builtins.__import__
+
+        def mock_import(name, *args, **kwargs):
+            if name == "akshare":
+                raise ImportError("no module")
+            return real_import(name, *args, **kwargs)
+
+        from src.python.providers.akshare_news import _fetch_cctv_news
+
+        with patch.object(builtins, "__import__", mock_import):
+            with self.assertLogs("invest", level="WARNING") as ctx:
+                result = _fetch_cctv_news(date_str="20250101")
+        self.assertEqual(result, [])
+        self.assertTrue(any("akshare" in line for line in ctx.output))

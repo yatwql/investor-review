@@ -219,3 +219,21 @@ class TestFetchWithFallback(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestAkshareFacadeDelegation(unittest.TestCase):
+    """fetcher.akshare 门面：报告层只经此读 provider 事实（不直连 providers）。"""
+
+    @patch("src.python.providers.akshare_extras._compute_index_fingerprint", return_value="deadbeef0000")
+    def test_profit_forecast_cache_key_carries_index_fingerprint(self, _mock_fp) -> None:
+        """盈利预测缓存键 = 统一前缀 + 指数指纹（指纹变则键变 → 缓存自动失效）。"""
+        from src.python.fetcher.akshare import get_profit_forecast_cache_key
+
+        self.assertEqual(get_profit_forecast_cache_key(), "profit_forecast_deadbeef0000")
+
+    @patch("src.python.providers.akshare_extras.sector_flow_degraded_state", return_value="stale")
+    def test_sector_flow_degraded_state_passthrough(self, _mock_state) -> None:
+        """行业资金流向降级态经门面透传（与 provider 同一口径）。"""
+        from src.python.fetcher.akshare import sector_flow_degraded_state
+
+        self.assertEqual(sector_flow_degraded_state(), "stale")

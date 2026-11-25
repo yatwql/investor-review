@@ -849,3 +849,150 @@ class TestCallSingleProviderFallbackClient(unittest.TestCase):
         self.assertIsNot(first, second, "每条 entry 应各自兜底建客户端")
         self.assertTrue(first.is_closed)
         self.assertTrue(second.is_closed)
+
+
+# ═══════════════════════════════════════════════════════════
+#  温度透传 / 思考能力判定 / 客户端缺失 — 各后端公共契约
+# ═══════════════════════════════════════════════════════════
+
+
+class TestProviderPayloadAndClientGuards(unittest.TestCase):
+    """call_gemini / call_claude 的温度字段、思考能力判定与客户端前置校验。"""
+
+    base_kw = dict(
+        system="system",
+        user="user",
+        api_key="sk-test",
+        endpoint="",
+        max_tokens=800,
+    )
+
+    @patch("src.python.llm._api_gemini.call_llm_with_retry")
+    def test_gemini_temperature_passed_into_generation_config(self, mock_retry: MagicMock) -> None:
+        """显式 temperature → 写入 generationConfig（未开启思考时不被移除）。"""
+        mock_retry.return_value = ("ok", {})
+        call_gemini(
+            **self.base_kw,
+            model="gemini-2.5-flash",
+            http_client=MagicMock(),
+            temperature=0.4,
+        )
+        payload = mock_retry.call_args[1]["payload"]
+        self.assertEqual(payload["generationConfig"]["temperature"], 0.4)
+
+    @patch("src.python.llm._api_gemini.call_llm_with_retry")
+    def test_gemini_thinking_skipped_for_unsupported_model(self, mock_retry: MagicMock) -> None:
+        """模型不支持 Extended Thinking → 告警且不注入 thinkingConfig（模块照常执行）。"""
+        mock_retry.return_value = ("ok", {})
+        cfg = {"thinking_enabled_global_macro": True, "thinking_budget_global_macro": 700}
+        with self.assertLogs(level="WARNING") as cm:
+            call_gemini(
+                **self.base_kw,
+                model="gemini-1.5-pro",
+                http_client=MagicMock(),
+                config_field="max_tokens_global_macro",
+                llm_config=cfg,
+                temperature=0.4,
+            )
+        payload = mock_retry.call_args[1]["payload"]
+        self.assertNotIn("thinkingConfig", payload["generationConfig"])
+        self.assertIn("不支持 Extended Thinking", "\n".join(cm.output))
+        self.assertEqual(payload["generationConfig"]["temperature"], 0.4, "不启思考时温度仍应生效")
+
+    def test_gemini_missing_http_client_raises(self) -> None:
+        """http_client=None → 显式 ValueError（不把 None 拖到调用处才炸）。"""
+        with self.assertRaises(ValueError):
+            call_gemini(**self.base_kw, model="gemini-2.5-flash", http_client=None)
+
+    @patch("src.python.llm._api_claude.call_llm_with_retry")
+    def test_claude_temperature_passed_when_thinking_absent(self, mock_retry: MagicMock) -> None:
+        """未开启思考（payload 无 thinking）→ 温度写入请求体。"""
+        mock_retry.return_value = ("ok", {})
+        call_claude(
+            **self.base_kw,
+            model="claude-sonnet-4-20250514",
+            config_field="max_tokens_global_macro",
+            llm_config=None,
+            http_client=MagicMock(),
+            temperature=0.2,
+        )
+        payload = mock_retry.call_args[1]["payload"]
+        self.assertEqual(payload["temperature"], 0.2)
+        self.assertNotIn("thinking", payload)
+
+    def test_claude_missing_http_client_raises(self) -> None:
+        """http_client=None → 显式 ValueError。"""
+        with self.assertRaises(ValueError):
+            call_claude(**self.base_kw, model="claude-sonnet-4-20250514", http_client=None)
+
+    @patch("src.python.llm._api_claude._get_last_server_error")
+    @patch("src.python.llm._api_claude._get_last_llm_failure")
+    @patch("src.python.llm._api_claude.call_llm_with_retry")
+    @patch("src.python.llm._api_claude._get_last_thinking_exhausted")
+    @patch("src.python.llm._api_claude.clear_last_thinking_exhausted")
+    def test_non_effort_model_thinking_retry_drops_thinking_key(
+        self,
+        mock_clear: MagicMock,
+        mock_get: MagicMock,
+        mock_retry: MagicMock,
+        mock_failure: MagicMock,
+        mock_server_error: MagicMock,
+    ) -> None:
+        """非强制推理模型思考耗尽 → 重试体移除 thinking 键（显式开启才需重试，移除即关）。"""
+        mock_server_error.return_value = ""
+        mock_failure.return_value = None
+        mock_get.side_effect = [True, False]
+        mock_retry.side_effect = [(None, None), ("recovered", {"output_tokens": 5})]
+        result, _usage = call_claude(
+            **self.base_kw,
+            model="claude-sonnet-4-20250514",
+            config_field="max_tokens_global_macro",
+            llm_config={"thinking_enabled_global_macro": True},
+            http_client=MagicMock(),
+            temperature=0.3,
+        )
+        self.assertEqual(result, "recovered")
+        second_payload = mock_retry.call_args_list[1][1]["payload"]
+        self.assertNotIn("thinking", second_payload)
+        self.assertEqual(second_payload.get("temperature"), 0.3, "关闭思考后恢复温度")
+        mock_clear.assert_called_once()
+
+
+# ═══════════════════════════════════════════════════════════
+#  链式选路：端点回显 / 观测汇聚
+# ═══════════════════════════════════════════════════════════
+
+
+class TestChainObservationAndEndpointEcho(unittest.TestCase):
+    """call_llm 的端点回显日志与 perf 观测汇聚（note_call / note_fallback）。"""
+
+    @patch("src.python.llm.api._call_provider_entry")
+    def test_endpoint_echoed_in_provider_desc(self, mock_entry: MagicMock) -> None:
+        """条目带 endpoint → 尝试日志回显该端点（便于定位走的是兼容端点还是官方）。"""
+        mock_entry.return_value = ("ok", {})
+        config = make_chain_config(model="m1", endpoint="https://compat.example/v1")
+        with self.assertLogs(level="INFO") as cm:
+            call_llm("sys", "user", config)
+        self.assertIn("[https://compat.example/v1]", "\n".join(cm.output))
+
+    @patch("src.python.llm.api._call_provider_entry")
+    def test_observation_records_call_and_fallback(self, mock_entry: MagicMock) -> None:
+        """首 provider 失败、次 provider 成功 → 观测记 1 次降级 + 成功者的选路。"""
+        from src.python.llm.observation import LlmObservation
+
+        sink = LlmObservation()
+        mock_entry.side_effect = [(None, None), ("ok", {})]
+        config = {
+            "_provider_list": [
+                {"name": "p-fail", "provider": "claude", "api_key": "sk-a", "model": "m-a"},
+                {"name": "p-ok", "provider": "claude", "api_key": "sk-b", "model": "m-b"},
+            ]
+        }
+        with patch("src.python.llm.observation.current_llm_observation", return_value=sink):
+            content, _usage, info = call_llm("sys", "user", config)
+        self.assertEqual(content, "ok")
+        self.assertEqual((info or {}).get("name"), "p-ok")
+        snap = sink.snapshot()
+        self.assertEqual(snap["fallbacks"], 1)
+        self.assertEqual(snap.get("providers"), {"p-ok": 1})
+        self.assertEqual(snap.get("models"), {"m-b": 1})

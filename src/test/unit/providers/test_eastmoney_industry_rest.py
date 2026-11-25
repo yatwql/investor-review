@@ -139,3 +139,34 @@ class TestRestFetchIndustryAndConcepts(unittest.TestCase):
 
         result = fetch_industry_and_concepts("000001")
         self.assertIsNone(result)
+
+
+class TestRestQuotedataInvalidAndCache(unittest.TestCase):
+    """quotedata 解析失败的降级 + 会话级缓存复用。"""
+
+    def setUp(self):
+        from src.python.core.provider_registry import get_registry
+
+        get_registry().session_cache_clear("industry_rest")
+
+    def test_invalid_json_returns_none(self):
+        """quotedata 块存在但 JSON 非法 → 按「未找到」返回 None（不抛异常）。"""
+        from src.python.providers.eastmoney_industry_rest import _extract_quotedata
+
+        self.assertIsNone(_extract_quotedata("<script>var quotedata = {bk_name: 白酒};</script>"))
+
+    @patch("src.python.providers.eastmoney_industry_rest.make_http_client")
+    def test_second_call_served_from_session_cache(self, mock_client_factory):
+        """同一代码二次调用 → 命中会话缓存，不再发起 HTTP 请求。"""
+        from src.python.providers.eastmoney_industry_rest import fetch_industry_and_concepts
+
+        mock_client = mock_client_factory.return_value.__enter__.return_value
+        mock_client.get.return_value.text = (
+            '<script>var quotedata = {"name":"贵州茅台","code":"600519","bk_name":"白酒Ⅱ","bk_id":"BK1277"};</script>'
+        )
+
+        first = fetch_industry_and_concepts("600519")
+        second = fetch_industry_and_concepts("600519")
+
+        self.assertEqual(second, first)
+        self.assertEqual(mock_client.get.call_count, 1, "二次调用应命中会话缓存")

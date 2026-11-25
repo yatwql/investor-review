@@ -702,3 +702,67 @@ class TestDimensionExceptionDegradation:
         )
 
         assert pf._safe_holdings_view(_details(), {}, DEFAULT_CONFIG) == []
+
+
+# ═══════════════════════════════════════════════════════════
+#  集中度分档 / 输入降级
+# ═══════════════════════════════════════════════════════════
+
+
+def _equal_rows(total: int, mv_each: float, prefix: str = "6000") -> list[DetailRow]:
+    """构造等权持仓（代码递增，避免同名去重干扰）。"""
+    return [_row(f"{prefix}{i:02d}", f"标的{i}", mv_each) for i in range(total)]
+
+
+class TestConcentrationTiers:
+    """集中度分档：≤目标 8 分 / 1.4 倍内 5 分（口径见 evidence 文案）。"""
+
+    def test_within_target_scores_eight(self):
+        """前十大集中度 = 50%（20 只等权）→ 达标档 8 分。"""
+        from src.python.analysis.prosperity_scoring import _cfg, _score_concentration
+
+        dim, conc_pct, _turn = _score_concentration(_equal_rows(20, 50_000.0), None, _cfg(None))
+        assert conc_pct == pytest.approx(50.0)
+        assert dim["status"] == "partial"  # 无快照 → 换手不可算
+        assert dim["score"] == 8
+
+    def test_between_target_and_1_4x_scores_five(self):
+        """前十大集中度 60%（20 只：10×6 万 + 10×4 万）→ 1.4 倍内 5 分。"""
+        from src.python.analysis.prosperity_scoring import _cfg, _score_concentration
+
+        rows = _equal_rows(10, 60_000.0) + _equal_rows(10, 40_000.0, prefix="5103")
+        dim, conc_pct, _turn = _score_concentration(rows, None, _cfg(None))
+        assert conc_pct == pytest.approx(60.0)
+        assert dim["score"] == 5
+
+
+class TestProsperityInputsDegradation:
+    """配置层不可读与穿透项形态异常的降级口径。"""
+
+    def test_config_layer_unavailable_falls_back_to_builtin(self, monkeypatch):
+        """配置层读取失败 → 退回内置最小词表（功能可用，不抛异常）。"""
+        from src.python.analysis import prosperity_inputs
+        from src.python.config import _config_defaults as _cd
+
+        class _UnreadableConfig(dict):
+            def get(self, *args, **kwargs):
+                raise RuntimeError("配置层不可读")
+
+        monkeypatch.setattr(_cd, "_DEFAULT_CONFIG", _UnreadableConfig())
+        result = prosperity_inputs._config_defaults_for_module()
+        assert set(result) <= set(prosperity_inputs._FALLBACK_CONFIG), "不得引入内置词表外的键"
+        assert result, "回退词表不得为空（否则景气匹配全失效）"
+
+    def test_non_dict_penetration_item_skipped(self):
+        """穿透 top10 含非 dict 项 → 跳过该项，其余项照常计入。"""
+        from src.python.analysis.prosperity_inputs import _sector_weight_items
+
+        penetration = {
+            "top10": [
+                "异常项",
+                {"name": "中际旭创", "sector": "科技", "concepts": ["光通信"], "ratio_pct": 20.0},
+            ]
+        }
+        items, _covered, pen_pct, _fb_pct, _fb_n = _sector_weight_items(penetration, _details())
+        assert pen_pct == pytest.approx(20.0), "异常项不得计入穿透权重"
+        assert any("光通信" in text for text, _weight in items)

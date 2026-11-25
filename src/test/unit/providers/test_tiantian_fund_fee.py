@@ -305,3 +305,29 @@ class TestFeeRequestBudget:
         assert isinstance(tf._TIMEOUT, httpx.Timeout)
         assert tf._TIMEOUT.connect == 4.0
         assert tf._TIMEOUT.read == 15.0
+
+
+class TestParseFeePageTableEdgeShapes:
+    """无行表 / 只有表头无数据行的表 → 跳过（不因空表误判表头匹配）。"""
+
+    def test_empty_table_and_header_only_purchase_table_skipped(self):
+        """空表与只有表头的「适用金额」表跳过 → 仍按赎回表正常出载荷。"""
+        html = (
+            "<html><body>"
+            "<table></table>"
+            "<table><tr><th>适用金额</th><th>费率</th></tr></table>"
+            "<table><tr><td>适用期限</td><td>赎回费率</td></tr>"
+            "<tr><td>小于7天</td><td>1.50%</td></tr></table>"
+            "</body></html>"
+        )
+        payload = parse_fee_page(html)
+        assert payload is not None
+        assert payload["redemption_rows"] == [["小于7天", "1.50%"]]
+        assert payload["purchase_rows"] == [], "只有表头的表不得产出档位行"
+
+    def test_rows_shape_ok_rejects_non_list(self):
+        """_rows_shape_ok 对非 list 载荷直接判 False（防截断/错位体混入）。"""
+        from src.python.providers.tiantian_fund_fee import _rows_shape_ok
+
+        assert _rows_shape_ok("小于7天|1.50%") is False
+        assert _rows_shape_ok([["小于7天", "1.50%"]]) is True
