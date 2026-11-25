@@ -226,7 +226,7 @@ class TestIndustryAvailabilityFlag:
         assert "industry_failure_type" not in result
         assert {item["name"]: item["sector"] for item in result["top10"]}["贵州茅台"] == "白酒"
 
-    def test_no_a_share_codes_marks_failure_type_without_degrade(self, monkeypatch):
+    def test_no_a_share_codes_marks_failure_type_without_degrade(self):
         result = penetration._compute_penetration_top10_uncached(
             [_holding("腾讯控股", "00700")],
             [_detail("00700", name="腾讯控股")],

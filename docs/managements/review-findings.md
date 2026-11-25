@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.18.7-dev
-> **编号源**：`rf-next = 1192`（新增问题提出后更新为 +1；已用最大 rf-1191，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1193`（新增问题提出后更新为 +1；已用最大 rf-1192，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -18,6 +18,7 @@
 
 | # | 问题 | 修复方向 |
 | --- | --- | --- |
+| `rf-1192` | `report/penetration_sheet.py:219-220` 的 `no_a_share` 分支直接 `pass`，不复位 `penetration_industry` 降级追踪器上遗留的 `empty` 计数——跨会话序列「有 A 股且行业取数为空」→「全为非 A 股」→「再切回有 A 股」时，T3 阈值判断读到的仍是上一次会话累积的 `empty`，可能提前一次触发「行业分类不可用」降级 | `no_a_share` 分支内调一次 `_tracker().reset("penetration_industry")` 清空该通道计数；展示语义不变（无 A 股仍不记降级、`build_penetration_data_status` 仍返回空字典） |
 
 ### P3 — 持续监控：兼容残留
 
