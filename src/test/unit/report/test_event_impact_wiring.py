@@ -34,7 +34,7 @@ from src.python.report.event_impact_panel import (
     build_event_impact_view,
     write_event_impact_footer,
 )
-from src.python.report.progress import ProgressReporter
+from src.test._fixtures.reporters import RecordingReporter
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
 
@@ -64,23 +64,9 @@ def _calendar(offline_external_sources):
         yield
 
 
-class _RecordingReporter(ProgressReporter):
-    """记录各级消息的进度报告器（默认 ProgressReporter 各方法为空实现）。"""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.messages: list[tuple[str, str]] = []
-
-    def warn(self, msg: str) -> None:
-        self.messages.append(("warn", msg))
-
-    def warns(self) -> list[str]:
-        return [msg for level, msg in self.messages if level == "warn"]
-
-
 @pytest.fixture
-def reporter() -> _RecordingReporter:
-    return _RecordingReporter()
+def reporter() -> RecordingReporter:
+    return RecordingReporter()
 
 
 def _event(index: int, match: str, polarity: str, day: str | None = None) -> dict:
@@ -148,7 +134,7 @@ class TestEventImpactMount:
         with patch("src.python.config.features.is_feature_enabled", return_value=False):
             seams.inject_event_impact_data(pipeline_data, reporter, news_data=[], holdings=[])
         assert pipeline_data == {}
-        assert reporter.warns() == []
+        assert reporter.warns == []
 
     def test_flag_on_injects_contract(self, reporter):
         """开关打开 → 契约写入 pipeline_data，新闻/持仓/宽基池透传。"""
@@ -178,7 +164,7 @@ class TestEventImpactMount:
             patch(_PANEL_BUILD, return_value={"available": True}),
         ):
             seams.inject_event_impact_data(None, reporter, news_data=[], holdings=[])
-        assert reporter.warns() == []
+        assert reporter.warns == []
 
     def test_downstream_exception_warns_only(self, reporter):
         """下游异常 → 一条告警 + 契约缺席，不外抛、不中断报告。"""
@@ -189,8 +175,8 @@ class TestEventImpactMount:
         ):
             seams.inject_event_impact_data(pipeline_data, reporter, news_data=[], holdings=[])
         assert pipeline_data == {}
-        assert len(reporter.warns()) == 1
-        assert "事件窗对照" in reporter.warns()[0]
+        assert len(reporter.warns) == 1
+        assert "事件窗对照" in reporter.warns[0]
 
 
 # ── 注册表 / 导航 / 页签名 ──────────────────────────────

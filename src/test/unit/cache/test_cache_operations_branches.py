@@ -12,6 +12,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.python.cache import operations as ops
+from src.test._fixtures.reporters import RecordingReporter
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_core]
 
@@ -21,22 +22,6 @@ class _Holder:
         self.code = code
         self.name = name
         self.account = account
-
-
-class _Reporter:
-    def __init__(self) -> None:
-        self.infos: list[str] = []
-        self.oks: list[str] = []
-        self.warns: list[str] = []
-
-    def info(self, msg: str) -> None:
-        self.infos.append(msg)
-
-    def ok(self, msg: str) -> None:
-        self.oks.append(msg)
-
-    def warn(self, msg: str) -> None:
-        self.warns.append(msg)
 
 
 class TestMarketBreakdown:
@@ -110,7 +95,7 @@ class TestJudgeAfterRefresh:
 
 class TestCleanupCache:
     def test_reports_removed_count(self):
-        reporter = _Reporter()
+        reporter = RecordingReporter()
         with (
             patch("src.python.cache.cleanup_expired", return_value=3),
             patch("src.python.cache.get_cache_dir", return_value="/tmp/cache"),
@@ -120,7 +105,7 @@ class TestCleanupCache:
         assert any("已删除 3 个" in msg for msg in reporter.oks)
 
     def test_reports_nothing_to_clean(self):
-        reporter = _Reporter()
+        reporter = RecordingReporter()
         with (
             patch("src.python.cache.cleanup_expired", return_value=0),
             patch("src.python.cache.get_cache_dir", return_value="/tmp/cache"),
@@ -132,7 +117,7 @@ class TestCleanupCache:
 
 class TestCacheStats:
     def test_hit_rate_reported_when_samples_exist(self):
-        reporter = _Reporter()
+        reporter = RecordingReporter()
         raw = {"total_files": 2, "total_size_bytes": 2048, "by_prefix": {}, "top_by_size": []}
         with (
             patch("src.python.cache.get_cache_stats", return_value=raw),
@@ -146,7 +131,7 @@ class TestCacheStats:
         assert any("命中率: 42.0%" in msg for msg in reporter.infos)
 
     def test_no_samples_skips_hit_rate_line(self):
-        reporter = _Reporter()
+        reporter = RecordingReporter()
         raw = {"total_files": 0, "total_size_bytes": 0}
         with (
             patch("src.python.cache.get_cache_stats", return_value=raw),
@@ -205,7 +190,7 @@ class TestWarmNewAssetCaches:
 
     def test_all_fetch_failures_warn_without_raising(self):
         """行情/业绩/持仓/行业全无数据 → 逐项 warn，流程照走完。"""
-        reporter = _Reporter()
+        reporter = RecordingReporter()
         patches = self._patches(fund=True, price=0.0, rankings={}, holdings={}, industry={})
         with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
             codes = ops.warm_new_asset_caches([_Holder("600900", "长江电力")], reporter)
@@ -217,7 +202,7 @@ class TestWarmNewAssetCaches:
         assert any("行业 长江电力 无数据" in w for w in reporter.warns)
 
     def test_fund_path_success_messages(self):
-        reporter = _Reporter()
+        reporter = RecordingReporter()
         patches = self._patches(
             fund=True,
             price=28.0,
@@ -234,7 +219,7 @@ class TestWarmNewAssetCaches:
         assert any("行业 长江电力 电力" in msg for msg in reporter.oks)
 
     def test_unknown_industry_label_falls_back(self):
-        reporter = _Reporter()
+        reporter = RecordingReporter()
         patches = self._patches(fund=False, price=28.0, rankings={}, holdings={}, industry={"600900": {}})
         with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
             ops.warm_new_asset_caches([_Holder("600900", "长江电力")], reporter)
@@ -243,7 +228,7 @@ class TestWarmNewAssetCaches:
 
     def test_code_missing_from_holdings_uses_code_as_name(self):
         """预热代码不在持仓映射里 → 用代码当显示名（不让名称变空串）。"""
-        reporter = _Reporter()
+        reporter = RecordingReporter()
         patches = self._patches(fund=False, price=28.0, rankings={}, holdings={}, industry={})
         with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
             ops.warm_new_asset_caches([], reporter)
@@ -252,7 +237,7 @@ class TestWarmNewAssetCaches:
 
     def test_unexpected_error_keeps_processed_codes(self, monkeypatch):
         """预热中途异常 → 记警告并返回已处理的代码表（调用方据此继续生成报告）。"""
-        reporter = _Reporter()
+        reporter = RecordingReporter()
         monkeypatch.setattr("src.python.cache.check_and_refresh_caches", lambda h: ["600900"])
         monkeypatch.setattr(
             "src.python.fetcher.price.fetch_market_data",
@@ -266,7 +251,7 @@ class TestUpdateBasicCacheSuccessBranches:
     """全成功分支：基金业绩/持仓/基准、行业资金流向、分红数据都计数成功。"""
 
     def test_all_domains_succeed(self):
-        reporter = _Reporter()
+        reporter = RecordingReporter()
         fund = _Holder("000001", "基金A")
         with (
             patch("src.python.cache.clear_by_group"),
@@ -290,7 +275,7 @@ class TestUpdateBasicCacheSuccessBranches:
         assert any("分红数据 (6 只股票)" in msg for msg in reporter.oks)
 
     def test_empty_domains_warn(self):
-        reporter = _Reporter()
+        reporter = RecordingReporter()
         fund = _Holder("000001", "基金A")
         with (
             patch("src.python.cache.clear_by_group"),

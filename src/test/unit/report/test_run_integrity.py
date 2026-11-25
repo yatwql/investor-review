@@ -34,6 +34,7 @@ from src.python.report.run_integrity import (
     note_artifact,
     note_temp,
 )
+from src.test._fixtures.reporters import RecordingReporter
 
 pytestmark = [
     pytest.mark.unit,
@@ -42,28 +43,6 @@ pytestmark = [
     # `src/test/unit/test_offline_pipeline_contract.py`
     pytest.mark.usefixtures("offline_external_sources"),
 ]
-
-
-class _FakeReporter:
-    """收集 warn 输出的最小进度通道。"""
-
-    def __init__(self) -> None:
-        self.warnings: list[str] = []
-
-    def warn(self, msg: str) -> None:
-        self.warnings.append(msg)
-
-    def stage_progress(self, perf) -> None:  # noqa: ANN001 - PerfCollector 形状
-        pass
-
-    def info(self, msg: str) -> None:
-        pass
-
-    def ok(self, msg: str) -> None:
-        pass
-
-    def add_error(self, msg: str) -> None:
-        pass
 
 
 class _RunContextBase(unittest.TestCase):
@@ -150,7 +129,7 @@ class TestInterruptionHandling(_RunContextBase):
 
             begin_run("both", tmp)
             note_temp(str(registered))
-            reporter = _FakeReporter()
+            reporter = RecordingReporter()
             with self.assertRaises(KeyboardInterrupt):
                 try:
                     raise KeyboardInterrupt
@@ -176,7 +155,7 @@ class TestInterruptionHandling(_RunContextBase):
             tmp_left.write_text("partial", encoding="utf-8")
             note_temp(str(tmp_left))
 
-            reporter = _FakeReporter()
+            reporter = RecordingReporter()
             handle_interruption(reporter)
 
             # 运行记录：已中断 + 阶段
@@ -185,7 +164,7 @@ class TestInterruptionHandling(_RunContextBase):
             self.assertEqual(record["status"], "interrupted")
             self.assertEqual(record["interrupted_stage"], "Excel 生成")
             # 明细提示：阶段 / 已写盘无 / 已丢弃 Excel / 清理 1 个
-            (msg,) = reporter.warnings
+            (msg,) = reporter.warns
             self.assertIn("生成已中断", msg)
             self.assertIn("Excel 生成", msg)
             self.assertIn("已写盘：无", msg)
@@ -199,9 +178,9 @@ class TestInterruptionHandling(_RunContextBase):
         with tempfile.TemporaryDirectory() as tmp:
             begin_run("both", tmp)
             note_artifact("html", os.path.join(tmp, "个人投资分析报告.html"))
-            reporter = _FakeReporter()
+            reporter = RecordingReporter()
             handle_interruption(reporter)
-            (msg,) = reporter.warnings
+            (msg,) = reporter.warns
             self.assertIn("已写盘：个人投资分析报告.html", msg)
             self.assertIn("未完成已丢弃：Excel", msg)
 
@@ -212,15 +191,15 @@ class TestInterruptionHandling(_RunContextBase):
             fut, holdings = object(), []
             bind_health(fut, "basic", holdings)
             with patch("src.python.report._report_health._collect_health_checks") as mock_collect:
-                handle_interruption(_FakeReporter())
+                handle_interruption(RecordingReporter())
             mock_collect.assert_called_once_with(fut, "basic", holdings)
 
     def test_no_context_emits_empty_message(self) -> None:
         """上下文未建立即中断 → 提示未产生任何产物，不抛。"""
         clear_run()
-        reporter = _FakeReporter()
+        reporter = RecordingReporter()
         handle_interruption(reporter)
-        self.assertIn("未产生任何产物", reporter.warnings[0])
+        self.assertIn("未产生任何产物", reporter.warns[0])
 
     def test_stage_gap_labeled(self) -> None:
         """中断落在阶段间隙（无活跃阶段）→ 阶段记「阶段间隙」。"""
@@ -232,9 +211,9 @@ class TestInterruptionHandling(_RunContextBase):
             bind_perf(perf)
             perf.start("行情获取")
             perf.stop()  # 阶段间隙
-            reporter = _FakeReporter()
+            reporter = RecordingReporter()
             handle_interruption(reporter)
-            self.assertIn("阶段间隙", reporter.warnings[0])
+            self.assertIn("阶段间隙", reporter.warns[0])
 
 
 class TestAtomicWrites(_RunContextBase):
@@ -266,7 +245,7 @@ class TestAtomicWrites(_RunContextBase):
             self.assertEqual(Path(target).read_text(encoding="utf-8"), "旧报告")
             self.assertIn(target + ".tmp", current_run().temps)
             # 收口清掉半成品临时文件
-            handle_interruption(_FakeReporter())
+            handle_interruption(RecordingReporter())
             self.assertFalse(os.path.exists(target + ".tmp"))
 
     def test_excel_save_atomic_and_no_tmp_left(self) -> None:
@@ -301,7 +280,7 @@ class TestAtomicWrites(_RunContextBase):
                     save_workbook(wb, output_dir=tmp)
             self.assertEqual(Path(latest).read_bytes(), b"OLD-CONTENT")
             # 收口清理已登记临时文件（若已写出）
-            handle_interruption(_FakeReporter())
+            handle_interruption(RecordingReporter())
             self.assertFalse(os.path.exists(latest + ".tmp"))
 
 
@@ -364,10 +343,10 @@ class TestGuardRun(_RunContextBase):
         def _fake_generate(config: dict, reporter=None, report_type="basic", output_dir=None):  # noqa: ANN001
             raise KeyboardInterrupt
 
-        reporter = _FakeReporter()
+        reporter = RecordingReporter()
         with self.assertRaises(KeyboardInterrupt):
             _fake_generate(config={"output_dir": "reports"}, reporter=reporter, report_type="both")
-        self.assertTrue(any("生成已中断" in w for w in reporter.warnings))
+        self.assertTrue(any("生成已中断" in w for w in reporter.warns))
         self.assertIsNone(current_run())
 
     def test_output_dir_falls_back_to_config(self) -> None:
@@ -407,7 +386,7 @@ class TestGenerateReportInterruption(_RunContextBase):
 
         with tempfile.TemporaryDirectory() as tmp:
             perf_file = os.path.join(tmp, "perf_history.jsonl")
-            reporter = _FakeReporter()
+            reporter = RecordingReporter()
             with (
                 patch("src.python.core.perf._PERF_HISTORY_FILE", perf_file),
                 patch(
@@ -435,7 +414,7 @@ class TestGenerateReportInterruption(_RunContextBase):
             self.assertEqual(record["status"], "interrupted")
             self.assertEqual(record["interrupted_stage"], "Excel 生成")
             # 明细提示已给出：未写盘任何产物、Excel 丢弃
-            self.assertTrue(any("未完成已丢弃：Excel" in w for w in reporter.warnings))
+            self.assertTrue(any("未完成已丢弃：Excel" in w for w in reporter.warns))
             # 上下文已清理、无临时文件残留
             self.assertIsNone(current_run())
             self.assertEqual(list(Path(tmp).glob("*.tmp")), [])

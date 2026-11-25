@@ -21,23 +21,9 @@ from src.python.analysis import industry_beta as ib
 from src.python.analysis import style_factor_regression as sfr
 from src.python.report import _report_factor_metrics as rfm
 from src.python.report.progress import ProgressReporter
+from src.test._fixtures.reporters import RecordingReporter
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
-
-
-class _Reporter:
-    def __init__(self) -> None:
-        self.warns: list[str] = []
-        self.oks: list[str] = []
-
-    def info(self, *_a, **_k) -> None:
-        pass
-
-    def ok(self, msg: str, *_a, **_k) -> None:
-        self.oks.append(msg)
-
-    def warn(self, msg: str, *_a, **_k) -> None:
-        self.warns.append(msg)
 
 
 def _holding(code: str, name: str = "标的", shares: float = 100.0) -> SimpleNamespace:
@@ -53,7 +39,7 @@ def _detail(code: str, name: str = "贵州茅台", market_value: float = 1000.0)
 
 
 def _reporter() -> ProgressReporter:
-    return cast(ProgressReporter, _Reporter())
+    return RecordingReporter()
 
 
 def _enable(monkeypatch, *, fund_deep: bool = True, factor_catalog: bool = True) -> None:
@@ -78,9 +64,9 @@ class TestComputeFactorExposureData:
     def test_compute_layer_import_error_degrades(self, monkeypatch):
         _enable(monkeypatch)
         monkeypatch.setitem(sys.modules, "src.python.analysis.style_factor_regression", None)
-        reporter = _Reporter()
+        reporter = RecordingReporter()
 
-        result = rfm.compute_factor_exposure_data([], {}, cast(ProgressReporter, reporter))
+        result = rfm.compute_factor_exposure_data([], {}, reporter)
 
         assert result is not None and result["available"] is False
         assert result["status"] == "source_failed"
@@ -124,9 +110,9 @@ class TestComputeFactorExposureData:
         _enable(monkeypatch)
         _stub_compute_layer(monkeypatch)
         monkeypatch.setattr(sfr, "filter_stale_factor_klines", lambda klines, today: (dict(klines), ["value"]))
-        reporter = _Reporter()
+        reporter = RecordingReporter()
 
-        result = rfm.compute_factor_exposure_data([_holding("600519")], {}, cast(ProgressReporter, reporter))
+        result = rfm.compute_factor_exposure_data([_holding("600519")], {}, reporter)
 
         assert result is not None and result["available"] is True
         assert result["stale_factors"] == ["value"], "剔除的停更因子必须进契约，供报告标注"
@@ -136,9 +122,9 @@ class TestComputeFactorExposureData:
         _enable(monkeypatch)
         _stub_compute_layer(monkeypatch)
         monkeypatch.setattr(sfr, "compute_factor_exposure", lambda *a, **k: {"available": False, "sample_count": 12})
-        reporter = _Reporter()
+        reporter = RecordingReporter()
 
-        rfm.compute_factor_exposure_data([_holding("600519")], {}, cast(ProgressReporter, reporter))
+        rfm.compute_factor_exposure_data([_holding("600519")], {}, reporter)
 
         assert any("12" in msg for msg in reporter.warns), reporter.warns
 
@@ -192,9 +178,9 @@ class TestComputeIndustryBetaData:
     def test_industry_beta_import_error_degrades(self, monkeypatch):
         _enable(monkeypatch)
         monkeypatch.setitem(sys.modules, "src.python.analysis.industry_beta", None)
-        reporter = _Reporter()
+        reporter = RecordingReporter()
 
-        result = rfm.compute_industry_beta_data([], [], {}, cast(ProgressReporter, reporter))
+        result = rfm.compute_industry_beta_data([], [], {}, reporter)
 
         assert result is not None and result["status"] == "source_failed"
         assert reporter.warns, "依赖缺失必须留 warn"
@@ -220,11 +206,9 @@ class TestComputeIndustryBetaData:
     def test_beta_unavailable_keeps_exposure_and_fetches_no_index(self, monkeypatch):
         _enable(monkeypatch)
         calls = self._stub(monkeypatch, exposure={"未映射行业": 0.6})
-        reporter = _Reporter()
+        reporter = RecordingReporter()
 
-        result = rfm.compute_industry_beta_data(
-            [_holding("600519")], [_detail("600519")], {}, cast(ProgressReporter, reporter)
-        )
+        result = rfm.compute_industry_beta_data([_holding("600519")], [_detail("600519")], {}, reporter)
 
         assert result is not None and result["available"] is False
         assert result["exposure"] == {"未映射行业": 0.6}
@@ -234,11 +218,9 @@ class TestComputeIndustryBetaData:
     def test_success_merges_exposure_index_codes_and_unmapped(self, monkeypatch):
         _enable(monkeypatch)
         calls = self._stub(monkeypatch, exposure={"银行": 0.6, "未映射行业": 0.4}, betas={"银行": 0.83})
-        reporter = _Reporter()
+        reporter = RecordingReporter()
 
-        result = rfm.compute_industry_beta_data(
-            [_holding("600519")], [_detail("600519")], {}, cast(ProgressReporter, reporter)
-        )
+        result = rfm.compute_industry_beta_data([_holding("600519")], [_detail("600519")], {}, reporter)
 
         assert result is not None and result["available"] is True
         assert calls["index_codes"] == [ib.INDUSTRY_INDEX_MAP["银行"]]

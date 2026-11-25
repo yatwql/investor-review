@@ -26,7 +26,7 @@ from src.python.config.features import feature_switch_registry, is_feature_enabl
 from src.python.core.constants import PROJECT_ROOT
 from src.python.core.registry import _REPORT_SECTION_DEFAULT, get_report_sheet_name
 from src.python.report import _experimental_seams as seams
-from src.python.report.progress import ProgressReporter
+from src.test._fixtures.reporters import RecordingReporter
 from src.python.report.schedule_replay_panel import (
     LIMITATIONS_NOTE,
     build_schedule_replay_panel,
@@ -88,23 +88,9 @@ def _build_contract(*, flag_on: bool = True) -> dict:
         return build_schedule_replay_panel(list(_HOLDINGS))
 
 
-class _RecordingReporter(ProgressReporter):
-    """记录各级消息的进度报告器（默认 ProgressReporter 各方法为空实现）。"""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.messages: list[tuple[str, str]] = []
-
-    def warn(self, msg: str) -> None:
-        self.messages.append(("warn", msg))
-
-    def warns(self) -> list[str]:
-        return [msg for level, msg in self.messages if level == "warn"]
-
-
 @pytest.fixture
-def reporter() -> _RecordingReporter:
-    return _RecordingReporter()
+def reporter() -> RecordingReporter:
+    return RecordingReporter()
 
 
 # ── 开关注册表 ───────────────────────────────────────────
@@ -134,7 +120,7 @@ class TestScheduleReplayMount:
         with patch("src.python.config.features.is_feature_enabled", return_value=False):
             seams.inject_schedule_replay_data(pipeline_data, reporter, holdings=list(_HOLDINGS))
         assert pipeline_data == {}
-        assert reporter.warns() == []
+        assert reporter.warns == []
 
     def test_flag_on_injects_contract(self, reporter):
         """开关打开 → 契约写入 pipeline_data，持仓清单透传。"""
@@ -154,7 +140,7 @@ class TestScheduleReplayMount:
             patch(_PANEL_BUILD, return_value={"available": True}),
         ):
             seams.inject_schedule_replay_data(None, reporter, holdings=[])
-        assert reporter.warns() == []
+        assert reporter.warns == []
 
     def test_downstream_exception_warns_only(self, reporter):
         """下游异常 → 一条告警 + 契约缺席，不外抛、不中断报告。"""
@@ -165,8 +151,8 @@ class TestScheduleReplayMount:
         ):
             seams.inject_schedule_replay_data(pipeline_data, reporter, holdings=list(_HOLDINGS))
         assert pipeline_data == {}
-        assert len(reporter.warns()) == 1
-        assert "调仓纪律回放" in reporter.warns()[0]
+        assert len(reporter.warns) == 1
+        assert "调仓纪律回放" in reporter.warns[0]
 
 
 # ── 注册表 / 导航 / 页签名 ──────────────────────────────

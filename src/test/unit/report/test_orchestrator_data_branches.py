@@ -12,26 +12,9 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.python.report import _orchestrator_data as mod
+from src.test._fixtures.reporters import RecordingReporter
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
-
-
-class _Reporter:
-    def __init__(self, *, fail_on_info: bool = False) -> None:
-        self.infos: list[str] = []
-        self.warns: list[str] = []
-        self._fail = fail_on_info
-
-    def info(self, msg: str) -> None:
-        if self._fail:
-            raise RuntimeError("probe fault")
-        self.infos.append(msg)
-
-    def warn(self, msg: str) -> None:
-        self.warns.append(msg)
-
-    def ok(self, msg: str) -> None:
-        pass
 
 
 class TestWarmRenderContracts:
@@ -46,7 +29,7 @@ class TestWarmRenderContracts:
         monkeypatch.setattr("src.python.config.is_enable_fund_deep_analysis", lambda config: True)
         monkeypatch.setattr("src.python.report.html_renderers._render_style_analysis", _raise)
 
-        mod._warm_render_contracts([], [], _Reporter(), {})
+        mod._warm_render_contracts([], [], RecordingReporter(), {})
 
         assert "基金业绩预取失败" in caplog.text
         assert "穿透附属取数预取失败" in caplog.text
@@ -58,7 +41,7 @@ class TestWarmRenderContracts:
         monkeypatch.setattr("src.python.config.is_enable_fund_deep_analysis", lambda config: False)
         monkeypatch.setattr("src.python.report.html_renderers._render_style_analysis", render)
 
-        mod._warm_render_contracts([], [], _Reporter(), {})
+        mod._warm_render_contracts([], [], RecordingReporter(), {})
 
         render.assert_not_called()
 
@@ -95,7 +78,7 @@ class TestFinancialReportDigest:
     def test_disabled_returns_none(self, monkeypatch):
         monkeypatch.setattr("src.python.config.is_enable_stock_fundamentals", lambda: False)
 
-        assert mod.compute_financial_report_digest_data([], [], {}, _Reporter()) is None
+        assert mod.compute_financial_report_digest_data([], [], {}, RecordingReporter()) is None
 
     def test_delegates_with_penetrated_targets(self, monkeypatch):
         """开启时把穿透标的（含来源标签）一并交给摘要构建器。"""
@@ -104,7 +87,7 @@ class TestFinancialReportDigest:
         monkeypatch.setattr("src.python.report.financial_report_digest.build_financial_report_digest", build)
         assets = [{"name": "阳光电源", "code": "300274", "sources": ["[ETF] 561910"]}]
 
-        result = mod.compute_financial_report_digest_data([], assets, {}, _Reporter())
+        result = mod.compute_financial_report_digest_data([], assets, {}, RecordingReporter())
 
         assert result == {"available": True}
         assert build.call_args.kwargs["penetrated_targets"] == [
@@ -116,14 +99,14 @@ class TestValuationData:
     def test_disabled_returns_none(self, monkeypatch):
         monkeypatch.setattr("src.python.config.is_enable_valuation_percentile", lambda: False)
 
-        assert mod.compute_valuation_data([], {}, _Reporter()) is None
+        assert mod.compute_valuation_data([], {}, RecordingReporter()) is None
 
     def test_orchestration_exception_degrades(self, monkeypatch):
         """编排异常（进度通道故障等）→ source_failed 占位，不把异常抛给报告链。"""
         monkeypatch.setattr("src.python.config.is_enable_valuation_percentile", lambda: True)
         monkeypatch.setattr("src.python.config.datasink_feature_ready", lambda config: False)
 
-        result = mod.compute_valuation_data([], {}, _Reporter(fail_on_info=True))
+        result = mod.compute_valuation_data([], {}, RecordingReporter(raise_on_info=True))
 
         assert result["available"] is False
         assert result["status"] == "source_failed"
@@ -137,7 +120,7 @@ class TestValuationData:
         detail.name = "长江电力"
         monkeypatch.setattr("src.python.core.code_utils.is_a_share_stock", lambda name, code: True)
         monkeypatch.setattr(mod, "_fetch_valuation_for_code", lambda code, name: None)
-        reporter = _Reporter()
+        reporter = RecordingReporter()
 
         result = mod.compute_valuation_data([detail], {}, reporter)
 
@@ -247,7 +230,7 @@ class TestPrepareReportDataFactorCatalogDegrade:
         monkeypatch.setattr("src.python.analysis.factor_evaluator.derive_factor_pool", lambda *a, **k: {"codes": []})
         monkeypatch.setattr("src.python.analysis.factor_evaluator.build_factor_catalog_data", _raise)
 
-        data = mod.prepare_report_data([], _Reporter(), {})
+        data = mod.prepare_report_data([], RecordingReporter(), {})
 
         assert data["factor_catalog_data"] == {"available": False, "reason": "计算异常: ValueError"}
         assert "因子目录计算失败" in caplog.text
@@ -256,6 +239,6 @@ class TestPrepareReportDataFactorCatalogDegrade:
         self._stub_stages(monkeypatch)
         monkeypatch.setattr("src.python.config.features.is_feature_enabled", lambda name: False)
 
-        data = mod.prepare_report_data([], _Reporter(), {})
+        data = mod.prepare_report_data([], RecordingReporter(), {})
 
         assert data["factor_catalog_data"] is None, "开关关闭时不计算，键为 None 供下游无感"

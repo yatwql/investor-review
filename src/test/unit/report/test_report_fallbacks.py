@@ -11,27 +11,9 @@ from src.python.report import decision_basis, decision_basis_signals
 from src.python.report._llm_news import _report_llm_module_results
 from src.python.report.fundamental_snapshot_sheet import _yi
 from src.python.report.style_factor_sheet import _factor_name
+from src.test._fixtures.reporters import RecordingReporter
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
-
-
-class _Reporter:
-    """只收集播报内容的最小 reporter（报告层播报口径断言用）。"""
-
-    def __init__(self) -> None:
-        self.messages: list[tuple[str, str]] = []
-
-    def info(self, text: str) -> None:
-        self.messages.append(("info", text))
-
-    def ok(self, text: str) -> None:
-        self.messages.append(("ok", text))
-
-    def warn(self, text: str) -> None:
-        self.messages.append(("warn", text))
-
-    def add_error(self, text: str) -> None:
-        self.messages.append(("error", text))
 
 
 class TestNumericFallback:
@@ -90,7 +72,7 @@ class TestLlmModuleResultReporting:
     """LLM 模块结果播报的四个分支：全空、全跳过、成功。"""
 
     def test_all_modules_absent_warns_config(self):
-        reporter = _Reporter()
+        reporter = RecordingReporter()
 
         _report_llm_module_results((), (False, False, False, False), reporter)
 
@@ -103,7 +85,7 @@ class TestLlmModuleResultReporting:
             "src.python.report.llm_module_info.get_llm_module_failure_reason",
             lambda registry, module_key: FAIL_REASON_DISABLED,
         )
-        reporter = _Reporter()
+        reporter = RecordingReporter()
 
         _report_llm_module_results((None, None, None, None), (False, False, False, False), reporter)
 

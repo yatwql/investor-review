@@ -9,13 +9,12 @@ from __future__ import annotations
 import logging
 import time
 from types import SimpleNamespace
-from typing import cast
 
 import pytest
 
 from src.python.analysis import style_factor_regression as sfr
 from src.python.report import _report_factor_metrics as rfm
-from src.python.report.progress import ProgressReporter
+from src.test._fixtures.reporters import SilentReporter
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
 
@@ -34,17 +33,6 @@ def _stub_pipeline(monkeypatch) -> None:
     monkeypatch.setattr(sfr, "filter_stale_factor_klines", lambda klines, today: (dict(klines), []))
     monkeypatch.setattr(sfr, "klines_to_returns", lambda bars: {"2026-09-01": 0.01})
     monkeypatch.setattr(sfr, "compute_factor_exposure", lambda *a, **k: {"available": True, "sample_count": 60})
-
-
-class _Reporter:
-    def info(self, *a, **k):
-        pass
-
-    def ok(self, *a, **k):
-        pass
-
-    def warn(self, *a, **k):
-        pass
 
 
 class TestFactorFetchParallelism:
@@ -72,7 +60,7 @@ class TestFactorFetchParallelism:
         serial_seconds = (len(holdings) + len(sfr.FACTOR_INDICES) + 1) * sleep
 
         started = time.perf_counter()
-        result = rfm.compute_factor_exposure_data(holdings, {}, cast(ProgressReporter, _Reporter()))
+        result = rfm.compute_factor_exposure_data(holdings, {}, SilentReporter())
         elapsed = time.perf_counter() - started
 
         assert result is not None and result.get("available") is True
@@ -95,7 +83,7 @@ class TestFactorFetchParallelism:
         )
 
         with caplog.at_level(logging.WARNING, logger="invest"):
-            rfm.compute_factor_exposure_data([_holding("600900", "长江电力")], {}, cast(ProgressReporter, _Reporter()))
+            rfm.compute_factor_exposure_data([_holding("600900", "长江电力")], {}, SilentReporter())
 
         warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
         assert any("取数偏慢" in m and "600900" in m for m in warnings), warnings

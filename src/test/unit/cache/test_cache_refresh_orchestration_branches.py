@@ -7,55 +7,22 @@
   - `_fetch_prices_and_indices`：取价失败、异常按文案归类为网络/解析/其它
   - `sector_flow_hint` 全档文案、`_get_news_top_count` 配置异常降级
 
-线程池一律替换为**同步内联**替身（`submit` 当场执行 + 落 Future），
+线程池一律替换为**同步内联**替身（`src.test.helpers.SynchronousExecutor`：`submit` 当场执行 + 落 Future），
 避免测试对线程调度与真实耗时的依赖。
 """
 
 from __future__ import annotations
 
-from concurrent.futures import Future
 from dataclasses import dataclass
 
 import pytest
 
 from src.python.cache import _cache_refresh as cr
 from src.python.cache import operations as ops
+from src.test._fixtures.reporters import RecordingReporter
+from src.test.helpers import SynchronousExecutor
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_core]
-
-
-class _InlinePool:
-    """同步执行的线程池替身：`submit` 立即执行并把结果/异常装进 Future。"""
-
-    def submit(self, fn, *args, **kwargs) -> Future:
-        future: Future = Future()
-        try:
-            future.set_result(fn(*args, **kwargs))
-        except BaseException as exc:  # noqa: BLE001 — 替身要复现池的「异常封进 Future」语义
-            future.set_exception(exc)
-        return future
-
-
-class _Reporter:
-    """记录 reporter.* 调用（消息 + 级别）的替身。"""
-
-    def __init__(self) -> None:
-        self.calls: list[tuple[str, str]] = []
-
-    def ok(self, msg: str) -> None:
-        self.calls.append(("ok", msg))
-
-    def info(self, msg: str) -> None:
-        self.calls.append(("info", msg))
-
-    def warn(self, msg: str) -> None:
-        self.calls.append(("warn", msg))
-
-    def error(self, msg: str) -> None:
-        self.calls.append(("error", msg))
-
-    def levels(self, level: str) -> list[str]:
-        return [msg for lvl, msg in self.calls if lvl == level]
 
 
 @dataclass
@@ -99,8 +66,8 @@ def test_position_cache_result_exit_code(kwargs: dict, expected: int) -> None:
 
 def test_update_basic_cache_without_funds_skips_fund_path(monkeypatch: pytest.MonkeyPatch) -> None:
     """无基金持仓 → 只刷公共 + 扩展缓存，不提交基金任务。"""
-    reporter = _Reporter()
-    monkeypatch.setattr(ops, "_get_pool", _InlinePool)
+    reporter = RecordingReporter()
+    monkeypatch.setattr(ops, "_get_pool", SynchronousExecutor)
     monkeypatch.setattr(ops, "_refresh_common_caches", lambda holdings, rep: (1, 2, 3, 4))
     seen: list[list] = []
     monkeypatch.setattr(ops, "_refresh_extended_caches", lambda holdings, funds, result, rep: seen.append(funds))
@@ -113,8 +80,8 @@ def test_update_basic_cache_without_funds_skips_fund_path(monkeypatch: pytest.Mo
 
 
 def test_update_basic_cache_aggregates_fund_and_public_results(monkeypatch: pytest.MonkeyPatch) -> None:
-    reporter = _Reporter()
-    monkeypatch.setattr(ops, "_get_pool", _InlinePool)
+    reporter = RecordingReporter()
+    monkeypatch.setattr(ops, "_get_pool", SynchronousExecutor)
     monkeypatch.setattr(
         ops,
         "_refresh_one_fund_cache",
@@ -139,8 +106,8 @@ def test_update_basic_cache_aggregates_fund_and_public_results(monkeypatch: pyte
 
 def test_update_basic_cache_records_future_exception(monkeypatch: pytest.MonkeyPatch) -> None:
     """单个任务抛异常 → 计入 errors 并告警，其余任务结果不受影响。"""
-    reporter = _Reporter()
-    monkeypatch.setattr(ops, "_get_pool", _InlinePool)
+    reporter = RecordingReporter()
+    monkeypatch.setattr(ops, "_get_pool", SynchronousExecutor)
 
     def _boom(fund):
         raise RuntimeError("pool down")
@@ -162,8 +129,8 @@ def test_update_basic_cache_records_future_exception(monkeypatch: pytest.MonkeyP
 
 
 def test_common_caches_reports_success_counts(monkeypatch: pytest.MonkeyPatch) -> None:
-    reporter = _Reporter()
-    monkeypatch.setattr(cr, "_get_pool", _InlinePool)
+    reporter = RecordingReporter()
+    monkeypatch.setattr(cr, "_get_pool", SynchronousExecutor)
     monkeypatch.setattr(cr, "_refresh_profit_forecast_cache", lambda: ("profit_forecast", 12))
     monkeypatch.setattr(cr, "_refresh_sector_flow_cache", lambda: ("sector_flow", 30))
     monkeypatch.setattr(cr, "_refresh_industry_cache", lambda holdings: 5)
@@ -181,8 +148,8 @@ def test_common_caches_reports_success_counts(monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_common_caches_warns_on_empty_results(monkeypatch: pytest.MonkeyPatch) -> None:
-    reporter = _Reporter()
-    monkeypatch.setattr(cr, "_get_pool", _InlinePool)
+    reporter = RecordingReporter()
+    monkeypatch.setattr(cr, "_get_pool", SynchronousExecutor)
     monkeypatch.setattr(cr, "_refresh_profit_forecast_cache", lambda: ("profit_forecast", 0))
     monkeypatch.setattr(cr, "_refresh_sector_flow_cache", lambda: ("sector_flow", 0))
     monkeypatch.setattr(cr, "_refresh_industry_cache", lambda holdings: 0)
@@ -201,9 +168,9 @@ def test_common_caches_warns_on_empty_results(monkeypatch: pytest.MonkeyPatch) -
 
 def test_common_caches_skip_holding_scoped_tasks_without_holdings(monkeypatch: pytest.MonkeyPatch) -> None:
     """无持仓 → 只提交盈利预测与行业资金流向两项。"""
-    reporter = _Reporter()
+    reporter = RecordingReporter()
     submitted: list[str] = []
-    monkeypatch.setattr(cr, "_get_pool", _InlinePool)
+    monkeypatch.setattr(cr, "_get_pool", SynchronousExecutor)
 
     def _spy(name, ret):
         def _run(*args):
@@ -222,8 +189,8 @@ def test_common_caches_skip_holding_scoped_tasks_without_holdings(monkeypatch: p
 
 
 def test_common_caches_warns_on_future_exception(monkeypatch: pytest.MonkeyPatch) -> None:
-    reporter = _Reporter()
-    monkeypatch.setattr(cr, "_get_pool", _InlinePool)
+    reporter = RecordingReporter()
+    monkeypatch.setattr(cr, "_get_pool", SynchronousExecutor)
 
     def _boom():
         raise OSError("disk gone")
@@ -239,9 +206,9 @@ def test_common_caches_warns_on_future_exception(monkeypatch: pytest.MonkeyPatch
 
 
 def test_extended_caches_reports_counts(monkeypatch: pytest.MonkeyPatch) -> None:
-    reporter = _Reporter()
+    reporter = RecordingReporter()
     result = ops.CacheUpdateResult()
-    monkeypatch.setattr(cr, "_get_pool", _InlinePool)
+    monkeypatch.setattr(cr, "_get_pool", SynchronousExecutor)
     monkeypatch.setattr(cr, "_refresh_news_cache", lambda holdings: 8)
     monkeypatch.setattr(cr, "_refresh_fund_manager_cache", lambda funds: 2)
     monkeypatch.setattr(cr, "_refresh_extended_cache", lambda holdings: 4)
@@ -253,9 +220,9 @@ def test_extended_caches_reports_counts(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 def test_extended_caches_warns_when_empty_and_notes_future_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    reporter = _Reporter()
+    reporter = RecordingReporter()
     result = ops.CacheUpdateResult()
-    monkeypatch.setattr(cr, "_get_pool", _InlinePool)
+    monkeypatch.setattr(cr, "_get_pool", SynchronousExecutor)
     monkeypatch.setattr(cr, "_refresh_news_cache", lambda holdings: 0)
 
     def _boom(funds):
@@ -272,9 +239,9 @@ def test_extended_caches_warns_when_empty_and_notes_future_error(monkeypatch: py
 
 
 def test_extended_caches_without_holdings_skips_news_and_style(monkeypatch: pytest.MonkeyPatch) -> None:
-    reporter = _Reporter()
+    reporter = RecordingReporter()
     result = ops.CacheUpdateResult()
-    monkeypatch.setattr(cr, "_get_pool", _InlinePool)
+    monkeypatch.setattr(cr, "_get_pool", SynchronousExecutor)
     monkeypatch.setattr(cr, "_refresh_fund_manager_cache", lambda funds: 1)
 
     cr._refresh_extended_caches([], [_Holding("011506", "华夏成长")], result, reporter)
@@ -329,8 +296,8 @@ def _patch_price_sources(monkeypatch: pytest.MonkeyPatch, *, price_side_effect=N
 
 def test_fetch_prices_reports_zero_price_as_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     """取价返回空/零价 → 告警且不计入 price_ok。"""
-    reporter = _Reporter()
-    monkeypatch.setattr(ops, "_get_pool", _InlinePool)
+    reporter = RecordingReporter()
+    monkeypatch.setattr(ops, "_get_pool", SynchronousExecutor)
     _patch_price_sources(monkeypatch, price_return={})
 
     result, details = ops._fetch_prices_and_indices([_Holding("600519", "贵州茅台")], reporter)
@@ -353,8 +320,8 @@ def test_fetch_prices_reports_zero_price_as_failure(monkeypatch: pytest.MonkeyPa
 )
 def test_fetch_prices_classifies_error_hint(monkeypatch: pytest.MonkeyPatch, message: str, hint: str) -> None:
     """单品种取数异常按文案归类提示，并计入 errors。"""
-    reporter = _Reporter()
-    monkeypatch.setattr(ops, "_get_pool", _InlinePool)
+    reporter = RecordingReporter()
+    monkeypatch.setattr(ops, "_get_pool", SynchronousExecutor)
 
     def _raise(code, name):
         raise RuntimeError(message)

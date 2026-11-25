@@ -14,19 +14,9 @@ import os
 import pytest
 
 from src.python.report import run_integrity as ri
+from src.test._fixtures.reporters import RecordingReporter
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
-
-
-class _Reporter:
-    def __init__(self, *, raise_on_warn: bool = False) -> None:
-        self.warnings: list[str] = []
-        self._raise = raise_on_warn
-
-    def warn(self, msg: str) -> None:
-        if self._raise:
-            raise RuntimeError("reporter broken")
-        self.warnings.append(msg)
 
 
 class _Perf:
@@ -140,7 +130,7 @@ class TestDisplayPath:
 class TestEmitFault:
     def test_reporter_failure_is_swallowed(self, caplog):
         """进度通道 warn 抛异常 → DEBUG 后继续（中断收口不能因通道故障失败）。"""
-        ri._emit(_Reporter(raise_on_warn=True), "提示")
+        ri._emit(RecordingReporter(raise_on_warn=True), "提示")
 
         assert "中断提示输出失败" in caplog.text
 
@@ -158,19 +148,19 @@ class TestHandleInterruptionSteps:
         """读阶段失败 → 回落到缺省「启动准备」，提示仍要发出去。"""
         ri.begin_run("basic", str(output_dir))
         ri.bind_perf(_Perf(stage_error=True))
-        reporter = _Reporter()
+        reporter = RecordingReporter()
 
         ri.handle_interruption(reporter)
 
-        assert reporter.warnings, "提示不得因读阶段失败而丢失"
-        assert "阶段：启动准备" in reporter.warnings[0]
+        assert reporter.warns, "提示不得因读阶段失败而丢失"
+        assert "阶段：启动准备" in reporter.warns[0]
 
     def test_cleanup_failure_keeps_going(self, output_dir, monkeypatch, caplog):
         """清理临时文件失败 → 告警 + 提示里记 0 个，后续步骤（落中断记录/提示）照跑。"""
         ri.begin_run("basic", str(output_dir))
         perf = _Perf()
         ri.bind_perf(perf)
-        reporter = _Reporter()
+        reporter = RecordingReporter()
 
         def _raise(ctx):
             raise OSError("io error")
@@ -181,18 +171,18 @@ class TestHandleInterruptionSteps:
 
         assert "清理临时文件失败" in caplog.text
         assert perf.marked, "清理失败不得阻断中断记录落盘"
-        assert "已清理临时文件 0 个" in reporter.warnings[0]
+        assert "已清理临时文件 0 个" in reporter.warns[0]
 
     def test_interrupt_record_failure_keeps_going(self, output_dir, caplog):
         """落中断记录失败 → 告警，但仍要给用户「已写盘/已丢弃」提示。"""
         ri.begin_run("basic", str(output_dir))
         ri.bind_perf(_Perf(mark_error=True))
-        reporter = _Reporter()
+        reporter = RecordingReporter()
 
         ri.handle_interruption(reporter)
 
         assert "中断运行记录落盘失败" in caplog.text
-        assert reporter.warnings, "记录失败不得连提示一起丢"
+        assert reporter.warns, "记录失败不得连提示一起丢"
 
     def test_message_assembly_failure_is_swallowed(self, output_dir, monkeypatch, caplog):
         """组装提示失败（如产物清单异常）→ 告警，不向外抛。"""
@@ -204,7 +194,7 @@ class TestHandleInterruptionSteps:
 
         monkeypatch.setattr(ri, "_display_path", _raise)
 
-        ri.handle_interruption(_Reporter())
+        ri.handle_interruption(RecordingReporter())
 
         assert "组装中断提示失败" in caplog.text
 
@@ -212,7 +202,7 @@ class TestHandleInterruptionSteps:
         """收敛健康检查失败（future 卡死/异常）→ DEBUG，不阻断中断收口。"""
         ri.begin_run("basic", str(output_dir))
         ri.bind_health(object(), "basic", [])
-        reporter = _Reporter()
+        reporter = RecordingReporter()
 
         import src.python.report._report_health as health_mod
 
@@ -224,7 +214,7 @@ class TestHandleInterruptionSteps:
         ri.handle_interruption(reporter)
 
         assert "健康检查收敛失败" in caplog.text
-        assert reporter.warnings, "收敛失败不得影响已完成的提示"
+        assert reporter.warns, "收敛失败不得影响已完成的提示"
         assert os.path.isdir(output_dir)
 
 
