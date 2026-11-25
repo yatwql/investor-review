@@ -14,12 +14,12 @@
 | 架构图示 | SVG | 4 | 396 | `src/static/` README 架构图（architecture 三渠道→引擎→双报告、llm-chain Provider 链式分发、capabilities 九大功能域总览、owl-mascot 吉祥物猫头鹰「守望」）+ 截图 7 张 PNG（报告实景 `report-overview`/`report-toc`/`report-charts` + 界面实景 `tui-menu`/`web-workbench`/`web-config`/`cli-report`，不计入本行） |
 | 辅助脚本 | Python | 150 | 31,446 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评测与因子目录评测、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、视觉资产（社交预览图/架构图体检）、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
 | 源代码合计 | — | 630 | 160,824 | 主程序 + 模板 + 脚本 + SVG |
-| 测试代码 | Python | 790 | 212,781 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
-| 测试用例 | — | — | 14,688 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
+| 测试代码 | Python | 795 | 213,916 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
+| 测试用例 | — | — | 14,769 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 15 | 7,088 | 含 README.md；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 14 | 6,851 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 223 | 75,230 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 14,480 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 223 | 75,235 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 14,485 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 200 | 59,038 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 9 | ~1616 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + TUI 交互改进（议题 + 第一/二批实施方案） + PanWatch 借鉴分析（含评估政策单源化与 LLM 复盘契约两份设计） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -1008,6 +1008,7 @@ investor-review/
 │       │   │   ├── test_prompts_signals.py    #   信号预消化测试（资金流方向/信号块/缓存后缀/接线）
 │       │   │   ├── test_prompts_signals_edge.py #  信号预消化边缘场景（畸形数据/非有限值）
 │       │   │   ├── test_prompts_structured_header.py # 结构化决策头提示词契约（开关关闭逐字节不变/契约可解析/指纹换键）
+│       │   │   ├── test_prompts_tables_branches.py # 提示词表格构建器分支（情景分析/国别敞口/净值基准/白名单退化）
 │       │   │   ├── test_rate_caliber.py      #   收益率口径标签与提示词文本版本进指纹测试
 │       │   │   ├── test_llm_session_usage.py       #   会话用量管理测试
 │       │   │   ├── test_news_parse_failure_contract.py # 新闻关联批量解析失败收口（整批不可解析=失败：不计分析条数/不写缓存/仍计费）
@@ -1049,6 +1050,7 @@ investor-review/
 │       │   │   ├── test_eastmoney_industry_rest.py #   东方财富行业 REST 接口测试
 │       │   │   ├── test_sina.py               #   新浪财经 API 测试
 │       │   │   ├── test_sina_edge.py          #   新浪财经边缘场景
+│       │   │   ├── test_sina_parse_fallbacks.py # 新浪行情解析兜底（字段不足/超时/畸形行跳过）
 │       │   │   ├── test_numeric_guard_regression.py # 非有限数值归一防线（各解析器拦截 NaN/±inf + 合法输入行为不变）
 │       │   │   ├── test_provider_utils.py    #   providers 共享原语（provider 自陈失败原因载体：消费即清/线程隔离）
 │       │   │   ├── test_tencent.py            #   腾讯财经 API 测试
@@ -1109,6 +1111,7 @@ investor-review/
 │       │   │   ├── test_excel_navigation.py       #   Excel 导航三件套（页签分组配色/汇总页章节导航/返回汇总链接 + 双端导航一致性）
 │       │   │   ├── test_excel_report_structure.py #   Excel 报告结构测试
 │       │   │   ├── test_excel_roundtrip.py        #   Excel 写入读取回环测试
+│       │   │   ├── test_excel_sheet_isolation.py # 可选明细页签装配与单页签写入失败隔离
 │       │   │   ├── test_excel_writer.py           #   Excel 写入器测试
 │       │   │   ├── test_experimental_seams.py     #   管线实验挂载点（开关关闭无感/开启生效/下游异常只告警不外抛 + 顶层导入接线守卫）
 │       │   │   ├── test_feature_interactive.py    #   交互图表 Feature Flag + JS 资产内嵌（单文件自包含，不产出松散副本）测试
@@ -1170,6 +1173,7 @@ investor-review/
 │       │   │   ├── test_html_template_context.py # 模板上下文契约（94 字段集合锁定/渲染键==字段集合/序号 CSS 注入保留）
 │       │   │   ├── test_html_builders_edge.py     #   HTML 构建器边缘场景
 │       │   │   ├── test_html_fund_deep_renderers.py # HTML 基金深度分析渲染器（报告期标注/陈旧剔除同 Excel 口径）
+│       │   │   ├── test_html_renderers_degrade.py # HTML 子渲染器降级（各块异常只降级自身/无候选告警/契约折叠块）
 │       │   │   ├── _html_report_fixtures.py   # HTML 结构测试共享夹具（模板路径/章节常量/最小渲染数据构造，不含用例）
 │       │   │   ├── test_html_report_structure.py  #   HTML 报告结构测试（导航/锚点/折叠）
 │       │   │   ├── test_section_block_contract.py #   章节区块契约测试（注册表键集/双端提取对账/双端对等/归一化与直通包装原语）
@@ -1325,6 +1329,7 @@ investor-review/
 │       │   │   ├── test_cli_cache_whatif.py                         #   CLI 缓存更新与调仓 What-if 子命令测试
 │       │   │   ├── test_cli_report.py                               #   CLI 报告子命令测试（生成/进度通道/降级摘要）
 │       │   │   ├── test_cli_holdings_hint.py                        #   持仓文件缺失提示测试（目录不存在/文件名不符/空目录三种修法）
+│       │   │   ├── test_cli_handler_branches.py # CLI 处理器分支（LLM 状态渲染/持仓提示/费用确认中断/cache 分派）
 │       │   │   ├── test_cli_cost_forecast.py #   CLI 费用预估/日预算（--yes/交互确认/非交互硬闸/降级清强刷）
 │       │   │   ├── test_cli_subcommands.py    #   CLI 子命令测试（view-logs/doctor/cassettes）
 │       │   │   ├── test_cli_settle_decisions.py #   CLI settle-decisions 子命令测试（接线/默认视界透传/非法输入退出码，mock 结算服务）
