@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.18.7-dev
-> **编号源**：`rf-next = 1197`（新增问题提出后更新为 +1；已用最大 rf-1196，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1198`（新增问题提出后更新为 +1；已用最大 rf-1197，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -73,6 +73,7 @@
 | **rf-1194** | `analysis/_math_utils._t_cdf` 在 `t == 0` 处 `x = df/(df+t²)` 恰为 1，命中 `if x >= 1: return 0.0` → 中位数处 CDF 返回 0.0 而非 0.5，与 t→0⁺（0.5004）不连续：`correlation` 的 `2*(1-CDF)` 与 `metrics_risk` 的 p 值在「无相关 / Beta 恰为 0」这一最不显著的取值上给出 p=2.0 这类越界读数 | `x >= 1` 分支返回 0.5（该支只在 t==0 命中，语义即中位数）；补 1 条回归断言 `_t_cdf(0.0, 10) == 0.5`，并保留 `_t_cdf(±10, 100)` 的尾部极限断言确保两侧连续性未变 |
 | **rf-1195** | `doctor._probe_targets` 在测试中从未被执行：`src/test/_path_isolation.py` 的 autouse 隔离 fixture 把 `doctor._probe_targets` 替换成固定替身，而 `test_doctor_branch_faults.TestProbeTargets` 仍经 `doctor._probe_targets()` 断言，实际断言的是隔离替身（`doctor_probe0/reports`）——生产实现「配置了 output_dir 就取它」这一被调用方依赖的行为在测试里既未被验证，也让该函数整段（try/except 兜底 + 返回）实测零覆盖 | 用例改为在收集期捕获真实函数引用（`_REAL_PROBE_TARGETS`）并按实现断言：`get_config` 返回 `output_dir` 时目标即该目录、异常时回落 `_DEFAULT_OUTPUT_DIR`；并补目录探针空目录态与账本概览导入失败兜底两条用例 |
 | **rf-1196** | `analysis/_math_utils._t_cdf` 在 `t = -inf` 时 `x = df/(df+t²)` 下溢为 0，命中 `if x <= 0: return 1.0`，-∞ 处 CDF 返回 1.0 | 该分支按 `t` 符号取两侧极限（`t < 0` → 0.0，否则 1.0）；相关性/风控 p 值在 t 统计量负向溢出时取左侧极限 |
+| **rf-1197** | `llm/fact_checker/_context._is_breakdown_sum_context` 判据恒假：「合计 = 分项之和」正则的括号前缀上限写 3 字符，而合计值自身文本（`18.3%`）就有 5 字符 ⇒ 实盘形态「18.3%（12.5% + 5.8%）」永不命中，自洽的占比口径被当成单品种收益率改写（实盘事故原文即该句），`_BREAKDOWN_SUM_TOLERANCE` 与文档声明的保护实际未生效 | 前缀上限放到 8 字符（仍要求括号紧邻合计值，覆盖带负号/两位整数/小数的常规写法）；补 2 条回归——实盘形态判为占比口径、分项与合计不自洽时仍不判 |
 
 ### 归档档案
 - [`archived_review-findings.0.18.x.md`](../archive/v0.18.x/archived_review-findings.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-19）

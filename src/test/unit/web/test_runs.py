@@ -259,3 +259,44 @@ class TestOldestSeqGapBaseline:
             state.push_event("info", f"事件 {i + 1}")
         assert state.oldest_seq() == 4
         assert [e["seq"] for e in state.events_after(0)] == [4, 5, 6]
+
+
+class TestExecutorInjectionAndWorkerGuards:
+    """executor 注入面与 worker 兜底：未注入即失败、悬空 run_id 不中断 worker。"""
+
+    def test_executor_property_injection_takes_effect(self):
+        """构造后再注入 executor（app 工厂路径）→ 新提交的 run 正常完成。"""
+        m = RunManager()
+        assert m.executor is None
+        m.executor = _make_executor(2)
+        run_id = m.submit({"report_type": "basic"})
+        state = _wait_done(m, run_id)
+        assert state.status == "done" and state.exit_code == 2
+
+    def test_missing_executor_marks_run_failed(self):
+        """executor 未注入 → run 置 failed 并留统一错误文案（不得挂死在 running）。"""
+        m = RunManager()
+        run_id = m.submit({"report_type": "basic"})
+        state = _wait_done(m, run_id)
+        assert state.status == "failed"
+        assert state.errors == ["任务执行异常（详情请查看日志）"]
+        assert state.finished_at is not None
+
+    def test_worker_skips_dangling_run_id(self):
+        """出队的 run_id 在注册表里已消失（并发 reset/淘汰）→ 跳过该轮继续取下一个。"""
+        processed: list[str] = []
+
+        def _executor(state, _params):
+            processed.append(state.run_id)
+            return 0
+
+        m = RunManager(executor=_executor)
+        real_run_id = m.submit({"report_type": "basic"})
+        _wait_done(m, real_run_id)
+
+        processed.clear()
+        pending = iter(["ghost-run-id", real_run_id])
+        m._dequeue = lambda: next(pending, None)
+        m._work_loop()
+
+        assert processed == [real_run_id]

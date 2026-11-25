@@ -334,3 +334,19 @@ class TestChartExportCsv:
             assert blocks, f"{name} 缺按钮样式"
             for block in blocks:
                 assert "position: absolute" not in block, f"{name} 按钮自身不得绝对定位（两按钮同坐标会重叠）"
+
+
+class TestInlineJsAssetsMissingFiles:
+    """资产目录不可用时的内嵌退化：保留外链、HTML 原样返回（不得产出空行内块）。"""
+
+    def test_missing_static_dir_keeps_external_links(self, tmp_path, monkeypatch, caplog) -> None:
+        import src.python.core.constants as constants
+
+        monkeypatch.setattr(constants, "PROJECT_ROOT", str(tmp_path))
+        html = '<html><head><script defer src="chart.min.js"></script></head><body>x</body></html>'
+
+        out = _inline_js_assets(html)
+
+        # 一个资产都读不到 → 整段跳过，HTML 逐字节不变（外链仍在）
+        assert out == html
+        assert "JS 资产缺失" in caplog.text

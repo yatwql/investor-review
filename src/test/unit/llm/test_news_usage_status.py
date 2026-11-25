@@ -233,3 +233,67 @@ def _slow_batch(*_args, **_kwargs):
 
     _time.sleep(0.02)
     return (10, 5, 0, 1)
+
+
+# ── 批次内截断续写与批异常兜底 ──
+
+
+def test_truncated_batch_response_is_completed_before_parse():
+    """响应含截断标记 → 先走续写补齐再解析（补齐结果才是本批产出）。"""
+    from src.python.llm import _batch_mode
+    from src.python.llm._api_responses import TRUNCATION_MARKER
+
+    items = [{"id": i} for i in range(2)]
+    seen: dict = {}
+
+    def _parser(batch, result):
+        seen["parsed_from"] = result
+        return [{"t": 1} for _ in batch]
+
+    def _fake_handle_truncation(
+        result, usage, max_tokens, system_prompt, user_prompt, llm_config, timeout, client, field, temperature, model
+    ):
+        seen["handle_args"] = (result, max_tokens, user_prompt, field)
+        return "补齐后的正文", {"input_tokens": 7, "output_tokens": 3}
+
+    with (
+        patch.object(_batch_mode, "call_llm", return_value=("半截正文" + TRUNCATION_MARKER, {"input_tokens": 5}, {})),
+        patch("src.python.llm.skeleton._handle_truncation", side_effect=_fake_handle_truncation),
+    ):
+        results, _cached, usage, _cnt = _batch_mode.run_batch_mode(
+            {"cache_enabled_news_correlation": False, "max_tokens_news_correlation": 2048},
+            "news_correlation",
+            batch_preparer=lambda: (items, "fp"),
+            per_item_cache_fn=None,
+            batch_prompt_fn=lambda batch, _fp: "批提示词",
+            response_parser=_parser,
+        )
+
+    assert seen["handle_args"] == ("半截正文" + TRUNCATION_MARKER, 2048, "批提示词", "max_tokens_news_correlation")
+    assert seen["parsed_from"] == "补齐后的正文"
+    assert results and usage["failed_batches"] == 0
+
+
+def test_batch_exception_is_counted_as_failed_without_aborting(caplog):
+    """单批抛异常 → 计失败并继续其余批次（不得让整个批量骨架炸掉）。"""
+    from src.python.llm import _batch_mode
+
+    items = [{"id": i} for i in range(2)]
+
+    def _boom(*_args, **_kwargs):
+        raise RuntimeError("批次炸了")
+
+    with patch.object(_batch_mode, "_execute_and_merge_batch", side_effect=_boom):
+        results, _cached, usage, _cnt = _batch_mode.run_batch_mode(
+            {"cache_enabled_news_correlation": False},
+            "news_correlation",
+            batch_preparer=lambda: (items, "fp"),
+            per_item_cache_fn=None,
+            batch_prompt_fn=lambda batch, _fp: "批提示词",
+            response_parser=lambda batch, result: [],
+        )
+
+    assert results == {}
+    assert usage["failed_batches"] == usage["total_batches"] >= 1
+    assert usage["ok_batches"] == 0
+    assert "批处理异常" in caplog.text

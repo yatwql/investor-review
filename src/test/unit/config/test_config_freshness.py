@@ -118,3 +118,25 @@ class TestParseErrorSeparation:
             "src.python.config._core.get_config", lambda: {"llm_settings_file": "", "llm_providers_file": ""}
         )
         assert fresh.check_config_freshness() == []
+
+
+class TestStringEscapeAndConfigFailure:
+    """字符串转义与配置不可读的兜底。"""
+
+    def test_escaped_quote_inside_string_does_not_break_comment_scan(self):
+        """字符串里的转义（``\\\\"`` / ``\\\\``）不结束字符串 → 其后的 ``//`` 仍是注释。"""
+        text = '{"a": "C:\\\\dir\\\\\\"sub\\"", "b": 1}  // 尾注\n'
+        texts = fresh._comment_texts(text)
+        assert "尾注" in texts
+        # 字符串体内的 // 仍不当作注释
+        assert "不是注释" not in fresh._comment_texts('{"u": "a\\\\b//不是注释"}\n')
+
+    def test_config_load_failure_returns_empty(self, monkeypatch):
+        """配置层读不出来 → 自检返回空列表（不得把异常抛给调用方）。"""
+        import src.python.config._core as core
+
+        def _boom() -> dict:
+            raise RuntimeError("配置不可读")
+
+        monkeypatch.setattr(core, "get_config", _boom)
+        assert fresh.check_config_freshness() == []

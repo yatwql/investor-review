@@ -111,3 +111,31 @@ class TestFetchFundNavHistory:
     def test_no_nav_variables_returns_empty(self, monkeypatch):
         monkeypatch.setattr(tiantian_nav, "_request_pingzhong_data", lambda code: "var somethingElse = 1;")
         assert tiantian_nav.fetch_fund_nav_history("110020") == []
+
+
+class TestNavMergeAndPayloadFallbacks:
+    """合并期兜底：双重零净值日期丢弃、包装体 data 非数组、超范围时间戳跳过。"""
+
+    def test_date_with_zero_net_and_acc_nav_is_dropped(self, monkeypatch):
+        """两侧净值都为 0 的日期（解析层漏网）→ 不产出记录，避免 0 净值污染曲线。"""
+        monkeypatch.setattr(tiantian_nav, "_request_pingzhong_data", lambda code: "占位文本")
+
+        def _fake_trend(_text: str, _var: str) -> list[dict]:
+            return [{"date": "2026-07-01", "nav": 0.0}]
+
+        monkeypatch.setattr(tiantian_nav, "_parse_nav_trend", _fake_trend)
+
+        assert tiantian_nav.fetch_fund_nav_history("110020") == []
+
+    def test_wrapped_data_not_a_list_returns_empty(self):
+        """包装体里 data 不是数组 → 空列表（不得迭代成脏 bar）。"""
+        text = _js("Data_netWorthTrend", {"data": {"foo": 1}})
+        assert tiantian_nav._parse_nav_trend(text, "Data_netWorthTrend") == []
+
+    def test_out_of_range_millisecond_timestamp_skipped(self):
+        """毫秒时间戳超出可表示年份 → 跳过该条，其余条照常解析。"""
+        text = _js(
+            "Data_netWorthTrend",
+            [{"x": 99999999999999999, "y": 1.0}, {"x": 20260701, "y": 1.5}],
+        )
+        assert tiantian_nav._parse_nav_trend(text, "Data_netWorthTrend") == [{"date": "2026-07-01", "nav": 1.5}]

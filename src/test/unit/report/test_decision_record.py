@@ -221,3 +221,18 @@ class TestRegister:
         assert out == {"registered": 0, "ids": []}
         # 未落账
         assert dl.fold_ledger(path=str(tmp_path / "ledger.jsonl"))["settled_count"] == 0
+
+
+class TestHoldingsPriceMapGuards:
+    """登记基线价格表的两个兜底：空代码跳过、非数值价格记 0（不中断登记）。"""
+
+    def test_empty_code_skipped_and_bad_price_zeroed(self):
+        price_map = rec._holdings_price_map(
+            [
+                {"name": "无代码", "code": "  ", "price": 10.0},
+                {"name": "脏价格", "code": "600519", "price": {"bad": 1}},
+                {"name": "正常", "code": "sh600000", "price": 9.5},
+            ]
+        )
+
+        assert price_map == {"600519": 0.0, "sh600000": 9.5, "600000": 9.5}

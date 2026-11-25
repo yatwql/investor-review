@@ -171,3 +171,25 @@ class TestSchedulerEndpoint:
             resp = client.post("/api/scheduler", json={"enabled": True})
         assert resp.status_code == 500
         assert resp.get_json()["error_code"] == "CONFIG_WRITE_FAILED"
+
+
+class TestHoldingsSavePayloadGuards:
+    """持仓写回的守门：跨站 Origin 与非法请求体都在写盘前拒绝。"""
+
+    def test_cross_origin_rejected_before_write(self, client):
+        with patch("src.python.web.holdings_edit.save") as save:
+            resp = client.post(
+                "/api/holdings/save",
+                json={"intents": [{"code": "600900"}]},
+                headers={"Origin": "http://evil.example.com"},
+            )
+        assert resp.status_code == 403
+        assert resp.get_json()["error"] == "同源校验失败，拒绝提交"
+        assert save.call_count == 0
+
+    def test_non_object_body_returns_400(self, client):
+        with patch("src.python.web.holdings_edit.save") as save:
+            resp = client.post("/api/holdings/save", json=["not-an-object"])
+        assert resp.status_code == 400
+        assert resp.get_json()["error"] == "请求体格式不合法"
+        assert save.call_count == 0

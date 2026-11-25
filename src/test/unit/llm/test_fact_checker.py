@@ -890,3 +890,84 @@ class TestGuardChainContract:
             assert verdict is None or (isinstance(verdict, tuple) and len(verdict) == 2), (
                 f"{step.__name__} 返回了非法形态: {verdict!r}"
             )
+
+
+class TestCorrectionSummaryBranches:
+    """修正摘要的计数口径与告警过滤（`_runner` 侧分支）。"""
+
+    @staticmethod
+    def _outcome(**overrides):
+        from src.python.llm.fact_checker._runner import _CheckOutcome
+
+        fields = {
+            "issues": [],
+            "total_checks": 2,
+            "total_passed": 2,
+            "corrections": [],
+            "symbol_issues": [],
+            "symbol_suggestions": [],
+        }
+        fields.update(overrides)
+        return _CheckOutcome(**fields)
+
+    def test_auto_part_counts_numeric_and_code_corrections_together(self):
+        """数值与代码笔误同轮命中 → auto_part 列出两个计数（历史只列其一）。"""
+        from unittest.mock import patch
+
+        from src.python.llm.fact_checker import _runner
+
+        outcome = self._outcome(
+            corrections=[("5.0", "5.5", "组合收益 5.0%", "组合实际收益率 5.50%")],
+            symbol_issues=["60000 不在持仓中"],
+        )
+        with (
+            patch.object(
+                _runner,
+                "apply_numerical_corrections",
+                side_effect=lambda html, corr, applied: applied.extend([c[0] for c in corr]) or html,
+            ),
+            patch.object(_runner, "detect_code_corrections", return_value=[("60000", "600000", "s", "权重 3.2% 吻合")]),
+            patch.object(_runner, "apply_code_corrections", side_effect=lambda html, corr: html),
+        ):
+            result = _runner._apply_auto_corrections(
+                "<p>组合收益 5.0%</p>",
+                "组合收益 5.0%",
+                [],
+                None,
+                auto_correct=True,
+                outcome=outcome,
+                module_label="测试",
+            )
+
+        assert result.auto_part == "1 处数值、1 处代码"
+        assert "5.0%→5.5%" in result.correction_lines
+        assert "60000→600000" in result.correction_lines
+
+    def test_summary_lists_symbol_suggestions_outside_checks(self):
+        """建议提及只作灰色提示行附加，不计入告警、不影响「全部通过」判词。"""
+        from src.python.llm.fact_checker._runner import _CorrectionOutcome, _build_summary
+
+        correction = _CorrectionOutcome("", "", "", set(), [], [])
+        summary = _build_summary(
+            outcome=self._outcome(symbol_suggestions=["建议提及 588000（科创50ETF）"]),
+            correction=correction,
+            auto_correct=True,
+            module_label="体检",
+        )
+        assert "✓ 事实校验通过" in summary
+        assert "建议提及（不计入校验）" in summary
+        assert "588000" in summary
+
+    def test_summary_hides_unjudged_skipped_value_from_issue_list(self):
+        """归属不可知而未改写的数值 → 不当告警列出（检查器没判定它是错的）。"""
+        from src.python.llm.fact_checker._runner import _CorrectionOutcome, _build_summary
+
+        correction = _CorrectionOutcome("", "", "", {"18.3"}, [], [])
+        summary = _build_summary(
+            outcome=self._outcome(issues=["18.3% 与持仓收益率不符"], total_passed=1),
+            correction=correction,
+            auto_correct=True,
+            module_label="体检",
+        )
+        assert "18.3% 与持仓收益率不符" not in summary
+        assert "✓ 事实校验通过" in summary

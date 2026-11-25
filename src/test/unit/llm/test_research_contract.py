@@ -403,3 +403,25 @@ class TestContractMetrics:
     def test_metrics_line_empty_without_data(self):
         assert rc.contract_metrics_line({}) == ""
         assert rc.contract_metrics_line(None) == ""
+
+
+class TestParseAndVerdictFallbacks:
+    """解析/判决的兜底格：JSON 不闭合、非对象 claim、模型没给 verdict。"""
+
+    def test_unterminated_json_returns_none(self):
+        """花括号不闭合（扫描不到结束位）→ 视为无契约，不抛异常。"""
+        text = rc.STRUCTURED_CLAIMS_MARKER + '{"claims":[{"id":"c1","statement":"x"'
+        assert rc.parse_contract(text) is None
+
+    def test_non_object_claim_downgrades_to_revise(self):
+        """claims 里的非对象条目 → 记 claim_not_object 并把模块判决降为 revise。"""
+        result = rc.validate_contract({"claims": ["不是对象"], "verdict": "ready"}, {}, as_of="2026-01-05")
+        assert result["errors"] == ["claim_not_object"]
+        assert result["claims"] == []
+        assert result["verdict"] == rc.VERDICT_REVISE
+        assert result["as_of"] == "2026-01-05"
+
+    def test_undeclared_verdict_without_errors_is_ready(self):
+        """无校验错误且模型没给可识别 verdict → 判决按 ready（错误列表是唯一真值）。"""
+        assert rc._derive_verdict([], "") == rc.VERDICT_READY
+        assert rc._derive_verdict([], "weird") == rc.VERDICT_READY

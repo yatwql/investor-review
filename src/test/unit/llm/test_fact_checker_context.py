@@ -903,3 +903,55 @@ class TestNonReturnMetricAndSignNormalization:
         html = "<p>超短债（012325，最大持仓12.3%，持仓收益率+45.5%）表现稳健。</p>"
         _report, corrected = run_fact_check(html, holdings)
         assert "+-" not in corrected and "-+" not in corrected, f"出现畸形数值: {corrected}"
+
+
+class TestContextPredicateFallbacks:
+    """上下文判定的边界格：无回撤词 / 回撤词远端 / 合计自洽 / 代码不在全文。"""
+
+    def test_no_drawdown_keyword_is_not_drawdown_context(self):
+        from src.python.llm.fact_checker._context import _is_drawdown_context
+
+        sentence = "组合累计收益 12.5%，跑赢基准"
+        assert _is_drawdown_context(sentence, sentence.index("12.5")) is False
+
+    def test_far_drawdown_keyword_without_profit_word_nearby_is_drawdown(self):
+        """整句有回撤词、数值附近无收益词 → 判为回撤语境（回撤词可距数值数百字）。"""
+        from src.python.llm.fact_checker._context import _is_drawdown_context
+
+        sentence = "历史最大回撤出现在三月，之后按纪律减仓，反弹幅度 8.4%"
+        pos = sentence.index("8.4")
+        # 前 8/15 字符内只有「反弹幅度」这类非收益关键词
+        assert _is_drawdown_context(sentence, pos) is True
+
+    def test_breakdown_parts_summing_to_value_is_breakdown_context(self):
+        """括号内分项之和与合计自洽 → 判为占比口径（不是单品种收益率）。"""
+        from src.python.llm.fact_checker._context import _is_breakdown_sum_context
+
+        sentence = "低风险资产占比 9.5%（5.0% + 4.5%）"
+        assert _is_breakdown_sum_context(sentence, sentence.index("9.5"), 9.5) is True
+
+    def test_breakdown_parts_not_summing_is_not_breakdown_context(self):
+        from src.python.llm.fact_checker._context import _is_breakdown_sum_context
+
+        sentence = "低风险资产占比 9.5%（5.0% + 1.5%）"
+        assert _is_breakdown_sum_context(sentence, sentence.index("9.5"), 9.5) is False
+
+    def test_code_absent_from_text_is_not_suggestion_context(self):
+        from src.python.llm.fact_checker._context import _is_suggestion_context
+
+        assert _is_suggestion_context("588000", "正文只提到 600519 与 000001") is False
+
+
+def test_breakdown_with_two_digit_share_is_breakdown_context():
+    """实盘形态「18.3%（12.5% + 5.8%）」：前缀含完整百分比文本，判定必须命中。
+
+    回归：括号前前缀上限曾为 3 字符，而 `18.3%` 本身就是 5 字符 ⇒ 合计自洽的占比
+    口径永远判不成 breakdown，18.3% 会被当品种收益率改写成无关值，句子随即自相矛盾。
+    """
+    from src.python.llm.fact_checker._context import _is_breakdown_sum_context
+
+    sentence = "把低风险资产从当前的 18.3%（12.5% + 5.8%）提到 25% 附近"
+    assert _is_breakdown_sum_context(sentence, sentence.index("18.3"), 18.3) is True
+    # 分项与合计不自洽时仍不得判为占比口径
+    off = "把低风险资产从当前的 18.3%（12.5% + 1.8%）提到 25% 附近"
+    assert _is_breakdown_sum_context(off, off.index("18.3"), 18.3) is False

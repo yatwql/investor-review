@@ -305,7 +305,9 @@ def _is_breakdown_sum_context(sentence: str, match_start: int, value: float) -> 
         命中「合计 = 分项之和」时为 True。
     """
     after = sentence[match_start : match_start + 80]
-    m = re.match(r"^[^（(]{0,3}[（(]([^）)]{0,80})[）)]", after)
+    # 前缀放 8 字符：合计值自身文本（如 `18.3%`、`-18.3%`）必须整段落在括号前，
+    # 只给 3 字符时两位整数+小数+百分号的常规写法（5 字符）永不命中，判定恒假。
+    m = re.match(r"^[^（(]{0,8}[（(]([^）)]{0,80})[）)]", after)
     if not m:
         return False
     parts = [float(x) for x in _BREAKDOWN_PART_PATTERN.findall(m.group(1))]
