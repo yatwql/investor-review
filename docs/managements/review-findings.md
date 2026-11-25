@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.18.7-dev
-> **编号源**：`rf-next = 1199`（新增问题提出后更新为 +1；已用最大 rf-1198，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1203`（新增问题提出后更新为 +1；已用最大 rf-1202，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -19,6 +19,11 @@
 | # | 问题 | 修复方向 |
 | --- | --- | --- |
 | **rf-1192** | `report/penetration_sheet.py:219-220` 的 `no_a_share` 分支直接 `pass`，不复位 `penetration_industry` 降级追踪器上遗留的 `empty` 计数——跨会话序列「有 A 股且行业取数为空」→「全为非 A 股」→「再切回有 A 股」时，T3 阈值判断读到的仍是上一次会话累积的 `empty`，可能提前一次触发「行业分类不可用」降级 | `no_a_share` 分支内调一次 `_tracker().reset("penetration_industry")` 清空该通道计数；展示语义不变（无 A 股仍不记降级、`build_penetration_data_status` 仍返回空字典） |
+
+| **rf-1199** | **现状**：`report/penetration.py:641-643` 在全为非 A 股时置 `industry_success=False` 并配 `industry_failure_type="no_a_share"`，靠后者兼表「非失败」；唯一消费处 `report/penetration_sheet.py:216-220` 正是靠 `industry_failure_type` 特判才没把预期行为记成降级。**影响**：任何只看 `industry_success` 的新消费方（新页面/新矩阵/新埋点）都会把「无 A 股穿透资产」记成数据降级，同一事实两个字段各自表述、口径随时分叉 | 合并为单字段 `industry_status: ok / empty / no_a_share / unreachable`，产出侧（`_compute_penetration_top10_uncached` 及其缓存结果）与消费侧（`build_penetration_data_status`）一次改齐，`no_a_share` 作为枚举值而非失败标志 |
+| **rf-1200** | **现状**：`src/test/unit/providers/` 下数据源用例各自定义 HTTP 替身——主流三种命名（`_FakeResp/_FakeClient`、`_FakeResponse/_FakeClient`、`_Resp/_Client`，7 文件 14 类），另有 `MockResponse/MockClient`、`_ClientStub` 变体；语义已分叉（cninfo 按 URL 后缀分派响应、hithink 替身带 `__enter__` 兼作上下文管理器）。**影响**：新增一个数据源用例就要再抄一份替身才能凑出 `raise_for_status`/`json()`/上下文管理行为，取数接口契约一变就要改 N 处，且各份对异常与状态码的假设并不一致 | 统一到 `src/test/_fixtures/http.py`（保留「url → 响应」分派参数与上下文管理器形态），逐文件改用共享替身并删除本地定义，由共享替身单一表述行为契约 |
+| **rf-1201** | **现状**：`src/test/unit/ui/test_tui_main_loop_branches.py:232` 用 `runpy.run_path(tui_mod.__file__, run_name="__main__")` 把整套 TUI 重跑一遍来验「Ctrl+C → 告别语 + 退出码 0」。**影响**：单条用例付出整模块导入墙钟，且 `run_name="__main__"` 会在同一进程内重执行模块级代码、搅乱模块会话状态与已注册的全局单例，与相邻 UI 用例互相污染 | 改为 `monkeypatch.setattr(sys, "path", …)` 注入伪造入口后断言入口**委托**（即 `__main__` 分支调用的函数被调用、告别语由该函数产出），不触发真实导入链；确需端到端验退出码则放子进程用例 |
+| **rf-1202** | **现状**：`logs/release.jsonl` 的解析同域实现在三处各写一遍——`scripts/probe-release-ledger.py:45` 的 `_load`（跳过损坏行/非 dict/无 `command`）、`scripts/_release/_commands_base.py:185` 的内联逐行 `json.loads`、`scripts/_release/_timing.py:233` 的 `release_token_usage`（会话快照差量累加）。**影响**：台账行口径（必填字段、损坏行容忍、会话累计语义）改一次要同步三处，probe 的统计与发布门禁自己的口径最易漂移，漂移后两边都「看着对」 | `_timing.py` 导出 `read_ledger_records(path)` 作为唯一台账读取入口（含损坏行/非 dict 跳过口径），`probe-release-ledger.py` 与 `_commands_base` 改调它；**不改任何输出格式**（probe 的 `--json`/`--last` 与 token 行文本保持原样） |
 
 ### P3 — 持续监控：兼容残留
 
