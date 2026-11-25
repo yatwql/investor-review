@@ -14,12 +14,12 @@
 | 架构图示 | SVG | 4 | 396 | `src/static/` README 架构图（architecture 三渠道→引擎→双报告、llm-chain Provider 链式分发、capabilities 九大功能域总览、owl-mascot 吉祥物猫头鹰「守望」）+ 截图 7 张 PNG（报告实景 `report-overview`/`report-toc`/`report-charts` + 界面实景 `tui-menu`/`web-workbench`/`web-config`/`cli-report`，不计入本行） |
 | 辅助脚本 | Python | 150 | 31,446 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评测与因子目录评测、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、视觉资产（社交预览图/架构图体检）、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
 | 源代码合计 | — | 630 | 160,855 | 主程序 + 模板 + 脚本 + SVG |
-| 测试代码 | Python | 829 | 220,514 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
-| 测试用例 | — | — | 15,284 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
+| 测试代码 | Python | 835 | 221,086 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
+| 测试用例 | — | — | 15,331 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 15 | 7,088 | 含 README.md；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 14 | 6,851 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 223 | 75,288 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 14,538 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 223 | 75,294 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 14,544 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 200 | 59,038 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 9 | ~1616 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + TUI 交互改进（议题 + 第一/二批实施方案） + PanWatch 借鉴分析（含评估政策单源化与 LLM 复盘契约两份设计） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -1106,6 +1106,7 @@ investor-review/
 │       │   │   ├── test_section_visibility.py    #   章节两层可见性（单契约乐观 + 多契约 data_flag_any OR 悲观）
 │       │   │   ├── test_category_edge.py          #   分类边缘场景
 │       │   │   ├── test_chart_data_builder.py     #   Chart.js 数据集预处理器测试
+│       │   │   ├── test_chart_data_builder_branches.py #   图表数据集降级分支（单图失败跳过/基准残缺取舍/Radar 空占位）
 │       │   │   ├── test_chart_data_builder_edge.py #   图表数据预处理器边缘场景（行业归"其他"等）
 │       │   │   ├── test_data_integrity.py         #   数据完整性测试
 │       │   │   ├── test_data_quality_edge.py      #   数据质量边缘场景
@@ -1154,9 +1155,11 @@ investor-review/
 │       │   │   ├── test_position_structure_sheet.py # 持仓结构与集中度页签（三区块 + 合并等价 + OR 可见性）
 │       │   │   ├── test_evolution_html.py         #   组合演进章节 HTML 呈现（图表+图下说明）
 │       │   │   ├── test_evolution_sheet.py        #   组合演进 Excel 页签呈现
+│       │   │   ├── test_evolution_sheet_branches.py #   组合演进「自上次快照变化摘要」分支（新增/移除/HHI/超限/无变化）
 │       │   │   ├── test_holding_change_panel.py    #   持仓变动复盘面板（契约装配/双端单源/关态隐藏/开关注册/模板接线/提示词块与重排标注）
 │       │   │   ├── test_report_qa_partial.py #   报告追问区块 partial（Data States/信封消费/token 样式纪律/主模板 guard/开关隔离渲染）
 │       │   │   ├── test_event_impact_panel.py #   事件窗对照表编排（极性/日期解析表、品种索引、行组装与降级计数）
+│       │   │   ├── test_event_impact_panel_branches.py #   事件窗对照表分支（空码/非 dict 资产/板块未识别/收益缺失/日期不可解析）
 │       │   │   ├── test_event_impact_panel_edge.py #   事件窗对照表编排边缘（空输入/坏 ctime/取数异常降级）
 │       │   │   ├── test_event_impact_wiring.py #   事件窗接线（开关/seam/注册表并入判定/关态回退/双端单源/分歧例召回/模板并入新闻章/新闻-LLM 串行化）
 │       │   │   ├── test_schedule_replay_wiring.py #   调仓纪律回放接线（开关/seam/注册表/关态回退/双端单源/引用块/模板/契约装配）
@@ -1172,9 +1175,11 @@ investor-review/
 │       │   │   ├── test_decision_llm_capture.py   #   决策复盘·LLM 操作建议表解析登记（表头识别/逐代码方向/去重/降级）
 │       │   │   ├── test_decision_header_render_wiring.py  #   决策复盘·决策头渲染剥离接线（登记后剥离/双端写出前/元组作用域）
 │       │   │   ├── test_decision_settlement.py    #   决策复盘·结算服务（到期结算/方向命中统计/需样本数/基准对齐）
+│       │   │   ├── test_decision_settlement_branches.py #   决策结算取数降级与不可判定分支（异常降级/空序列/决策日缺失）
 │       │   │   ├── test_decision_review_block.py  #   决策复盘·复盘区块数据组装（available/命中率/近期明细/样本守门）
 │       │   │   ├── test_decision_book.py # 决策书装配与双端同源契约（开关/匿名化/无契约三态）
 │       │   │   ├── test_decision_basis.py   #   判断依据章内块（信号清单三态标注/可信度仲裁四枚举/回测结论登记/开关/零参数/零 LLM/双端同源）
+│       │   │   ├── test_decision_basis_settlement_branches.py #   结算展示块对畸形账本条目的容错（非 dict/非整数视界/缺字段）
 │       │   │   ├── test_signal_record.py          #   确定性信号沉淀适配器（五类抽取/不可用跳过/实时-非实时判定/幂等与开关）
 │       │   │   ├── test_whatif_html.py            #   调仓 What-if 独立 HTML 页呈现
 │       │   │   ├── test_whatif_sheet.py           #   调仓 What-if Excel 三页签呈现
@@ -1230,6 +1235,7 @@ investor-review/
 │       │   │   ├── test_news_correlation_branches.py # 关键词扩展回落/费用估算口径/源状态降级/页脚与着色/全源失败占位
 │       │   │   ├── test_news_degradation_edge.py  #   新闻降级边缘场景
 │       │   │   ├── test_penetration.py            #   穿透分析测试（合并/排序/TOP10 与比值归一）
+│       │   │   ├── test_penetration_branches.py   #   穿透计算分支（关键词表加载降级/无名称成分跳过/行业数据写入）
 │       │   │   ├── test_penetration_classify.py   #   穿透分类与名称判定测试（classify/债券/联接/类型标签/名称归一化）
 │       │   │   ├── test_penetration_edge.py       #   穿透分析边缘场景
 │       │   │   ├── test_penetration_report_periods.py # 穿透报告期场景测试（不可得剔除/陈旧闸门/联接来源登记）
