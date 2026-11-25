@@ -125,3 +125,30 @@ class TestLlmProvidersPanel:
             status_order = [p["name"] for p in llm_status()["providers"]]
         panel_order = [p["name"] for p in order_providers_by_chain(_PROVIDERS_ARRAY_ORDER_STALE["providers"])]
         assert status_order == panel_order == ["aux", "main"]
+
+
+class TestLlmProvidersPanelInputEdges:
+    """[M] 面板的非法输入与中断收口。"""
+
+    def test_non_numeric_pair_reprompts_without_write(self, capsys) -> None:
+        """两个词但非数字（如「a b」）：给范围提示并回到面板，不写盘。"""
+        with (
+            patch("src.python.config.get_llm_providers", return_value=_PROVIDERS),
+            patch("src.python.tui.handlers_llm_providers.input_choice", side_effect=["a b", "0"]),
+            patch("src.python.tui.handlers_config._apply_edit") as edited,
+        ):
+            _cmd_config_llm_providers()
+
+        assert "请输入两个不同的编号交换位置" in capsys.readouterr().out
+        edited.assert_not_called()
+
+    def test_eof_returns_without_raising(self) -> None:
+        """读取中断（EOF/Ctrl+C）：收口返回，不向菜单抛出。"""
+        with (
+            patch("src.python.config.get_llm_providers", return_value=_PROVIDERS),
+            patch("src.python.tui.handlers_llm_providers.input_choice", side_effect=EOFError),
+            patch("src.python.tui.handlers_config._apply_edit") as edited,
+        ):
+            _cmd_config_llm_providers()
+
+        edited.assert_not_called()
