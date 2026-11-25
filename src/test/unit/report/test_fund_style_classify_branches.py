@@ -49,7 +49,7 @@ class TestClassifyStockDegrade:
 
         assert result["is_estimated"] is True
         assert result["style"] == "混合", "无市值即无法定风格，须落混合而非臆测"
-        assert result["size"] == fsc._get_size_from_code("600519")
+        assert result["size"] == "大盘"
 
     def test_missing_pe_keeps_size_and_marks_estimate(self):
         result = fsc._classify_stock("600519", 1e11, None)

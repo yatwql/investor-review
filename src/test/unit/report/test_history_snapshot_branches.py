@@ -114,7 +114,7 @@ class TestPruneDeletion:
 
 
 class TestListAndLoadFailures:
-    """目录列举与文件读取的降级。"""
+    """目录列举与文件读取的降级（经公开入口验证）。"""
 
     def test_listdir_failure_degrades_to_empty(self, monkeypatch, tmp_path):
         _empty_workspace(monkeypatch, tmp_path)
@@ -124,10 +124,16 @@ class TestListAndLoadFailures:
 
         monkeypatch.setattr(hs.os, "listdir", _boom)
 
-        assert hs._list_snapshot_files() == []
+        assert hs.load_latest() is None, "列举异常须按「无快照」处理"
+        assert hs.load_all() == []
+        assert hs.prune(retention_days=180, max_count=1) == 0
 
-    def test_load_missing_file_returns_none(self, tmp_path):
-        assert hs._load_file(str(tmp_path / "absent.json")) is None
+    def test_load_missing_file_returns_none(self, monkeypatch, tmp_path):
+        _empty_workspace(monkeypatch, tmp_path)
+        # 列举到的文件在读取前消失（并发 prune 的真实竞态）
+        monkeypatch.setattr(hs.os, "listdir", lambda _p: ["snapshot_20260101T090000.json"])
+
+        assert hs.load_all() == [], "文件在列举与读取之间消失须静默跳过，不得抛出"
 
 
 def _snapshot():

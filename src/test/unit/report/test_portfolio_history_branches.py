@@ -125,6 +125,16 @@ class TestComputeDrawdown:
         assert max_dd_pct == pytest.approx(25.0)
         assert (start, end) == ("2026-03-03", "2026-03-04")
 
+    def test_first_date_below_peak_records_same_day_window(self):
+        dates = ["2026-03-02", "2026-03-03"]
+        date_map = {"2026-03-02": -5.0, "2026-03-03": 10.0}
+
+        bars, max_dd, _pct, start, end = PortfolioHistoryCalculator._compute_drawdown(dates, date_map)
+
+        assert bars[0]["total_value"] == -5.0
+        assert max_dd == pytest.approx(5.0)
+        assert (start, end) == ("2026-03-02", "2026-03-02"), "峰值未建立时的回撤窗口取当日（不得留空起点）"
+
 
 class TestFetchBenchmarks:
     """基准指数取数与归一化的降级。"""
@@ -141,13 +151,3 @@ class TestFetchBenchmarks:
         monkeypatch.setattr("src.python.report.portfolio_history.fetch_benchmarks", lambda *a, **k: {})
 
         assert calc._fetch_benchmarks(_series(["2026-03-02"], [100.0]), 30) == []
-
-    def test_first_date_below_peak_records_same_day_window(self):
-        dates = ["2026-03-02", "2026-03-03"]
-        date_map = {"2026-03-02": -5.0, "2026-03-03": 10.0}
-
-        bars, max_dd, _pct, start, end = PortfolioHistoryCalculator._compute_drawdown(dates, date_map)
-
-        assert bars[0]["total_value"] == -5.0
-        assert max_dd == pytest.approx(5.0)
-        assert (start, end) == ("2026-03-02", "2026-03-02"), "峰值未建立时的回撤窗口取当日（不得留空起点）"

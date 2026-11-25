@@ -14,7 +14,6 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
-from unittest.mock import patch
 
 import pytest
 
@@ -101,13 +100,6 @@ _ALL_DATES = [
     for i in range(70)
     if (date(2026, 8, 24) + timedelta(days=i)).weekday() < 5
 ]
-
-
-@pytest.fixture(autouse=True)
-def _calendar():
-    """注入交易日历（patch 持有者模块，隔离 akshare 网络调用）。"""
-    with patch("src.python.core.trading_calendar._get_trading_calendar", return_value=set(_ALL_DATES)):
-        yield
 
 
 def _price_bars() -> list[dict]:

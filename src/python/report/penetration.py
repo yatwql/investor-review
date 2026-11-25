@@ -636,6 +636,9 @@ def _compute_penetration_top10_uncached(
     a_share_codes = {c for c in all_codes if is_a_share_code(c)}
 
     if not a_share_codes:
+        # 无 A 股代码属预期行为：仍置 success=False，使上游按 failure_type
+        # 区分「不降级」与真实失败时有统一入口
+        industry_success = False
         industry_failure_type = "no_a_share"
     else:
         prefetched: dict[str, dict] = {}
@@ -650,15 +653,16 @@ def _compute_penetration_top10_uncached(
 
         # 补取基金持仓中出现的、预取未覆盖的新代码
         remaining = a_share_codes - set(prefetched.keys())
+        remaining_data: dict[str, dict] = {}
         if remaining:
             from src.python.fetcher.industry import batch_fetch_industry_data as batch_ind
 
-            remaining_data = batch_ind(list(remaining))
+            remaining_data = batch_ind(list(remaining)) or {}
             if remaining_data:
                 _apply_industry_data(merged, remaining_data)
 
-        # 没有任何行业数据被获取
-        if not prefetched and not remaining and a_share_codes:
+        # 没有任何行业数据被获取（预取与补取均为空：熔断短路或批量全败）
+        if not prefetched and not remaining_data:
             logger.warning("[penetration] 行业分类数据为空（非关键）")
             industry_success = False
             industry_failure_type = "empty"

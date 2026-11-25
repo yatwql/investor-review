@@ -89,7 +89,7 @@ class TestSettleFromSeries:
         assert raw == pytest.approx(0.1)
         assert bench_ret is None
         assert outcome is not None
-        assert isinstance(hit, bool)
+        assert hit is True, "看多且上涨 10% 须判命中"
 
 
 class TestSettleMissingBaseline:

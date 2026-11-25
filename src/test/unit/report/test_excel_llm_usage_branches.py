@@ -99,7 +99,9 @@ class TestBuildUsageSheet:
 
         writer.assert_not_called()
 
-    def test_sheet_write_exception_is_swallowed(self, monkeypatch):
+    def test_sheet_write_exception_is_swallowed(self, monkeypatch, caplog):
+        import logging
+
         writer = MagicMock(side_effect=RuntimeError("write boom"))
         monkeypatch.setattr("src.python.llm.get_session_usage", lambda: {"per_module": {}})
         monkeypatch.setattr(
@@ -108,7 +110,12 @@ class TestBuildUsageSheet:
         )
         monkeypatch.setattr("src.python.report.summary.write_llm_usage_sheet", writer)
 
+        caplog.set_level(logging.DEBUG)
         excel_llm_usage.build_llm_usage_sheet({"llm_usage": MagicMock()}, _prog())
 
-        # 写页签须被尝试过且异常不外冒（本用例跑到此处即证明未冒泡）
+        # 异常须被转成可追溯的 DEBUG 日志（不是静默 pass）
         writer.assert_called_once()
+        failures = [r for r in caplog.records if "创建 LLM API 用量页签失败" in r.getMessage()]
+        assert failures, "写页签失败须留 DEBUG 日志，不得静默吞掉"
+        assert failures[0].levelno == logging.DEBUG
+        assert "write boom" in failures[0].getMessage(), "日志须带上原始异常信息"

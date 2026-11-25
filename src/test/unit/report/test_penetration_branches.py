@@ -18,7 +18,7 @@ from datetime import date
 import pytest
 
 from src.python.core.models import Holding
-from src.python.report import penetration
+from src.python.report import penetration, penetration_sheet
 from src.python.report.market_value import DetailRow
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
@@ -178,3 +178,60 @@ class TestIndustryPrefetch:
         sectors = {item["name"]: item["sector"] for item in result["top10"]}
         assert sectors["贵州茅台"] == "白酒", "预取命中的代码须写入分类结果"
         assert sectors["五粮液"] == "食品饮料", "预取未覆盖的代码补取后也须写入"
+
+
+class TestIndustryAvailabilityFlag:
+    """行业取数全空时须报降级（`industry_success=False` + failure_type）。
+
+    生产场景：行业链路熔断（`batch_fetch_industry_data` 直接回空）或批量全败
+    （只回填成功项），两段取数均为空。此前判据放在 `remaining` 非空之外，
+    该分支永不成立，`penetration_sheet` 的「行业分类不可用」降级从未被触发。
+    """
+
+    def test_prefetch_and_batch_both_empty_marks_industry_failed(self, monkeypatch):
+        calls: list[list[str]] = []
+
+        def _batch(codes):
+            calls.append(list(codes))
+            return {}
+
+        monkeypatch.setattr("src.python.fetcher.industry.batch_fetch_industry_data", _batch)
+
+        result = penetration._compute_penetration_top10_uncached(
+            [_holding("贵州茅台", "600519")],
+            [_detail("600519")],
+        )
+
+        assert calls == [["600519"], ["600519"]], "预取为空后须按需补取"
+        assert result["industry_success"] is False, "两段取数全空须标记行业不可用"
+        assert result["industry_failure_type"] == "empty"
+
+    def test_partial_batch_success_keeps_industry_available(self, monkeypatch):
+        calls: list[list[str]] = []
+
+        def _batch(codes):
+            calls.append(list(codes))
+            if len(calls) == 1:
+                return {}
+            return {"600519": {"industry": "白酒"}}
+
+        monkeypatch.setattr("src.python.fetcher.industry.batch_fetch_industry_data", _batch)
+
+        result = penetration._compute_penetration_top10_uncached(
+            [_holding("贵州茅台", "600519")],
+            [_detail("600519")],
+        )
+
+        assert result["industry_success"] is True, "补取有命中即不算取数失败"
+        assert "industry_failure_type" not in result
+        assert {item["name"]: item["sector"] for item in result["top10"]}["贵州茅台"] == "白酒"
+
+    def test_no_a_share_codes_marks_failure_type_without_degrade(self, monkeypatch):
+        result = penetration._compute_penetration_top10_uncached(
+            [_holding("腾讯控股", "00700")],
+            [_detail("00700", name="腾讯控股")],
+        )
+
+        assert result["industry_success"] is False, "置 False 才能让上游读到失败类型"
+        assert result["industry_failure_type"] == "no_a_share"
+        assert penetration_sheet.build_penetration_data_status(result) == {}, "无 A 股属预期行为，不记降级"
