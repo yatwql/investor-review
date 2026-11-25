@@ -733,3 +733,44 @@ class TestSourceNormalization:
         assert result is not None, "全文阶应命中"
         assert seen["source"] == "cninfo", "全文阶必须携带归一后的 source"
         assert seen["meta"]["id"] == 555001, "全文阶必须透传候选 meta"
+
+
+class TestSectionPickingAndCandidateLadders:
+    """章节名匹配、候选阶梯的空 id 跳过、索引降级登记与凭据透传。"""
+
+    def test_empty_preference_is_skipped(self):
+        """空偏好项不参与子串匹配（否则 ``"" in name`` 恒真，首个章节会被全部偏好抢占）。"""
+        picked = fr._pick_sections(["管理层讨论与分析", "财务报表附注"], ("", "财务报表"))
+
+        assert picked == ["财务报表附注"]
+
+    def test_candidates_without_id_are_skipped_in_both_ladders(self, monkeypatch):
+        """候选缺 ``id`` 时两阶（章节阶 / 全文阶）均跳过，不拿 None 去请求文档。"""
+        fetched: list = []
+        monkeypatch.setattr(fr, "_collect_doc_sections", lambda doc_id, *a, **k: fetched.append(doc_id) or (None, []))
+
+        result = fr._attempt_candidates([{"title": "无 id 元数据"}], "600000.SS", ["管理层讨论"], 1000, [])
+
+        assert result is None
+        assert fetched == [], "缺 id 的候选不得进入文档请求"
+
+    def test_index_failure_registration_error_is_swallowed(self, monkeypatch, caplog):
+        """降级登记自身异常（观测链路故障）不得冒泡到取数链路。"""
+        from src.python.core import degradation
+
+        class _BrokenTracker:
+            def record(self, *a, **kw):
+                raise RuntimeError("观测后端挂了")
+
+        monkeypatch.setattr(degradation, "get_tracker", lambda: _BrokenTracker())
+        with caplog.at_level("DEBUG", logger="invest"):
+            fr._record_index_failure("600000.SS", "主源超时且备源无命中")
+
+        assert "索引降级登记失败" in caplog.text
+
+    def test_datasink_credential_missing_passes_through(self, monkeypatch):
+        """凭据就绪判定只透传 DataSinking 单一来源（不在报告层复制判定口径）。"""
+        sentinel = object()
+        monkeypatch.setattr(fr.datasink, "missing_credential", lambda source_id: (source_id, sentinel))
+
+        assert fr.datasink_credential_missing() == (fr.datasink.SOURCE_ID, sentinel)

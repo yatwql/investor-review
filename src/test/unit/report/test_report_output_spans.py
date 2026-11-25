@@ -199,6 +199,37 @@ class TestFullPathPhaseSpans:
         assert ok is True
         assert perf.events == ["start:Excel 生成", "stop"]
 
+    def test_excel_failure_records_error_and_returns_false(self, monkeypatch, tmp_path, prep_stub):
+        """Excel 生成抛异常 → 记错误、返回 False（不冒泡中断整个报告流程）。"""
+        monkeypatch.setattr(
+            "src.python.report.excel_generator.generate_excel_report",
+            MagicMock(side_effect=OSError("落盘失败")),
+        )
+        result = ReportResult()
+
+        ok = rg._generate_full_excel_report(
+            [],
+            prep_stub,
+            str(tmp_path),
+            True,
+            (None, None, None, None),
+            [],
+            {},
+            [],
+            None,
+            None,
+            MagicMock(),
+            False,
+            False,
+            False,
+            False,
+            None,
+            result,
+        )
+
+        assert ok is False
+        assert "Excel 报告生成失败" in result.errors
+
     def test_html_failure_still_closes_phase(self, monkeypatch, tmp_path, prep_stub):
         """渲染抛异常时阶段仍收口（finally），否则该阶段永久悬挂、后续计时错位。"""
         perf = _RecordingPerf()

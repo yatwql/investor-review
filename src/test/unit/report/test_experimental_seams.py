@@ -126,6 +126,42 @@ class TestDeterministicDecisions:
         assert any("登记 1 条确定性建议" in msg for msg in ok_messages)
         assert reporter.warns() == []
 
+    def test_no_settled_but_deferred_reports_info(self, reporter):
+        """无到期已结但有延后/跳过 → 走 info 口径（不谎报已结算）。"""
+        with (
+            _patch_active("decision_ledger", True),
+            patch(
+                "src.python.report.decision_settlement.settle_pending_decisions",
+                return_value={"settled": 0, "deferred": 2, "skipped": 1},
+            ),
+            patch(
+                "src.python.report.decision_record.register_action_decisions",
+                return_value={"registered": 0},
+            ),
+        ):
+            seams.record_deterministic_decisions(_PREP, {"sell": []}, reporter)
+
+        infos = [msg for level, msg in reporter.messages if level == "info"]
+        assert infos == ["决策复盘：无到期可结算决策"], "延后/跳过须按 info 口径上报"
+
+    def test_empty_registration_logs_info(self, reporter, caplog):
+        """登记为空（无卖出信号或无基线）→ 只记 info 日志，不打扰用户。"""
+        with (
+            _patch_active("decision_ledger", True),
+            patch(
+                "src.python.report.decision_settlement.settle_pending_decisions",
+                return_value={"settled": 1},
+            ),
+            patch(
+                "src.python.report.decision_record.register_action_decisions",
+                return_value={"registered": 0},
+            ),
+            caplog.at_level("INFO", logger="invest"),
+        ):
+            seams.record_deterministic_decisions(_PREP, {"sell": []}, reporter)
+
+        assert "确定性建议登记为空" in caplog.text
+
     def test_downstream_exception_warns_only(self, reporter, caplog):
         """结算抛异常 → 只告警 + 异常日志，不外抛，且不再继续登记。"""
         with (
@@ -191,6 +227,41 @@ class TestLlmDecisionsAndReviewBlock:
         assert pipeline_data["decision_review_data"] is block
         ok_messages = [msg for level, msg in reporter.messages if level == "ok"]
         assert any("登记 3 条 LLM 操作建议" in msg for msg in ok_messages)
+
+    def test_contract_lookup_failure_registers_with_empty_verdict(self, reporter):
+        """契约载体不可用 → 判定短语留空照常登记（不阻断登记链路）。"""
+        pipeline_data: dict = {}
+
+        with (
+            _patch_active("decision_ledger", True),
+            patch(
+                "src.python.llm.research_contract.get_module_contracts",
+                side_effect=ImportError("契约不可用"),
+            ),
+            patch(
+                "src.python.report.decision_llm_capture.register_llm_decisions",
+                return_value={"registered": 1},
+            ) as register,
+            patch("src.python.report.decision_review_block.build_review_block", return_value={}),
+        ):
+            seams.record_llm_decisions_and_review_block(_PREP, (None, "| 代码 | 方向 |"), True, pipeline_data, reporter)
+
+        assert register.call_args.kwargs["module_verdict"] == "", "契约不可用时判定短语须为空串"
+
+    def test_empty_llm_registration_logs_info(self, reporter, caplog):
+        """LLM 登记为空（无方向建议或同日已登记）→ 只记 info 日志。"""
+        with (
+            _patch_active("decision_ledger", True),
+            patch(
+                "src.python.report.decision_llm_capture.register_llm_decisions",
+                return_value={"registered": 0},
+            ),
+            patch("src.python.report.decision_review_block.build_review_block", return_value={}),
+            caplog.at_level("INFO", logger="invest"),
+        ):
+            seams.record_llm_decisions_and_review_block(_PREP, (None, "| 代码 | 方向 |"), True, None, reporter)
+
+        assert "LLM 操作建议登记为空" in caplog.text
 
     def test_flag_on_without_llm_skips_registration_but_builds_block(self, reporter):
         """LLM 关闭 → 不登记（回退占位非真实意见），复盘区块仍装配。"""

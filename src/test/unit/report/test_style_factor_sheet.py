@@ -353,3 +353,66 @@ class TestFactorCatalogBlock(unittest.TestCase):
         idx3 = next(i for i, v in enumerate(flat) if "三、行业 Beta" in v)
         idx4 = next(i for i, v in enumerate(flat) if "四、因子目录" in v)
         self.assertLess(idx3, idx4, "区块四应在区块三之后")
+
+
+class TestFactorBlockPartialDataGuards(unittest.TestCase):
+    """因子只出一部分时的行级跳过与说明区条目。"""
+
+    def _ws(self):
+        from openpyxl import Workbook
+
+        return Workbook().active
+
+    def test_factors_absent_from_betas_are_skipped(self):
+        """betas 缺某因子 → 该因子不出 β 行；基准对照按「双侧都有」出 1 行。"""
+        from src.python.report.style_factor_sheet import _FACTOR_ORDER, _write_factor_block
+
+        ws = self._ws()
+        exposure = {
+            "available": True,
+            "betas": {_FACTOR_ORDER[0]: 0.42},
+            "window": 60,
+            "sample_count": 60,
+            "baseline_betas": {factor: 0.1 for factor in _FACTOR_ORDER},
+        }
+
+        _write_factor_block(ws, 1, exposure, None, 5)
+
+        beta_rows = [row for row in ws.iter_rows() if isinstance(row[1].value, (int, float))]
+        self.assertEqual(len(beta_rows), 2, "组合 β 1 行 + 基准对照 1 行（缺失因子两侧都跳过）")
+
+    def test_stale_and_correlation_note_lines_rendered(self):
+        """停更因子剔除与相关性说明各自成行（诊断可追溯）。"""
+        from src.python.report.style_factor_sheet import _write_factor_block
+
+        ws = self._ws()
+        exposure = {
+            "available": True,
+            "betas": {},
+            "window": 60,
+            "sample_count": 60,
+            "stale_factors": ["momentum"],
+            "correlation_note": "size 与 value 高度相关，回归需谨慎解读",
+        }
+
+        _write_factor_block(ws, 1, exposure, None, 5)
+
+        flat = [str(c.value) for row in ws.iter_rows() for c in row if c.value is not None]
+        self.assertIn("已剔除停更/不可用因子：momentum", flat)
+        self.assertIn("size 与 value 高度相关，回归需谨慎解读", flat)
+
+    def test_catalog_factor_without_neutral_band_renders_dash(self):
+        """因子有值与可算、但缺中性带 → 相对列写「—」而不是猜方向。"""
+        from src.python.report.style_factor_sheet import _write_catalog_block
+
+        ws = self._ws()
+        catalog = {
+            "available": True,
+            "factors": [{"slug": "size", "label": "规模", "computable": True, "value": 0.53, "neutral": None}],
+        }
+
+        body = _write_catalog_block(ws, 1, catalog, 6)
+
+        flat = [str(c.value) for row in ws.iter_rows(min_row=1, max_row=body) for c in row if c.value is not None]
+        self.assertIn("—", flat)
+        self.assertNotIn("▲ 中性上方", flat)

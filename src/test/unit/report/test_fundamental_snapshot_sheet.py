@@ -279,3 +279,44 @@ class TestWriteFundamentalSnapshotSheet(unittest.TestCase):
             standalone = dump(ws_ind if marker.startswith("一") else ws_dig, marker, limit)
             for i, (m_row, s_row) in enumerate(zip(merged, standalone)):
                 self.assertEqual(m_row, s_row, f"{marker} 第 {i} 行与独立写入不一致")
+
+
+class TestFailureRowsWithAvailableData(unittest.TestCase):
+    """available=True 时未取到的标的同样要逐条落到明细之后（不能静默丢）。"""
+
+    def _flat(self, ws, body: int) -> list[str]:
+        return [
+            str(c.value) if c.value is not None else "" for row in ws.iter_rows(min_row=1, max_row=body) for c in row
+        ]
+
+    def test_indicator_failures_rendered_after_rows(self):
+        from openpyxl import Workbook
+
+        from src.python.report.fundamental_snapshot_sheet import _write_indicator_block
+
+        data = _indicator_data()
+        data["failures"] = [{"code": "600519", "name": "贵州茅台", "reason": "年报未披露"}]
+        ws = Workbook().active
+
+        body = _write_indicator_block(ws, 1, data)
+
+        flat = self._flat(ws, body)
+        self.assertTrue(any("600519" in v and "年报未披露" in v for v in flat), flat)
+
+    def test_digest_failures_render_own_title_block(self):
+        from openpyxl import Workbook
+
+        from src.python.report.fundamental_snapshot_sheet import _write_digest_block
+
+        data = {
+            "available": True,
+            "rows": [{"code": "600900", "name": "长江电力", "report_period": "2025-12-31", "summary": "摘要"}],
+            "failures": [{"code": "000001", "name": "平安银行", "reason": "接口失败"}],
+        }
+        ws = Workbook().active
+
+        body = _write_digest_block(ws, 1, data)
+
+        flat = self._flat(ws, body)
+        self.assertTrue(any("未取到财报的标的" == v for v in flat), flat)
+        self.assertTrue(any("000001" in v and "接口失败" in v for v in flat), flat)

@@ -14,12 +14,12 @@
 | 架构图示 | SVG | 4 | 396 | `src/static/` README 架构图（architecture 三渠道→引擎→双报告、llm-chain Provider 链式分发、capabilities 九大功能域总览、owl-mascot 吉祥物猫头鹰「守望」）+ 截图 7 张 PNG（报告实景 `report-overview`/`report-toc`/`report-charts` + 界面实景 `tui-menu`/`web-workbench`/`web-config`/`cli-report`，不计入本行） |
 | 辅助脚本 | Python | 150 | 31,446 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评测与因子目录评测、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、视觉资产（社交预览图/架构图体检）、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
 | 源代码合计 | — | 630 | 160,867 | 主程序 + 模板 + 脚本 + SVG |
-| 测试代码 | Python | 929 | 235,572 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
-| 测试用例 | — | — | 16,415 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
+| 测试代码 | Python | 931 | 236,278 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
+| 测试用例 | — | — | 16,455 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 15 | 7,088 | 含 README.md；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 14 | 6,851 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 223 | 75,407 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 14,657 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 223 | 75,409 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 14,659 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 200 | 59,038 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 9 | ~1616 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + TUI 交互改进（议题 + 第一/二批实施方案） + PanWatch 借鉴分析（含评估政策单源化与 LLM 复盘契约两份设计） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -1083,6 +1083,7 @@ investor-review/
 │       │   │   ├── test_news_dedup_anchor_isolation.py # 锚点语料测试隔离（基路径已重定向到 tmp / 落盘不碰仓库 data）
 │       │   │   ├── test_news_dedup_compact.py  #   锚点维护压缩（保留每组最新/备份 .bak/环境变量关闭/阈值下 noop）
 │       │   │   ├── test_news_dedup_anchor_policy_faults.py # 锚点策略层故障注入（保留期非法值/文件系统故障→aborted/无指纹旧行/维护三态）
+│       │   │   ├── test_news_dedup_anchor_trim_faults.py #  锚点压缩分支配额与备份清扫容错（受保护行留存/过期分片备份与删除失败/清理 .bak 失败）
 │       │   │   ├── test_news_dedup_anchor_store_faults.py # 锚点存储层容错（分片读失败跳过/追加失败归 False/压缩自检拒绝/ts 解析）
 │       │   │   ├── test_sina_news.py          #   新浪新闻源测试
 │       │   │   └── test_wallstreetcn_news.py  #   华尔街见闻新闻源测试
@@ -1190,6 +1191,7 @@ investor-review/
 │       │   │   ├── test_snapshot_extended_history_branches.py # 长窗取数配置兜底与危机回放指数层跳过
 │       │   │   ├── test_summary_llm_usage_contract.py # 用量页签结构化契约埋点行（有字段出行 / 无字段零变化）
 │       │   │   ├── test_summary_llm_usage_sections.py # 用量页签排版分支（自检清单块/缓存命中行/辩论模式/命中率区块/明细全空不写）
+│       │   │   ├── test_excel_generator_aux_branches.py #   basic 路径辅助块装配分支（市场情绪注入/景气诊断异常降级/匿名化产物清扫）
 │       │   │   ├── test_excel_generator_llm_usage.py # LLM 用量页签状态判定（缓存/成功/禁用/失败四态 + 表头行内容契约）
 │       │   │   ├── test_excel_generator_edge.py   #   Excel 生成边缘场景
 │       │   │   ├── test_excel_llm_usage_branches.py # LLM 章节与用量页签降级（模块缺失/生成异常/无用量/页签未建/写入异常）

@@ -578,3 +578,31 @@ class TestFetchIndexKline:
         assert ht.fetch_index_kline("sh000300", days=30) == []
         assert ht.fetch_index_kline("gb_inx", days=30) == []
         assert not hasattr(ht, "to_index_thscode")
+
+
+class TestParsingAndLimiterGuards:
+    """限速器配置降级、K 线与基金持仓的脏条目过滤。"""
+
+    def test_limiter_config_failure_falls_back_to_default(self, monkeypatch, caplog):
+        """配置不可读（无配置文件/测试环境）→ 按默认 qps 建限速器，不影响取数。"""
+        import src.python.config as config_module
+
+        monkeypatch.setattr(config_module, "get_config", lambda: (_ for _ in ()).throw(RuntimeError("无配置")))
+        ht.reset_hithink_limiter()
+        with caplog.at_level("DEBUG", logger="invest"):
+            limiter = ht._get_limiter()
+
+        assert limiter is not None
+        assert "qps 配置不可读" in caplog.text
+
+    def test_kline_skips_non_dict_and_undated_items(self, monkeypatch):
+        """K 线条目非 dict / 无可用日期 → 跳过，不产出空日期 bar。"""
+        monkeypatch.setattr(ht, "_request", lambda path, params: {"item": ["坏条目", {"date_ms": 0}]})
+
+        assert ht._kline_for_symbol("600519.SH", 5, None) == []
+
+    def test_fund_holdings_skips_empty_item_payload(self, monkeypatch):
+        """首个候选返回空 item 列表 → 换下一个候选继续试（不返回空载荷）。"""
+        monkeypatch.setattr(ht, "fetch_fund_portfolio_holdings", lambda thscode: {"item": []})
+
+        assert ht.fetch_fund_holdings("016055") is None

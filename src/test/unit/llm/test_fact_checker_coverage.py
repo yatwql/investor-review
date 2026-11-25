@@ -6,8 +6,11 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
+from src.python.llm.fact_checker._coverage import _classify_skip
 from src.python.llm.fact_checker import numerical_coverage, reset_numerical_coverage, run_fact_check
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_llm, pytest.mark.llm]
@@ -78,3 +81,24 @@ class TestSkipReasonGranularity:
         run_fact_check("<p>某某新能源主题 收益率 45.2%</p>", _HOLDINGS, module_label="测试", auto_correct=False)
         reasons = numerical_coverage()["skip_reasons"]
         assert any("紧邻名称解析不出持仓" in reason for reason in reasons), reasons
+
+
+class TestSkipReasonContextBuckets:
+    """语境细分桶逐条可命中：每个桶对应一条「该补规则」的具体语境。"""
+
+    @pytest.mark.parametrize(
+        ("sentence", "reason"),
+        [
+            ("组合收益的贡献度主要来自减仓节奏", "贡献/归因语境"),
+            ("组合收益 5.0% 高于国债利率", "宏观基准语境"),
+            ("当前仓位下组合收益 4.2%", "仓位/占比语境"),
+            ("如果组合收益达到 6.0% 则继续持有", "假设/情景语境"),
+            ("组合累计收益 5.0% 后续计划调至低风险品种", "调仓目标语境"),
+            ("组合收益 5.0%，美元敞口约 20%", "币种/敞口语境"),
+        ],
+    )
+    def test_context_bucket_matched(self, sentence, reason):
+        """收益关键词齐备但语境不同 → 落到对应细分桶而非笼统的「无收益关键词」。"""
+        ctx = SimpleNamespace(sentence=sentence, holding_codes=set(), name_to_code={}, anchor=0)
+
+        assert _classify_skip(ctx) == reason
