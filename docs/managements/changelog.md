@@ -8,18 +8,28 @@
 
 ## [0.18.7-dev] - 开发中（未发布）
 
+### 修复
 
-（本次发布内容见下方归档索引）
+- **后置模块的重算原因归因恒判 `ttl_expired`（rf-1190）**：`llm/skeleton.generate_llm_content` 先把本轮键写入 `_PREV_MODULE_CACHE_KEY` 再做原因判定，判定读到的「上一轮键」永远等于本轮键 → 「无上轮记录 → `cache_miss`」与「换键 → `fingerprint_changed`」两个分支不可达，内容变化被系统性误标成「TTL 到期」，据此判断「放宽 TTL 能省钱」会得出错误结论；归因改取写基线**之前**的键，并把该块抽为 `_attribute_recompute_reason()`（单一职责，同时降低骨架圈复杂度），补 6 条回归（三态归因 / 已归因不覆盖 / 无汇聚器 / 端到端两轮判 `fingerprint_changed`）。
+- **敏感缓存清理遇畸形 `_ts` 中断整轮（rf-1189）**：`cache/_cleanup.clean_sensitive` 的时间戳直接参与减法，`_ts` 为字符串或 None 时抛 `TypeError` 并被导入期兜底吞掉 → 该轮清理中止，盘上其余过期持仓/穿透/基金缓存全部漏清（`cleanup_expired` 同期已有类型容错，两入口口径不一致）；抽出共享 `_payload_ts()` 让两入口同源，敏感缓存按「无法判定年龄 = 极旧」处理（宁可多清不可留存），单文件畸形不再打断后续扫描。
+- **llm_settings 运行约束静默丢失（rf-1188）**：`config/_llm_schema.apply_flat_updates` 的 runtime 扁平键查表按「字段名」而不是「扁平键」建反向表——`llm_max_concurrency` / `llm_max_thinking_concurrency` / `llm_full_fail_retry_delay` / `llm_total_time_budget_sec` 写回时落到顶层、v2 `runtime` 段不更新，随后 `flatten()` 用 runtime 段的值压过顶层透传 → 用户在配置面板/编辑层改的并发、重试延后、时间预算设置**静默丢失**（`llm_settings.json` 缺失走默认兜底、或同批含 `debate`/`fact_check` 更新时走该路径即触发）；改按扁平键建反向表，配 12 条落点敏感回归（`runtime` 段落值 + 顶层无扁平键残留 + 六个字段从 `RUNTIME_FIELDS` 参数化派生 + 写盘级解析残留 JSON），并修掉既有「只经 `flatten()` 回读」的假绿往返用例。
 
-- **第五批故障分支补齐（缓存编排 · LLM 骨架 · 新闻关联 · CLI 配置面）**：4 个模块补 103 条用例——`cache/operations`（分市场明细去重与「无有效行情」pending、清理/统计两分支、目录统计容错、新资产预热逐项失败只告警）、`llm/skeleton`（空输出记 API 失败、用量递归合并、provider 链与凭据解析回落、`raw_filter_fn` 作用于原始 Markdown、账本上下文回灌仅限接收模块、禁用/未配置批量与单篇返回形状）、`report/news_correlation`（行业/概念扩展失败回落原关键词、费用按归一用量估算、源状态失败不影响匹配、页脚与利好利空着色、全源失败占位）、`cli/_handlers`（持仓读取成功日志、`config set` 各类型解析与 `--dry-run`、`config list` 文本与 JSON 两种渲染、未知源名中止、非 UTF-8 控制台禁彩、产物清单后追降级行）。四模块 → 99~100%（仅剩 1 行不可达防御分支）；另修掉后置模块重算原因归因恒判 `ttl_expired` 的顺序缺陷（`rf-1190`）。单位套件行覆盖率 95.2% → 95.5%。
-- **第四批故障分支补齐（LLM 内容写入 · 数据编排 · 汇总渲染）**：3 个模块补 42 条用例——`report/llm_content`（块级标签前的游离文本先收拢、剥离后为空的块不占空行、未登记失败原因回落通用文案而非误导「未配置 API Key」、实验模式注解只落智囊团页签、结构化契约写入同页签、未建页签告警跳过）、`report/_orchestrator_data`（预取三簇各自失败留渲染阶段重取、因子目录计算失败写占位、估值编排异常与全不可用分别降级、真实分位取数/计算失败回落价格代理、穿透来源标签归一）、`report/summary`（有成本但市值全零出警示条、温度字段不全时分数/三因子行分别降级、指数走备用源触发降级登记、温度段接线）。三模块 → 100%，单位套件行覆盖率 95.1% → 95.2%。
-- **第三批故障分支补齐（Jinja 缓存与过滤器 · 中断收口 · 调仓产物）**：3 个模块补 53 条用例——`report/html_jinja_env`（字节码缓存读/写/清理失败一律降级为「下次再编译」；过滤器遇 None/非数值/对象输出 `--`；匿名代码折叠上下文未命中保持原值）、`report/run_integrity`（中断收口五步各自 best-effort：预清扫、删临时文件、登记去重、落 status=interrupted、组装提示、收敛健康检查单步失败不影响其余步骤与异常传播；写失败提示带目标路径）、`report/whatif_writer`（匿名模式缺省解析与 off 恒等零拷贝、派生容器改名、最新/归档写失败抛带路径 OSError、归档清理失败仅告警）。三模块 → 100%，单位套件行覆盖率 95.0% → 95.1%。
-- **第二批故障分支补齐（TUI 诊断/状态条 · 天天基金 HTTP · 健康检查 · 新闻页签降级 · 缓存目录权限）**：6 个模块补 68 条用例——`tui/handlers_log`（无效键留守面板 / 配置读失败 / 数值字段应为整数 / 窄档健康历史两行渲染 / 自检执行异常指向日志）、`tui/progress`（状态条启用判据、绘制失败只留 DEBUG 不打断进度流、落地行挂起-恢复序列、错误汇总清空）、`providers/tiantian_base`（超时 / 429 状态码 / 连接错误 / JS 转义解析失败各归 None，连接超时严于总超时）、`report/_report_health`（启动失败、结果非 list、条目非 dict、收集异常均不阻断报告）、`report/excel_news_warning`（可选模块缺失与取数失败仍占位写页签并留 [ERR]）、`cache/_paths`（权限过宽收紧到 0o700，chmod/makedirs 失败降级；`INVEST_CACHE_DIR` 覆盖解析）。上述 6 模块 76%→100%，单位套件行覆盖率 94.8% → 95.0%。
-- **缓存清理畸形时间戳修复 + 故障分支补齐**：`cache/_cleanup.clean_sensitive` 的时间戳未做类型容错，`_ts` 为字符串/None 时抛 `TypeError` 并（被导入期兜底吞掉）中断整轮敏感缓存清理，盘上其余过期持仓/穿透/基金缓存全部漏清；抽出共享 `_payload_ts()` 让清理与敏感清理两入口同口径，敏感性归档按「无法判定年龄 = 极旧」清理且单文件畸形不再打断后续扫描（`rf-1189`）。另补齐 5 个模块的故障与注册分支（78 条用例）：`cache/_store`（目录不可建/临时文件失败/目录被外删重试/清除失败）、`cache/_cleanup`（目录不可读/畸形 `_ts`/gz 与 json 同口径/自动清理兜底）、`providers/news_dedup_anchor_store`（分片读失败跳过/追加失败归 False/压缩自检拒绝/ts 解析）、`report/_run_scope`（九步观测复位各自失败均不阻断 + 单轮复用并发/跨轮失效）、`report/pipeline_data_builder`（未知键告警自注册/类型不符只告警/prep 缺省值/merge 四路径），单位套件行覆盖率 94.7% → 94.8%，上述 5 模块 92% → 99%（3 个 100%）。
+### 新增
 
-- **修复 llm_settings 运行约束静默丢失**：`config/_llm_schema.apply_flat_updates` 的 runtime 扁平键查表按「字段名」而不是「扁平键」建反向表——`llm_max_concurrency` / `llm_max_thinking_concurrency` / `llm_full_fail_retry_delay` / `llm_total_time_budget_sec` 写回时落到顶层、v2 `runtime` 段不更新，随后 `flatten()` 用 runtime 段的值压过顶层透传 → 用户在配置面板/编辑层改的并发、重试延后、时间预算设置**静默丢失**（`llm_settings.json` 缺失走默认兜底、或同批含 `debate`/`fact_check` 更新时走该路径即触发）；改按扁平键建反向表，配 12 条落点敏感回归（`runtime` 段落值 + 顶层无扁平键残留 + 六个字段从 `RUNTIME_FIELDS` 参数化派生 + 写盘级解析残留 JSON），并修掉既有「只经 `flatten()` 回读」的假绿往返用例（`rf-1188`）。
-- **发布台账按版本汇总**：新增只读脚本 `scripts/probe-release-ledger.py`（`--last N` / `--version` / `--json` / `-v`），按版本切段输出每版墙钟、分步耗时、会话 token 增量与失败步；token 列口径明确标注为「相邻台账行之间的会话增量」，不是发布命令本身的成本；配 11 条用例（`rf-1187`）。
-- **覆盖率接入与测试缺口补齐**：`requirements.txt` 增 `pytest-cov`（此前项目只有测试规模快照、没有行覆盖率数据）；据首轮实测（`src/test/unit`，90.7%）补齐 9 个薄弱文件的分支覆盖——`report/excel_module_loader`（53.9%→100%）、`llm/_debate_router`（60.0%→100%）、`report/excel_fund_deep_analysis`（28.9%→97.4%）、`providers/tiantian_nav`（50.7%→94.0%）、`tui/handlers_config`（58.2%→96.3%）、`tui/tui_keys`（61.5%→91.9%）、`tui/handlers_holdings`（64.7%→93.6%）、`web/server`（59.5%→83.5%）、`report/_report_factor_metrics`（50.9%→88.3%），整体 90.7%→92.1%，`<60%` 文件由 6 个降为 0 个；新增 9 个测试文件共 184 条用例，聚焦降级链路（ImportError 逐模块兜底 / 数据源故障 vs 数据不足 / 辩论两级回退清空容器）、序列拆包与 UTF-8 解码、持仓录入撤销与保存防线。
+- **发布台账按版本汇总（rf-1187）**：新增只读脚本 `scripts/probe-release-ledger.py`（`--last N` / `--version` / `--json` / `-v`），按版本切段输出每版墙钟、分步耗时、会话 token 增量与失败步；token 列口径明确标注为「相邻台账行之间的会话增量」，不是发布命令本身的成本；配 11 条用例（切段口径/跨版本不串账/同会话取前后差/新会话首行记 0/累计回退记 0/脏行与缺失容错/JSON 与选择器）。
+
+### 测试
+
+- **测试覆盖率 92.1% → 95.5%（七个批次，累计约 500 条新用例）**：接入 `pytest-cov` 后按「失败路径优先、只值一测的分支也不放过」逐批补齐；本轮收尾时 `cli/_handlers`、`report/news_correlation`、`cache/operations`、`report/llm_content`、`report/summary`、`report/_orchestrator_data`、`report/html_jinja_env`、`report/whatif_writer`、`report/pipeline_data_builder`、`report/_run_scope`、`providers/news_dedup_anchor_store`、`tui/handlers_log`、`tui/progress`、`providers/tiantian_base`、`report/_report_health`、`report/excel_news_warning`、`cache/_paths`、`cache/_store`、`cache/_cleanup` 等模块均达 100%（`llm/skeleton` 99%，保留 1 行早退后的不可达防御分支）。逐批口径：
+  - **第 2 批（92.9% → 93.5%）**：analysis guard 分支、缓存刷新编排、config 写路径/校验分区、pricing 解析、akshare 扩展、东财净值历史、回撤页签、HTML 构建阶段埋点、TUI 入口分支。
+  - **第 3 批（93.5% → 93.9%）**：Excel 页签写入隔离、HTML 渲染降级、新浪解析回落、提示词表格分支、CLI 命令簇。
+  - **第 4 批（93.9% → 94.7%）**：医生检查项故障、行情时段官方层、因子目录探测、缓存面板分支、API 响应解析、提示词数据块、新闻去重锚点策略、基金业绩、穿透页签、调度回放面板、LLM 用量小结、Web 错误分支与持仓编辑校验。
+  - **第 5 批（94.7% → 94.8%）**：`cache/_store` 写侧故障、`cache/_cleanup` 清理故障与敏感缓存、锚点存储容错、运行边界九步复位故障注入、pipeline_data 注册与校验分支。
+  - **第 6 批（94.8% → 95.0%）**：TUI 诊断面板与状态条接线、天天基金公共 HTTP 故障面、健康检查收口容错、新闻页签降级、缓存目录权限自检。
+  - **第 7 批（95.0% → 95.1%）**：Jinja 字节码缓存与过滤器兜底、中断收口五步逐步容错、调仓 What-if 产物写出与匿名装配。
+  - **第 8 批（95.1% → 95.2%）**：LLM 内容写入边角（游离文本分段/占位文案/契约小节）、编排数据逐域降级、汇总页降级渲染。
+  - **第 9 批（95.2% → 95.5%）**：缓存编排分市场明细与预热、LLM 骨架边角（空输出/用量合并/凭据回落/原始输出过滤/账本回灌）、新闻关联关键词扩展与费用口径、CLI 配置面（set/list/源名校验/非 UTF-8 禁彩）。
+- **覆盖率接入与首轮缺口补齐**：`requirements.txt` 增 `pytest-cov`（此前项目只有测试规模快照、没有行覆盖率数据）；据首轮实测（`src/test/unit`，90.7%）补齐 9 个薄弱文件的分支覆盖——`report/excel_module_loader`（53.9%→100%）、`llm/_debate_router`（60.0%→100%）、`report/excel_fund_deep_analysis`（28.9%→97.4%）、`providers/tiantian_nav`（50.7%→94.0%）、`tui/handlers_config`（58.2%→96.3%）、`tui/tui_keys`（61.5%→91.9%）、`tui/handlers_holdings`（64.7%→93.6%）、`web/server`（59.5%→83.5%）、`report/_report_factor_metrics`（50.9%→88.3%），整体 90.7%→92.1%，`<60%` 文件由 6 个降为 0 个；新增 9 个测试文件共 184 条用例，聚焦降级链路（ImportError 逐模块兜底 / 数据源故障 vs 数据不足 / 辩论两级回退清空容器）、序列拆包与 UTF-8 解码、持仓录入撤销与保存防线。
 
 ## 归档
 
