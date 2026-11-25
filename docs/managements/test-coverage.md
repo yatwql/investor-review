@@ -101,6 +101,27 @@
 - **操作系统**：Windows 相对 Linux 慢约 1.5~3×（调度器/文件系统/进程创建开销/电源管理差异）
 - **磁盘**：机械盘相对 NVMe SSD 慢约 2~4×（测试收集期密集读写 pyc/缓存/log 小文件）
 
+## 行覆盖率（pytest-cov）
+
+上面几张表是「测试规模」口径（多少条用例、跑多久）；本节是「源码被覆盖多少」口径，两者不可互换。
+
+**口径**：`.venv/bin/python -m pytest src/test/unit --cov=src/python`——`coverage` 的**语句**口径（`--cov-report=term` 结果表末行 `TOTAL` 的 `Stmts` / `Miss` 两列，不启用分支覆盖），分子分母都只含 `src/test/unit` 触发执行的 `src/python` 语句；场景/集成/边缘等其它档不并入本口径（避免同一语句被多档重复计入）。
+
+| 维度 | 当前基线（撰写时实测快照） |
+|:--|:--|
+| 语句数（Stmts） | 49,972 |
+| 未覆盖语句（Miss） | 192 |
+| 行覆盖率 | 99.62% |
+
+**本地复跑**（需要 `pytest-cov`，已在 `requirements.txt` 与 `pyproject.toml` 的可选依赖中声明）：
+
+```bash
+.venv/bin/python -m pytest src/test/unit --cov=src/python --cov-report=term-missing
+```
+
+- 逐批推进过程（92.1% → 99.6% 的批次明细与缺口收敛）记在 `changelog.md` 当前开发版「测试」小节，本文档只维护口径与当前基线，不复写批次明细。
+- **不可达行处理原则**：确认属早退后不可达的防御分支时（如 `llm/skeleton` 保留的 1 行），**不硬凑用例、不放宽断言**去换读数——在用例 docstring 与交接说明里写明「为何不可达」，覆盖率读数如实保留该行未覆盖；反之，凡能由真实入口触发的分支（含降级/故障路径）一律补真用例覆盖，不以 `# pragma: no cover` 或 `omit` 回避。
+
 ## 功能域对应测试源
 
 按被测试的源代码模块分组，方便定位"改了某段源码该跑什么测试"：
