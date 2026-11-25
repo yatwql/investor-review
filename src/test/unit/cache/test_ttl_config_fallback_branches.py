@@ -31,7 +31,9 @@ class TestCacheAgeByDataType:
             seen.append(key)
             return 42.0
 
-        monkeypatch.setattr("src.python.fetcher.akshare.get_profit_forecast_cache_key", lambda: "profit_forecast_abc123")
+        monkeypatch.setattr(
+            "src.python.fetcher.akshare.get_profit_forecast_cache_key", lambda: "profit_forecast_abc123"
+        )
         monkeypatch.setattr(ttl, "get_cache_age", _age)
         assert ttl.get_cache_age_by_data_type("profit_forecast") == 42.0
         assert seen == ["profit_forecast_abc123"]
