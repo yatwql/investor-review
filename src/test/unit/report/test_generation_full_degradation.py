@@ -70,6 +70,25 @@ class TestFetchSectorFlow:
         assert "获取失败" in reporter.warn.call_args.args[0]
         perf.stop.assert_called_once()
 
+    def test_empty_and_exception_register_same_source_key(self):
+        """空载荷与异常两态登记到同一个 source_key（失败原因不分裂信号来源）。"""
+        _, _, _, _, mock_empty = self._run(payload=[], failure="empty")
+        _, _, _, _, mock_raises = self._run(payload=None, failure=None, raises=True)
+
+        empty_key = mock_empty.call_args.args[0]
+        raises_key = mock_raises.call_args.args[0]
+        assert empty_key == raises_key
+        assert empty_key != "fund_flow"
+
+    def test_empty_payload_source_key_maps_to_fund_flow_matrix_row(self):
+        """空载荷登记的 source_key 经矩阵归属落到「资金流向」行（不得成为无行可落的孤儿键）。"""
+        _, _, _, _, mock_empty = self._run(payload=[], failure="empty")
+        source_key = mock_empty.call_args.args[0]
+
+        from src.python.report.data_source_matrix import _match_category
+
+        assert _match_category(source_key) == "fund_flow"
+
 
 class TestRecordLlmStageCounters:
     """事实校验修正数与 thinking 串行等待写入 perf counters。"""

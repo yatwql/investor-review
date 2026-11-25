@@ -290,6 +290,8 @@ def run_schedule_replay(
                 return
             navs_d[c] = float(nav)
         value = day_value(sim_shares, idx, cash)
+        # 不变量：navs_d 全为正（上方守卫）、目标权重和为 1、单边费率上限 <100%，故 cash 只会因
+        # 交易费用轻微为负、累计费用不吞市值 ⇒ value 恒 >0；放宽费率上限或权重和时须复核本守卫。
         if value <= 0:
             return
         before = [{"code": c, "market_value": sim_shares[c] * navs_d[c]} for c in codes]
@@ -301,6 +303,8 @@ def run_schedule_replay(
             if abs(delta) < 1e-6:
                 continue
             base_cost = sim_shares[c] * cost_basis.get(c, 0.0)
+            # 不变量：codes 全部来自期初持仓行，shares 归零只发生在曾「清仓」后由目标权重恢复，
+            # 故本支只在清仓后回补/新品种进入 target 时命中；放宽「target 仅含期初持仓」假设须复核本支。
             if sim_shares[c] <= _EPS:
                 action, cand_cost = "新增", new_shares * nav_d
                 cost_basis[c] = nav_d

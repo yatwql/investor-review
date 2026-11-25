@@ -72,8 +72,10 @@ def _fetch_sector_flow(reporter: ProgressReporter, perf: PerfCollector) -> list[
 
             failure = sector_flow_failure()
             failure_type = "empty" if failure == "empty" else "unreachable"
+            # 与陈旧回退/异常两态同键：矩阵「资金流向」行的前缀是 ff_，空载荷分支
+            # 若登记成 fund_flow 就既不同源、也匹配不上任何行前缀（事件在矩阵里失联）。
             mark_data_unavailable(
-                "fund_flow",
+                "ff_sector_flow",
                 "T4",
                 failure_type=failure_type,
                 message=f"akshare（{sector_flow_hint()}）",
