@@ -297,3 +297,76 @@ class TestRunCliErrorHint:
         err = capsys.readouterr().err
         assert "网络连接异常" in err
         assert "Traceback" not in err
+
+
+class TestMainDispatchBranches:
+    """main() 无配置命令分派、调整类命令提前返回与未知命令兜底。"""
+
+    def _run(self, argv, target: str, **kwargs):
+        import sys
+
+        with (
+            patch(target, **kwargs) as mock_handler,
+            patch("src.python.config.init_config"),
+            patch("src.python.config.get_config", return_value={}),
+            patch("src.python.core.logger.setup_logger"),
+            patch("src.python.startup_wizard.show_startup_wizard_if_needed"),
+            patch.object(sys, "argv", argv),
+        ):
+            code = main()
+        return code, mock_handler
+
+    def test_health_history_dispatch(self):
+        """health-history 只读本地快照 → 在配置初始化前直接分派。"""
+        code, mock_handler = self._run(
+            ["cli.py", "health-history"], "src.python.cli.cli._handle_health_history", return_value=0
+        )
+        mock_handler.assert_called_once()
+        assert code == 0
+
+    def test_settle_decisions_dispatch(self):
+        """settle-decisions 分派到结算处理器。"""
+        code, mock_handler = self._run(
+            ["cli.py", "settle-decisions"],
+            "src.python.cli.cli._handle_settle_decisions",
+            return_value=0,
+        )
+        mock_handler.assert_called_once()
+        assert code == 0
+
+    def test_config_dispatch(self):
+        """config 子命令分派到配置处理器。"""
+        code, mock_handler = self._run(
+            ["cli.py", "config", "list"], "src.python.cli.cli._handle_config", return_value=0
+        )
+        mock_handler.assert_called_once()
+        assert code == 0
+
+    def test_llm_provider_order_exits_without_report(self):
+        """调整类命令写盘后立即返回，不触发报告生成。"""
+        code, mock_handler = self._run(
+            ["cli.py", "--llm-provider-order", "b,a", "report"],
+            "src.python.cli.cli._apply_cli_llm_provider_order",
+            return_value=0,
+        )
+        mock_handler.assert_called_once_with(["b", "a"])
+        assert code == 0
+
+    def test_startup_wizard_failure_does_not_block(self):
+        """首次运行引导异常 → 只记 debug，报告命令照常执行。"""
+        import sys
+
+        with (
+            patch("src.python.cli.cli._handle_report", return_value=0) as mock_report,
+            patch("src.python.config.init_config"),
+            patch("src.python.config.get_config", return_value={}),
+            patch("src.python.core.logger.setup_logger"),
+            patch(
+                "src.python.startup_wizard.show_startup_wizard_if_needed",
+                side_effect=RuntimeError("wizard boom"),
+            ),
+            patch.object(sys, "argv", ["cli.py", "report"]),
+        ):
+            code = main()
+        mock_report.assert_called_once()
+        assert code == 0
