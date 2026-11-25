@@ -102,3 +102,11 @@ class TestSkipReasonContextBuckets:
         ctx = SimpleNamespace(sentence=sentence, holding_codes=set(), name_to_code={}, anchor=0)
 
         assert _classify_skip(ctx) == reason
+
+
+def test_module_label_tolerance_override_wins_over_default():
+    """模块级容差映射按「空格→下划线」归一命中；调用级容差仍最高优先。"""
+    from src.python.llm.fact_checker._runner import _resolve_tolerance
+
+    assert _resolve_tolerance(None, {"expert_review": 2.0}, "expert review") == 2.0
+    assert _resolve_tolerance(1.5, {"expert_review": 2.0}, "expert review") == 1.5

@@ -186,3 +186,16 @@ class TestAutoCleanupOnGenerate:
         ):
             generate_report(holdings=[], config={}, reporter=mock_reporter, report_type="basic")
         assert calls == [1], "生成入口须触发一次过期缓存自动清理"
+
+
+def test_unknown_report_type_returns_skeleton_result(monkeypatch, caplog):
+    """未知 report_type → 走骨架兜底（报告成功产出 + 清理提示），不落进任何分支。"""
+    from src.python.report import orchestrator
+    from src.python.report.progress import SilentProgressReporter
+
+    monkeypatch.setattr("src.python.cache.auto_cleanup_expired", lambda: 3)
+    with caplog.at_level("INFO", logger="invest"):
+        result = orchestrator.generate_report([], {}, SilentProgressReporter(), report_type="unknown-variant")
+
+    assert result.report_generated is True
+    assert "自动清理过期缓存 3 个文件" in caplog.text, "生成前清理须留痕"

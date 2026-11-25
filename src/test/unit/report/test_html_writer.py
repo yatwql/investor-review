@@ -854,3 +854,31 @@ class TestAppVersionInTemplate(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_mask_report_text_applies_alias_and_code_mask(monkeypatch):
+    """非 off 模式 → 文本真名换代号 + 代码面掩码（两者都不得残留原文）。"""
+    from src.python.report import html_writer
+
+    monkeypatch.setattr("src.python.config.anonymizer.get_anonymization_mode", lambda: "full_anonymous")
+    monkeypatch.setattr(
+        html_writer,
+        "_MASK_CTX",
+        {"holdings": [{"code": "600519", "name": "贵州茅台"}], "code_map": {"600519": "***"}},
+    )
+
+    masked = html_writer._mask_report_text({"html": "<p>贵州茅台 600519 今日上涨</p>"})
+
+    assert "贵州茅台" not in masked
+    assert "600519" not in masked
+    assert "今日上涨" in masked, "清扫只换敏感面，其余文本原样保留"
+
+
+def test_mask_report_text_is_identity_when_mode_off(monkeypatch):
+    """off 模式 → 恒等零开销（不读上下文、不替换）。"""
+    from src.python.report import html_writer
+
+    monkeypatch.setattr("src.python.config.anonymizer.get_anonymization_mode", lambda: "off")
+    html = "<p>贵州茅台 600519</p>"
+
+    assert html_writer._mask_report_text({"html": html}) == html
