@@ -10,6 +10,8 @@
 
 ### 修复
 
+- **后置模块的重算原因与预检同源（rf-1198）**：`self_review` / `holding_change` 等在上游产出后才定键的模块，「上一轮键」经 `llm/cache_policy.previous_module_key` 取（跨报告基线优先、无基线回落进程内记录），与预检共用同一取数点；报告收尾的基线快照一并落这些模块的键（`llm/skeleton.module_cache_keys`），故同键未命中记 `ttl_expired`、换键记 `fingerprint_changed`、无基线记 `cache_miss`，与四个基础模块口径一致，`recompute_reasons` 不再混入两种含义。
+
 - **「合计 = 分项之和」占比口径保护未生效（rf-1197）**：`llm/fact_checker/_context._is_breakdown_sum_context` 识别「合计值（分项 + 分项）」的正则把括号前缀限制在 3 字符，而合计值文本本身（如 `18.3%`）就有 5 字符，该判据对实盘形态恒返回假——「把低风险资产从 18.3%（12.5% + 5.8%）提到 25% 附近」这类自洽占比会被当成单品种收益率改写，句子随即自相矛盾；现把前缀上限放到 8 字符（仍要求括号紧邻合计值），分项与合计不自洽时照旧不判为占比口径，并补 2 条回归（实盘形态命中 + 不自洽不命中）。
 
 - **t 分布 CDF 在 t=-∞ 处返回 0.0（rf-1196）**：`analysis/_math_utils._t_cdf` 的`if x <= 0` 分支（仅在 `|t|` 溢出为无穷时命中）恒返回 1.0，-∞ 处 CDF 应归 0；现按 `t` 符号取两侧极限（`t < 0` → 0.0，否则 1.0），`correlation` 的 `2*(1-CDF)` 与 `metrics_risk` 的 p 值在 t 统计量负向溢出时取左侧极限（0）。

@@ -505,6 +505,15 @@ def module_cache_key(module_key: str) -> str:
     return _PREV_MODULE_CACHE_KEY.get(str(module_key or ""), "")
 
 
+def module_cache_keys() -> dict[str, str]:
+    """本进程已记录的各模块缓存键快照（报告收尾落基线用）。
+
+    后置模块（`self_review` / `holding_change` 等）的键只在本模块记录，预检侧拿不到；
+    收尾落基须把它们一并写盘，下一份报告才有真实的「上一轮键」可比对。
+    """
+    return dict(_PREV_MODULE_CACHE_KEY)
+
+
 def write_back_module_cache(
     content: str,
     *,
@@ -550,7 +559,7 @@ def _attribute_recompute_reason(
     sink: Any,
     module_key: str,
     precheck_key: str,
-    prev_key: str | None,
+    prev_in_process_key: str | None,
 ) -> None:
     """记录本模块的重算原因（纯观测，不改控制流）。
 
@@ -562,11 +571,14 @@ def _attribute_recompute_reason(
     不二次归因：进程重启后本进程无「上一轮键」记忆，再记一次会把 `ttl_expired`
     覆盖成 `cache_miss`（TTL 判据被污染）。
 
+    「上一轮键」经 :func:`cache_policy.previous_module_key` 取（跨报告基线优先）——
+    报告边界会清空进程内记录，后置模块只靠进程内字典会恒判冷启动。
+
     Args:
         sink: 观测汇聚器（None 时跳过）。
         module_key: 模块键。
         precheck_key: 本轮实际读写的缓存键。
-        prev_key: **本轮赋值前**的上一轮键（须在写基线前取，否则两个分支恒不可达）。
+        prev_in_process_key: **本轮赋值前**的本进程键（须在写基线前取，否则两个分支恒不可达）。
     """
     if sink is None or not hasattr(sink, "note_recompute_reason"):
         return
@@ -575,13 +587,15 @@ def _attribute_recompute_reason(
     )
     if already_attributed:
         return
+    from src.python.llm.cache_policy import previous_module_key
     from src.python.llm.observation import (
         RECOMPUTE_CACHE_MISS,
         RECOMPUTE_FINGERPRINT_CHANGED,
         RECOMPUTE_TTL_EXPIRED,
     )
 
-    if prev_key is None:
+    prev_key = previous_module_key(module_key, prev_in_process_key or "")
+    if not prev_key:
         sink.note_recompute_reason(module_key, RECOMPUTE_CACHE_MISS)
     elif prev_key == precheck_key:
         sink.note_recompute_reason(module_key, RECOMPUTE_TTL_EXPIRED)
@@ -632,7 +646,7 @@ def generate_llm_content(
     # 「上一轮键」停留在更早的收盘档，下次归因会把换键误报成 ttl_expired。
     # 归因判据必须取**赋值前**的值：先写基线再比对会让「无上轮记录」与「换键」
     # 两个分支恒不可达（恒判 ttl_expired，把内容变化误标成「放宽 TTL 能省钱」）。
-    _prev_key_before = _PREV_MODULE_CACHE_KEY.get(module_key) if module_key else None
+    _prev_in_process_key = _PREV_MODULE_CACHE_KEY.get(module_key) if module_key else None
     if module_key:
         _PREV_MODULE_CACHE_KEY[module_key] = precheck_key
     if cache_enabled and not force and not _reuse_blocked:
@@ -640,7 +654,7 @@ def generate_llm_content(
         if _hit_sink is not None and hasattr(_hit_sink, "note_cache"):
             _hit_sink.note_cache(bool(cached))
         if not cached and module_key:
-            _attribute_recompute_reason(_hit_sink, module_key, precheck_key, _prev_key_before)
+            _attribute_recompute_reason(_hit_sink, module_key, precheck_key, _prev_in_process_key)
         if cached:
             return (
                 _handle_cache_hit(

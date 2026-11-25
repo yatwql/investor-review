@@ -23,6 +23,8 @@ __all__ = [
     "PRICE_INDEPENDENT_MODULES",
     "is_price_sensitive_module",
     "intraday_reuse_blocked",
+    "previous_module_key",
+    "key_changed_from_baseline",
 ]
 
 #: 指纹与持仓产品**价格无关**的模块 —— LLM 指纹分两类的唯一事实来源。
@@ -71,3 +73,36 @@ def intraday_reuse_blocked(module_key: str, sink: Any = None) -> bool:
         if hasattr(sink, "note_recompute_reason"):
             sink.note_recompute_reason(module_key or "未指定", RECOMPUTE_INTRADAY_NO_REUSE)
     return True
+
+
+def previous_module_key(module_key: str, in_process_key: str = "") -> str:
+    """上一轮该模块的缓存键（跨报告基线优先，无基线时回落本进程记录；两者皆无返回空串）。
+
+    这是「与上一轮比对」的唯一取数点，预检（四个基础模块）与生成骨架（`self_review` /
+    `holding_change` 等在上游产出后才定键的后置模块）共用：报告边界会清空进程内记录，
+    只有跨报告基线能回答「这一轮相对上一份报告换键了吗」；各写一份必然出现
+    「预检判 ttl_expired、骨架判 cache_miss」的口径分裂。
+
+    Args:
+        module_key: 模块标识。
+        in_process_key: 调用方手里的本进程记录（可为空串）；骨架侧须传**赋值前**的值。
+
+    Returns:
+        上一轮键；无任何基线时为空串（调用方据此判冷启动）。
+    """
+    from src.python.llm.fingerprint_baseline import baseline_module_key
+
+    return baseline_module_key(module_key) or str(in_process_key or "")
+
+
+def key_changed_from_baseline(current_key: str, module_key: str, in_process_key: str = "") -> bool | None:
+    """该模块当前的缓存键相对上一轮是否变化。
+
+    Returns:
+        ``True`` 键变了（输入变）；``False`` 键未变（内容没变，只是老化）；
+        ``None`` 无任何上轮基线（冷启动，不臆测原因）。
+    """
+    prev_key = previous_module_key(module_key, in_process_key)
+    if not prev_key:
+        return None
+    return prev_key != current_key
