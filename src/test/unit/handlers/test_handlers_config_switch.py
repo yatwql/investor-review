@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+from unittest.mock import MagicMock
 from unittest.mock import patch
 
 import pytest
@@ -421,3 +422,63 @@ class TestSwitchDetailExperimentUsage:
         out = capsys.readouterr().out
         assert "实验项" in out
         assert "启用" not in out and "最近" not in out
+
+
+class TestSwitchPanelTextChannels:
+    """[S] 面板文本通道：重绘键、无效编号、面板外开关赋值、裸 ``?`` 与 EOF 退出。"""
+
+    @staticmethod
+    def _run(inputs, capsys):
+        from src.python.tui.handlers_config import _cmd_config_content_options
+
+        save = MagicMock()
+        with (
+            patch("builtins.input", side_effect=inputs),
+            patch("src.python.config.features.save_feature_overrides", save),
+            patch("src.python.tui.handlers_config.refresh_config"),
+        ):
+            _cmd_config_content_options()
+        return save, capsys.readouterr().out
+
+    def test_repaint_key_leaves_overrides_untouched(self, capsys):
+        save, out = self._run(["p", "0"], capsys)
+
+        save.assert_not_called()
+        assert "章节显隐（顶层 / LLM / 整章）在菜单 [C] 配置" in out, "p 触发重绘：重绘后才印页脚提示"
+
+    def test_unknown_number_reports_invalid_number(self, capsys):
+        save, out = self._run(["99999", "0"], capsys)
+
+        save.assert_not_called()
+        assert "无效编号" in out
+
+    def test_assignment_to_off_panel_switch_reports_unknown_entry(self, capsys):
+        from src.python.config.features import feature_switch_registry, panel_option_numbers
+
+        on_panel = {name for _n, name, _d in panel_option_numbers("[S]")}
+        off_panel = sorted(set(feature_switch_registry) - on_panel)
+        assert off_panel, "注册表须存在 [S] 面板之外的开关，否则本分支无输入可造"
+
+        save, out = self._run([f"{off_panel[0]}=on", "0"], capsys)
+
+        save.assert_not_called()
+        assert f"未知条目「{off_panel[0]}」" in out
+
+    def test_bare_help_falls_through_to_runtime(self, capsys):
+        save, out = self._run(["?", "0"], capsys)
+
+        save.assert_not_called()
+        assert "无效编号" not in out and "未知编号或键名" not in out
+
+    def test_eof_exits_panel_cleanly(self, capsys):
+        from src.python.tui.handlers_config import _cmd_config_content_options
+
+        with (
+            patch("builtins.input", side_effect=EOFError),
+            patch("src.python.config.features.save_feature_overrides", MagicMock()) as save,
+            patch("src.python.tui.handlers_config.refresh_config"),
+        ):
+            _cmd_config_content_options()
+
+        save.assert_not_called()
+        assert capsys.readouterr().out.endswith("\n"), "EOF 收口只补一个换行，不抛 traceback"

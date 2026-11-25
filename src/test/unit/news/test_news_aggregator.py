@@ -415,3 +415,64 @@ class TestSourceTimings:
 
         assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
         assert any("源耗时" in r.getMessage() for r in caplog.records), "汇总行始终输出"
+
+
+class TestCacheAndUnknownSourceBranches:
+    """缓存命中/写入、未知源与无耗时三种旁路：均不得影响聚合主流程。"""
+
+    def test_cache_hit_returns_cached_and_logs_skip(self, monkeypatch, caplog):
+        import logging
+
+        from src.python.providers import news_aggregator as na
+
+        cached = [{"title": "命中", "url": "https://example.com/a"}]
+        monkeypatch.setattr("src.python.cache.get", lambda key, ttl: cached)
+
+        with caplog.at_level(logging.INFO, logger="invest"):
+            out = na._check_news_cache("news_abc", ["sina", "eastmoney"])
+
+        assert out is cached
+        assert any("新闻缓存命中" in r.getMessage() and "2" in r.getMessage() for r in caplog.records), caplog.text
+
+    def test_cache_miss_returns_none_without_log(self, monkeypatch, caplog):
+        import logging
+
+        from src.python.providers import news_aggregator as na
+
+        monkeypatch.setattr("src.python.cache.get", lambda key, ttl: None)
+
+        with caplog.at_level(logging.INFO, logger="invest"):
+            assert na._check_news_cache("news_abc", ["sina"]) is None
+
+        assert not [r for r in caplog.records if "新闻缓存命中" in r.getMessage()]
+
+    def test_save_cache_writes_through_to_cache_module(self, monkeypatch):
+        from src.python.providers import news_aggregator as na
+
+        written: list[tuple[str, object]] = []
+        monkeypatch.setattr("src.python.cache.set", lambda key, value: written.append((key, value)))
+
+        payload = [{"title": "甲", "url": "https://example.com/b"}]
+        na._save_news_cache("news_def", payload)
+
+        assert written == [("news_def", payload)], "缓存键与载荷须原样交给 cache.set"
+
+    def test_unknown_source_is_reported_without_fetch(self, monkeypatch):
+        from src.python.providers import news_aggregator as na
+
+        monkeypatch.setattr(na, "_FETCH_MAP", {})
+
+        all_raw, src_results = na._fetch_from_all_sources(["nosuchsource"], 5)
+
+        assert all_raw == []
+        assert src_results == {"nosuchsource": (0, "未知源")}, "未知源按零条 + 未知源标注登记"
+
+    def test_empty_timings_logs_nothing(self, caplog):
+        import logging
+
+        from src.python.providers import news_aggregator as na
+
+        with caplog.at_level(logging.INFO, logger="invest"):
+            na._log_source_timings({})
+
+        assert not [r for r in caplog.records if "[news]" in r.getMessage()], "无耗时数据时不打观测行"

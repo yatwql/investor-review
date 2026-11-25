@@ -247,3 +247,13 @@ def test_default_menu_key_lands_on_matching_item(monkeypatch):
     harness = _run_main(monkeypatch, ["0"], default_key=key)
 
     assert harness.cursors[0] == expected
+
+
+def test_tui_package_entry_delegates_to_main(monkeypatch):
+    """`python -m src.python.tui` 的包入口：转调 `tui.main()`，不自行处理返回值。"""
+    called: list[int] = []
+    monkeypatch.setattr(tui_mod, "main", lambda: called.append(1))
+
+    runpy.run_module("src.python.tui", run_name="__main__")
+
+    assert called == [1], "包入口须调用 tui.main 一次"

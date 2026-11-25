@@ -446,3 +446,30 @@ class TestInactionRegistrationDedupe:
         second = cap.register_llm_decisions(_HTML_TWO_ROWS, _HOLDINGS, report_date=_REPORT_DATE, path=lp)
         assert second["registered"] == 0
         assert len(self._decisions(lp)) == 1  # 仅首轮登记的那条不动作决策
+
+
+class TestParseAndIndexDefensiveBranches:
+    """列数不足、缺代码、价格畸形与方向越界四种输入都不登记（不抛异常）。"""
+
+    def test_row_with_fewer_than_four_cells_is_none(self):
+        assert cap._parse_table_row("| 🔴 高 | 600900 长江电力 | 加仓 |") is None
+
+    def test_holding_without_code_is_skipped(self):
+        index = cap._build_holdings_index([{"name": "无代码", "price": 1.0}, *_HOLDINGS[:1]])
+
+        assert list(index) == ["040046"], "空代码的持仓行不入索引"
+
+    def test_holding_with_non_numeric_price_falls_back_to_zero(self):
+        # 非字符串也非数值的对象走不通 float()：`.get("price")` 归一时抛 TypeError → 记 0
+        index = cap._build_holdings_index([{"code": "600900", "name": "长江电力", "price": object()}])
+
+        assert index["600900"] == {"name": "长江电力", "price": 0.0}
+
+    def test_invalid_direction_is_reported_as_no_direction(self):
+        holdings = cap._build_holdings_index(_HOLDINGS)
+        best: dict[str, dict] = {}
+
+        reason = cap._collect_decision(best, {"code": "600900", "direction": 7}, holdings)
+
+        assert reason == "no_direction"
+        assert best == {}, "方向值越界（非 ±1/0）不得入账"
