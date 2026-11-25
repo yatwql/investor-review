@@ -183,3 +183,49 @@ class TestFetchIndexValuationHistory:
             assert fetch_index_valuation_history("sh000300") is None
         mock_reg.return_value.record_failure.assert_not_called()
         mock_reg.return_value.record_success.assert_not_called()
+
+
+class TestLgFrameBranches:
+    """``_fetch_lg_frame`` / ``_merge_pe_pb`` 的降级与脏值分支。"""
+
+    def test_akshare_missing_returns_empty(self, monkeypatch):
+        """akshare 未安装（模块不可导入）→ 空列表且不抛异常。"""
+        import sys
+
+        from src.python.fetcher.index_valuation import _fetch_lg_frame
+
+        monkeypatch.setitem(sys.modules, "akshare", None)
+        assert _fetch_lg_frame("sh000300", "stock_index_pe_lg", "滚动市盈率") == []
+
+    def test_akshare_call_raises_returns_empty(self):
+        """接口调用抛异常 → 空列表（不向上冒泡）。"""
+        from src.python.fetcher.index_valuation import _fetch_lg_frame
+
+        with patch("akshare.stock_index_pe_lg", side_effect=RuntimeError("接口报错")):
+            assert _fetch_lg_frame("sh000300", "stock_index_pe_lg", "滚动市盈率") == []
+
+    def test_missing_columns_returns_empty(self):
+        """返回帧缺日期/取值列 → 空列表（不按键名硬取）。"""
+        from src.python.fetcher.index_valuation import _fetch_lg_frame
+
+        with patch("akshare.stock_index_pe_lg", return_value=pd.DataFrame({"未知列": [1.0]})):
+            assert _fetch_lg_frame("sh000300", "stock_index_pe_lg", "滚动市盈率") == []
+
+    def test_unparsable_value_becomes_none(self):
+        """取值非数值 → 该行 value=None（保留日期行）。"""
+        from src.python.fetcher.index_valuation import _fetch_lg_frame
+
+        df = pd.DataFrame([["2026-01-31", "abc"]], columns=["日期", "滚动市盈率"])
+        with patch("akshare.stock_index_pe_lg", return_value=df):
+            rows = _fetch_lg_frame("sh000300", "stock_index_pe_lg", "滚动市盈率")
+        assert rows == [{"date": "2026-01-31", "value": None}]
+
+    def test_merge_drops_dates_with_both_sides_missing(self):
+        """两侧取值皆缺（同为 None）的日期不进入合并结果。"""
+        from src.python.fetcher.index_valuation import _merge_pe_pb
+
+        merged = _merge_pe_pb(
+            [{"date": "2026-01-31", "value": None}, {"date": "2026-02-28", "value": 13.0}],
+            [{"date": "2026-01-31", "value": None}, {"date": "2026-02-28", "value": 1.5}],
+        )
+        assert [r["date"] for r in merged] == ["2026-02-28"]
