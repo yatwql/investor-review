@@ -394,9 +394,8 @@ def run_schedule_replay(
         # 逐日记录当日收盘后净值（调仓已在当日 NAV 下完成，成本同日扣除）
         replay_values.append(day_value(sim_shares, idx, cash))
 
-    if replay_values[0] <= 0:
-        return _unavailable("回放期初市值非正（无法归一）", schedule=parsed)
-
+    # 不变量：期初市值恒正——`_holdings_payload` 只保留 `shares > _EPS` 的行，
+    # `navs` 经 `_sanitize_series` 只留有限正值，故 `sum(shares*nav) > 0`。
     replay_norm = normalize_to_basis(replay_values, replay_values[0])
     buyhold_norm = normalize_to_basis(buyhold_values, buyhold_values[0])
 

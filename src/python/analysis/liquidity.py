@@ -9,8 +9,9 @@
 场内品种（股票/ETF）基于近 20 日 K 线成交量和收盘价估算日成交额，
 计算全额变现所需天数。场外品种标记为 OTC 类型，可通过 redemption_limits
 参数配置单日赎回上限计算赎回天数；未配置时按 `core/code_utils.otc_redemption_days_default`
-的类型默认档估算（货币/短债 T+1、纯债 T+2、其他场外 T+3、QDII T+7；标「非实测」），
-类型无法识别才标记"需手动确认赎回上限"）。
+的类型默认档估算（货币/短债 T+1、纯债 T+2、其他场外 T+3、QDII T+7；标「非实测」）。
+场外判定与默认档判定同源（都在 `core/code_utils`）：能判为场外的品种必有默认档，
+故输出中不存在「已判场外但档位未知」的中间态。
 
 降级方案：成交额数据失败时默认假设流动性充足，不告警。
 """
@@ -103,7 +104,8 @@ def check_liquidity(
     对每个场内品种，基于近 20 日日均成交额计算全额变现天数。
     场外品种标记 type="otc"，若提供 redemption_limits 则计算赎回天数，
     未配置赎回上限的品种按类型默认档估算（estimate_basis="type_default"，标「非实测」），
-    类型无法识别时才标记"需手动确认赎回上限"。
+    可识别为场外基金的品种必落类型默认档（`otc_redemption_days_default` 对货基/短债、
+    纯债、QDII、指数与联接等均返回档位，无法识别时 `_is_otc_fund` 本身为假）。
     数据获取失败的场内品种默认假设流动性充足（标记 type="assumed_liquid"）。
 
     Args:
@@ -122,7 +124,7 @@ def check_liquidity(
         - liquidation_days: 全额变现天数（type="stock" 或已配 OTC）
         - daily_redemption_limit: 单日赎回上限（CNY，仅 type="otc" 且已配置）
         - tag: "当日可卖出" / "需约 N 日卖出" / "约 T+N 日赎回（类型默认档，非实测）" /
-               "需手动确认赎回上限" / "流动性充足（数据缺失）"
+               "流动性充足（数据缺失）"
     """
     if not holdings_details:
         return []
@@ -173,19 +175,6 @@ def check_liquidity(
                             "daily_redemption_limit": None,
                             "estimate_basis": "type_default",
                             "tag": f"约 T+{tier_days} 日赎回（类型默认档，非实测）",
-                        }
-                    )
-                else:
-                    results.append(
-                        {
-                            "code": code,
-                            "name": name,
-                            "market_value": mv,
-                            "type": "otc",
-                            "avg_daily_turnover": None,
-                            "liquidation_days": None,
-                            "daily_redemption_limit": None,
-                            "tag": "需手动确认赎回上限",
                         }
                     )
             continue

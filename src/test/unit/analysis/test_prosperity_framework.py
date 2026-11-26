@@ -377,6 +377,29 @@ class TestLiquidityDimension:
         assert any("未计入" in u for u in dim["unverified"])
 
 
+class TestConcentrationZero:
+    def test_equal_weight_far_below_one_decimal_yields_no_score(self):
+        """前十占比四舍五入到 0.0 时该维度不给分（`_pct` 保留两位小数，需 >20 万等权持仓）。"""
+        from src.python.analysis.prosperity_scoring import _score_concentration
+        from src.python.analysis.prosperity_signals import _top10_concentration_pct
+
+        class _D:
+            market_value = 100.0
+
+        details = [_D() for _ in range(250001)]
+        assert _top10_concentration_pct(details) == 0.0
+
+        dim, concentration, turnover = _score_concentration(
+            details, None, {"concentration_target_pct": 50, "turnover_target_pct": 30}
+        )
+
+        assert concentration == 0.0
+        assert turnover is None
+        # 两个子项都不可评分 → 该维度记 unverified、总分 0（不是「给 0 分」而是「不计分」）
+        assert dim["status"] == "unverified"
+        assert dim["score"] == 0
+
+
 class TestConcentrationDimension:
     def test_concentration_and_turnover_scored(self):
         data = build_prosperity_framework_data(_details(), snapshots=_snapshots())
