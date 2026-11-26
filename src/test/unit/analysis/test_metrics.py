@@ -347,11 +347,15 @@ class TestTruncateExtremeValues:
     def test_outliers_truncated(self):
         from src.python.analysis.metrics import truncate_extreme_values
 
-        data = [-100.0, 0.1, 0.2, 0.3, 100.0]
+        # 两端极端值各占 1%，分位数上下界都落在中间档位 0.01 → 截断必须把极端值拉回
+        data = [-9.0] + [0.01] * 98 + [9.0]
         result = truncate_extreme_values(data, lower_quantile=0.1, upper_quantile=0.9)
-        assert min(result) >= -100.0  # 下限截断
-        assert max(result) <= 100.0
+        allowed_levels = {min(data[1:-1]), max(data[1:-1])}
         assert len(result) == len(data)
+        # 截断后每个取值都属于允许档位（中间档位 / 分位数端点），原始极端值不得残留
+        assert set(result) <= allowed_levels
+        assert -9.0 not in result
+        assert 9.0 not in result
 
 
 class TestCheckDataSufficiency:

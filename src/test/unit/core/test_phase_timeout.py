@@ -71,22 +71,37 @@ class TestPhaseTimeout:
         with phase_timeout(seconds=0.5, phase_name="second") as ctx2:
             assert not ctx2.expired
 
-    def test_concurrent_no_interference(self):
-        """不同线程各自的 phase_timeout 互不干扰。"""
-        results: list[bool] = []
+    def test_concurrent_contexts_reject_second_entry(self):
+        """全局单例：并发线程同时开 phase_timeout，仅一方成功入内，其余抛 RuntimeError。"""
+        holding = threading.Event()
+        results: dict[str, bool] = {}
 
-        def worker():
+        def holder():
             try:
-                with phase_timeout(seconds=0.01, phase_name="worker"):
-                    time.sleep(0.05)
-                    results.append(True)
+                with phase_timeout(seconds=0.5, phase_name="holder"):
+                    holding.set()  # 已占住全局相位，其余线程要做到全局超时检测
+                    time.sleep(0.1)
+                    results["holder"] = True
             except RuntimeError:
-                results.append(False)
+                results["holder"] = False
 
-        threads = [threading.Thread(target=worker) for _ in range(3)]
+        def contender(name: str):
+            holding.wait()
+            try:
+                with phase_timeout(seconds=0.5, phase_name=name):
+                    results[name] = True
+            except RuntimeError:
+                results[name] = False
+
+        threads = [threading.Thread(target=holder)] + [
+            threading.Thread(target=contender, args=(f"contender{i}",)) for i in range(2)
+        ]
         for t in threads:
             t.start()
         for t in threads:
             t.join()
+
         # 线程中的 phase_timeout 因嵌套检测会失败
         assert len(results) == 3
+        assert results["holder"] is True, "先入内的线程应正常跑完"
+        assert results["contender0"] is False and results["contender1"] is False, "后入线程必被嵌套检测拦住"

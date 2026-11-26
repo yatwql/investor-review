@@ -105,10 +105,10 @@ class TestCliIntegration:
         assert _EXIT_SEVERE == 2
 
     def test_handle_report_return_exit_code(self):
-        """_handle_report 返回 orchestrator 的 exit_code。"""
+        """_handle_report 原样透传 orchestrator 的非零 exit_code（失败不被吞成成功）。"""
         mock_holdings = [MagicMock()]
         mock_result = MagicMock()
-        mock_result.exit_code = 0
+        mock_result.exit_code = 2
 
         with (
             patch(
@@ -121,4 +121,4 @@ class TestCliIntegration:
 
             args = MagicMock(type="basic", history="off", force_llm=False, warm=False, output=None, verbose=False)
             code = _handle_report(args, {})
-        assert code == 0
+        assert code == 2

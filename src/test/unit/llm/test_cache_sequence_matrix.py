@@ -67,6 +67,9 @@ class TestHitGranularity:
         _run(inputs)
         changed = {**inputs, "a_indices": {"sh000300": {"name": "沪深300", "close": 4050.0, "change_pct": 1.2}}}
         assert _run(changed) == _ALL, "指数变化不应触发重算"
+        # 序列口径：同一变更连续两轮仍全命中，回退原输入也不因「上一轮换了」而失配
+        assert _run(changed) == _ALL, "变更后的第二轮应仍全命中"
+        assert _run(inputs) == _ALL, "回退到原输入应仍全命中"
 
     def test_us_index_change_keeps_all_hits(self, llm_cache_dir):
         inputs = make_inputs()
@@ -101,7 +104,11 @@ class TestHitGranularity:
         """量化指标（行情派生）变化不换键：四模块全命中。"""
         inputs = make_inputs()
         _run(inputs)
-        assert _run({**inputs, "metrics": {"sharpe": 0.8, "hhi": 0.45}}) == _ALL
+        changed = {**inputs, "metrics": {"sharpe": 0.8, "hhi": 0.45}}
+        assert _run(changed) == _ALL
+        # 序列口径：指标再换一次、再回退，均应保持全命中（指标不进键）
+        assert _run({**inputs, "metrics": {"sharpe": -0.2, "hhi": 0.61}}) == _ALL
+        assert _run(inputs) == _ALL
 
     def test_penetration_change_misses_penetration(self, llm_cache_dir):
         inputs = make_inputs()
@@ -145,6 +152,7 @@ class TestForceSemantics:
         inputs = make_inputs()
         _run(inputs)
         assert not any(_run(inputs, force=True)), "全量强制应全部重算"
+        assert _run(inputs) == _ALL, "强制重算已刷新缓存，下一轮应恢复全命中"
 
     def test_module_force_only_bypasses_target(self, llm_cache_dir):
         inputs = make_inputs()
@@ -152,6 +160,7 @@ class TestForceSemantics:
         flags = _run(inputs, force_modules=frozenset({"expert_review"}))
         assert flags[1] is False, "目标模块必须重算"
         assert flags[0] is True and flags[2] is True and flags[3] is True, "其余模块仍可命中"
+        assert _run(inputs) == _ALL, "定向强制不影响缓存有效性：下一轮四模块全命中"
 
 
 class TestCostConsistency:

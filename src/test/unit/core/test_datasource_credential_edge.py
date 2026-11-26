@@ -56,13 +56,20 @@ class TestDeclarationEdges:
         assert credential_readiness() == []
 
     def test_duplicate_registration_keeps_one_row(self, monkeypatch):
-        """同一源重复登记只留一行（矩阵不出现重复行）。"""
+        """同一源重复登记只留一行，且就绪矩阵按最后一次声明的环境变量判定。"""
         monkeypatch.delenv("DUP_KEY", raising=False)
-        register_credential_spec(CredentialSpec("dup", "旧", "DUP_KEY"))
+        monkeypatch.setenv("OLD_KEY", "v")
+        register_credential_spec(CredentialSpec("dup", "旧", "OLD_KEY"))
         register_credential_spec(CredentialSpec("dup", "新", "DUP_KEY"))
+
         rows = credential_readiness()
+
         assert len(rows) == 1
         assert rows[0]["display_name"] == "新"
+        assert rows[0]["env_var"] == "DUP_KEY"
+        # 覆盖后按新键判定：旧键已设也不算就绪，新键未设就绪 → 未就绪
+        assert rows[0]["ready"] is False
+        assert missing_credential("dup") is not None
 
 
 class TestEnvironmentEdges:

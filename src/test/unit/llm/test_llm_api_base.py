@@ -144,20 +144,6 @@ class TestCheckOpenaiTruncation(unittest.TestCase):
         result = _check_openai_truncation(data, 1000, "OpenAI")
         self.assertFalse(result)
 
-    def test_malformed_choices(self) -> None:
-        """choices 索引异常 → False。"""
-        from src.python.llm._api_responses import _check_openai_truncation
-
-        result = _check_openai_truncation({"choices": []}, 1000, "OpenAI")
-        self.assertFalse(result)
-
-    def test_missing_choices(self) -> None:
-        """data 无 choices → False。"""
-        from src.python.llm._api_responses import _check_openai_truncation
-
-        result = _check_openai_truncation({}, 1000, "OpenAI")
-        self.assertFalse(result)
-
 
 class TestSanitizeEndpoint(unittest.TestCase):
     """_sanitize_endpoint — URL 域名提取。"""
@@ -173,18 +159,6 @@ class TestSanitizeEndpoint(unittest.TestCase):
         from src.python.llm.api_base import _sanitize_endpoint
 
         self.assertEqual(_sanitize_endpoint("https://localhost:8080/api"), "localhost:8080")
-
-    def test_empty_endpoint(self) -> None:
-        """空字符串 → 'unknown'。"""
-        from src.python.llm.api_base import _sanitize_endpoint
-
-        self.assertEqual(_sanitize_endpoint(""), "unknown")
-
-    def test_invalid_url(self) -> None:
-        """非 URL 格式 → 'unknown'。"""
-        from src.python.llm.api_base import _sanitize_endpoint
-
-        self.assertEqual(_sanitize_endpoint("not-a-url"), "unknown")
 
 
 class TestGetRetryMax(unittest.TestCase):

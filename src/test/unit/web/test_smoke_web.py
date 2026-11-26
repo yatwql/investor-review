@@ -26,7 +26,9 @@ def test_smoke_web_run_smoke_all_pass():
     mod = load_script("test-smoke-web.py")
     results = mod.run_smoke()
 
-    assert len(results) == 11
+    assert results, "冒烟须产出结果项"
+    names = [r["name"] for r in results]
+    assert len(names) == len(set(names)), "冒烟项名须唯一（新增项不应重名覆盖）"
     failed = [r for r in results if not r["ok"]]
     assert failed == [], f"Web 冒烟存在失败项: {failed}"
 

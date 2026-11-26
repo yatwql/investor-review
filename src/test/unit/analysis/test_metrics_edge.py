@@ -55,13 +55,13 @@ class TestSharpeRatioEdge:
         assert sr < 0
 
     def test_nan_in_returns(self):
-        """NaN 混入收益率 → 夏普返回 None 或正常值（NaN 传播不崩溃）。"""
+        """NaN 混入收益率 → 夏普返回 None（NaN 传播到结果后被 sanitize_metric 清理）。"""
         from src.python.analysis.metrics import sharpe_ratio
 
         returns = [0.001] * 251 + [float("nan")]
         sr = sharpe_ratio(returns, rf_annual=0.015)
-        # math.nan 在加法中传播 → variance 变成 NaN → daily_vol = NaN → None
-        assert sr is None or math.isnan(sr)
+        # math.nan 在加法中传播 → variance 变成 NaN → daily_vol = NaN → 结果经 sanitize_metric 转 None
+        assert sr is None
 
     def test_inf_in_returns(self):
         """Inf 混入收益率 → 不崩溃。"""

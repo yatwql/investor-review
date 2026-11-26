@@ -68,21 +68,17 @@ class TestShowLlmConfigStatus:
 
 
 class TestMissingHoldingsHint:
-    """缺文件提示区分「目录不存在」与「目录在但文件名不对」。"""
+    """缺文件提示的候选列表上限（三个分支的具体文案由 test_cli_holdings_hint.py 覆盖）。"""
 
-    def test_missing_directory_points_at_holdings_dir(self, tmp_path) -> None:
-        target = tmp_path / "不存在的目录" / "持仓.xlsx"
+    def test_candidate_list_capped_at_five(self, tmp_path) -> None:
+        """目录里 xlsx 很多时只列前 5 个，不把错误日志撑爆。"""
+        for i in range(6):
+            (tmp_path / f"持仓{i}.xlsx").write_text("stub", encoding="utf-8")
 
-        hint = _handlers._missing_holdings_hint(str(target))
+        hint = _handlers._missing_holdings_hint(str(tmp_path / "旧名字.xlsx"))
 
-        assert "本身不存在" in hint
-        assert "config.json 的 holdings_dir" in hint
-
-    def test_existing_directory_without_xlsx_points_at_dir_content(self, tmp_path) -> None:
-        hint = _handlers._missing_holdings_hint(str(tmp_path / "持仓.xlsx"))
-
-        assert "下没有任何 .xlsx 文件" in hint
-        assert "holdings_dir" in hint
+        assert "holdings_filename" in hint
+        assert hint.count(".xlsx") == 5, "候选列表须截断到 5 个"
 
 
 class TestResolveHoldingsFile:

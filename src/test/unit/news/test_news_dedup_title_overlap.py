@@ -1,178 +1,20 @@
-"""新闻源获取模块单元测试。
+"""新闻标题相似度去重的跨源合并/保留口径。
 
-测试目标：
-  - _SOURCE_LABELS / _FALLBACK_ENABLED 完整性
-  - get_source_label 查找
-  - _FETCH_MAP 元数据完整性
+被测模块为 `src/python/providers/news_dedup.py` 的 `_dedup_by_title`（经
+`news_aggregator` 导出）：跨源同事件的实体/词梯度合并、防误合并护栏、
+实体 token 梯度合并三组口径。自 `news/test_news_sources.py` 迁入（原文件按被测模块归位）。
 
 运行：
-  pytest src/test/unit/news/test_news_sources.py -v
+  pytest src/test/unit/news/test_news_dedup_title_overlap.py -v
 """
 
 from __future__ import annotations
 
 import unittest
-from unittest.mock import MagicMock, patch
 
-from src.python.providers.news_sources import (
-    _FETCH_MAP,
-    _SOURCE_LABELS,
-    get_source_label,
-)
 import pytest
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_news]
-
-
-class TestSourceMetadata(unittest.TestCase):
-    """新闻源元数据测试。"""
-
-    def test_source_labels_complete(self) -> None:
-        """所有源都有中文标签。"""
-        expected_sources = {"sina", "eastmoney", "cls", "wallstreetcn", "akshare"}
-        self.assertEqual(set(_SOURCE_LABELS.keys()), expected_sources)
-
-    def test_get_source_label_known(self) -> None:
-        """已知源 → 返回中文标签。"""
-        self.assertEqual(get_source_label("sina"), "新浪财经")
-        self.assertEqual(get_source_label("cls"), "财联社")
-
-    def test_get_source_label_unknown(self) -> None:
-        """未知源 → 返回原名称。"""
-        self.assertEqual(get_source_label("unknown_source"), "unknown_source")
-
-    def test_fetch_map_complete(self) -> None:
-        """每个源都有对应的获取函数。"""
-        self.assertEqual(set(_FETCH_MAP.keys()), set(_SOURCE_LABELS.keys()))
-
-    def test_fetch_map_callable(self) -> None:
-        """_FETCH_MAP 中所有值都是 callable。"""
-        for name, fn in _FETCH_MAP.items():
-            self.assertTrue(callable(fn), f"{name} 的 fetch 函数不可调用")
-
-    def test_get_source_label_empty_string(self) -> None:
-        """空字符串 → 返回空字符串。"""
-        self.assertEqual(get_source_label(""), "")
-
-    def test_get_source_label_whitespace(self) -> None:
-        """空白字符 → 返回原值。"""
-        self.assertEqual(get_source_label("  "), "  ")
-
-    def test_get_source_label_numeric(self) -> None:
-        """纯数字字符串 → 返回原值。"""
-        self.assertEqual(get_source_label("123"), "123")
-
-    def test_source_label_values_non_empty(self) -> None:
-        """所有中文标签非空。"""
-        for key, label in _SOURCE_LABELS.items():
-            self.assertTrue(label, f"{key} 的标签为空")
-
-
-class TestFetchFunctionBehavior(unittest.TestCase):
-    """各源获取函数的行为测试。"""
-
-    @patch("src.python.providers.sina_news.fetch_news")
-    def test_fetch_from_sina_returns_list(self, mock_fetch: MagicMock) -> None:
-        """新浪财经获取函数返回列表。"""
-        mock_fetch.return_value = [{"title": "t1", "url": "http://u1"}]
-        fn = _FETCH_MAP["sina"]
-        result = fn(num=3)
-        self.assertEqual(result, [{"title": "t1", "url": "http://u1"}])
-
-    @patch("src.python.providers.sina_news.fetch_news")
-    def test_fetch_from_sina_dedup_by_url(self, mock_fetch: MagicMock) -> None:
-        """新浪财经获取函数按 URL 去重。"""
-        mock_fetch.return_value = [
-            {"title": "a", "url": "http://u"},
-            {"title": "b", "url": "http://u"},
-        ]
-        fn = _FETCH_MAP["sina"]
-        result = fn(num=5)
-        self.assertEqual(len(result), 1)
-
-    @patch("src.python.providers.eastmoney_news.fetch_news")
-    def test_fetch_from_eastmoney_returns_list(self, mock_fetch: MagicMock) -> None:
-        """东方财富获取函数返回列表。"""
-        mock_fetch.return_value = []
-        fn = _FETCH_MAP["eastmoney"]
-        result = fn(num=5)
-        self.assertIsInstance(result, list)
-        mock_fetch.assert_called_once_with(num=5)
-
-    @patch("src.python.providers.cls_news.fetch_news")
-    def test_fetch_from_cls_returns_list(self, mock_fetch: MagicMock) -> None:
-        """财联社获取函数返回列表。"""
-        mock_fetch.return_value = []
-        fn = _FETCH_MAP["cls"]
-        result = fn(num=5)
-        self.assertIsInstance(result, list)
-        mock_fetch.assert_called_once_with(num=5)
-
-    @patch("src.python.providers.wallstreetcn_news.fetch_news")
-    def test_fetch_from_wallstreetcn_returns_list(self, mock_fetch: MagicMock) -> None:
-        """华尔街见闻获取函数返回列表。"""
-        mock_fetch.return_value = []
-        fn = _FETCH_MAP["wallstreetcn"]
-        result = fn(num=5)
-        self.assertIsInstance(result, list)
-        mock_fetch.assert_called_once_with(num=5)
-
-    @patch("src.python.providers.akshare_news.fetch_news")
-    def test_fetch_from_akshare_returns_list(self, mock_fetch: MagicMock) -> None:
-        """akshare 获取函数返回列表。"""
-        mock_fetch.return_value = []
-        fn = _FETCH_MAP["akshare"]
-        result = fn(num=5)
-        self.assertIsInstance(result, list)
-        mock_fetch.assert_called_once_with(num=5)
-
-
-class TestSinaSourceBudget(unittest.TestCase):
-    """新浪分类抓取的预算治理：单类挂起不得把整段拉长、已取条目不得丢。"""
-
-    def test_request_timeout_shrinks_with_remaining_budget(self) -> None:
-        from src.python.providers.news_sources import _sina_request_timeout
-
-        assert _sina_request_timeout(30.0).read == 6.0, "预算充足时用模块上限"
-        assert _sina_request_timeout(1.5).read == 1.5, "预算见底时按剩余收紧"
-
-    @patch("src.python.providers.sina_news.fetch_news")
-    def test_budget_exhausted_stops_and_keeps_collected(self, mock_fetch: MagicMock) -> None:
-        """预算耗尽 → 停止翻页并保留已取条目（不整源丢弃；分类并发下按共享 deadline 收尾）。"""
-        import itertools
-        import threading
-
-        from src.python.providers import news_sources
-
-        mock_fetch.return_value = [{"title": "t", "url": "http://u"}]
-        # 线程安全的假时钟：每次调用 +5s，预算 20s → 三个分类合计约 4 次调用后耗尽
-        counter = itertools.count()
-        lock = threading.Lock()
-
-        def _clock() -> float:
-            with lock:
-                return next(counter) * 5.0
-
-        with patch.object(news_sources, "time") as fake_time:
-            fake_time.monotonic = _clock
-            result = news_sources._fetch_from_sina(num=90)
-        assert len(result) >= 1, "预算耗尽前取到的条目必须保留"
-        assert mock_fetch.call_count <= 9, "预算耗尽后不得继续翻页"
-        for call in mock_fetch.call_args_list:
-            assert "timeout" in call.kwargs, "每次请求都带按预算收紧的超时"
-
-    @patch("src.python.providers.sina_news.fetch_news")
-    def test_within_budget_keeps_normal_flow(self, mock_fetch: MagicMock) -> None:
-        """预算充足时不改变原有取数行为（逐页取满即止）。"""
-        from src.python.providers import news_sources
-
-        mock_fetch.side_effect = [
-            [{"title": "a", "url": "http://a"}],
-            [{"title": "b", "url": "http://b"}],
-            [{"title": "c", "url": "http://c"}],
-        ]
-        result = news_sources._fetch_from_sina(num=3)
-        assert len(result) == 3
 
 
 class TestDedupByTitle(unittest.TestCase):
@@ -268,14 +110,14 @@ class TestDedupByTitle(unittest.TestCase):
         self.assertEqual(len(_dedup_by_title(items)), 1)
 
     def test_cross_source_roundup_closing_terminology_synonym_merged_v2(self) -> None:
-        """跨源：另一条收评/收盘对的归一化合并（同校验，多日样本验证）。"""
+        """跨源：归一化后仍保留先入条目（新浪「收评」条不被后到的东财「收盘」条替换）。"""
         from src.python.providers.news_aggregator import _dedup_by_title
 
         items = [
             self._make_item("港股收评：恒指涨1.21% 科指涨1.40% 黄金股集体上涨 锂矿概念活跃", "新浪财经"),
             self._make_item("8月21日港股收盘：恒指涨1.21% 恒生科技指数涨1.4%", "东方财富"),
         ]
-        self.assertEqual(len(_dedup_by_title(items)), 1)
+        self.assertEqual([item["_source"] for item in _dedup_by_title(items)], ["新浪财经"])
 
     def test_substring_dedup(self) -> None:
         """子串包含去重：短标题(≥6字)完全出现在长标题中则合并。"""
@@ -319,19 +161,20 @@ class TestDedupByTitle(unittest.TestCase):
         # bg=2 梯度规则：ratio≈0.43 ≥ 0.40 → 合并为1条
         self.assertEqual(len(result), 1)
 
-    def test_cross_source_bg2_high_ratio_merged(self) -> None:
-        """跨源：英数 token 重叠≥3（amd+helios+azure+ai），走正常 bg≥3 规则合并。"""
+    def test_cross_source_bg3_entity_overlap_merged(self) -> None:
+        """跨源（东财 vs 新浪）：英数实体重叠 ≥3 走 bg≥3 主干规则合并，保留先入条目。"""
         from src.python.providers.news_aggregator import _dedup_by_title
 
         # 同一事件不同表述，entity bigram 含 amd/helios/azure/ai 4 个英数 token
-        # （注：原标注为 bg=2 梯度规则测试，实际走的是 bg≥3 主干规则）
         items = [
             self._make_item("微软Azure采用大规模集群AMD Helios以推动AI创新", "东方财富"),
             self._make_item("AMD与微软AI合作推出Azure上Helios系统", "新浪财经"),
         ]
         result = _dedup_by_title(items)
         # entity overlap = {amd, helios, azure, ai, _tk:helios, _tk:azure} ≥ 3 → 合并为1条
-        self.assertEqual(len(result), 1)
+        self.assertEqual([item["_source"] for item in result], ["东方财富"])
+        # 同源口径不参与：跨源合并后不保留第二条（含同名实体但表述不同的后到条目）
+        self.assertNotIn("新浪财经", [item["_source"] for item in result])
 
     def test_cross_source_bg2_low_ratio_kept(self) -> None:
         """跨源：bg=2 但 ratio<0.40 时不合并，梯度规则不误杀。"""
@@ -517,38 +360,3 @@ class TestDedupTokenGradientMerge(unittest.TestCase):
             self._make_item("SpaceX股价盘初重挫12%", "东方财富"),
         ]
         self.assertEqual(len(_dedup_by_title(items)), 1)
-
-
-class TestSinaParallelism:
-    """新浪三分类并发抓取：墙钟取最慢分类，跨分类仍按 URL 去重。"""
-
-    @patch("src.python.providers.sina_news.fetch_news")
-    def test_categories_fetch_concurrently(self, mock_fetch: MagicMock) -> None:
-        """三个分类必须同时在飞：用屏障判定并发，不用墙钟。
-
-        并发语义由屏障表达：三路真并发时同时到达即放行；任一路被串行排队则屏障超时
-        抛 `BrokenBarrierError`，该分类取数失败 → 结果条数不足。刻意不按耗时阈值判定
-        ——耗时把「是否并发」与 runner 调度快慢混在一起，慢机器上会红成假阳性。
-        """
-        import threading
-
-        from src.python.providers import news_sources
-
-        barrier = threading.Barrier(3, timeout=5)
-
-        def _sync(**kwargs):
-            barrier.wait()  # 三路必须同时在飞；串行时在此超时
-            return [{"title": "t", "url": f"http://u-{kwargs['lid']}-{kwargs['page']}"}]
-
-        mock_fetch.side_effect = _sync
-        result = news_sources._fetch_from_sina(num=150)  # per_category=50 → 每类 1 页即止
-
-        assert len(result) == 3, f"三个分类未并发（结果 {len(result)} 条，屏障超时即串行）"
-
-    @patch("src.python.providers.sina_news.fetch_news")
-    def test_cross_category_url_dedupe_kept(self, mock_fetch: MagicMock) -> None:
-        from src.python.providers import news_sources
-
-        mock_fetch.return_value = [{"title": "same", "url": "http://same"}]
-        result = news_sources._fetch_from_sina(num=150)
-        assert len(result) == 1, "跨分类重复 URL 合并后只保留一条"

@@ -54,16 +54,16 @@ class TestCorrelateNewsWithHoldings(unittest.TestCase):
         self.assertEqual(result, [])
 
     def test_ordering_by_match_count(self) -> None:
-        """匹配关键词多的新闻排在前面。"""
+        """匹配关键词多的新闻排在前面（输入乱序，结果须严格降序）。"""
         news = [
-            {"title": "长江电力", "intro": "宁德时代利好", "url": "http://a.com/1"},
             {"title": "腾讯控股", "intro": "", "url": "http://a.com/2"},
+            {"title": "长江电力", "intro": "宁德时代利好", "url": "http://a.com/1"},
         ]
         result = correlate_news_with_holdings(news, self.keywords)
-        # 第一条匹配 2 个词，应在前
-        first_count = len(result[0]["matched_keywords"])
-        second_count = len(result[1]["matched_keywords"])
-        self.assertGreaterEqual(first_count, second_count)
+        counts = [len(item["matched_keywords"]) for item in result]
+        self.assertEqual(counts, sorted(counts, reverse=True), "结果必须按匹配数降序")
+        self.assertGreater(counts[0], counts[-1], "两条匹配数须不同，否则排序断言空转")
+        self.assertIn("长江电力", result[0]["title"], "2 词匹配条应居首")
 
     def test_dedup_by_url(self) -> None:
         """同一 URL 只保留一条。"""
