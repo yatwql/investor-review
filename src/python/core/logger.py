@@ -6,6 +6,7 @@ import sys
 from logging.handlers import RotatingFileHandler
 
 from src.python.core.constants import PROJECT_ROOT
+from src.python.core.logging_defaults import DEFAULTS
 from src.python.core.path_utils import resolve_project_path
 from src.python.core.ansi_colors import MAGENTA, RED, RESET, YELLOW
 
@@ -27,10 +28,6 @@ _LOG_FILE = os.path.join(_LOG_BASE, "test.log") if _is_pytest else os.path.join(
 # 日志格式
 _LOG_FORMAT = "%(asctime)s [%(levelname)s] %(message)s"
 
-# 日志轮转配置
-_LOG_MAX_BYTES = 10 * 1024 * 1024  # 单文件最大 10 MB
-_LOG_BACKUP_COUNT = 5  # 保留 5 个备份
-
 # ── 级别可配（默认 INFO；排障时按需开 DEBUG） ──────────────
 # 背景：文件 handler 长期固定 DEBUG，逐次取数的追踪行（市场时段/缓存命中）占日志
 # 九成以上，10MB 轮转只能留约 6 天，真正告警被埋。默认收敛到 INFO，需要追踪时
@@ -38,30 +35,17 @@ _LOG_BACKUP_COUNT = 5  # 保留 5 个备份
 #   INVEST_LOG_FILE_LEVEL=DEBUG      （文件）
 #   INVEST_LOG_CONSOLE_LEVEL=DEBUG   （控制台）
 _LOGGER_CONFIG_PATH = os.path.join(PROJECT_ROOT, "data/config/logger.json")
-_DEFAULT_ROTATION_BYTES = 10 * 1024 * 1024
-_DEFAULT_BACKUP_COUNT = 5
-_DEFAULT_CONSOLE_COLOR = True
-_DEFAULT_VIEWER_LEVEL = "INFO"
-_DEFAULT_TAIL_LINES = 500
 _VALID_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
 
 
 def _read_logger_config_file() -> dict:
     """读取 data/config/logger.json（JSONC）；缺失/损坏/版本不符 → 全默认。
 
-    本模块属 core 层，不得导入 config 包；这里内联读取 + 轻量校验，面板侧另有
-    ``config/_logging.py`` 提供同一范围表的保存拒绝与路径绝对化。
+    缺省值单源在 ``core/logging_defaults.py::DEFAULTS``（本模块属 core 层，不导入
+    config 包）；面板侧 ``config/_logging.py`` re-export 同一张表，并提供保存拒绝
+    与路径绝对化。
     """
-    config = {
-        "path": os.path.join("logs", "app.log"),
-        "level": "INFO",
-        "max_bytes": _DEFAULT_ROTATION_BYTES,
-        "backup_count": _DEFAULT_BACKUP_COUNT,
-        "console_level": "INFO",
-        "console_color": _DEFAULT_CONSOLE_COLOR,
-        "viewer_level": _DEFAULT_VIEWER_LEVEL,
-        "tail_lines": _DEFAULT_TAIL_LINES,
-    }
+    config = dict(DEFAULTS)
     if not os.path.exists(_LOGGER_CONFIG_PATH):
         return config
     try:
@@ -131,8 +115,8 @@ def reload_logger_config() -> dict:
 
 _LOG_FILE_LEVEL_ENV = "INVEST_LOG_FILE_LEVEL"
 _LOG_CONSOLE_LEVEL_ENV = "INVEST_LOG_CONSOLE_LEVEL"
-_CONFIG_FILE_LEVEL = "INFO"
-_CONFIG_CONSOLE_LEVEL = "INFO"
+_CONFIG_FILE_LEVEL = str(DEFAULTS["level"])
+_CONFIG_CONSOLE_LEVEL = str(DEFAULTS["console_level"])
 
 
 def _resolve_level(env_name: str, default_name: str) -> int:
@@ -222,9 +206,9 @@ class _ClosedStreamSilentHandler(logging.StreamHandler):
 
 
 #: 生效值（模块级；reload_logger_config 可刷新）
-_LOG_MAX_BYTES = _DEFAULT_ROTATION_BYTES
-_LOG_BACKUP_COUNT = _DEFAULT_BACKUP_COUNT
-_CONSOLE_COLOR = _DEFAULT_CONSOLE_COLOR
+_LOG_MAX_BYTES = int(DEFAULTS["max_bytes"])
+_LOG_BACKUP_COUNT = int(DEFAULTS["backup_count"])
+_CONSOLE_COLOR = bool(DEFAULTS["console_color"])
 _LOG_FILE = os.path.join(_LOG_BASE, "test.log") if _is_pytest else os.path.join(_LOG_BASE, "app.log")
 
 # ── 非真实运行（演示截图 / 性能基准）的日志隔离 ──────────────

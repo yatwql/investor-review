@@ -11,7 +11,6 @@
 
 from __future__ import annotations
 
-import os
 import time
 from typing import Any
 
@@ -20,6 +19,7 @@ import pytest
 from src.python.core import logger as lg
 from src.python.core import system_info as si
 from src.python.core import trading_calendar as tc
+from src.python.core.logging_defaults import DEFAULTS
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_core]
 
@@ -168,7 +168,7 @@ class TestLoggerConfigFallbacks:
     def test_missing_file_returns_defaults(self, tmp_path, monkeypatch):
         """配置文件不存在 → 全默认（默认日志路径）。"""
         monkeypatch.setattr(lg, "_LOGGER_CONFIG_PATH", str(tmp_path / "absent.json"))
-        assert lg._read_logger_config_file()["path"] == os.path.join("logs", "app.log")
+        assert lg._read_logger_config_file()["path"] == DEFAULTS["path"]
 
     def test_corrupt_json_returns_defaults(self, tmp_path, monkeypatch):
         """JSONC 解析失败 → 全默认，不阻断日志初始化。"""
@@ -182,7 +182,7 @@ class TestLoggerConfigFallbacks:
         path = tmp_path / "logger.json"
         path.write_text("[1, 2]", encoding="utf-8")
         monkeypatch.setattr(lg, "_LOGGER_CONFIG_PATH", str(path))
-        assert lg._read_logger_config_file()["backup_count"] == lg._DEFAULT_BACKUP_COUNT
+        assert lg._read_logger_config_file()["backup_count"] == DEFAULTS["backup_count"]
 
     def test_version_mismatch_warns_and_returns_defaults(self, tmp_path, monkeypatch):
         """version 不受支持 → 告警后全默认（面板侧据此提示重新生成）。"""

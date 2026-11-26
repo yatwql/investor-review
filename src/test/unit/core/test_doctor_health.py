@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from src.python.config import _logging as logger_config
 from src.python.core import doctor, doctor_logs
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_core]
@@ -42,6 +43,13 @@ class TestLogLevel:
         item = doctor_logs._check_log_level()
         assert "DEBUG" in item["message"]
         assert "unset INVEST_LOG_FILE_LEVEL" in item["hint"]
+
+    def test_default_level_follows_logger_defaults(self, monkeypatch):
+        """默认级别取自 `config/_logging.py::DEFAULTS`（不内联字面量）。"""
+        monkeypatch.delenv("INVEST_LOG_FILE_LEVEL", raising=False)
+        monkeypatch.setitem(logger_config.DEFAULTS, "level", "WARNING")
+        item = doctor_logs._check_log_level()
+        assert "默认 WARNING" in item["message"]
 
 
 class TestLogVolume:

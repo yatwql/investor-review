@@ -22,6 +22,7 @@ from unittest import mock
 import pytest
 
 import src.python.core.logger as log_mod
+from src.python.core.logging_defaults import DEFAULTS
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_core]
 
@@ -205,3 +206,11 @@ class TestRunContextIsolation:
             assert "demo" in marker[0]
         finally:
             logger.handlers.clear()
+
+
+class TestLoggerDefaultsSingleSource:
+    """日志配置缺省值单源：`core/logging_defaults.py::DEFAULTS`（core 侧无字面量镜像）。"""
+
+    def test_read_fallback_equals_logging_defaults_table(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(log_mod, "_LOGGER_CONFIG_PATH", str(tmp_path / "absent.json"))
+        assert log_mod._read_logger_config_file() == DEFAULTS

@@ -10,6 +10,12 @@
 
 ### 修复
 
+- **自检的缓存目录探针取缓存层唯一解析器（rf-1205）**：`core/doctor.py` 的目录探针把「缓存目录」交给 `cache.get_cache_dir()` 解析——`INVEST_CACHE_DIR` 覆盖（演示/基准运行的缓存隔离入口）生效时，自检上屏的路径、哨兵文件的写入目录就是实际生效目录，隔离 run 的探针不触碰真实 `data/cache`。补 1 条回归（隔离目录下上屏路径 = 解析器结果、哨兵落在隔离目录、真实 `data/cache` 无哨兵残留）。
+
+- **日志配置缺省值单源（rf-1206）**：`core/logging_defaults.py` 承载唯一一张日志缺省值表（`DEFAULTS`/`LEVELS`/`RANGES`），`config/_logging.py` re-export 同一对象，`core/logger.py` 与 `core/doctor_logs.py` 从同包取用——「启动读取 / 面板校验 / 自检回显」三处取的是同一份事实；`_DEFAULT_TABLE_FILES` 的登记同步指向该文件。补 2 条回归（配置回落值等于缺省值表、`config._logging.DEFAULTS is core.logging_defaults.DEFAULTS`）。
+
+- **报告百分比格式化口径单一来源（rf-1207）**：`report/_format.py` 提供 `fmt_pct_points()`（入参是百分数点数）与 `fmt_pct_fraction(value, *, signed=False)`（入参是小数比例），决策依据 / 事件窗对照 / 调仓纪律回放三处调用点按各自口径显式引用对应函数，既有输出字符串保持一致；非数值入参统一回「—」占位，取值失败按缺失呈现而不中断渲染。补 1 个单测（None / 字符串 / 负数 / 0 边界）。
+
 - **两处运行期断言/字典直取的隐性契约（rf-1204）**：`report/decision_llm_capture.py` 原用 `assert code is not None` 收紧「该行必含 6 位代码」——`python -O` 会剥离 assert，优化模式下 None 会被当代码继续往下走；改为在 `elif` 条件里用 walrus 取值、体内直接用，断言与二次取值一并去掉。`cli/cli.py` 原用 `handlers[args.command]` 直取需 config 的命令分发表，subparsers 与表不同域时抛 `KeyError`；改为 `_config_required_handlers()` 单点定义 + `.get()` 判定，漏挂时收口为 `[ERR] 未知命令` 与 `_EXIT_SEVERE`。补 2 条回归（未知命令按用法错误收口、决策抽取在两种模式下取值一致）。
 
 - **再平衡分类的 ETF 名称维度与两处死 logger（rf-1203）**：`analysis.rebalance.classify_holding` 只在场内区间（`is_exchange_fund_code(code)` 为真，即代码 5/1 前缀）内消费 ETF 判定的名称半区——场外 ETF 联接基金（`天弘沪深300ETF联接A`/`000961`）按场外基金口径归 `fund_equity`，代码 5/1 前缀的场内品种归 `equity`，`test_rebalance.py::TestClassifyHolding` 的两条用例分别钉住这两种口径（名称维度独立化的实现会让前者变红）；`analysis/rebalance.py` 与 `analysis/metrics_risk.py` 的 `import logging` 与 `logger` 对象无调用点，一并删除

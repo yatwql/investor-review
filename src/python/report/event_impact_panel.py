@@ -28,6 +28,7 @@ from src.python.analysis.event_window_impact import (
 from src.python.core.code_utils import is_a_share_code, is_a_share_stock
 from src.python.core.log_dedupe import log_throttled
 from src.python.core.perf import SLOW_SPAN_WARN_SECONDS
+from src.python.report._format import fmt_pct_fraction
 
 logger = logging.getLogger("invest")
 
@@ -311,14 +312,6 @@ LIMITATIONS_NOTE = (
 )
 
 
-def _fmt_pct(value: Any) -> str:
-    """收益 → 带符号百分比字符串（视图与提示词块共用，双端同文）。"""
-    try:
-        return f"{float(value) * 100:+.2f}%"
-    except (TypeError, ValueError):
-        return "—"
-
-
 def _short_title(title: str, limit: int = 32) -> str:
     return title if len(title) <= limit else title[: limit - 1] + "…"
 
@@ -467,8 +460,8 @@ def build_event_impact_view(contract: dict[str, Any] | None) -> dict[str, Any]:
                 str(event.get("code") or ""),
                 str(event.get("matched_keyword") or ""),
                 str(event.get("polarity") or "—"),
-                _fmt_pct(event.get("asset_return")),
-                _fmt_pct(event.get("excess_return")),
+                fmt_pct_fraction(event.get("asset_return"), signed=True),
+                fmt_pct_fraction(event.get("excess_return"), signed=True),
                 str(event.get("direction") or "—"),
                 str(event.get("match") or "—"),
             ]

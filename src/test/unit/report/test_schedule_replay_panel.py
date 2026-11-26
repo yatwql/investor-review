@@ -210,10 +210,8 @@ class TestBuildPanelSuccess:
 
 
 class TestFormatHelpers:
-    def test_none_formats_to_dash(self):
-        assert panel_mod._fmt_pct(None) == "—"
+    def test_fmt_num_none_and_thousands(self):
         assert panel_mod._fmt_num(None) == "—"
-        assert panel_mod._fmt_pct(0.125) == "12.50%"
         assert panel_mod._fmt_num(1234.5) == "1,234.50"
 
 

@@ -1,9 +1,10 @@
 """配置默认值单源守卫（check-code-traces 的 AST 级 DEFAULTDUP 扫描支路）。
 
 约束口径：配置项的**缺省值只有一份**，住在 `config/_config_defaults.py`、
-`config/_llm_settings_defaults.py`、`config/_llm_providers_defaults.py` 三张
-默认值表里；读取侧一律走 `get_default()` / `get_llm_setting_default()` 等
-单一入口，**不得自带一份与默认表同值的字面量兜底**。理由：字面量兜底与默认
+`config/_llm_settings_defaults.py`、`config/_llm_providers_defaults.py`、
+`core/logging_defaults.py` 四张默认值表里；读取侧一律走 `get_default()` /
+`get_llm_setting_default()` / `DEFAULTS` 等单一入口，**不得自带一份
+与默认表同值的字面量兜底**。理由：字面量兜底与默认
 表是两个事实位，改默认值时必然漏改其一，症状是「配置文件里没写这个键，却
 拿到旧值」，且随读取点增加而扩散（同类问题已在缓存/报告/问答多处复发）。
 
@@ -23,11 +24,12 @@ from pathlib import Path
 
 from _shared.checklib import repo_relative_posix as _rel_posix
 
-#: 默认值事实位（相对仓库根，POSIX 形态）：这三份之外的"默认值"都不合法
+#: 默认值事实位（相对仓库根，POSIX 形态）：这四份之外的"默认值"都不合法
 _DEFAULT_TABLE_FILES = (
     "src/python/config/_config_defaults.py",
     "src/python/config/_llm_settings_defaults.py",
     "src/python/config/_llm_providers_defaults.py",
+    "src/python/core/logging_defaults.py",
 )
 
 #: 扫描域前缀（只约束生产代码；测试断言字面量属正常用法）
@@ -52,7 +54,7 @@ def _literal_value(node: ast.expr) -> tuple[str, bool]:
 
 
 def _collect_default_pairs(repo_root: Path) -> frozenset[tuple[str, str]]:
-    """汇总三张默认值表的 `(键, 值)` 对（按仓库根缓存，单轮扫描只解析一次）。"""
+    """汇总四张默认值表的 `(键, 值)` 对（按仓库根缓存，单轮扫描只解析一次）。"""
     cache_key = str(Path(repo_root).resolve())
     cached = _PAIRS_CACHE.get(cache_key)
     if cached is not None:

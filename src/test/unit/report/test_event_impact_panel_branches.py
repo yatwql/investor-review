@@ -60,19 +60,6 @@ class TestKeywordIndex:
         assert all(level == "品种" for entries in index.values() for _code, level in entries)
 
 
-class TestFmtPct:
-    """收益格式化的缺失口径。"""
-
-    def test_missing_value_shows_dash(self):
-        assert eip._fmt_pct(None) == "—"
-
-    def test_non_numeric_value_shows_dash(self):
-        assert eip._fmt_pct("N/A") == "—"
-
-    def test_numeric_value_is_signed_percent(self):
-        assert eip._fmt_pct(0.0123) == "+1.23%"
-
-
 class TestHistoryDaysFor:
     """行情窗口跨度按最早事件日自适应。"""
 

@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.18.7-dev
-> **编号源**：`rf-next = 1205`（新增问题提出后更新为 +1；已用最大 rf-1204，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1208`（新增问题提出后更新为 +1；已用最大 rf-1207，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -40,7 +40,7 @@
 | 文件 | 现状与拆分方向 |
 |------|----------------|
 | `src/python/core/perf.py` 799 行 | 采集器与台账落盘可拆（`perf` 采集 / `perf_history` 读写两文件） |
-| `src/python/core/doctor.py` 785 行 | 检查项按域分文件（环境 / 配置 / 数据源 / 报告产物），入口只留编排 |
+| `src/python/core/doctor.py` 789 行 | 检查项按域分文件（环境 / 配置 / 数据源 / 报告产物），入口只留编排 |
 | `src/python/llm/fact_checker/_numerical.py` 764 行 | 数值校验按规则族拆（金额 / 比率 / 计数），共享解析原语上提包内 `_common` |
 | `src/python/tui/handlers_config.py` 743 行 | 配置面板按域拆（内容选项 / 全局设置 / 目录与文件名） |
 | `scripts/_doc_drift/_format.py` 742 行 | 格式化规则按文档类型拆（章节 / 表格 / 树 / 统计） |
@@ -81,6 +81,9 @@
 | **rf-1202** | `logs/release.jsonl` 的解析同域实现在三处各写一遍——`scripts/probe-release-ledger.py` 的读取（跳过损坏行/非 dict/无 `command`）、`scripts/_release/_commands_base._finish_timing` 的内联逐行 `json.loads`、`scripts/_release/_timing.release_token_usage` 的会话快照差量；台账行口径（必填字段、损坏行容忍）改一次要同步三处 | `_release/_timing.read_ledger_records(path)` 作为唯一台账读取入口（含损坏行/非 dict/缺 `command` 跳过口径），probe 与 `_finish_timing` 改调它；probe 的输出格式与 `--last`/`--version`/`--json` CLI 面不变 |
 | **rf-1203** | 死码删除安全评审把 `analysis/rebalance.py:200` 的 ETF 名称维度判为「被误删的可达分支」（反例 `classify_holding("天弘沪深300ETF联接A", "000961")` 声称应为 `equity`），并要求据此回滚；同时 `analysis/rebalance.py` / `analysis/metrics_risk.py` 残留零调用的 `import logging` 与 `logger` 对象 | 以 `git worktree` 拉出删除前版本对 20 名称 × 19 代码共 380 组逐一比对 `classify_holding`，差异 0 组：被删的 `is_etf_by_name_or_code` 内层判断原本嵌在 `if is_exchange_fund_code(code):` 内（代码必 5/1 前缀 ⇒ 内层恒真），`return "alternative"` 从未可达 ⇒ 分支保持删除态（评审误报），补 `test_etf_name_with_otc_code_is_fund_equity` 与 `test_exchange_fund_code_prefix_is_equity` 钉住真实口径（前者在「名称维度独立」的错误实现下变红）；两处死 `import logging`／`logger` 一并清掉 |
 | **rf-1204** | 两处「依赖运行期断言/字典直取」的隐性契约：① `report/decision_llm_capture.py` 用 `assert code is not None` 收紧「该行必含 6 位代码」，而 `python -O` 会剥离 assert ⇒ 优化模式下 None 会被当代码继续往下走；② `cli/cli.py` 用 `handlers[args.command]` 直取需 config 的命令分发表，subparsers 与表不同域时抛 `KeyError` 而不是按用法错误收口 | ① 改为在 `elif` 条件里用 walrus 取值（`elif (line_code := extract_code(line)) is not None`），体内直接用该值，删除断言与二次取值；② 新增 `_config_required_handlers()` 单点定义分发表，`main` 用 `.get()` 判定并把漏挂情形收口为 `[ERR] 未知命令` + `_EXIT_SEVERE`；补 2 条回归（未知命令收口、决策抽取在两模式下行为一致） |
+| **rf-1205** | `core/doctor.py` 的目录探针把「缓存目录」硬编码为 `PROJECT_ROOT/data/cache`：缓存目录的唯一解析器是 `cache/_paths.py`（`INVEST_CACHE_DIR` 覆盖是演示/基准的缓存隔离入口），隔离 run 下自检探测并可能写入真实 `data/cache`，且上屏路径与实际生效目录不符（违反「缓存统一管理」架构约束：缓存目录只经缓存层解析器取得） | 探针内取 `from src.python.cache import get_cache_dir` 的解析结果（core→cache 属同层依赖，函数级导入即满足导入面契约），上屏路径与哨兵写入目录同源；补 1 条回归（隔离目录下上屏路径 = 解析器结果、哨兵落在隔离目录、真实 `data/cache` 无哨兵残留） |
+| **rf-1206** | 日志配置默认值三处镜像：`core/logger.py` 全量复制 7 项默认值、`core/doctor_logs.py` 另带 `or "INFO"`，而缺省值事实位 `config/_logging.py::DEFAULTS` 未登记进 `_DEFAULT_TABLE_FILES`（违反架构约束「配置默认值单源」）；core 侧不得导入 config（叶子模块边界守卫），单源须落在 core | 新增 `core/logging_defaults.py` 承载 `DEFAULTS`/`LEVELS`/`RANGES` 唯一事实位，`config/_logging.py` re-export 同一对象（config→core 为合法依赖方向），`core/logger.py` 与 `core/doctor_logs.py` 从同包取用，`_DEFAULT_TABLE_FILES` 登记该路径；补 2 条回归（配置回落值等于缺省值表、`config._logging.DEFAULTS is core.logging_defaults.DEFAULTS`） |
+| **rf-1207** | 三份同名 `_fmt_pct` 语义分叉：`report/decision_basis.py` 吃百分数点数（`%g`）、`report/event_impact_panel.py` 吃小数比例且带符号、`report/schedule_replay_panel.py` 吃小数比例不带符号且非数值直接抛 `ValueError`——同名不同义使调用点无法自证口径 | 抽出 `report/_format.py`，按口径分 `fmt_pct_points()` 与 `fmt_pct_fraction(value, *, signed=False)`，三处调用点按各自语义替换对应函数（既有输出字符串不变），非数值入参统一回「—」占位（取值失败按缺失呈现，不抛异常）；补 1 个单测覆盖 None/字符串/负数/0 边界 |
 
 ### 归档档案
 - [`archived_review-findings.0.18.x.md`](../archive/v0.18.x/archived_review-findings.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-19）

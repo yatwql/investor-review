@@ -112,8 +112,8 @@ _WRITE_PROBE = ".doctor_write_probe"
 # ── 目录探针目标 ────────────────────────────────────────────
 # module-level 常量，测试时可通过 setattr 重定向（测试隔离模式，同 core/perf.py 的
 # 持久化路径）。挂在常量上而非内联拼接：探针会**真实写盘**，不重定向则每次自检
-# 测试都会瞬写用户真实的 reports/ 与 data/cache、logs/ 目录。
-_CACHE_DIR = os.path.join(PROJECT_ROOT, "data", "cache")
+# 测试都会瞬写用户真实的 reports/ 与 logs/ 目录（缓存目录不设常量：唯一解析器在
+# `cache/_paths.py`，见 `_probe_targets` 惰性取用）。
 _LOGS_DIR = os.path.join(PROJECT_ROOT, "logs")
 # 输出目录的缺省值：与 config/_config_defaults.py 的 output_dir 默认值同源。
 # 仅当配置里该键取空值（空串）时才用到——此时报告仍会落到默认目录，探针跟着
@@ -356,10 +356,14 @@ def _check_llm_credentials() -> list[dict[str, Any]]:
 def _probe_targets() -> list[tuple[str, str]]:
     """目录探针目标 ``[(标签, 目录)]`` —— 会**真实写盘**，故收敛于单一函数。
 
-    输出目录取自配置（未设时回落到报告实际落盘目录）；缓存与日志目录固定取项目
-    子目录。测试经 conftest 对本函数 ``setattr`` 重定向到临时目录——探针写盘若指向
+    输出目录取自配置（未设时回落到报告实际落盘目录）；缓存目录取缓存层的唯一
+    解析器（``INVEST_CACHE_DIR`` 覆盖生效，演示/基准隔离 run 不探测真实
+    ``data/cache`` 也不报出与实际生效目录不一致的路径）；日志目录固定取项目子目录。
+    测试经 conftest 对本函数 ``setattr`` 重定向到临时目录——探针写盘若指向
     真实 ``reports/`` / ``data/cache/`` / ``logs/``，用例中途失败即留下残留。
     """
+    from src.python.cache import get_cache_dir
+
     try:
         from src.python.config import get_config
 
@@ -368,7 +372,7 @@ def _probe_targets() -> list[tuple[str, str]]:
         output_dir = _DEFAULT_OUTPUT_DIR
     return [
         ("输出目录", output_dir),
-        ("缓存目录", _CACHE_DIR),
+        ("缓存目录", get_cache_dir()),
         ("日志目录", _LOGS_DIR),
     ]
 

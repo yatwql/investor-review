@@ -10,11 +10,13 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from unittest.mock import patch
 
 import pytest
 
+from src.python.cache import _paths as cache_paths
 from src.python.core import doctor
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_core]
@@ -115,6 +117,28 @@ class TestProbeTargets:
         assert targets[0][0] == "输出目录"
         assert targets[0][1] == doctor._DEFAULT_OUTPUT_DIR
         assert [label for label, _ in targets[1:]] == ["缓存目录", "日志目录"]
+
+
+class TestCacheProbeFollowsResolver:
+    """缓存目录探针取缓存层唯一解析器（隔离 run 不探测/不写真实 data/cache）。"""
+
+    def test_cache_target_and_probe_write_follow_cache_resolver(self, tmp_path, monkeypatch):
+        isolated = tmp_path / "isolated_cache"
+        isolated.mkdir()
+        monkeypatch.setattr(cache_paths, "_CACHE_DIR", str(isolated))
+
+        targets = dict(_REAL_PROBE_TARGETS())
+        cache_target = targets["缓存目录"]
+        # 上屏路径 = 缓存解析器结果（INVEST_CACHE_DIR 覆盖生效），不另拼 data/cache
+        assert cache_target == os.path.abspath(str(isolated))
+
+        removed: list[str] = []
+        monkeypatch.setattr(doctor.os, "remove", removed.append)
+        assert doctor._check_writable(cache_target) == (True, "可读写")
+        # 哨兵写在隔离目录里（remove 被截获，写到哪里就能看出来）
+        assert [os.path.dirname(p) for p in removed] == [cache_target]
+        # 真实 data/cache 未被触碰：哨兵若写进去，删除被截获后会留下残迹
+        assert not os.path.exists(os.path.join(doctor.PROJECT_ROOT, "data", "cache", doctor._WRITE_PROBE))
 
 
 class TestDirectories:

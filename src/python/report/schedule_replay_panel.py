@@ -22,6 +22,7 @@ from src.python.analysis.schedule_replay import (
     run_schedule_replay,
 )
 from src.python.core.registry import get_report_sheet_name
+from src.python.report._format import fmt_pct_fraction
 
 logger = logging.getLogger("invest")
 
@@ -161,12 +162,6 @@ def build_schedule_replay_panel(
     return contract
 
 
-def _fmt_pct(value: Any) -> str:
-    if value is None:
-        return "—"
-    return f"{float(value) * 100:.2f}%"
-
-
 def _fmt_num(value: Any) -> str:
     if value is None:
         return "—"
@@ -181,13 +176,13 @@ def _rule_metric_row(label: str, run: dict[str, Any]) -> list[str]:
     turnover = sum(float(p.get("turnover") or 0.0) for p in periods)
     return [
         label,
-        _fmt_pct(metrics.get("total_return")),
-        _fmt_pct(metrics.get("annualized")),
-        _fmt_pct(metrics.get("max_drawdown")),
+        fmt_pct_fraction(metrics.get("total_return")),
+        fmt_pct_fraction(metrics.get("annualized")),
+        fmt_pct_fraction(metrics.get("max_drawdown")),
         _fmt_num(metrics.get("sharpe")),
         _fmt_num(cost),
         str(len(periods)),
-        _fmt_pct(turnover),
+        fmt_pct_fraction(turnover),
     ]
 
 
@@ -267,7 +262,7 @@ def build_schedule_replay_view(panel: dict[str, Any] | None) -> dict[str, Any]:
     view["summary_lines"] = [
         (
             f"回放窗口 {window.get('start', '')} ~ {window.get('end', '')}"
-            f"（{window.get('points', 0)} 个净值日，行情缺口 {_fmt_pct(gap_pct)}）；"
+            f"（{window.get('points', 0)} 个净值日，行情缺口 {fmt_pct_fraction(gap_pct)}）；"
             "规则 A = 每月首个净值日回归目标权重，"
             f"规则 B = 任一持仓偏离 ≥{THRESHOLD_PP_DEFAULT:g}pp 触发全量回归"
         ),
@@ -282,9 +277,9 @@ def build_schedule_replay_view(panel: dict[str, Any] | None) -> dict[str, Any]:
     view["metric_rows"] = [
         [
             "买入持有",
-            _fmt_pct(bh.get("total_return")),
-            _fmt_pct(bh.get("annualized")),
-            _fmt_pct(bh.get("max_drawdown")),
+            fmt_pct_fraction(bh.get("total_return")),
+            fmt_pct_fraction(bh.get("annualized")),
+            fmt_pct_fraction(bh.get("max_drawdown")),
             _fmt_num(bh.get("sharpe")),
             "0.00",
             "0",
@@ -301,7 +296,7 @@ def build_schedule_replay_view(panel: dict[str, Any] | None) -> dict[str, Any]:
             [
                 str(period.get("date") or ""),
                 str(period.get("trades") or 0),
-                _fmt_pct(period.get("turnover")),
+                fmt_pct_fraction(period.get("turnover")),
                 _fmt_num(period.get("cost")) if known else "—",
                 "已计（申赎费）" if known else (cost_note or "部分费率未知"),
             ]
