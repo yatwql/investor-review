@@ -104,5 +104,5 @@ def build_llm_usage_sheet(
     glb_endpoint = build_llm_endpoint_display(excel_module_info)
     try:
         write_llm_usage_sheet(ws, formatted, excel_module_info, llm_endpoint=glb_endpoint)
-    except Exception as e:
+    except Exception as e:  # 宽捕获理由：创建 LLM API 用量页签失败（非关键）: %s
         logger.debug("创建 LLM API 用量页签失败（非关键）: %s", e)

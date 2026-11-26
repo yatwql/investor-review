@@ -95,7 +95,7 @@ def build_purchase_status_data(
 
     try:
         payload = fetch_fund_purchase_status_cached()
-    except Exception:  # 有意宽捕获：取数层任何异常都不得阻断报告主链路（四层降级末层）
+    except Exception:  # 宽捕获理由：取数层任何异常都不得阻断报告主链路（四层降级末层）
         logger.warning("申购状态取数异常，本列静默隐列", exc_info=True)
         payload = None
     if not payload:

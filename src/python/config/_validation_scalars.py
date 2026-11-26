@@ -147,7 +147,7 @@ def _validate_cache_ttl(config: dict, issues: int) -> int:
         from src.python.core.data_registry import get_registered_data_types
 
         known_types = get_registered_data_types()
-    except Exception:  # 有意宽捕获：注册表不可用时不误报
+    except Exception:  # 宽捕获理由：注册表不可用时不误报
         known_types = set()
     for k, v in cache_ttl.items():
         # 未注册键属历史残留（如 v0.10.x 合并章删除的缓存模块）：不会被任何读取方

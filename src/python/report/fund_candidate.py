@@ -106,7 +106,7 @@ def _collect_existing_fund_baseline(
             continue
         try:
             fh = fetch_fund_holdings_cached(h.code)
-        except Exception as e:  # 单基金获取失败降级
+        except Exception as e:  # 宽捕获理由：单基金获取失败降级
             logger.debug("候选重合度：现有基金 %s 持仓获取失败，跳过: %s", h.code, e)
             continue
         if not fh or not fh.get("holdings"):
@@ -233,7 +233,7 @@ def _build_candidate_row(
         try:
             style = classify_fund_style(code, cand_holdings)
             row["style"] = style.get("style") or "--"
-        except Exception as e:  # 风格判定失败降级
+        except Exception as e:  # 宽捕获理由：风格判定失败降级
             logger.debug("候选基金 %s 风格判定失败，跳过: %s", code, e)
         _fill_overlap(row, code, cand_holdings, existing_holdings)
 
@@ -256,7 +256,7 @@ def _fill_overlap(
         return
     try:
         om = compute_overlap_matrix(combined)
-    except Exception as e:
+    except Exception as e:  # 宽捕获理由：候选基金 %s 重合度矩阵计算失败，跳过: %s
         logger.debug("候选基金 %s 重合度矩阵计算失败，跳过: %s", code, e)
         return
     names = om.get("fund_names") or {}

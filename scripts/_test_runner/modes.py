@@ -157,7 +157,7 @@ def default_jobs() -> int:
     """多档采集自适应并行度：4 核+ 取 2；弱机、缺核信息或核数采集异常一律取 1（保守不超订）。"""
     try:
         cpu = os.cpu_count()
-    except Exception:  # 采集失败按弱机处理（用户口径：异常退 1，不并行）
+    except Exception:  # 宽捕获理由：采集失败按弱机处理（用户口径：异常退 1，不并行）
         cpu = None
     return 2 if (cpu or 0) >= 4 else 1
 

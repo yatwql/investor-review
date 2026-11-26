@@ -108,7 +108,7 @@ def _fetch_temperature_valuation_inputs(
             pb_vals = [r["pb"] for r in rows if r.get("pb") is not None]
             pe = pe_vals or None
             pb = pb_vals or None
-    except Exception:
+    except Exception:  # 宽捕获理由：[temperature] 指数估值历史获取失败，估值因子缺席
         logger.warning("[temperature] 指数估值历史获取失败，估值因子缺席", exc_info=True)
 
     try:
@@ -119,7 +119,7 @@ def _fetch_temperature_valuation_inputs(
             from src.python.analysis.market_temperature import build_erp_series
 
             erp = build_erp_series(pe_rows, rf_rows) or None
-    except Exception:
+    except Exception:  # 宽捕获理由：[temperature] 无风险利率历史获取失败，ERP 因子缺席
         logger.warning("[temperature] 无风险利率历史获取失败，ERP 因子缺席", exc_info=True)
 
     return pe, pb, erp
@@ -177,7 +177,7 @@ def compute_correlation_data(
                 h = _futs[_fut]
                 try:
                     _bars = _fut.result()
-                except Exception:
+                except Exception:  # 宽捕获理由：单标的 K 线取数异常按「缺数据」处理，估值分位整体降级
                     _bars = None
                 if _bars:
                     _rets = klines_to_returns(_bars)
@@ -221,7 +221,7 @@ def compute_correlation_data(
                     for _fp in rolling["focus_pairs"]:
                         _fp["series"] = {wk: downsample_bars(pts) for wk, pts in _fp["series"].items()}
                 result["rolling"] = rolling
-            except Exception:
+            except Exception:  # 宽捕获理由：[correlation] 滚动趋势计算失败（静态矩阵不受影响）
                 logger.warning("[correlation] 滚动趋势计算失败（静态矩阵不受影响）", exc_info=True)
                 result["rolling"] = None
         else:
@@ -263,7 +263,7 @@ def compute_market_sentiment_data(
     penetrated = (prep or {}).get("penetrated_assets") or []
     try:
         return build_market_sentiment_data(holdings, penetrated, config)
-    except Exception:  # 增强模块异常不得中断主报告
+    except Exception:  # 宽捕获理由：增强模块异常不得中断主报告
         logger.warning("[market_sentiment] 市场情绪装配异常，本次跳过（主报告不受影响）", exc_info=True)
         return None
 
@@ -317,7 +317,7 @@ def compute_prosperity_framework_data(
             from src.python.report.penetration import compute_penetration_top10
 
             penetration_data = compute_penetration_top10(holdings, details) or None
-        except Exception:  # 穿透失败不影响诊断其余维度
+        except Exception:  # 宽捕获理由：穿透失败不影响诊断其余维度
             logger.debug("[prosperity_framework] 穿透数据不可用，退回直接持仓板块口径", exc_info=True)
 
     liquidity_signals = None
@@ -339,7 +339,7 @@ def compute_prosperity_framework_data(
             )
             or None
         )
-    except Exception:  # 流动性取数失败 → 该维标记未验证
+    except Exception:  # 宽捕获理由：流动性取数失败 → 该维标记未验证
         logger.debug("[prosperity_framework] 流动性信号不可用，该维标记未验证", exc_info=True)
 
     snapshots = None
@@ -347,7 +347,7 @@ def compute_prosperity_framework_data(
         from src.python.report import history_snapshot
 
         snapshots = history_snapshot.load_all() or None
-    except Exception:
+    except Exception:  # 宽捕获理由：[prosperity_framework] 历史快照不可用，换手代理标记未验证
         logger.debug("[prosperity_framework] 历史快照不可用，换手代理标记未验证", exc_info=True)
 
     if financial_indicator_data is None and pipeline_data:
@@ -368,7 +368,7 @@ def compute_prosperity_framework_data(
         if fund_items:
             known_roe = roe_by_code_from_rows((financial_indicator_data or {}).get("rows"))
             fund_roe_estimates = estimate_fund_roe_batch(fund_items, known_roe=known_roe) or None
-    except Exception:  # 估算失败不影响诊断其余维度
+    except Exception:  # 宽捕获理由：估算失败不影响诊断其余维度
         logger.debug("[prosperity_framework] 基金重仓 ROE 估算不可用，②维退回个股口径", exc_info=True)
 
     try:
@@ -382,7 +382,7 @@ def compute_prosperity_framework_data(
             history_data=history_data,
             config=config,
         )
-    except Exception:
+    except Exception:  # 宽捕获理由：[prosperity_framework] 诊断计算失败，本次跳过该模块（主报告不受影响）
         # 实验性诊断**不得拖垮主报告**：任何异常降级为「本契约缺席」（等价于开关关闭），
         # 记录完整堆栈便于定位；契约缺席时渲染层不出现该块、其余章节零影响。
         logger.warning("[prosperity_framework] 诊断计算失败，本次跳过该模块（主报告不受影响）", exc_info=True)

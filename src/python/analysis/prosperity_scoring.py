@@ -97,7 +97,7 @@ def _guard_dimension(build, key: str, name: str, max_score: int) -> dict[str, An
     """执行单维计算；异常时降级为「未验证」维度（**不得**让单维异常拖垮整份契约）。"""
     try:
         return build()
-    except Exception:
+    except Exception:  # 宽捕获理由：[prosperity_framework] 维度「%s」计算异常，已降级为未验证
         logger.warning("[prosperity_framework] 维度「%s」计算异常，已降级为未验证", name, exc_info=True)
         return _unverified_dimension(key, name, max_score, "该维计算异常，已跳过（详见日志）")
 

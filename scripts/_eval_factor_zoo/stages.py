@@ -342,7 +342,7 @@ def measure_cold_sample() -> dict[str, Any]:
             try:
                 value = fn(code)
                 ok = bool(value)
-            except Exception as exc:  # 样本失败仅记录（冷均值按成功冷样本）
+            except Exception as exc:  # 宽捕获理由：样本失败仅记录（冷均值按成功冷样本）
                 value, ok = None, False
                 entry[f"{ftype}_error"] = f"{type(exc).__name__}: {exc}"
             elapsed = time.perf_counter() - t0
@@ -354,7 +354,7 @@ def measure_cold_sample() -> dict[str, Any]:
     t0 = time.perf_counter()
     try:
         index_ok = bool(probe_index())
-    except Exception:
+    except Exception:  # 宽捕获理由：性能评测：探针失败按「指数不可用」记录，采集继续
         index_ok = False
     index_seconds = time.perf_counter() - t0
     mean_cold = (sum(cold_durations) / len(cold_durations)) if cold_durations else None
@@ -382,7 +382,7 @@ def stage_timing(out_dir: Path) -> dict[str, Any]:
     # 冷启动估算：池外冷样本均延迟 × 全量请求数（池码 × 三字段类型 + 指数一次）
     try:
         cold_info = measure_cold_sample()
-    except Exception as exc:
+    except Exception as exc:  # 宽捕获理由：性能评测：冷样本采集失败记入 error 字段并继续，不中断评测
         cold_info = {"samples": [], "error": f"{type(exc).__name__}: {exc}", "mean_cold_request_seconds": None}
     pool_size = int(fields_report.get("pool_size") or 0)
     requests = pool_size * 3 + 1

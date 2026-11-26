@@ -58,7 +58,7 @@ def _probe_once(index: int) -> tuple[bool, str]:
     except httpx.TimeoutException as e:
         dt = (time.time() - t0) * 1000
         return False, f"[{index}] 超时  {dt:.0f}ms  {type(e).__name__}: {e}"
-    except Exception as e:  # 有意宽捕获：诊断脚本需覆盖所有异常
+    except Exception as e:  # 宽捕获理由：诊断脚本需覆盖所有异常
         dt = (time.time() - t0) * 1000
         return False, f"[{index}] 异常  {dt:.0f}ms  {type(e).__name__}: {e}"
 

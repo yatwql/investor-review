@@ -46,7 +46,7 @@ def _safe_build_data_status(builder, *args, label: str = "", **kwargs) -> DataSt
     try:
         result = builder(*args, **kwargs)
         return result if isinstance(result, dict) else {}
-    except Exception:
+    except Exception:  # 宽捕获理由：HTML 报告构建%s数据状态失败（非关键）
         logger.debug("HTML 报告构建%s数据状态失败（非关键）", label, exc_info=True)
         return {}
 

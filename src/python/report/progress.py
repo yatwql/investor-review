@@ -125,7 +125,7 @@ class ProgressReporter:
             if eta is not None and eta < 1.0:
                 return
             self.info(format_stage_status(status, eta))
-        except Exception:
+        except Exception:  # 宽捕获理由：阶段状态行生成失败，静默降级
             logger.debug("阶段状态行生成失败，静默降级", exc_info=True)
 
     def timer(self, label: str) -> Timer:

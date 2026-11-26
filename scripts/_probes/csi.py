@@ -188,7 +188,7 @@ def run(args) -> int:
     for code, name in candidates:
         try:
             bars = probe_code(code, days, provider=args.provider)
-        except Exception as e:  # 有意宽捕获：单代码失败不中断整体探测
+        except Exception as e:  # 宽捕获理由：单代码失败不中断整体探测
             logger = logging.getLogger("invest")
             logger.warning("代码 %s 探测异常: %s", code, e)
             bars = []

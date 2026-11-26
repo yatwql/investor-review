@@ -164,7 +164,7 @@ def _purchase_restricted_index(candidate_holdings: list[Holding]) -> dict[str, A
     try:
         contract = compute_purchase_status_data()
         index = build_restricted_index(contract, [h.code for h in candidate_holdings])
-    except Exception:  # 有意宽捕获：取契约异常不得阻断模拟（仅兜 Exception，不吞 BaseException）
+    except Exception:  # 宽捕获理由：取契约异常不得阻断模拟（仅兜 Exception，不吞 BaseException）
         logger.debug("申购受限索引获取失败，what-if 提示降级缺席", exc_info=True)
         return {}
     logger.debug("what-if 申购受限索引命中 %d 个目标持仓标的", len(index))
@@ -236,7 +236,7 @@ def run_whatif_simulation(
     if is_feature_enabled("whatif_trade_cost"):
         try:
             data = {**data, "cost": build_whatif_cost_panel(data, effective_date=effective_date)}
-        except Exception:  # 有意宽捕获：面板装配异常降级缺席，不阻断主报告（不吞 BaseException）
+        except Exception:  # 宽捕获理由：面板装配异常降级缺席，不阻断主报告（不吞 BaseException）
             logger.warning("交易成本对比面板装配失败（面板缺席）", exc_info=True)
 
     paths = write_whatif_report(data, output_dir=output_dir, reporter=reporter)

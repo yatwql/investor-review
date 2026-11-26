@@ -233,7 +233,7 @@ def _attempt(channel: str, fn: Callable[[], None], *, secret: str = "") -> bool:
         fn()
         logger.info("[notify] %s 通道已发送", channel)
         return True
-    except Exception as exc:
+    except Exception as exc:  # 宽捕获理由：[notify] %s 通道发送失败（不影响退出码）：%s
         msg = f"{type(exc).__name__}: {exc}"
         if secret and secret in msg:
             msg = msg.replace(secret, _mask_url(secret))
@@ -271,6 +271,6 @@ def dispatch_completion_notification(event: dict, notify_cfg: dict | None) -> bo
         if "desktop" in channels:
             sent = _attempt("desktop", lambda: _send_desktop(subject, text)) or sent
         return sent
-    except Exception:
+    except Exception:  # 宽捕获理由：[notify] 通知分发异常（非关键，不影响退出码）
         logger.warning("[notify] 通知分发异常（非关键，不影响退出码）", exc_info=True)
         return False

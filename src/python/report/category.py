@@ -104,7 +104,7 @@ def _load_dividend_data(holdings: list) -> tuple[dict, bool]:
             # 「本无分红」（``empty`` 且无故障）不登记，避免正常空结果被误报为源故障。
             _record_dividend_status(False, _dividend_failure_hint(failure))
         return data, True
-    except Exception:
+    except Exception:  # 宽捕获理由：[category] 分红数据加载失败（非关键），年均股息率列显示 --
         logger.warning("[category] 分红数据加载失败（非关键），年均股息率列显示 --", exc_info=True)
         _record_dividend_status(False, "分红数据加载异常")
         return {}, False
@@ -128,7 +128,7 @@ def _record_dividend_status(success: bool, message: str = "") -> None:
             tracker.record(_DIVIDEND_SOURCE_KEY, "T3", success=True)
         else:
             tracker.record(_DIVIDEND_SOURCE_KEY, "T3", success=False, failure_type="unreachable", message=message)
-    except Exception:  # 观测失败不影响主链路
+    except Exception:  # 宽捕获理由：观测失败不影响主链路
         logger.debug("[category] 分红状态登记失败（非关键）", exc_info=True)
 
 
@@ -172,6 +172,6 @@ def calc_yield_text(code: str, d, dividend_data: dict) -> str:
         if price <= 0:
             return "--"
         return f"{avg_div / price * 100:.2f}%"
-    except Exception:
+    except Exception:  # 宽捕获理由：[category] 股息率计算异常
         logger.warning("[category] 股息率计算异常", exc_info=True)
         return "--"

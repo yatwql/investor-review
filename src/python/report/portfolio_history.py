@@ -375,7 +375,7 @@ class PortfolioHistoryCalculator:
                 _code = _futures[_fut]
                 try:
                     series_by_code[_code] = _fut.result()
-                except Exception:
+                except Exception:  # 宽捕获理由：[history] %s 历史数据获取异常
                     logger.warning("[history] %s 历史数据获取异常", _code, exc_info=True)
                     series_by_code[_code] = None
 
@@ -618,7 +618,7 @@ class PortfolioHistoryCalculator:
                     logger.warning("[history] 基准指数归一化全部失败")
             else:
                 logger.warning("[history] 基准指数全部获取失败")
-        except Exception:
+        except Exception:  # 宽捕获理由：[history] 基准指数获取异常
             logger.warning("[history] 基准指数获取异常", exc_info=True)
 
         return benchmarks

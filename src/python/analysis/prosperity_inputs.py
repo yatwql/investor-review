@@ -30,7 +30,7 @@ def _config_defaults_for_module() -> dict[str, Any]:
         section = _cd._DEFAULT_CONFIG.get("prosperity_framework") or {}
         if section:
             return {key: value for key, value in section.items() if key in _FALLBACK_CONFIG}
-    except Exception:  # 配置层不可用（如极简运行环境）→ 退回内置
+    except Exception:  # 宽捕获理由：配置层不可用（如极简运行环境）→ 退回内置
         logger.debug("[prosperity_framework] 配置层默认值不可读，使用内置回退词表", exc_info=True)
     return dict(_FALLBACK_CONFIG)
 

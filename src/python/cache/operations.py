@@ -246,7 +246,7 @@ def update_basic_cache(holdings: list, reporter) -> CacheUpdateResult:
                     reporter.ok(f"分红数据 ({result.div_ok} 只股票)")
                 else:
                     reporter.warn("分红数据 获取失败")
-        except Exception as e:
+        except Exception as e:  # 宽捕获理由：缓存刷新 Future 异常: %s
             logger.debug("缓存刷新 Future 异常: %s", e)
             result.errors.append(f"缓存刷新异常: {e}")
             reporter.warn("基金刷新异常" if tag == "fund" else "其他缓存刷新异常")
@@ -305,7 +305,7 @@ def _fetch_prices_and_indices(holdings: list, reporter) -> tuple[PositionCacheRe
                     reporter.ok(f"{h.name} ({h.code}) → {price_res['price']:.4f}")
                 else:
                     reporter.warn(f"{h.name} ({h.code}) → 失败")
-        except Exception as e:
+        except Exception as e:  # 宽捕获理由：单标的价格取数异常按失败计入预热结果，不中断整批预热
             if h_or_none is not None:
                 _msg = str(e)
                 if any(kw in _msg.lower() for kw in ("connect", "timeout", "network", "reset")):
@@ -451,7 +451,7 @@ def _judge_after_refresh(holdings: list, details: list[dict]) -> tuple[str, list
         from src.python.core.trading_calendar import get_last_trading_day
 
         trading_day = get_last_trading_day()
-    except Exception as e:  # 交易日历不可得：只丢判定，不影响已刷新的缓存
+    except Exception as e:  # 宽捕获理由：交易日历不可得：只丢判定，不影响已刷新的缓存
         logger.debug("刷新后取价口径判定跳过: %s", e)
         return "", None
     return trading_day, _market_breakdown(holdings, normalized, trading_day)
@@ -618,7 +618,7 @@ def warm_new_asset_caches(holdings: list, reporter) -> list[str]:
             else:
                 reporter.warn(f"行业 {name} 无数据")
         reporter.ok("新增资产缓存预热完成")
-    except Exception:
+    except Exception:  # 宽捕获理由：新资产预热过程异常，跳过（不影响后续生成）
         logger.warning("新资产预热过程异常，跳过（不影响后续生成）", exc_info=True)
     return new_codes
 

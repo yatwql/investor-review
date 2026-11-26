@@ -202,7 +202,7 @@ def mark_data_used(
         # 若成功事件沿用默认 "unreachable"，每次正常取数都会被计成一次连接失败
         # （既与事实相反，也让「缓存命中数不同」的报告产出不同的质量文本）。
         get_tracker().record(source_key, tier, success=True, failure_type="ok", freshness=freshness)
-    except Exception:  # 观测失败不影响主链路
+    except Exception:  # 宽捕获理由：观测失败不影响主链路
         logger.debug("[data_status] 取用标记失败（非关键）: %s", source_key, exc_info=True)
 
 
@@ -227,7 +227,7 @@ def mark_data_unavailable(
         get_tracker().record(
             source_key, tier, success=False, failure_type=failure_type, message=message, freshness=freshness
         )
-    except Exception:  # 观测失败不影响主链路
+    except Exception:  # 宽捕获理由：观测失败不影响主链路
         logger.debug("[data_status] 不可用标记失败（非关键）: %s", source_key, exc_info=True)
 
 
@@ -264,7 +264,7 @@ def mark_provider_used(data_type: str, provider_id: str, display_name: str = "")
             entry["count"] = int(entry["count"]) + 1
             if display_name:
                 entry["label"] = display_name
-    except Exception:  # 观测失败不影响主链路
+    except Exception:  # 宽捕获理由：观测失败不影响主链路
         logger.debug("[data_status] provider 归属登记失败（非关键）: %s/%s", data_type, provider_id, exc_info=True)
 
 
@@ -305,7 +305,7 @@ def degradation_summary(max_items: int = 10) -> list[str]:
     """
     try:
         events = [e for e in get_tracker().get_log() if e.get("degraded")]
-    except Exception:
+    except Exception:  # 宽捕获理由：降级台账不可用时摘要按「无事件」展示
         return []
     lines: list[str] = []
     seen: set[str] = set()
@@ -337,7 +337,7 @@ def report_degradation_summary(max_items: int = 3) -> dict[str, Any]:
     """
     try:
         events = [e for e in get_tracker().get_log() if e.get("degraded")]
-    except Exception:  # 有意宽捕获（不窄化：降级日志读取失败按「无事件」返回，提示栏不因此中断）
+    except Exception:  # 宽捕获理由：有意宽捕获（不窄化：降级日志读取失败按「无事件」返回，提示栏不因此中断）
         return {"count": 0, "events": 0, "lines": [], "text": ""}
     counter: dict[tuple[str, str], int] = {}
     for event in events:
@@ -412,7 +412,7 @@ class DegradationTracker:
                     data = json.load(f)
                 if isinstance(data, dict):
                     return {k: float(v) for k, v in data.items() if isinstance(v, (int, float))}
-        except Exception:
+        except Exception:  # 宽捕获理由：[degradation] 持久化状态加载失败，使用空状态
             logger.debug("[degradation] 持久化状态加载失败，使用空状态", exc_info=True)
         return {}
 

@@ -102,7 +102,7 @@ def _cleanup_old_archives(output_dir: str, max_days: int = _REPORT_RETENTION_DAY
                     logger.info("已清理过期归档目录: %s（%d 天前）", dir_path, age)
             except ValueError:
                 continue
-    except Exception:
+    except Exception:  # 宽捕获理由：归档清理过程异常（非关键），跳过
         logger.warning("归档清理过程异常（非关键），跳过", exc_info=True)
 
 

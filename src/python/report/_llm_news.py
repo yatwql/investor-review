@@ -163,7 +163,7 @@ def _collect_llm_future_result(fut, reporter) -> tuple:
         _report_llm_module_results(llm_content, _cached, reporter)
         debate_info = _result[8] if len(_result) > 8 else None
         return llm_content, debate_info
-    except Exception:
+    except Exception:  # 宽捕获理由：LLM 内容生成异常（详情请查看日志）
         reporter.add_error("LLM 内容生成异常（详情请查看日志文件 logs/app.log）")
         reporter.error("LLM 内容生成异常（详情请查看日志）")
         return (None, None, None, None), None
@@ -176,7 +176,7 @@ def _collect_news_future_result(fut, reporter) -> tuple:
         news_ok = bool(news_data)
         reporter.ok(f"新闻获取完成，共 {len(news_data)} 条")
         return news_data, news_llm_meta, news_ok
-    except Exception:
+    except Exception:  # 宽捕获理由：新闻源处第三方边界，异常即空新闻集（报告其余部分照常生成）
         reporter.add_error("新闻获取异常（详情请查看日志文件 logs/app.log）")
         reporter.warn("新闻获取异常（详情请查看日志）")
         return [], {}, False

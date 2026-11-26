@@ -78,7 +78,7 @@ def _turnover_proxy_pct(snapshots: list[Any] | None) -> float | None:
         return None
     try:
         prev, cur = _snapshot_holding_codes(snapshots[-2]), _snapshot_holding_codes(snapshots[-1])
-    except Exception:  # 形态异常 → 该子项未验证（不得冒泡）
+    except Exception:  # 宽捕获理由：形态异常 → 该子项未验证（不得冒泡）
         logger.warning("[prosperity_framework] 快照形态不可解析，换手代理标记未验证", exc_info=True)
         return None
     if not prev or not cur:

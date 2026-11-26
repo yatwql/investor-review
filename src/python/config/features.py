@@ -304,7 +304,7 @@ def log_experimental_features() -> None:
         from src.python.core.experiment_stats import record_experiment_usage
 
         record_experiment_usage([flag for flag, _name in enabled])
-    except Exception:  # 有意宽捕获（不窄化：实验统计属旁路观测，记录失败不影响报告生成）
+    except Exception:  # 宽捕获理由：有意宽捕获（不窄化：实验统计属旁路观测，记录失败不影响报告生成）
         logger.warning("[features] 实验功能使用统计记录失败（不影响报告生成）", exc_info=True)
 
 

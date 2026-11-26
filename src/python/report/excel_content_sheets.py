@@ -56,7 +56,7 @@ def write_content_sheets(
             prog.info("正在分析基金经理变更...")
             try:
                 manager_data = detect(holdings)
-            except Exception as e:  # 保持既有隔离：数据失败不影响主表
+            except Exception as e:  # 宽捕获理由：保持既有隔离：数据失败不影响主表
                 logger.warning("基金经理变更监控数据获取失败: %s", e)
                 prog.add_error("基金经理变更监控数据获取失败")
                 manager_data = None

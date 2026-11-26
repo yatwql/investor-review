@@ -112,7 +112,7 @@ def _evaluate(flag: str, label: str) -> dict[str, Any]:
         }
     try:
         reading = reader()
-    except Exception as exc:
+    except Exception as exc:  # 宽捕获理由：读数函数来自外部探针（可抛任意异常），异常即「无读数」状态并如实记录原因
         return {**base, "state": STATE_NO_READING, "reason": f"读数失败：{type(exc).__name__}: {exc}", "checks": []}
 
     checks = list(reading.get("checks") or [])

@@ -51,14 +51,14 @@ def _warm_render_contracts(holdings: list, details: list, reporter, config: dict
         from src.python.report.html_builders import _build_perf_data
 
         _build_perf_data(holdings, details, progress=reporter)
-    except Exception:  # 预取失败不阻断主链路：渲染阶段会重取并各自降级
+    except Exception:  # 宽捕获理由：预取失败不阻断主链路：渲染阶段会重取并各自降级
         logger.debug("[prefetch] 基金业绩预取失败，渲染阶段重取", exc_info=True)
     try:
         # 穿透块的附属取数（盈利预测 ≈2000+ 只、股息率）：载入本身约 2~3s
         from src.python.report.html_renderers import prefetch_penetration_side_data
 
         prefetch_penetration_side_data(holdings, details)
-    except Exception:
+    except Exception:  # 宽捕获理由：[prefetch] 穿透附属取数预取失败，渲染阶段重取
         logger.debug("[prefetch] 穿透附属取数预取失败，渲染阶段重取", exc_info=True)
     try:
         # 开关判定必须走 config 解析器（缺失键默认 True）：直接读原始键会把「配置里没写」
@@ -69,7 +69,7 @@ def _warm_render_contracts(holdings: list, details: list, reporter, config: dict
             from src.python.report.html_renderers import _render_style_analysis
 
             _render_style_analysis(holdings, True, reporter)
-    except Exception:
+    except Exception:  # 宽捕获理由：[prefetch] 基金风格预取失败，渲染阶段重取
         logger.debug("[prefetch] 基金风格预取失败，渲染阶段重取", exc_info=True)
 
 
@@ -395,7 +395,7 @@ def prepare_report_data(
             from src.python.analysis.factor_evaluator import build_factor_catalog_data, derive_factor_pool
 
             factor_catalog_data = build_factor_catalog_data(derive_factor_pool(details, penetrated_assets)["codes"])
-        except Exception as exc:
+        except Exception as exc:  # 宽捕获理由：[factor_catalog] 因子目录计算失败，降级为不可用占位: %s
             logger.warning("[factor_catalog] 因子目录计算失败，降级为不可用占位: %s", exc)
             factor_catalog_data = {"available": False, "reason": f"计算异常: {type(exc).__name__}"}
 
@@ -614,7 +614,7 @@ def compute_valuation_data(
                     code = _futs[_fut]
                     try:
                         _val = _fut.result()
-                    except Exception:
+                    except Exception:  # 宽捕获理由：[valuation] %s 估值取数异常，该标的按无估值处理
                         # 逐代码记一行：单只估值取数异常与「该标的本来无估值」必须可区分，
                         # 否则报告里只是少一行，排障时与「该标的本来无估值」不可区分
                         logger.warning("[valuation] %s 估值取数异常，该标的按无估值处理", code, exc_info=True)
@@ -694,11 +694,11 @@ def _real_valuation_for_code(code: str, bars: list[dict]) -> dict:
 
     try:
         records = fetch_indicator_series(code)
-    except Exception:
+    except Exception:  # 宽捕获理由：[valuation] %s 指标序列取数失败，真实估值分位降级
         logger.debug("[valuation] %s 指标序列取数失败，真实估值分位降级", code, exc_info=True)
         records = []
     try:
         return compute_real_valuation(bars, records)
-    except Exception:
+    except Exception:  # 宽捕获理由：[valuation] %s 真实估值分位计算异常，降级
         logger.debug("[valuation] %s 真实估值分位计算异常，降级", code, exc_info=True)
         return {"available": False, "reason": "compute_failed"}

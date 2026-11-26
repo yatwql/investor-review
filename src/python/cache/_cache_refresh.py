@@ -157,7 +157,7 @@ def _refresh_common_caches(
                     reporter.ok(f"分红数据 ({div_ok} 只股票)")
                 else:
                     reporter.warn("分红数据 获取失败")
-        except Exception as e:
+        except Exception as e:  # 宽捕获理由：%s Future 异常: %s
             logger.debug("%s Future 异常: %s", tag, e)
             reporter.warn(f"{label} 获取失败")
 
@@ -171,7 +171,7 @@ def _get_news_top_count() -> int:
     try:
         value = get_config().get("news_top_count", get_default("news_top_count"))
         return int(value) if value else 300
-    except Exception:
+    except Exception:  # 宽捕获理由：配置读取/转换失败回落默认条数 300，缓存刷新不因此中断
         return 300
 
 
@@ -216,7 +216,7 @@ def _refresh_fund_manager_cache(funds: list) -> int:
         try:
             if fetch_fund_manager(f.code):
                 ok += 1
-        except Exception:
+        except Exception:  # 宽捕获理由：基金经理刷新异常 [%s]: %s
             logger.debug("基金经理刷新异常 [%s]: %s", getattr(f, "code", "?"), getattr(f, "name", ""))
     return ok
 
@@ -286,7 +286,7 @@ def _refresh_extended_caches(
                     reporter.ok(f"风格扩展 ({count} 只证券)")
                 else:
                     reporter.warn("风格扩展 获取失败")
-        except Exception as e:
+        except Exception as e:  # 宽捕获理由：%s 扩展缓存刷新异常: %s
             logger.debug("%s 扩展缓存刷新异常: %s", tag, e)
             result.errors.append(f"扩展缓存刷新异常: {e}")
             reporter.warn(f"{tag} 刷新异常")

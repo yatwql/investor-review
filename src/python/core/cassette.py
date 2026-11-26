@@ -463,7 +463,7 @@ def verify_cassettes(
         try:
             with cassette_replay([name], directory=directory):
                 parsed = check()
-        except Exception as err:  # 诊断入口：任何异常都如实上报，不向上抛
+        except Exception as err:  # 宽捕获理由：诊断入口：任何异常都如实上报，不向上抛
             results.append({"name": name, "status": "fail", "detail": f"{type(err).__name__}: {err}"})
             continue
         parseable = parsed not in (None, [], {}, "")

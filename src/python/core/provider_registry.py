@@ -149,7 +149,7 @@ class DataSourceRegistry:
         # 启动时加载持久化熔断状态
         try:
             self._load_state()
-        except Exception:
+        except Exception:  # 宽捕获理由：[registry] 熔断状态加载跳过（首次运行或异常）
             logger.debug("[registry] 熔断状态加载跳过（首次运行或异常）")
 
     # ── Provider 注册 ─────────────────────────────────
@@ -566,7 +566,7 @@ class DataSourceRegistry:
 
             try:
                 market_open = is_market_open()
-            except Exception:
+            except Exception:  # 宽捕获理由：交易时段判定异常保守按非交易时段（宁可不走交易窗口逻辑）
                 market_open = False
 
         if not market_open:
