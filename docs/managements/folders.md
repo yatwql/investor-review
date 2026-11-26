@@ -14,12 +14,12 @@
 | 架构图示 | SVG | 4 | 396 | `src/static/` README 架构图（architecture 三渠道→引擎→双报告、llm-chain Provider 链式分发、capabilities 九大功能域总览、owl-mascot 吉祥物猫头鹰「守望」）+ 截图 7 张 PNG（报告实景 `report-overview`/`report-toc`/`report-charts` + 界面实景 `tui-menu`/`web-workbench`/`web-config`/`cli-report`，不计入本行） |
 | 辅助脚本 | Python | 151 | 31,902 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评测与因子目录评测、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、视觉资产（社交预览图/架构图体检）、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
 | 源代码合计 | — | 635 | 161,699 | 主程序 + 模板 + 脚本 + SVG |
-| 测试代码 | Python | 977 | 244,014 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
-| 测试用例 | — | — | 16,930 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
+| 测试代码 | Python | 985 | 246,059 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
+| 测试用例 | — | — | 17,071 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 15 | 7,088 | 含 README.md；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 14 | 6,851 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 223 | 75,702 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 14,818 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 223 | 75,710 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 14,826 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 200 | 59,172 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 9 | ~1616 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + TUI 交互改进（议题 + 第一/二批实施方案） + PanWatch 借鉴分析（含评估政策单源化与 LLM 复盘契约两份设计） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -1426,6 +1426,14 @@ investor-review/
 │       │   │   ├── test_test_quality_regression.py #  测试质量回归守护（静态禁止空测试体=死用例）
 │       │   │   ├── test_test_runner_machine_info.py  #  test_runner 机器信息采集/bench 别名/耗时表格渲染测试
 │       │   │   ├── test_test_runner_runner.py  # 测试运行器编排（argv 组装/退出码映射/阶段调度）
+│       │   │   ├── test_eval_decision_quality_factor_ic.py  # 因子 IC 阶段（脏值跳过、逐因子×视界判定行、无基准降级）
+│       │   │   ├── test_eval_decision_quality_report.py  # 决策质量评测报告（五阶段判定表渲染与控制台摘要）
+│       │   │   ├── test_eval_llm_budget_pipeline.py  # LLM 预算评测管线（提示词追加与还原、repair 重试、矩阵口径）
+│       │   │   ├── test_make_assets_svg_pixel.py  # SVG/图标像素校验（Pillow 缺失契约、亮色与文字色 finding、main 分支）
+│       │   │   ├── test_make_screenshots_commands.py  # 截图与演示工作区命令（伪 TTY 代理、PTY 打桩、浏览器回退链）
+│       │   │   ├── test_release_prep_commands.py  # 发布预检/归档初始化（本地门禁前置、幂等骨架、dry 零写入、回滚告警）
+│       │   │   ├── test_release_ship_failures.py  # 发布提交与推送失败路径（六处失败、闭环判定、devbump 守卫）
+│       │   │   ├── test_test_runner_index_html.py  # 测试运行器 HTML 汇总（三态徽标、报告链接列、备注条件）
 │       │   │   ├── test_trace_extract.py  # 痕迹抽取（源码历史痕迹/任务编号/日志统一/配置默认值单源）
 │       │   │   ├── test_test_runner_machine_info_fallbacks.py  # 测试运行器环境采集降级（平台/CPU/内存探测失败路径）
 │       │   │   ├── test_test_runner_doc_writer.py  #   test_runner 环境耗时对照文档自动更新（标记定位/列增改/round-trip）
