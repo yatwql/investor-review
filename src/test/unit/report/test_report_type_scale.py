@@ -285,7 +285,14 @@ class TestReportCssRulesetBaseline:
     # `.text-tertiary` / `.text-danger` 与 `.llm-status-{disabled,failed,cached,success,unknown,thinking}`
     # 共 8 条规则，声明即 `color: var(--<同名 token>)`，与原内联 style 声明等值；
     # 规则集仅此 +8（186 → 194 条），无删无改，业务字节面零变化。
-    _RULESET_HASH = "06f31870a95846fe167303c7abff0eee19e965aa4227d29cadec809976a5c7ea"
+    # 基线复核（2026-11-26，空态警报字幕层叠收口批次）：新增 `.empty-section.t-warn`
+    # 共 1 条规则（194 → 195 条），声明即内联 `color: var(--warn-text)`。归因可辨识：
+    # 从本次渲染规则集里移除该条后重算哈希，恰等于基准 06f31870…，故规则集变化
+    # 严格为 +1 条（彩色内联色批次之后无其他漂移）。层叠等价证明：
+    # `.t-warn` 单类（0,1,0）会被其后 `.empty-section` 的 `color: var(--text-muted)` 压住，
+    # 故取 2 类复合选择器 `.empty-section.t-warn`（0,2,0）胜出；声明值与内联值逐字相同，
+    # 模板侧仅去该条内联 color、增 `t-warn` 类，其余两声明（background / border-color）不动。
+    _RULESET_HASH = "fc68f16a1052d6b814cf3b5fe663bfff8693ba260197f129dd9ca88c3f43a9d8"
 
     def _ruleset_hash(self) -> tuple[str, int, int]:
         import hashlib

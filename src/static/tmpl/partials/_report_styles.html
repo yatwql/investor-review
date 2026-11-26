@@ -306,6 +306,10 @@
         
         
         .empty-section { padding: 24px 16px; text-align: center; color: var(--text-muted); font-size: var(--fs-body); background: var(--empty-section-bg); border: 1px dashed var(--border); border-radius: 6px; margin: 8px 0; }
+        /* 警告态字幕：`t-warn` 单类会被上面 .empty-section 的 color 压成灰字
+           （同为单类、其后声明），故用复合选择器（2 类）胜出；语义等价于原内联
+           color: var(--warn-text)。 */
+        .empty-section.t-warn { color: var(--warn-text); }
         .heatmap-matrix { border-collapse: collapse; }
         .heatmap-matrix th, .heatmap-matrix td { border: 1px solid var(--border-strong); padding: 4px 8px; text-align: center; font-size: var(--fs-table-sm); }
         .heatmap-matrix th { background: var(--row-first-check-bg); font-weight: 600; }
