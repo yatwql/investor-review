@@ -631,7 +631,7 @@ def check_claude_md_derived_counts(doc_text: str | None = None) -> list[str]:
     if doc_text is None:
         try:
             doc_text = _CLAUDE_MD.read_text(encoding="utf-8")
-        except OSError:  # pragma: no cover - 仓库内恒存在
+        except OSError:
             return []
     findings: list[str] = []
     for lineno, line in enumerate(doc_text.splitlines(), 1):
@@ -664,7 +664,7 @@ def check_readme_doc_index(doc_text: str | None = None) -> list[str]:
     if doc_text is None:
         try:
             doc_text = _README.read_text(encoding="utf-8")
-        except OSError:  # pragma: no cover - 仓库内恒存在
+        except OSError:
             return []
     listed = set(_README_MGMT_LINK.findall(doc_text))
     actual = {p.name for p in _MANAGEMENTS.glob("*.md")}
@@ -702,7 +702,7 @@ def check_readme_derived_counts(doc_text: str | None = None) -> list[str]:
     if doc_text is None:
         try:
             doc_text = _README.read_text(encoding="utf-8")
-        except OSError:  # pragma: no cover - 仓库内恒存在
+        except OSError:
             return []
     findings: list[str] = []
     for lineno, line in enumerate(doc_text.splitlines(), 1):
@@ -731,7 +731,7 @@ def check_manuals_index(doc_text: str | None = None) -> list[str]:
     if doc_text is None:
         try:
             doc_text = index.read_text(encoding="utf-8")
-        except OSError:  # pragma: no cover - 仓库内恒存在
+        except OSError:
             return []
     listed = set(_MANUALS_INDEX_LINK.findall(doc_text)) - {"README.md"}
     actual = {p.name for p in _MANUALS.glob("*.md")} - {"README.md"}

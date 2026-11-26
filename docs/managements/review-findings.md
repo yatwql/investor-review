@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.18.7-dev
-> **编号源**：`rf-next = 1217`（新增问题提出后更新为 +1；已用最大 rf-1216，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1218`（新增问题提出后更新为 +1；已用最大 rf-1216，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -95,7 +95,7 @@
 | **rf-1214** | 审计点名「余 10 处内联颜色声明」实际是**子串匹配**结果：仅 1 处是文字色声明（`summary_section.html:94` 的 `color: var(--warn-text)`），其余 9 处为 `background-color`（`position_structure_section.html:141/145/149` 用 `--row-first-check-bg`/`--cell-na-bg`/`--surface`，`:153/155/159/161` 用 `--corr-pos`/`--corr-pos-weak`/`--corr-neg`/`--corr-neg-weak`）与 `border-left-color`（`data_source_status_section.html:69` `--success`、`portfolio_history_drawdown_section.html:305` `--border-strong`） | 按 DESIGN.md 语义色表逐处判定后**全部不改、只登记**：①`position_structure` 的 7 处是相关性热力/空态**底色**，属契约登记的组件派生面 token（`--corr-*`/`--cell-na-bg`），改 `.text-*` 会把底色变字色（视觉反演）；其中 `:141/145/149` 元素已带 `.text-faint`，不存在「背景 token 误作字色」的错值。②两处 `border-left-color` 是状态条边框色，`.text-*` 工具体只设 `color`，替换即丢边框语义。③`summary_section.html:94` 可换 `.text-warn`，但 `.empty-section` 规则（`_report_styles.html:308`）在其后声明且同为单类选择器、内含 `color: var(--text-muted)`，纯 class 替换会被层叠压成灰字——需复合选择器或调整工具类顺序（触及层叠契约），留待单独决策。故本轮模板零改动、报告页规则集与 whatif 基线不变（`_RULESET_HASH` 未变），`check-style-guardrails` 内联色值 0（该口径只判裸 hex/rgb/关键字色，`var()` 引用已登记 token 不计 finding）。 |
 | **rf-1215** | 日期解析失败语义分散：全仓 `strptime`/`fromisoformat` 共 60 处调用、53 处各自包 try/except，失败口径**六种并存**（返回 `None` / `""` / 原串 / 抛错 / 哨兵值 / `pass` 续算），同一格式同一语义被重复实现，新增调用点无从判定该抄哪一处；口径事实位也缺（文档无处可查「这类解析失败该返回什么」） | 新建 `src/python/core/dates.py`，只收拢「同一格式集合 + 同一失败语义 + 同一返回类型」的明确重复组：`parse_datetime_ymd`（`%Y-%m-%d`→datetime，ValueError/TypeError→None，4 处）、`parse_iso_date`（`date.fromisoformat`→date，TypeError/ValueError→None，7 处）、`parse_datetime_iso`（`datetime.fromisoformat`→datetime，ValueError→None，5 处）共 **16 处**替换，**逐处保留原降级动作**（调用点各自 `return None` / `continue` / `return out`）；语义确有差异的 **33 处一律不动**并在 `technical.md` §8.7.1「日期解析口径」逐处列出差异点（哨兵值/默认态/上抛/日志副作用/多格式链/宽捕获）；补 `test_dates.py` 30 条（正常/边界/非法/空值/非字符串/时区，断言即原调用点语义） |
 | **rf-1216** | `summary_section.html` 行情全不可用提示块把 `color: var(--warn-text)` 内联在 `.empty-section` 上；`.empty-section`（`_report_styles.html`）同为单类选择器且含 `color: var(--text-muted)`，内联色若改单类工具类会被灰字压住（2 类才胜出），该处因此长期只能停在「内联色」形态，与「色值一律走语义 token / 内联色归零」的护栏方向相抵 | 标本块内联色声明改为复合选择器：`_report_styles.html` 增 `.empty-section.t-warn { color: var(--warn-text); }`（2 类 > 1 类，特异性胜出）；模板删该条内联 color、补 `t-warn` 类，`background` / `border-color` 两条内联声明不动；等价证明＝从新规则集移除该条后重算哈希恰等于旧基线（严格 +1 规则、194→195，无删无改）；`test_report_type_scale._RULESET_HASH` 重标定并附基线复核记录；补 2 条层叠契约用例（复合选择器形态 + 模板无内联色） |
-
+| **rf-1217** | 覆盖率口径债无出口也无闸门：`test-coverage.md` 的「不可达行处理原则」声明不以 `# pragma: no cover` 回避可达分支，而 `src/python` + `scripts` 实际留有 13 处标注（其中防御残留 10 处、整函数豁免 2 处），全仓没有任何机制拦住新增 | 逐处判类：10 处判「可移除」（删分支/补测后去掉标注），3 处判「不可达但合理」（平台分支与可选依赖缺失）登记进 `test-coverage.md` 新增的「`pragma: no cover` 豁免清单」；`check-code-traces.py` 增 PRAGMA 守卫——`src/python/**`、`scripts/**` 里的每处标注必须在清单中按 `文件:行号` 严格同行命中，否则报 LOW finding，并补单测钉住「未登记报警 / 已登记放行 / 行号严格」 |
 
 ### 归档档案
 - [`archived_review-findings.0.18.x.md`](../archive/v0.18.x/archived_review-findings.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-19）

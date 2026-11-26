@@ -68,7 +68,7 @@ class PacingPolicy:
         """无任何约束（默认态）——调用方据此走零开销路径。"""
         return self.min_interval <= 0 and self.max_concurrency <= 0
 
-    def __repr__(self) -> str:  # pragma: no cover - 诊断用
+    def __repr__(self) -> str:
         return (
             f"PacingPolicy(min_interval={self.min_interval}, jitter={self.jitter}, "
             f"max_concurrency={self.max_concurrency})"

@@ -229,17 +229,15 @@ def _ask_report_qa_impl(
                 f"本轮对话已达 {_QA_MAX_TURNS} 轮上限，请刷新页面开始新会话",
                 session_id=session.session_id,
             )
-        if session.context is None:
+        # 上下文用局部变量承接：属性赋值不参与静态收窄，局部赋值后可直接窄化类型
+        context = session.context
+        if context is None:
             try:
-                session.context = extract_report_qa_context(report, output_dir=output_dir)
+                context = extract_report_qa_context(report, output_dir=output_dir)
             except ReportQaContextError as exc:
                 logger.warning("[report_qa] 上下文不可用 code=%s report=%s", exc.code, report)
                 return _fail(exc.code, str(exc))
-        # 取局部引用：上下文是对象属性，静态分析无法跨赋值收窄；这里再兜一次空值
-        # （理论不可达——上面要么已赋值、要么早返回），避免把 None 当上下文用。
-        context = session.context
-        if context is None:  # pragma: no cover - 防御分支
-            return _fail(QA_LLM_FAILED, "服务暂不可用（报告上下文缺失）", session_id=session.session_id)
+            session.context = context
 
         history_block = _history_block(session)
         input_chars = (

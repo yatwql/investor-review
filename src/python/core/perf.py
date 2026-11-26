@@ -188,7 +188,7 @@ class _LogCounterHandler(logging.Handler):
         super().__init__(level=logging.WARNING)
         self._collector = collector
 
-    def emit(self, record: logging.LogRecord) -> None:  # pragma: no cover - 异常分支不构造
+    def emit(self, record: logging.LogRecord) -> None:
         try:
             if record.levelno >= logging.ERROR:
                 self._collector.note_error(str(record.getMessage()))

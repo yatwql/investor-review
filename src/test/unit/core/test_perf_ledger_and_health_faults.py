@@ -205,3 +205,32 @@ class TestPhaseSecondsShape:
         history = [{"report_type": "basic", "phases": [{"name": "行情获取", "seconds": 10.0}]}]
 
         assert perf.estimate_stage_eta("行情获取", 1.0, history=history) is None
+
+
+# ── 日志计数 handler ─────────────────────────────────────
+
+
+class TestLogCounterHandler:
+    """`_LogCounterHandler.emit`：WARNING/ERROR 计入诊断面，收集器自身故障不外溢。"""
+
+    def test_counts_warning_and_error_levels(self):
+        collector = perf.PerfCollector(report_type="basic", holdings=[])
+        handler = perf._LogCounterHandler(collector)
+
+        handler.emit(perf.logging.LogRecord("invest", perf.logging.WARNING, __file__, 0, "warn %s", ("x",), None))
+        handler.emit(perf.logging.LogRecord("invest", perf.logging.ERROR, __file__, 0, "err %s", ("y",), None))
+
+        counters = collector.counts()
+        assert counters["warnings"] == 1
+        assert counters["errors"] == 1
+
+    def test_collector_failure_does_not_escape_emit(self):
+        collector = perf.PerfCollector(report_type="basic", holdings=[])
+        handler = perf._LogCounterHandler(collector)
+        record = perf.logging.LogRecord("invest", perf.logging.WARNING, __file__, 0, "warn", None, None)
+
+        with mock.patch.object(collector, "count", side_effect=RuntimeError("内部故障")):
+            with mock.patch.object(handler, "handleError") as handle_error:
+                handler.emit(record)
+
+        handle_error.assert_called_once_with(record)

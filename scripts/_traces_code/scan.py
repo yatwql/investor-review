@@ -20,6 +20,7 @@ from _traces_code.patterns import (
     _is_magic_match_excluded,
     _is_under_excluded,
 )
+from _traces_code.pragma_exemptions import _is_guarded_surface, _scan_pragma_no_cover
 
 
 def scan_file(fpath: Path, verbose: bool) -> list[tuple[int, str, str, str]]:
@@ -88,5 +89,9 @@ def scan_file(fpath: Path, verbose: bool) -> list[tuple[int, str, str, str]]:
 
     # 配置默认值单源守卫（禁止与默认表同值的字面量兜底）
     hits.extend(_scan_config_default_fallbacks(fpath, REPO_ROOT))
+
+    # pragma: no cover 豁免清单守卫（覆盖率口径债不得无声增长；只管辖 src/python + scripts）
+    if _is_guarded_surface(fpath):
+        hits.extend(_scan_pragma_no_cover(fpath))
 
     return hits

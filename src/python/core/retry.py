@@ -167,12 +167,10 @@ def retry_transient(
     """
     _sleep = sleep or time.sleep
     judge = retry_on if retry_on is not None else is_transient_exception
-    last_exc: BaseException | None = None
     for attempt in range(1, policy.attempts + 1):
         try:
             result = fn()
         except BaseException as exc:  # 有意宽捕获：判据决定是否可重试，非瞬时异常原样抛出
-            last_exc = exc
             if not judge(exc) or attempt >= policy.attempts:
                 raise
             delay = policy.delay_for(attempt)
@@ -181,7 +179,6 @@ def retry_transient(
             if delay > 0:
                 _sleep(delay)
             continue
-        last_exc = None
         if retry_if_result is None or not retry_if_result(result) or attempt >= policy.attempts:
             return result
         delay = policy.delay_for(attempt)
@@ -189,5 +186,3 @@ def retry_transient(
             on_retry(attempt, delay, None)
         if delay > 0:
             _sleep(delay)
-    if last_exc is not None:  # pragma: no cover - 上面的分支已穷尽策略
-        raise last_exc

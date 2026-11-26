@@ -92,7 +92,7 @@ def run(
     if resolved_chrome is None:
         print("  [ERR] 未找到 Chromium/Chrome（用 --chrome 或 CHROME_BIN 指定）")
         return 1
-    if not CDP_SCRIPT.is_file():  # pragma: no cover - 打包缺失
+    if not CDP_SCRIPT.is_file():
         print(f"  [ERR] 缺少 CDP 脚本：{CDP_SCRIPT}")
         return 1
     command = build_command(

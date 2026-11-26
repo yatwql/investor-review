@@ -17,7 +17,6 @@ import argparse
 import datetime as dt
 import json
 import logging
-import sys
 from pathlib import Path
 
 from .budget import BUDGET_TIERS
@@ -126,11 +125,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI 入口；返回退出码。"""
+    """CLI 入口；返回退出码（由 `scripts/eval-llm-budget.py` 薄壳调用）。"""
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     args = build_parser().parse_args(argv)
     return int(args.func(args))
-
-
-if __name__ == "__main__":  # pragma: no cover - 常规由薄壳脚本调用
-    sys.exit(main())
