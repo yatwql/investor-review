@@ -16,7 +16,7 @@ import threading
 import time
 from collections.abc import Callable, Iterable
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 
@@ -31,6 +31,9 @@ from src.python.llm.generators import (
 )
 
 from src.python.config import get_llm_setting_default
+
+if TYPE_CHECKING:
+    from src.python.core.perf import PhaseBreakdownRecorder
 
 logger = logging.getLogger("invest")
 
@@ -103,8 +106,8 @@ def run_holding_change_in_worker(
 
 
 def _build_module_fns(
-    a_indices,
-    us_indices,
+    a_indices: dict[str, dict[str, Any]],
+    us_indices: dict[str, dict[str, Any]],
     total_mv: float,
     total_cost: float,
     total_profit: float,
@@ -379,8 +382,8 @@ def _dispatch_llm_workers(
     needs: dict[str, bool],
     llm_config: dict | None,
     force: bool,
-    a_indices,
-    us_indices,
+    a_indices: dict[str, dict[str, Any]],
+    us_indices: dict[str, dict[str, Any]],
     total_mv: float,
     total_cost: float,
     total_profit: float,
@@ -403,7 +406,7 @@ def _dispatch_llm_workers(
     holding_change_block: str = "",
     event_impact_block: str = "",
     schedule_replay_block: str = "",
-    span_recorder=None,
+    span_recorder: PhaseBreakdownRecorder | None = None,
 ) -> dict[str, dict]:
     """对缓存未命中的模块提交线程池任务，返回结果字典。
 

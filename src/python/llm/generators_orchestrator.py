@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 
 from src.python.cache import get as cache_get
@@ -80,6 +80,10 @@ from src.python.llm._llm_news_correlation import (
     run_news_correlation_safe,
 )
 
+if TYPE_CHECKING:
+    from src.python.core.perf import PhaseBreakdownRecorder
+    from src.python.llm.observation import LlmObservation
+
 
 __all__ = [
     "_compute_module_cache_info",
@@ -96,8 +100,8 @@ __all__ = [
 
 def _compute_module_cache_info(
     llm_config: dict,
-    a_indices,
-    us_indices,
+    a_indices: dict[str, dict[str, Any]],
+    us_indices: dict[str, dict[str, Any]],
     total_mv: float,
     total_cost: float,
     total_profit: float,
@@ -240,7 +244,7 @@ def _recompute_reason(cache_info: dict, fingerprint_changed: bool | None) -> str
     return RECOMPUTE_FINGERPRINT_CHANGED if fingerprint_changed else RECOMPUTE_TTL_EXPIRED
 
 
-def _note_recompute_reason(sink, module_key: str, reason: str) -> None:
+def _note_recompute_reason(sink: LlmObservation | None, module_key: str, reason: str) -> None:
     """把重算原因记入观测汇聚器（无汇聚器时静默跳过，不增加任何调用）。"""
     if sink is None or not hasattr(sink, "note_recompute_reason"):
         return
@@ -519,7 +523,7 @@ def generate_all_llm(
     metrics: dict | None = None,
     degradation_events: list[dict] | None = None,
     comparison_indices: dict[str, str] | None = None,
-    span_recorder=None,
+    span_recorder: PhaseBreakdownRecorder | None = None,
 ) -> (
     tuple[str | None, str | None, str | None, str | None, bool, bool, bool, bool]
     | tuple[str | None, str | None, str | None, str | None, bool, bool, bool, bool, dict | None]

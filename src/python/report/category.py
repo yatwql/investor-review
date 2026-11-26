@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 
 from src.python.core.code_utils import (
@@ -16,6 +17,9 @@ from src.python.core.code_utils import (
 from src.python.core.models import Holding
 from src.python.core.num_utils import finite_or
 from src.python.core.degradation import STATUS_MESSAGES, DataStatus, DataStatusItem
+
+if TYPE_CHECKING:
+    from src.python.report.market_value import DetailRow
 
 logger = logging.getLogger("invest")
 
@@ -156,7 +160,7 @@ def build_category_data_status(dividend_success: bool) -> DataStatus:
     return status
 
 
-def calc_yield_text(code: str, d, dividend_data: dict) -> str:
+def calc_yield_text(code: str, d: DetailRow | None, dividend_data: dict) -> str:
     """计算单条持仓的年均股息率文本（非关键，失败返回"--"）。
 
     合并 category 和 html_builders 两处的重复实现，统一此公共函数。

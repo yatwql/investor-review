@@ -8,6 +8,7 @@ import logging
 from concurrent.futures import as_completed
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 
 from src.python.core.code_utils import (
     is_a_share_code,
@@ -366,7 +367,7 @@ def _compute_detail_row(h: Holding, mkt: dict | None) -> DetailRow:
     )
 
 
-def sum_today_profit(rows) -> float:
+def sum_today_profit(rows: list[DetailRow] | list[dict[str, Any]] | None) -> float:
     """组合本日盈亏合计：只累加「当日已更新」的行。
 
     滞后净值的行（`today_profit_reference=True`）显示的是其净值日当日涨跌，
@@ -387,7 +388,7 @@ def sum_today_profit(rows) -> float:
     return total
 
 
-def count_today_profit_reference(rows) -> int:
+def count_today_profit_reference(rows: list[DetailRow] | list[dict[str, Any]] | None) -> int:
     """滞后净值行数（本日盈亏标参考的品种数）——汇总说明文案用。"""
     return sum(1 for row in rows or [] if detail_value(row, "today_profit_reference", False))
 
@@ -396,7 +397,7 @@ def count_today_profit_reference(rows) -> int:
 TODAY_PROFIT_REFERENCE_NOTE = "注：{n} 只品种净值日早于当日，其本日盈亏为各自净值日的涨跌（仅参考），未计入合计"
 
 
-def today_profit_reference_note(rows) -> str:
+def today_profit_reference_note(rows: list[DetailRow] | list[dict[str, Any]] | None) -> str:
     """本日盈亏「参考」口径脚注（无滞后品种时返回空串，两端口径同一条文案）。"""
     count = count_today_profit_reference(rows)
     return "" if count <= 0 else TODAY_PROFIT_REFERENCE_NOTE.format(n=count)

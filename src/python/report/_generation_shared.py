@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-
+from typing import TYPE_CHECKING
 
 from src.python.report._report_output import (  # noqa: F401  # 产物落盘子模块（消费方在本门面，patch 点不变）
     _generate_full_excel_report,
@@ -22,6 +22,10 @@ from src.python.report._report_helpers import (  # noqa: F401
     _validate_pipeline_snapshot,
     _validate_prep_completeness,
 )
+
+if TYPE_CHECKING:
+    from src.python.core.perf import PerfCollector
+    from src.python.llm.observation import LlmObservation
 
 logger = logging.getLogger("invest")
 
@@ -78,7 +82,7 @@ def _usage_delta(current: dict, baseline: dict | None) -> dict:
     return delta
 
 
-def _record_llm_context(perf, sink=None, baseline: dict | None = None) -> None:
+def _record_llm_context(perf: PerfCollector, sink: LlmObservation | None = None, baseline: dict | None = None) -> None:
     """把本次运行的 LLM 上下文写入 perf 记录（provider/等待/缓存/用量/质量）。
 
     三个来源合并（均为可选，缺失即跳过）：

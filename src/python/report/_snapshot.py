@@ -6,9 +6,14 @@
 from __future__ import annotations
 
 
+from typing import TYPE_CHECKING
+
 from src.python.core.detail_view import detail_value
 from src.python.report.progress import ProgressReporter
 from src.python.config import get_default
+
+if TYPE_CHECKING:
+    from src.python.schemas.history import SnapshotData
 
 logger = __import__("logging").getLogger("invest")
 
@@ -30,7 +35,7 @@ def _baseline_labels(ts: str) -> tuple[str, str]:
     return trading_day_as_of(dt), dt.strftime("%Y-%m-%d %H:%M")
 
 
-def _classify_qdii_value_diff(details: list, old) -> tuple[float, bool]:
+def _classify_qdii_value_diff(details: list, old: SnapshotData | None) -> tuple[float, bool]:
     """环比中 QDII 官方净值变动的金额与是否滞后口径（T-1）。
 
     QDII 官方净值天然滞后一个交易日：本次快照用的是 T-1 净值、基线快照用的是

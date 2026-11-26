@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -49,7 +50,12 @@ _CONTENT_FILTER_RECOVERY = (
 追加到 system prompt 尾部重新请求。"""
 
 
-def _calm_retry(system_prompt: str, user_prompt: str, name: str, do_retry) -> tuple[str | None, dict | None]:
+def _calm_retry(
+    system_prompt: str,
+    user_prompt: str,
+    name: str,
+    do_retry: Callable[[str, str], tuple[str | None, dict | None]],
+) -> tuple[str | None, dict | None]:
     """追加安抚指令后重试一次（空白内容兜底）。
 
     Args:

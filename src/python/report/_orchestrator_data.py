@@ -11,7 +11,7 @@ import logging
 import time
 
 from datetime import datetime
-from typing import Any, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 from src.python.report.progress import ProgressReporter
 
@@ -29,16 +29,19 @@ from src.python.report._report_factor_metrics import (
 from src.python.config import get_default, resolve_output_dir
 from src.python.report.progress import MSG_FETCHING_MARKET
 
+if TYPE_CHECKING:
+    from src.python.core.perf import PhaseBreakdownRecorder
+
 logger = logging.getLogger("invest")
 
 
-def _record_span(recorder, name: str, started: float) -> None:
+def _record_span(recorder: PhaseBreakdownRecorder | None, name: str, started: float) -> None:
     """记录一个子阶段耗时（recorder 为 None 时零行为变化）。"""
     if recorder is not None:
         recorder.record(name, time.perf_counter() - started)
 
 
-def _warm_render_contracts(holdings: list, details: list, reporter, config: dict) -> None:
+def _warm_render_contracts(holdings: list, details: list, reporter: ProgressReporter, config: dict) -> None:
     """预取渲染阶段才需要的基金业绩/风格数据（失败不阻断：渲染阶段会自行重取）。
 
     Args:
@@ -295,7 +298,7 @@ def prepare_report_data(
     reporter: ProgressReporter,
     config: dict,
     transactions: list | None = None,
-    recorder=None,
+    recorder: PhaseBreakdownRecorder | None = None,
 ) -> dict:
     """获取行情、指数、穿透数据，整理持仓明细字典列表。
 

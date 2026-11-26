@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from openpyxl.styles import Alignment, Font
 from openpyxl.utils import get_column_letter
@@ -34,6 +34,9 @@ from src.python.report.excel_writer import (
 )
 
 from src.python.config import get_llm_setting_default
+
+if TYPE_CHECKING:
+    from src.python.core.perf import PhaseBreakdownRecorder
 
 logger = logging.getLogger("invest")
 
@@ -453,7 +456,7 @@ def build_news_data(
     penetrated_assets: list[dict] | None = None,
     purchase_constraint_block: str = "",
     force_news_llm: bool = False,
-    span_recorder=None,
+    span_recorder: PhaseBreakdownRecorder | None = None,
 ) -> tuple[list[dict[str, Any]], dict]:
     """获取新闻数据并与持仓关联。
 

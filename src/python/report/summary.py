@@ -62,7 +62,7 @@ _STAT_TIME_FONT = Font(size=10, bold=True)  # 统计时间值：加粗
 _TRADING_DAY_FONT = Font(size=12, bold=True, color="2E75B6")  # 所属交易日值：加粗+加大+蓝色
 
 
-def _write_section(ws, row: int, label: str) -> int:
+def _write_section(ws: Worksheet, row: int, label: str) -> int:
     """写入章节标题行（如 【持仓概况】），占 2 列合并。"""
     ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=_NCOLS)
     cell = ws.cell(row=row, column=1, value=label)
@@ -71,18 +71,18 @@ def _write_section(ws, row: int, label: str) -> int:
     return row + 1
 
 
-def write_block_title(ws, row: int, label: str) -> int:
+def write_block_title(ws: Worksheet, row: int, label: str) -> int:
     """区块标题行（区块契约载体：区块级标题一律经此写入，供双端区块契约提取）。"""
     return _write_section(ws, row, label)
 
 
-def _write_kv_row(ws, row: int, key: str, value: Any) -> int:
+def _write_kv_row(ws: Worksheet, row: int, key: str, value: Any) -> int:
     """写入一个指标=数值行（标准 2 列）。"""
     write_data_row(ws, row, [key, value])
     return row + 1
 
 
-def _write_kv_row_colored(ws, row: int, key: str, value: Any, font: Font) -> int:
+def _write_kv_row_colored(ws: Worksheet, row: int, key: str, value: Any, font: Font) -> int:
     """写入带颜色的指标行。"""
     write_data_row(ws, row, [key, value])
     for col in (1, 2):
@@ -90,7 +90,7 @@ def _write_kv_row_colored(ws, row: int, key: str, value: Any, font: Font) -> int
     return row + 1
 
 
-def _write_index_row(ws, row: int, name: str, price: float, change_pct: float) -> int:
+def _write_index_row(ws: Worksheet, row: int, name: str, price: float, change_pct: float) -> int:
     """写入指数行，涨跌幅自动着色（涨红跌绿）。
 
     Args:
@@ -112,7 +112,7 @@ def _write_index_row(ws, row: int, name: str, price: float, change_pct: float) -
     return row + 1
 
 
-def _write_blanks(_ws, row: int, n: int = 1) -> int:
+def _write_blanks(_ws: Worksheet, row: int, n: int = 1) -> int:
     """写入 n 行空白。"""
     return row + n
 

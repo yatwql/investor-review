@@ -38,6 +38,7 @@ from src.python.core.registry import get_llm_module_name
 from src.python.llm.api_base import TRUNCATION_MARKER
 from src.python.llm.fallback import is_placeholder_content
 from src.python.report.llm_content import strip_html
+from src.python.report.progress import ProgressReporter
 
 logger = logging.getLogger("invest")
 
@@ -226,7 +227,7 @@ def grade_modules(llm_content: tuple) -> list[ModuleQuality]:
     return results
 
 
-def apply_quality_banners(llm_content: tuple, reporter=None) -> tuple:
+def apply_quality_banners(llm_content: tuple, reporter: ProgressReporter | None = None) -> tuple:
     """按开关给低评级模块的内容头部追加质量提示横幅。
 
     开关关闭时原样返回（同一对象），调用方无需分叉判断。横幅注入发生在

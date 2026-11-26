@@ -38,6 +38,7 @@ from src.python.core.constants import (
 from src.python.report.excel_writer import _cleanup_old_archives, _ensure_reports_dir
 from src.python.report.html_save import _write_html_atomic
 from src.python.report.html_writer import _inline_js_assets
+from src.python.report.progress import ProgressReporter
 from src.python.report.whatif_sheet import (
     write_whatif_backtest_sheet,
     write_whatif_category_sheet,
@@ -405,7 +406,7 @@ def write_whatif_html(whatif_data: dict[str, Any], output_dir: str = "reports") 
 def write_whatif_report(
     whatif_data: dict[str, Any],
     output_dir: str = "reports",
-    reporter=None,
+    reporter: ProgressReporter | None = None,
 ) -> dict[str, str]:
     """同时输出 Excel + HTML 调仓模拟报告。
 

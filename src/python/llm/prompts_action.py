@@ -210,7 +210,13 @@ def scenario_mandate_cache_suffix() -> str:
     return "" if is_feature_enabled("decision_basis") else "_ms"
 
 
-def _append_research_contract(parts: list[str], *, holdings_details, penetrated_assets, metrics=None) -> None:
+def _append_research_contract(
+    parts: list[str],
+    *,
+    holdings_details: list[dict[str, Any]] | None,
+    penetrated_assets: list[dict[str, Any]] | None,
+    metrics: dict[str, Any] | None = None,
+) -> None:
     """开关开启时追加「主张+证据+判决」契约段与证据索引（关闭时零行为，逐字节不变）。"""
     from src.python.llm.research_contract import build_instruction, is_enabled, record_evidence_index
 

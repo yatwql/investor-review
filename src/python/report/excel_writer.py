@@ -7,12 +7,13 @@ import os
 import re
 import shutil
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 from openpyxl import Workbook
 from openpyxl.cell.cell import MergedCell
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.worksheet import Worksheet
 
 from src.python.core.constants import LATEST_XLSX_NAME, REPORT_FILE_BASE
 from src.python.report.run_integrity import TEMP_SUFFIX, note_artifact, note_temp
@@ -198,7 +199,7 @@ def create_workbook() -> Workbook:
     return wb
 
 
-def write_title_row(ws, row: int, text: str, ncols: int) -> int:
+def write_title_row(ws: Worksheet, row: int, text: str, ncols: int) -> int:
     """写入标题行（合并单元格居中）。
 
     Args:
@@ -218,7 +219,7 @@ def write_title_row(ws, row: int, text: str, ncols: int) -> int:
     return row + 1
 
 
-def write_block_title(ws, row: int, text: str, ncols: int) -> int:
+def write_block_title(ws: Worksheet, row: int, text: str, ncols: int) -> int:
     """写入章内区块标题行 — 区块契约载体（与 write_title_row 同样式）。
 
     双端区块契约（`core/section_block_registry.py`）按本函数调用点提取实际
@@ -237,7 +238,7 @@ def write_block_title(ws, row: int, text: str, ncols: int) -> int:
     return write_title_row(ws, row, text, ncols)
 
 
-def write_header_row(ws, row: int, headers: list[str]) -> int:
+def write_header_row(ws: Worksheet, row: int, headers: list[str]) -> int:
     """写入表头行。
 
     Args:
@@ -262,7 +263,7 @@ def write_header_row(ws, row: int, headers: list[str]) -> int:
     return row + 1
 
 
-def write_data_row(ws, row: int, values: list[Any], formats: list[str | None] | None = None) -> int:
+def write_data_row(ws: Worksheet, row: int, values: list[Any], formats: list[str | None] | None = None) -> int:
     """写一行数据。
 
     Args:
@@ -280,12 +281,18 @@ def write_data_row(ws, row: int, values: list[Any], formats: list[str | None] | 
         cell.alignment = CENTER_ALIGN
         cell.border = THIN_BORDER
         if formats and col - 1 < len(formats) and formats[col - 1]:
-            cell.number_format = formats[col - 1]
+            cell.number_format = cast(str, formats[col - 1])
     return row + 1
 
 
 def _write_summary_row(
-    ws, row: int, label: str, values: list[Any], ncols: int, formats: list[str | None] | None, fill
+    ws: Worksheet,
+    row: int,
+    label: str,
+    values: list[Any],
+    ncols: int,
+    formats: list[str | None] | None,
+    fill: PatternFill,
 ) -> int:
     """写汇总行本体（小计/总计共用）：首列标签 + 后续各列居中对齐，统一底色。
 
@@ -313,12 +320,17 @@ def _write_summary_row(
         # +1 因为 values 从列 2 开始，而 formats 从列 1 起索引
         fmt_idx = idx + 1
         if formats and fmt_idx < len(formats) and formats[fmt_idx]:
-            cell.number_format = formats[fmt_idx]
+            cell.number_format = cast(str, formats[fmt_idx])
     return row + 1
 
 
 def write_subtotal_row(
-    ws, row: int, label: str, values: list[Any], ncols: int, formats: list[str | None] | None = None
+    ws: Worksheet,
+    row: int,
+    label: str,
+    values: list[Any],
+    ncols: int,
+    formats: list[str | None] | None = None,
 ) -> int:
     """写小计行（首列标签，后续各列居中对齐，黄底）。
 
@@ -336,13 +348,18 @@ def write_subtotal_row(
 
 
 def write_total_row(
-    ws, row: int, label: str, values: list[Any], ncols: int, formats: list[str | None] | None = None
+    ws: Worksheet,
+    row: int,
+    label: str,
+    values: list[Any],
+    ncols: int,
+    formats: list[str | None] | None = None,
 ) -> int:
     """写总计行（绿底加粗，与上方的分隔线）。"""
     return _write_summary_row(ws, row, label, values, ncols, formats, TOTAL_FILL)
 
 
-def auto_width(ws, min_width: int = 8, max_width: int = 30) -> None:
+def auto_width(ws: Worksheet, min_width: int = 8, max_width: int = 30) -> None:
     """自动调整列宽。
 
     Args:
@@ -351,7 +368,7 @@ def auto_width(ws, min_width: int = 8, max_width: int = 30) -> None:
         max_width: 最大列宽
     """
     for col_cells in ws.columns:
-        col_letter = get_column_letter(col_cells[0].column)
+        col_letter = get_column_letter(cast(int, col_cells[0].column))
         max_len = 0
         for cell in col_cells:
             if cell.value is not None:
@@ -363,7 +380,7 @@ def auto_width(ws, min_width: int = 8, max_width: int = 30) -> None:
         ws.column_dimensions[col_letter].width = width
 
 
-def freeze_header(ws, row: int = 1) -> None:
+def freeze_header(ws: Worksheet, row: int = 1) -> None:
     """冻结指定行以上的区域（默认首行表头）。"""
     ws.freeze_panes = f"A{row + 1}"
 
@@ -372,7 +389,7 @@ def freeze_header(ws, row: int = 1) -> None:
 
 
 def _write_data_status_foot(
-    ws,
+    ws: Worksheet,
     data_status: dict,
     start_row: int | None = None,
     max_cols: int = 5,
@@ -422,7 +439,7 @@ def _write_data_status_foot(
     return row
 
 
-def _write_placeholder(ws, text: str, row: int | None = None, max_cols: int = 5) -> int:
+def _write_placeholder(ws: Worksheet, text: str, row: int | None = None, max_cols: int = 5) -> int:
     """写入占位提示行（页签中央浅灰色提示）。
 
     Args:
@@ -442,7 +459,7 @@ def _write_placeholder(ws, text: str, row: int | None = None, max_cols: int = 5)
     return r + 1
 
 
-def _write_status_title(ws, row: int, ncols: int) -> None:
+def _write_status_title(ws: Worksheet, row: int, ncols: int) -> None:
     """写入状态摘要标题行（深灰色加粗）。"""
     ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=ncols)
     cell = ws.cell(row=row, column=1, value="数据加载状态")
@@ -450,7 +467,7 @@ def _write_status_title(ws, row: int, ncols: int) -> None:
     cell.alignment = Alignment(horizontal="left", vertical="center")
 
 
-def write_privacy_footer(ws, ncols: int = 5) -> None:
+def write_privacy_footer(ws: Worksheet, ncols: int = 5) -> None:
     """在指定工作表底部写入隐私声明脚注。
 
     灰色小字，合并列居中显示。适用于所有页签的页脚。

@@ -9,8 +9,12 @@
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING, Any
 
 from src.python.report.progress import ProgressReporter
+
+if TYPE_CHECKING:
+    from src.python.core.models import Holding
 
 logger = logging.getLogger("invest")
 
@@ -236,7 +240,7 @@ def compute_correlation_data(
 
 
 def compute_market_sentiment_data(
-    holdings,
+    holdings: list[Holding],
     prep: dict | None,
     config: dict,
     reporter: ProgressReporter | None = None,
@@ -269,8 +273,8 @@ def compute_market_sentiment_data(
 
 
 def compute_prosperity_framework_data(
-    holdings,
-    details,
+    holdings: list[Holding],
+    details: list[Any] | None,
     prep: dict | None,
     config: dict,
     reporter: ProgressReporter | None = None,
@@ -288,7 +292,8 @@ def compute_prosperity_framework_data(
 
     Args:
         holdings: 原始持仓列表
-        details: 市值明细行（DetailRow）
+        details: 市值明细行（实际形态为 `DetailRow` 对象；下游契约 `build_prosperity_framework_data`
+            形参标注 `list[dict[str, Any]]` 但一律按 `getattr` 消费，故此处记 `Any` 而不强标 dict）
         prep: `prepare_report_data` 的 prep 字典（读 `penetrated_assets`）
         config: 完整配置（只读）
         reporter: 可选进度上报

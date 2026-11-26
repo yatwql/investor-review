@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from jinja2 import BytecodeCache, Environment, FileSystemLoader, pass_context
 
@@ -13,6 +13,9 @@ from src.python.core.code_utils import is_qdii_extended
 from src.python.core.registry import _REPORT_SECTION_DEFAULT
 from src.python.core.constants import PROJECT_ROOT
 from src.python.report.market_value import PRICE_TYPE_OFFICIAL_NAV_T1
+
+if TYPE_CHECKING:
+    from jinja2.runtime import Context
 
 logger = logging.getLogger("invest")
 
@@ -209,7 +212,7 @@ def _jinja_sentiment_colorize(text: str) -> str:
 
 
 @pass_context
-def _jinja_anon_code(ctx, value: Any) -> Any:
+def _jinja_anon_code(ctx: Context, value: Any) -> Any:
     """匿名化代码列掩码：在模板渲染点把持仓真码折叠为显示掩码。
 
     与产物自由文本全文替换不同，这里是**精确键控**查找（真码是完整键），

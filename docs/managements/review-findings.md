@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.18.7-dev
-> **编号源**：`rf-next = 1221`（新增问题提出后更新为 +1；已用最大 rf-1220，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1222`（新增问题提出后更新为 +1；已用最大 rf-1220，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -45,7 +45,7 @@
 | `src/python/tui/handlers_config.py` 743 行 | 配置面板按域拆（内容选项 / 全局设置 / 目录与文件名） |
 | `scripts/_doc_drift/_format.py` 742 行 | 格式化规则按文档类型拆（章节 / 表格 / 树 / 统计） |
 | `src/python/core/degradation.py` 768 行 | 状态词与事件模型、登记面与持久化可拆两文件 |
-| `src/python/report/action_sheet.py` 753 行 | 行动页签内各块（建议表 / 判断依据 / 决策书 / 复盘）拆子模块 |
+| `src/python/report/action_sheet.py` 754 行 | 行动页签内各块（建议表 / 判断依据 / 决策书 / 复盘）拆子模块 |
 | `src/python/fetcher/financial_report.py` 725 行 | 按「索引 / 正文 / 全文定位」三阶下沉 |
 | `src/python/providers/akshare_extras.py` 718 行 | 按接口族拆（指数 / 行业 / 分红 / 盈利预测） |
 | `src/python/core/provider_registry.py` 710 行 | 熔断与会话缓存各自独立文件 |
@@ -99,6 +99,7 @@
 | **rf-1217** | 覆盖率口径债无出口也无闸门：`test-coverage.md` 的「不可达行处理原则」声明不以 `# pragma: no cover` 回避可达分支，而 `src/python` + `scripts` 实际留有 13 处标注（其中防御残留 10 处、整函数豁免 2 处），全仓没有任何机制拦住新增 | 逐处判类：10 处判「可移除」（删分支/补测后去掉标注），3 处判「不可达但合理」（平台分支与可选依赖缺失）登记进 `test-coverage.md` 新增的「`pragma: no cover` 豁免清单」；`check-code-traces.py` 增 PRAGMA 守卫——`src/python/**`、`scripts/**` 里的每处标注必须在清单中按 `文件:行号` 严格同行命中，否则报 LOW finding，并补单测钉住「未登记报警 / 已登记放行 / 行号严格」 |
 | **rf-1218** | `ARG`（未用参数）规则未启用：生产域 `src/python`+`scripts` 积压 45 处未用参数（`ARG001` 41 / `ARG005` 3 / `ARG002` 1），签名契约里的死参数与桩签名漂移只能靠人评审逐处发现 | `[tool.ruff.lint]` 的 `select` 加 `ARG`，测试域 `src/test/**` 经 per-file-ignores 豁免（替身/回调参数天然未用）；45 处逐处定型——29 处签名契约（回调/链层/provider/pane 统一签名、公开 API、测试桩）挂 `# noqa: ARG00x — <理由>`，15 处签名可控的内部助手参数改名 `_x`，1 处死参数（`_test_runner/runner.run_mode` 的 `phased`，CLI 已在入口分流）删参并同步 `test-runner.py` 调用点 |
 | **rf-1220** | `ANN001`（函数参数缺类型注解）未启用：`src/python`+`scripts` 积压 294 处无注解参数（`scripts` 129 / `report` 71 / `web` 20 / `tui` 20 / `llm` 13 / 其余 41），落在 `check-types.py` 受检域内的这些签名只能按 `Unknown` 推断，参数契约靠人评审 | 试点批补 5 个目录 32 处（`cache`/`core`/`config`/`fetcher`/`analysis`），逐处按真实用法推导：`reporter`→`ProgressReporter`、`fund`→`Holding`、`wb`/`ws`→openpyxl `Workbook`/`Worksheet`、`exc_type`/`exc_val`/`exc_tb`→`type[BaseException]\|None`/`BaseException\|None`/`TracebackType\|None`、`build`→`Callable[[], dict[str, Any]]`、`diag`→`FailureDiagnostics`、`span_recorder`→`PhaseBreakdownRecorder\|None`；`Any` 仅 4 处（JSON payload / 外部查询串 / 强转入口 / 白名单分派）且就地写明理由，`object` 2 处（Excel 单元格原始值）；pyright ERROR 0→0、五目录单测 5558 全绿、diff +57/-32。规则**本批不入 `select`**（前提是全树零残留），余 262 处分批推进，清零后再一次性启用 |
+| **rf-1221** | `ANN001` 第二批：`report` 71 处 + `llm` 13 处参数缺注解（试点批已确立口径，本批沿用） | 84 处逐处按**真实用法**补齐：`ws`→openpyxl `Worksheet`、`reporter`→`ProgressReporter`、`span_recorder`/`recorder`→`PhaseBreakdownRecorder\|None`、`a_indices`/`us_indices`→`dict[str, dict[str, Any]]`、`pool`→`ThreadPoolExecutor`、`fut`→`Future`、`result`→`ReportResult`、`do_retry`→`Callable[[str, str], tuple[str\|None, dict\|None]]`、`row_values`→`Callable[[dict[str, Any]], list[Any]]`、`section_visible`→`Callable[[str], bool]`、`build_fn`/`fn`→`Callable[..., …]`、`old`→`SnapshotData\|None`、`d`→`DetailRow\|None`、`ctx`→`jinja2` `Context`；全程只加注解（不改行为/默认值/参数名/顺序），跨模块注解导入一律走 `TYPE_CHECKING`（`PhaseBreakdownRecorder`/`LlmObservation`/`PerfCollector`/`ReportResult`/`SnapshotData`/`DetailRow`/`Holding`，避免 report↔llm 与 report 门面的导入环）；`Any` 仅 2 处（`details: list[Any]`——明细行实为 `DetailRow` 对象而下层契约形参标注 `list[dict[str, Any]]`；`fn: Callable[..., Any]`——透传取数函数原样返回）与 `object` 1 处（`key_fn: Callable[[str], object]`），均就地/就地文档写明理由；注解化后暴露 5 处下游窄化缺口（`cell.number_format`/`get_column_letter` 的 stub 可空、事件窗分支 `Future\|None`）以 `cast` 收窄、零行为变更；pyright ERROR 0→0、`report`+`llm` 单测 5703 全绿、27 文件 +182/-91。余 178 处（`scripts` 129 / `web` 20 / `tui` 20 / `cli` 4 / `providers` 3 / `qa` 2）留下批 |
 
 ### 归档档案
 - [`archived_review-findings.0.18.x.md`](../archive/v0.18.x/archived_review-findings.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-19）

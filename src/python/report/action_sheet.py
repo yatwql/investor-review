@@ -18,6 +18,7 @@ orchestrator 注入 pipeline_data）。子块为空时写「暂无」占位—�
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import Any
 
 from openpyxl.styles import Font
@@ -38,7 +39,7 @@ _FONT_SUMMARY_LINE = Font(size=11, color="404040")
 _FONT_SUB_BLOCK = Font(bold=True, color="404040")
 
 
-def write_block_title(ws, row: int, title: str, ncols: int | None = None) -> int:
+def write_block_title(ws: Worksheet, row: int, title: str, ncols: int | None = None) -> int:
     """区块标题行（区块契约载体）：子块标题与同版式区块标题统一入口。
 
     ``ncols`` 给定时走合并居中标题样式（情绪/景气块），否则保持子块直排加粗样式。
@@ -68,7 +69,7 @@ def _write_sub_block(
     items: list[dict[str, Any]],
     headers: list[str],
     ncols: int,
-    row_values,
+    row_values: Callable[[dict[str, Any]], list[Any]],
     placeholder: str = _PLACEHOLDER_EMPTY,
 ) -> int:
     """写入一个行动子块（标题 + 表头 + 数据行，空时写占位）。
@@ -589,7 +590,7 @@ def _write_review_block(
     return row
 
 
-def _write_market_sentiment_block(ws, row: int, data: dict[str, Any], ncols: int) -> int:
+def _write_market_sentiment_block(ws: Worksheet, row: int, data: dict[str, Any], ncols: int) -> int:
     """写入「市场情绪与持仓热点」块（报告增强开关 `market_sentiment`，默认关）。
 
     只列**命中持仓/穿透标的代码**的当日事件：上榜龙虎榜（净买额/上榜原因）与
@@ -663,7 +664,7 @@ def _write_market_sentiment_block(ws, row: int, data: dict[str, Any], ncols: int
     )
 
 
-def _write_prosperity_block(ws, row: int, data: dict[str, Any], ncols: int) -> int:
+def _write_prosperity_block(ws: Worksheet, row: int, data: dict[str, Any], ncols: int) -> int:
     """写入「景气度框架诊断」块（实验性功能，六维评分卡）。
 
     含总分/评级、六维明细（依据行）、持仓视角与「需核实」清单；结尾固定免责句

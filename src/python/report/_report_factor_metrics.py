@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from datetime import datetime
+from typing import Any
 
 from src.python.analysis.unavailable_contracts import factor_unavailable_result, industry_unavailable_result
 from src.python.core.code_utils import is_six_digit_code
@@ -27,7 +29,7 @@ logger = logging.getLogger("invest")
 _SLOW_FETCH_WARN_SECONDS = SLOW_SPAN_WARN_SECONDS
 
 
-def _timed_fetch(fn, *args, label: str = "", **kwargs):
+def _timed_fetch(fn: Callable[..., Any], *args, label: str = "", **kwargs):
     """包一层单路取数计时：超阈值时告警（带标的标签），不改变返回语义。"""
     started = time.perf_counter()
     try:

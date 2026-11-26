@@ -27,6 +27,7 @@ from src.python.analysis.whatif_backtest import compute_backtest_days, compute_b
 from src.python.config.features import is_feature_enabled
 from src.python.core.models import Holding
 from src.python.report.portfolio_history import PortfolioHistoryCalculator
+from src.python.report.progress import ProgressReporter
 from src.python.report.whatif_cost_panel import build_whatif_cost_panel
 from src.python.report.whatif_writer import write_whatif_report
 
@@ -177,7 +178,7 @@ def run_whatif_simulation(
     base_file: str,
     candidate_file: str,
     output_dir: str = "reports",
-    reporter=None,
+    reporter: ProgressReporter | None = None,
     effective_date: str | None = None,
 ) -> WhatifRunResult:
     """调仓模拟业务核心：build_whatif_data → 校验 available → write_whatif_report。

@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from src.python.core.registry import NAV_GROUPS, _REPORT_SECTION_DEFAULT
@@ -159,7 +160,7 @@ def _compute_section_visibility(
 
 def _build_section_nav_groups(
     order: list[dict],
-    section_visible,
+    section_visible: Callable[[str], bool],
     section_numbers: dict,
 ) -> list[dict]:
     """构建 HTML 目录分组导航数据（分组聚合视图，报告号是唯一排序权威）。
