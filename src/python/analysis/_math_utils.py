@@ -248,8 +248,7 @@ def _beta_se(
     # Σ(x_i - x̄)²
     ssx = math.fsum((br[i] - mean_br) ** 2 for i in range(n))
 
-    if ssx <= 0 or mse < 0:
-        return None
-
+    # ssx > 0 由上面的「极差非 0」早退保证（Popoviciu 不等式：ssx ≥ 极差²/2），
+    # mse 为平方和除以正数，故此处无需再兜底。
     se = math.sqrt(mse / ssx)
     return (se, n - 2)
