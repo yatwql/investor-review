@@ -19,6 +19,8 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
 
 from src.python.core.ansi_colors import GREEN, RESET, YELLOW
 from src.python.tui.panel_runtime import NavState, PanelItem, panel_loop
@@ -102,6 +104,198 @@ def show_switch_detail(choice: str, items: list[tuple[int, str, str, bool]]) -> 
         print(line)
 
 
+@dataclass(frozen=True)
+class _SwitchPanelLayout:
+    """面板一次进入期间的静态版面量：分组/编号块、实验项集与各列宽。
+
+    ``blocks`` 的元素是 ``config.features.FeatureSwitchDef``——该模块按既有约定在
+    函数内导入（渠道层顶部不引入配置注册表），此处故以 ``Any`` 承载。
+    """
+
+    groups: tuple[str, ...]
+    blocks: dict[str, list[tuple[int, str, Any]]]
+    experiment_keys: set[str]
+    name_column: int
+    key_column: int
+    number_width: int
+
+
+def _render_switch_panel(
+    nav: NavState,
+    layout: _SwitchPanelLayout,
+    state: dict[str, Any],
+    session: Any,
+) -> list[str]:
+    """上屏本轮面板：分组标题 + 条目行 + 返回行 + 页脚图例（`nav` 决定筛选与光标）。"""
+    from src.python.config.features import GROUP_LABELS, is_feature_enabled
+    from src.python.core.experiment_stats import load_experiment_usage
+
+    rows: list[str | None] = []
+    tuples: list[tuple[int, str, str, bool]] = []
+    exp_stats = load_experiment_usage()
+    columns = terminal_columns()
+    narrow = layout_tier(columns) == "narrow"
+    for group in layout.groups:
+        block = layout.blocks[group]
+        rows.append(None if use_panel_box(columns) else "")
+        rows.extend(
+            format_heading(
+                GROUP_LABELS[group].split("（", 1)[0],
+                sum(1 for _n, flag, _d in block if is_feature_enabled(flag)),
+                len(block),
+                columns,
+            )
+        )
+        for num, flag, definition in block:
+            status = is_feature_enabled(flag)
+            marker = pad_right("⚗" if flag in layout.experiment_keys else "", EXPERIMENT_MARK_COLUMNS)
+            notes = ""
+            if flag in layout.experiment_keys:
+                entry = exp_stats.get(flag) or {}
+                if isinstance(entry.get("enabled_count"), int):
+                    date = str(entry.get("last_enabled_date") or "")[5:]
+                    notes += f"（启用 {entry['enabled_count']} 次" + (f" · 最近 {date}" if date else "") + "）"
+            tuples.append((num, flag, definition.label, status))
+            if not nav.is_visible(len(tuples) - 1):
+                continue  # 筛选态：命中项之外的开关不渲染（索引仍占位）
+            rows.extend(
+                format_item(
+                    number=num,
+                    label=definition.label,
+                    key=flag,
+                    enabled=status,
+                    star="" if status == definition.default else "*",
+                    marker=marker,
+                    cursor=nav.marker(len(tuples) - 1),
+                    notes=notes,
+                    columns=columns,
+                    name_column=layout.name_column,
+                    key_column=layout.key_column,
+                    number_width=layout.number_width,
+                    reveal_key=state["reveal_keys"],
+                )
+            )
+    rows.append("")
+    rows.append(f"{nav.marker(len(tuples))}0. 返回主菜单")
+    if session.count:
+        rows.append(change_footer(session.count))
+    state["tuples"] = tuples
+    print()
+    panel_rows = [
+        *rows,
+        None if use_panel_box(columns) else "",
+        *legend_lines(0, columns, reveal_key=state["reveal_keys"]),
+    ]
+    if not state["repaint"]:
+        # 窄终端（手机）：只读查询（? 说明）与失败路径不整屏重绘——详情/报错留屏
+        # 不被面板顶走；写路径成功后 repaint=True 即时重绘（结果必须立刻可见）
+        print("  （输入 p 重绘面板）")
+        print()
+    elif use_panel_box(columns):
+        print("\n".join(render_panel("配置报告章节内容呈现", panel_rows)))
+    else:
+        header = truncate_display(f"章节内容（{len(tuples)} 项）", inner_width(columns) - 5)
+        print(style_heading(f"  ── {header} ──"))
+        print("\n".join(f"  {row}" if row else "" for row in panel_rows))
+    if state["repaint"]:
+        for _line in wrap_hanging("  章节显隐（顶层 / LLM / 整章）在菜单 [C] 配置", inner_width(columns)):
+            print(_line)
+        print()
+    # 本轮已渲染 → 窄终端下一轮只回反馈行（省纵向空间）；宽/中档照常整屏重绘
+    state["repaint"] = not narrow
+    return []
+
+
+def _dispatch_switch_text(
+    choice: str,
+    state: dict[str, Any],
+    session: Any,
+    apply_toggle: Callable[[int, str, str, bool], None],
+    emit: Callable[[str], None],
+) -> None:
+    """键分派：导航命令（u/U/p/k）→ 批量命令（r/ra/x）→ 赋值 → 编号或键名直取。"""
+    from src.python.config.features import (
+        GROUP_LABELS,
+        clear_feature_overrides,
+        experimental_flags,
+        feature_switch_registry,
+        parse_switch_override,
+        switches_in_group,
+    )
+    from src.python.tui import handlers_config as hc
+
+    tuples = state["tuples"]
+    if hc.handle_config_undo(choice, session, emit):
+        state["repaint"] = True
+        return
+    if choice.lower() == "p":
+        state["repaint"] = True
+        return
+    if choice.lower() == "k":
+        if layout_tier(terminal_columns()) == "narrow":
+            state["reveal_keys"] = not state["reveal_keys"]
+            state["repaint"] = True  # 版面行数变化，需要重绘才能生效
+        else:
+            emit("  [!] 当前终端宽度已直接显示键名列，无需 k 切换")
+        return
+
+    # ── 写路径三通道：批量命令 / 赋值（CLI 同词表）/ 编号或键名直取 ──
+    raw = choice.strip()
+    lowered = raw.lower()
+    if lowered == "ra":
+        removed = clear_feature_overrides(None)
+        emit(f"  {GREEN}[OK]{RESET} 已恢复功能开关全部默认（移除 {removed} 项覆写）")
+        state["repaint"] = True
+        return
+    if lowered == "x":
+        exp_keys = sorted(flag for flag, _d in experimental_flags())
+        clear_feature_overrides(exp_keys)
+        emit(f"  {GREEN}[OK]{RESET} 实验项已全部关闭（回到无实验态）：{'、'.join(exp_keys)}")
+        state["repaint"] = True
+        return
+    head, space, rest = raw.partition(" ")
+    if head.lower() == "r" and space and rest.strip():
+        target = match_switch_item(rest, tuples)
+        if target is None:
+            emit(f"  {YELLOW}[!]{RESET} 未识别目标「{rest.strip()}」（输入编号或键名）")
+        else:
+            group = feature_switch_registry[target[1]].group
+            group_flags = [flag for flag, _d in switches_in_group(group)]
+            removed = clear_feature_overrides(group_flags)
+            emit(f"  {GREEN}[OK]{RESET} 已恢复「{GROUP_LABELS[group]}」默认（移除 {removed} 项覆写）")
+            state["repaint"] = True
+        return
+
+    assign_name, eq, _assign_val = raw.partition("=")
+    assign_name = assign_name.strip()
+    if eq:
+        item = next((it for it in tuples if it[1] == assign_name), None)
+        if item is None:
+            try:
+                parse_switch_override(raw)
+            except ValueError as e:
+                emit(f"  {YELLOW}[!]{RESET} {e}")
+            else:
+                emit(f"  {YELLOW}[!]{RESET} 未知条目「{assign_name}」")
+            return
+        try:
+            _parsed_flag, new_val = parse_switch_override(raw)
+        except ValueError as e:
+            emit(f"  {YELLOW}[!]{RESET} {e}")
+            return
+        apply_toggle(item[0], item[1], item[2], new_val)
+        return
+
+    target = match_switch_item(raw, tuples)
+    if target is None:
+        if raw.isdigit():
+            emit(f"  {YELLOW}[!]{RESET} 无效编号")
+        else:
+            emit(f"  {YELLOW}[!]{RESET} 未知编号或键名「{raw}」（可输入编号、键名 或 键名=on|off）")
+        return
+    apply_toggle(target[0], target[1], target[2], not target[3])
+
+
 def run_content_options_panel() -> None:
     """配置报告章节内的内容与呈现（六组功能开关，编号由注册表派生）。
 
@@ -111,18 +305,12 @@ def run_content_options_panel() -> None:
     from src.python.tui import handlers_config as hc
 
     from src.python.config.features import (
-        GROUP_LABELS,
         PANEL_GROUPS,
-        clear_feature_overrides,
-        experimental_flags,
         FeatureSwitchDef,
-        feature_switch_registry,
+        experimental_flags,
         is_feature_enabled,
         panel_option_numbers,
-        parse_switch_override,
-        switches_in_group,
     )
-    from src.python.core.experiment_stats import load_experiment_usage
 
     panel = "[S]"
     numbered = panel_option_numbers(panel)
@@ -137,6 +325,14 @@ def run_content_options_panel() -> None:
     name_column = max(display_width(definition.label) for _n, _f, definition in numbered)
     key_column = max(display_width(flag) for _n, flag, _d in numbered)
     number_width = len(str(len(numbered)))
+    layout = _SwitchPanelLayout(
+        groups=groups,
+        blocks=blocks,
+        experiment_keys=experiment_keys,
+        name_column=name_column,
+        key_column=key_column,
+        number_width=number_width,
+    )
 
     state = {"repaint": True, "reveal_keys": False, "tuples": []}
     # 会话快照：改动仍即时写盘，仅记录变更前值，供 u / U 退回
@@ -159,80 +355,7 @@ def run_content_options_panel() -> None:
         return lambda: _apply_toggle(num, key, name, not is_feature_enabled(key))
 
     def _render(nav: NavState) -> list[str]:
-        rows: list[str | None] = []
-        tuples: list[tuple[int, str, str, bool]] = []
-        exp_stats = load_experiment_usage()
-        columns = terminal_columns()
-        narrow = layout_tier(columns) == "narrow"
-        for group in groups:
-            block = blocks[group]
-            rows.append(None if use_panel_box(columns) else "")
-            rows.extend(
-                format_heading(
-                    GROUP_LABELS[group].split("（", 1)[0],
-                    sum(1 for _n, flag, _d in block if is_feature_enabled(flag)),
-                    len(block),
-                    columns,
-                )
-            )
-            for num, flag, definition in block:
-                status = is_feature_enabled(flag)
-                marker = pad_right("⚗" if flag in experiment_keys else "", EXPERIMENT_MARK_COLUMNS)
-                notes = ""
-                if flag in experiment_keys:
-                    entry = exp_stats.get(flag) or {}
-                    if isinstance(entry.get("enabled_count"), int):
-                        date = str(entry.get("last_enabled_date") or "")[5:]
-                        notes += f"（启用 {entry['enabled_count']} 次" + (f" · 最近 {date}" if date else "") + "）"
-                tuples.append((num, flag, definition.label, status))
-                if not nav.is_visible(len(tuples) - 1):
-                    continue  # 筛选态：命中项之外的开关不渲染（索引仍占位）
-                rows.extend(
-                    format_item(
-                        number=num,
-                        label=definition.label,
-                        key=flag,
-                        enabled=status,
-                        star="" if status == definition.default else "*",
-                        marker=marker,
-                        cursor=nav.marker(len(tuples) - 1),
-                        notes=notes,
-                        columns=columns,
-                        name_column=name_column,
-                        key_column=key_column,
-                        number_width=number_width,
-                        reveal_key=state["reveal_keys"],
-                    )
-                )
-        rows.append("")
-        rows.append(f"{nav.marker(len(tuples))}0. 返回主菜单")
-        if session.count:
-            rows.append(change_footer(session.count))
-        state["tuples"] = tuples
-        print()
-        panel_rows = [
-            *rows,
-            None if use_panel_box(columns) else "",
-            *legend_lines(0, columns, reveal_key=state["reveal_keys"]),
-        ]
-        if not state["repaint"]:
-            # 窄终端（手机）：只读查询（? 说明）与失败路径不整屏重绘——详情/报错留屏
-            # 不被面板顶走；写路径成功后 repaint=True 即时重绘（结果必须立刻可见）
-            print("  （输入 p 重绘面板）")
-            print()
-        elif use_panel_box(columns):
-            print("\n".join(render_panel("配置报告章节内容呈现", panel_rows)))
-        else:
-            header = truncate_display(f"章节内容（{len(tuples)} 项）", inner_width(columns) - 5)
-            print(style_heading(f"  ── {header} ──"))
-            print("\n".join(f"  {row}" if row else "" for row in panel_rows))
-        if state["repaint"]:
-            for _line in wrap_hanging("  章节显隐（顶层 / LLM / 整章）在菜单 [C] 配置", inner_width(columns)):
-                print(_line)
-            print()
-        # 本轮已渲染 → 窄终端下一轮只回反馈行（省纵向空间）；宽/中档照常整屏重绘
-        state["repaint"] = not narrow
-        return []
+        return _render_switch_panel(nav, layout, state, session)
 
     def _on_help(target: str) -> bool:
         """``?键`` 详情（丰富多段输出）；``?`` 无参交运行时印可用键一览。"""
@@ -242,76 +365,7 @@ def run_content_options_panel() -> None:
         return True
 
     def _on_text(choice: str) -> None:
-        tuples = state["tuples"]
-        if hc.handle_config_undo(choice, session, _emit):
-            state["repaint"] = True
-            return
-        if choice.lower() == "p":
-            state["repaint"] = True
-            return
-        if choice.lower() == "k":
-            if layout_tier(terminal_columns()) == "narrow":
-                state["reveal_keys"] = not state["reveal_keys"]
-                state["repaint"] = True  # 版面行数变化，需要重绘才能生效
-            else:
-                _emit("  [!] 当前终端宽度已直接显示键名列，无需 k 切换")
-            return
-
-        # ── 写路径三通道：批量命令 / 赋值（CLI 同词表）/ 编号或键名直取 ──
-        raw = choice.strip()
-        lowered = raw.lower()
-        if lowered == "ra":
-            removed = clear_feature_overrides(None)
-            _emit(f"  {GREEN}[OK]{RESET} 已恢复功能开关全部默认（移除 {removed} 项覆写）")
-            state["repaint"] = True
-            return
-        if lowered == "x":
-            exp_keys = sorted(flag for flag, _d in experimental_flags())
-            clear_feature_overrides(exp_keys)
-            _emit(f"  {GREEN}[OK]{RESET} 实验项已全部关闭（回到无实验态）：{'、'.join(exp_keys)}")
-            state["repaint"] = True
-            return
-        head, space, rest = raw.partition(" ")
-        if head.lower() == "r" and space and rest.strip():
-            target = match_switch_item(rest, tuples)
-            if target is None:
-                _emit(f"  {YELLOW}[!]{RESET} 未识别目标「{rest.strip()}」（输入编号或键名）")
-            else:
-                group = feature_switch_registry[target[1]].group
-                group_flags = [flag for flag, _d in switches_in_group(group)]
-                removed = clear_feature_overrides(group_flags)
-                _emit(f"  {GREEN}[OK]{RESET} 已恢复「{GROUP_LABELS[group]}」默认（移除 {removed} 项覆写）")
-                state["repaint"] = True
-            return
-
-        assign_name, eq, _assign_val = raw.partition("=")
-        assign_name = assign_name.strip()
-        if eq:
-            item = next((it for it in tuples if it[1] == assign_name), None)
-            if item is None:
-                try:
-                    parse_switch_override(raw)
-                except ValueError as e:
-                    _emit(f"  {YELLOW}[!]{RESET} {e}")
-                else:
-                    _emit(f"  {YELLOW}[!]{RESET} 未知条目「{assign_name}」")
-                return
-            try:
-                _parsed_flag, new_val = parse_switch_override(raw)
-            except ValueError as e:
-                _emit(f"  {YELLOW}[!]{RESET} {e}")
-                return
-            _apply_toggle(item[0], item[1], item[2], new_val)
-            return
-
-        target = match_switch_item(raw, tuples)
-        if target is None:
-            if raw.isdigit():
-                _emit(f"  {YELLOW}[!]{RESET} 无效编号")
-            else:
-                _emit(f"  {YELLOW}[!]{RESET} 未知编号或键名「{raw}」（可输入编号、键名 或 键名=on|off）")
-            return
-        _apply_toggle(target[0], target[1], target[2], not target[3])
+        _dispatch_switch_text(choice, state, session, _apply_toggle, _emit)
 
     # 可派发项清单：编号与面板派生同源（连续 1..N）
     panel_items = [
