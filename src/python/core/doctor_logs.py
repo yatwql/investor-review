@@ -188,7 +188,7 @@ def _check_logs_and_cache() -> list[dict[str, Any]]:
     for fn in (_check_log_level, _check_log_volume, _check_dedup_anchor, _check_perf_ledger_health):
         try:
             results.append(fn())
-        except Exception as e:  # noqa: BLE001 — 自检自身永不抛异常
+        except Exception as e:  # 有意宽捕获：自检自身永不抛异常
             results.append(_item(GROUP_LOG_CACHE, fn.__name__, False, f"自检异常：{e}"))
     return results
 

@@ -22,7 +22,7 @@ from src.python.config.features import (
     GROUP_LABELS,
     experimental_flags,
     feature_switch_registry,
-)  # noqa: F401  # 公开再导出
+)  # 公开再导出
 
 logger = logging.getLogger("invest")
 

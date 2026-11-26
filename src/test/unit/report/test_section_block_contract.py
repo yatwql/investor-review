@@ -155,7 +155,7 @@ class TestSpecSideHelpers:
 
     def test_specs_are_frozen(self):
         spec = next(iter(SECTION_BLOCK_SPECS.values()))
-        with pytest.raises(Exception):  # noqa: B017 — dataclass frozen 写入即抛，类型不限
+        with pytest.raises(Exception):  # 说明：dataclass frozen 写入即抛，异常类型不限
             spec.html = ()
 
 

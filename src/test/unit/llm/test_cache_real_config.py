@@ -212,7 +212,7 @@ class TestConcurrency:
         def _worker() -> None:
             try:
                 _run(base, patch_call=False)
-            except BaseException as exc:  # noqa: BLE001 — 收集后再断言
+            except BaseException as exc:  # 有意宽捕获：收集后再断言
                 errors.append(exc)
 
         threads = [Thread(target=_worker) for _ in range(2)]

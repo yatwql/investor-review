@@ -74,14 +74,14 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享模块（_checklib）
-from _shared.checklib import REPO_ROOT, add_common_args, rel, report  # noqa: E402,F401  # rel：单测直接访问 drift.rel
-from _shared.checklib import conclusion_cache_load, conclusion_cache_save  # noqa: E402
+from _shared.checklib import REPO_ROOT, add_common_args, rel, report  # rel：单测直接访问 drift.rel
+from _shared.checklib import conclusion_cache_load, conclusion_cache_save
 
 if str(REPO_ROOT) not in sys.path:  # 允许任意 cwd 下运行
     sys.path.insert(0, str(REPO_ROOT))
 
 # 原面 re-export：实现层用到的外部符号（单测直接访问 drift.<name>，故在此保留绑定）
-from src.python.config.chapter_registry import (  # noqa: E402,F401
+from src.python.config.chapter_registry import (
     BLOCK_LABELS,
     BLOCK_ORDER,
     SOURCE_FEATURES,
@@ -91,14 +91,14 @@ from src.python.config.chapter_registry import (  # noqa: E402,F401
     chapters_in_block,
     sub_item_numbers,
 )
-from src.python.config.features import (  # noqa: E402,F401
+from src.python.config.features import (
     feature_switch_registry,
     panel_option_numbers,
     switches_in_group,
 )
-from src.python.core.registry import _REPORT_SECTION_DEFAULT, get_llm_module_names  # noqa: E402,F401
-from src.python.tui.tui_menu import filter_menu_llm_modules  # noqa: E402,F401
-from _doc_drift._format_panels import (  # noqa: E402,F401  # 面板编号族（实现见 _doc_drift/_format_panels.py）
+from src.python.core.registry import _REPORT_SECTION_DEFAULT, get_llm_module_names
+from src.python.tui.tui_menu import filter_menu_llm_modules
+from _doc_drift._format_panels import (  # 面板编号族（实现见 _doc_drift/_format_panels.py）
     _HOWTO_PANEL_HEADING,
     _PANEL_ROW,
     _SUB_ITEM_ROW,
@@ -107,7 +107,7 @@ from _doc_drift._format_panels import (  # noqa: E402,F401  # 面板编号族（
     _PANEL_KEY_MAP_ROW,
     check_panel_numbering,
 )
-from _doc_drift import (  # noqa: E402,F401  # 原面 re-export（实现见 _doc_drift/）
+from _doc_drift import (  # 原面 re-export（实现见 _doc_drift/）
     _RELIABILITY_MD,
     check_chain_table,
     _README,
@@ -221,6 +221,85 @@ from _doc_drift import (  # noqa: E402,F401  # 原面 re-export（实现见 _doc
     parse_menu_block_lines,
     _HOW_TO_START_MD,
 )
+
+#: 测试与台账脚本按本模块名访问的再导出面（实现见对应子模块）
+__all__ = [
+    "BLOCK_LABELS",
+    "BLOCK_ORDER",
+    "SOURCE_FEATURES",
+    "chapter_number",
+    "chapter_numbers",
+    "chapter_registry",
+    "chapters_in_block",
+    "sub_item_numbers",
+    "panel_option_numbers",
+    "switches_in_group",
+    "get_llm_module_names",
+    "filter_menu_llm_modules",
+    "_HOWTO_PANEL_HEADING",
+    "_PANEL_ROW",
+    "_SUB_ITEM_ROW",
+    "_GROUP_PANEL_RANGE",
+    "_BLOCK_PANEL_RANGE",
+    "_PANEL_KEY_MAP_ROW",
+    "_README",
+    "_MANUALS",
+    "_MANAGEMENTS",
+    "_PLAN_MD",
+    "_CHANGELOG_MD",
+    "_REVIEW_FINDINGS_MD",
+    "_HISTORY_DOCS",
+    "_TREE_ROOTS",
+    "_GENERATED_DIRS",
+    "_GENERATED_SUFFIXES",
+    "_GENERATED_FILES",
+    "_GENERATED_PREFIXES",
+    "_is_generated",
+    "_doc_section",
+    "_split_table_row",
+    "_first_number",
+    "_count",
+    "_values_equal",
+    "_collect_test_count",
+    "_SECTION_COUNT_PATTERNS",
+    "parse_section_rows",
+    "_SWITCH_TABLE_START",
+    "_SWITCH_ROW",
+    "_GROUP_CHAIN_COUNT",
+    "_GROUPED_COUNT",
+    "_GROUP_NAME_TO_KIND",
+    "_RETIRED_GROUP_NAMES",
+    "_GROUP_DOC_NAMES",
+    "_group_doc_name",
+    "_TOTAL_COUNT",
+    "_count_finding",
+    "_DEFAULT_CLAIM",
+    "_CONFIG_ROW",
+    "_LLM_ROW",
+    "_TTL_TABLE_ROW",
+    "_HOURS_ROW",
+    "_ttl_default",
+    "_TEST_COVERAGE_ROW",
+    "_COUNT_CELL",
+    "_COUNT_NAME_ALIAS",
+    "_TREE_ENTRY",
+    "_STATS_ROW",
+    "_BLOCK_MATRIX_TITLE",
+    "_RF_ID",
+    "_PLAN_ID",
+    "_CHANGELOG_HEADER",
+    "_RF_ROW_ID",
+    "_PLAN_HEADING_ID",
+    "_PLAN_DONE_HEADING_ID",
+    "_ARCHIVE_INDEX_PAIRS",
+    "audit_management_partitions",
+    "_THINKING_FAMILY_PREFIXES",
+    "_THINKING_FAMILY_LABELS",
+    "_thinking_families",
+    "find_guard_parity",
+    "guard_parity_sources",
+    "parse_menu_block_lines",
+]
 
 
 #: 最近一次 `run_checks` 的「子项 → finding 数」快照（命中台账用；进程内单次运行）

@@ -175,7 +175,9 @@ class TestSwitchPanelUndoKeys:
         seq = iter(keys)
         writes: list[dict] = []
 
-        def _read(prompt: str = "", arrows: bool = False):  # noqa: ARG001
+        def _read(
+            prompt: str = "", arrows: bool = False
+        ):  # 说明：桩函数签名须与运行时 read 回调一致（prompt/arrows 由运行时传入，桩内不用）
             try:
                 return next(seq)
             except StopIteration:

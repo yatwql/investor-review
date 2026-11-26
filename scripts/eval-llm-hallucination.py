@@ -36,7 +36,7 @@ if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # 同目录共享包（_eval_halluc_sampler）
-from _eval_halluc_sampler import (  # noqa: E402
+from _eval_halluc_sampler import (
     _MODULE_FNS,
     _call_llm_module,
     _compute_categories,

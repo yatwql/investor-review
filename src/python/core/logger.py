@@ -53,7 +53,7 @@ def _read_logger_config_file() -> dict:
 
         with open(_LOGGER_CONFIG_PATH, encoding="utf-8-sig") as f:
             doc = loads(f.read())
-    except Exception:  # noqa: BLE001 — 日志配置损坏不得阻断主流程
+    except Exception:  # 有意宽捕获：日志配置损坏不得阻断主流程
         return config
     if not isinstance(doc, dict):
         return config

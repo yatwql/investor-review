@@ -46,7 +46,7 @@ _PROJECT_ROOT = _SCRIPTS_DIR.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from src.python.core import decision_ledger as dl  # noqa: E402
+from src.python.core import decision_ledger as dl
 
 # ── 预注册常量（讨论稿 §2.2；改动即口径变更，须全量重跑） ──
 HORIZONS = (5, 20, 60)  # 结算视界（交易日）

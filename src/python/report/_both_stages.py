@@ -22,8 +22,8 @@ from typing import Any
 # ── 可 patch 的接缝（模块级集中导入）─────────────────────────
 # 这些函数在拆分前是 `_generation_both` 的模块级名字，测试按「patch 消费模块」纪律打桩；
 # 消费点移入本模块后，名字随之在此集中，测试目标同步迁移（漏迁即 AttributeError）。
-from src.python.report._chart_dataset_factory import _build_chart_datasets_for_report  # noqa: F401
-from src.python.report._report_helpers import (  # noqa: F401
+from src.python.report._chart_dataset_factory import _build_chart_datasets_for_report
+from src.python.report._report_helpers import (
     _compute_details,
     _inject_evolution_data,
     _inject_snapshot_diff_data,

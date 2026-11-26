@@ -65,7 +65,7 @@ from src.python.llm._llm_context_blocks import (  # noqa: F401  # 上下文块�
     extract_purchase_constraint_block,
     extract_schedule_replay_block,
 )
-from src.python.llm._llm_post_pass import (  # noqa: F401  # 生成后一遍（锚定/自检/跨模块核对）
+from src.python.llm._llm_post_pass import (  # 生成后一遍（锚定/自检/跨模块核对）
     BASE_MODULES,
     anchor_fact_checks,
     apply_generation_post_pass,
@@ -76,7 +76,7 @@ from src.python.llm._llm_dispatch import (  # noqa: F401  # 并发分发子模�
     reset_thinking_wait_total,
     thinking_wait_total_seconds,
 )
-from src.python.llm._llm_news_correlation import (  # noqa: F401
+from src.python.llm._llm_news_correlation import (
     run_news_correlation_safe,
 )
 

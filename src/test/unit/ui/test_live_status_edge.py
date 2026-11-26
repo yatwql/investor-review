@@ -19,12 +19,12 @@ if os.name == "nt":
     pytest.skip("状态条边缘用例依赖伪终端（pty/termios），仅 POSIX 可用", allow_module_level=True)
 
 try:
-    import pty  # noqa: E402
-    import termios  # noqa: E402
+    import pty
+    import termios
 except ImportError:  # 兜底：os.name 非 nt 但平台缺 POSIX 模块（如受限容器）
     pytest.skip("伪终端依赖不可用（缺 pty/termios），仅 POSIX 环境可跑", allow_module_level=True)
 
-from src.python.tui.live_status import LiveStatusBar, status_bar_text  # noqa: E402
+from src.python.tui.live_status import LiveStatusBar, status_bar_text
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_ui, pytest.mark.edge]
 

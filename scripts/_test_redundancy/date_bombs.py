@@ -28,7 +28,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享模块（_checklib）
-from _shared.checklib import rel  # noqa: E402
+from _shared.checklib import rel
 
 
 #: 账本写入/裁剪类调用：这些调用的日期实参进账本，会被保留期裁剪按 now() 判定。

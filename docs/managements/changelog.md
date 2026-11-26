@@ -10,6 +10,12 @@
 
 ### 修复
 
+- **抑制清单与启用规则对齐（rf-1208）**：`pyproject.toml` 的 `select` 含 `RUF100`——`noqa` 只在指向真在跑的规则时才有意义，落在未启用规则上的抑制判为死抑制并硬失败。全树 114 处落到未启用规则上的抑制（`BLE001`/`ANN001`/`ARG001`/`PERF203` 等）写成行内说明注释（`有意宽捕获：…` 交代失败后果与不窄化理由，`说明：…` 交代签名契约或入参对象）；6 个脚本门面的 200 个再导出名由 `__all__` 声明（再导出即公开面，行内 `# noqa: F401` 清零），其余冗余/失效指令整条删除，5 处仍会触发的 `E402` 保留抑制并补理由；`[tool.ruff.lint]` 上方写明抑制的生效域与评审口径落点（`technical.md` §8.7「代码质量口径」）。
+
+- **设计契约的图表色值口径收口（rf-1209）**：`DESIGN.md` 的 Do-Don't #1 只豁免 token 兜底默认值（`cssVar('--chart-*', fallback)` 的 fallback、`ChartTheme` 调色板常量、页内脚本 `|| '#…'` 兜底值）与双主题 override 块；#10 要求模板与页内脚本取值一律经 `window.ChartTheme`（半透明填充由 `.alpha()` 派生）；#13 把分类调色板（`doughnutColors`/`benchmarkColors`/`barColors`）定为 `ChartTheme` 常量、随主题切换整组替换。
+
+- **core 反向依赖纳入分层机检并登记（rf-1210）**：`check-import-surface` 的 `layer-inversion` 规则集覆盖 `core`——最底层经函数内延迟导入取数层属探针职责，允许但要逐处登记；`core/check_sources.py` 的 4 个目标模块（5 处调用）登记进 `scripts/_import_surface_exceptions.json` 并带到期日与收敛方向（探针注册表）；`technical.md` §9 同步 core 行、例外行与探针说明。
+
 - **自检的缓存目录探针取缓存层唯一解析器（rf-1205）**：`core/doctor.py` 的目录探针把「缓存目录」交给 `cache.get_cache_dir()` 解析——`INVEST_CACHE_DIR` 覆盖（演示/基准运行的缓存隔离入口）生效时，自检上屏的路径、哨兵文件的写入目录就是实际生效目录，隔离 run 的探针不触碰真实 `data/cache`。补 1 条回归（隔离目录下上屏路径 = 解析器结果、哨兵落在隔离目录、真实 `data/cache` 无哨兵残留）。
 
 - **日志配置缺省值单源（rf-1206）**：`core/logging_defaults.py` 承载唯一一张日志缺省值表（`DEFAULTS`/`LEVELS`/`RANGES`），`config/_logging.py` re-export 同一对象，`core/logger.py` 与 `core/doctor_logs.py` 从同包取用——「启动读取 / 面板校验 / 自检回显」三处取的是同一份事实；`_DEFAULT_TABLE_FILES` 的登记同步指向该文件。补 2 条回归（配置回落值等于缺省值表、`config._logging.DEFAULTS is core.logging_defaults.DEFAULTS`）。

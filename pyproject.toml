@@ -58,9 +58,16 @@ line-length = 120
 extend-exclude = [".venv", "docs"]
 force-exclude = true
 
+# 行内抑制只对**已启用**的规则生效：`# noqa: X` 里的 X 不在 `select` 内（或该文件被
+# per-file-ignores 忽略了 X）时，抑制是空转——由 RUF100（unused-noqa）当硬失败拦住。
+# 想说明「此处必须宽捕获 / 参数故意不用 / 注解暂缺」请写说明注释（「有意宽捕获：…」/
+# 「说明：…」），不要挂 noqa；宽异常捕获、未用参数、注解缺失的评审口径见
+# docs/managements/technical.md §8.7「代码质量口径」——BLE/ARG/ANN 未启用，靠人评审
+# 加行内理由，不靠 lint 兜（启用它们是数百处 finding 的重构，另行排期）。
 [tool.ruff.lint]
-# 显式声明基线选择项（等价于 ruff 默认集），避免默认集随版本升级静默漂移
-select = ["E4", "E7", "E9", "F"]
+# 显式声明基线选择项（等价于 ruff 默认集），避免默认集随版本升级静默漂移；
+# RUF100 恒开（见上段：抑制必须指向真在跑的规则）
+select = ["E4", "E7", "E9", "F", "RUF100"]
 
 [tool.ruff.lint.per-file-ignores]
 # E402 / F401：scripts/ 下入口先注入 sys.path 再导入同目录与项目模块，顺序不可重排；

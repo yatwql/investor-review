@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.18.7-dev
-> **编号源**：`rf-next = 1208`（新增问题提出后更新为 +1；已用最大 rf-1207，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1211`（新增问题提出后更新为 +1；已用最大 rf-1210，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -84,6 +84,12 @@
 | **rf-1205** | `core/doctor.py` 的目录探针把「缓存目录」硬编码为 `PROJECT_ROOT/data/cache`：缓存目录的唯一解析器是 `cache/_paths.py`（`INVEST_CACHE_DIR` 覆盖是演示/基准的缓存隔离入口），隔离 run 下自检探测并可能写入真实 `data/cache`，且上屏路径与实际生效目录不符（违反「缓存统一管理」架构约束：缓存目录只经缓存层解析器取得） | 探针内取 `from src.python.cache import get_cache_dir` 的解析结果（core→cache 属同层依赖，函数级导入即满足导入面契约），上屏路径与哨兵写入目录同源；补 1 条回归（隔离目录下上屏路径 = 解析器结果、哨兵落在隔离目录、真实 `data/cache` 无哨兵残留） |
 | **rf-1206** | 日志配置默认值三处镜像：`core/logger.py` 全量复制 7 项默认值、`core/doctor_logs.py` 另带 `or "INFO"`，而缺省值事实位 `config/_logging.py::DEFAULTS` 未登记进 `_DEFAULT_TABLE_FILES`（违反架构约束「配置默认值单源」）；core 侧不得导入 config（叶子模块边界守卫），单源须落在 core | 新增 `core/logging_defaults.py` 承载 `DEFAULTS`/`LEVELS`/`RANGES` 唯一事实位，`config/_logging.py` re-export 同一对象（config→core 为合法依赖方向），`core/logger.py` 与 `core/doctor_logs.py` 从同包取用，`_DEFAULT_TABLE_FILES` 登记该路径；补 2 条回归（配置回落值等于缺省值表、`config._logging.DEFAULTS is core.logging_defaults.DEFAULTS`） |
 | **rf-1207** | 三份同名 `_fmt_pct` 语义分叉：`report/decision_basis.py` 吃百分数点数（`%g`）、`report/event_impact_panel.py` 吃小数比例且带符号、`report/schedule_replay_panel.py` 吃小数比例不带符号且非数值直接抛 `ValueError`——同名不同义使调用点无法自证口径 | 抽出 `report/_format.py`，按口径分 `fmt_pct_points()` 与 `fmt_pct_fraction(value, *, signed=False)`，三处调用点按各自语义替换对应函数（既有输出字符串不变），非数值入参统一回「—」占位（取值失败按缺失呈现，不抛异常）；补 1 个单测覆盖 None/字符串/负数/0 边界 |
+| **rf-1208** | 抑制清单形似治理：`pyproject.toml` 的 `select` 只有 `E4`/`E7`/`E9`/`F`，而全树 316 处 `noqa` 规则引用里有一批指向根本没启用的规则（`BLE001` 70、`ANN001` 13、`ARG001` 13、`PERF203` 5、`ARG002` 2、`S603` 2、`B010` 2、`PLC0415` 1、`PLW0108` 1、`B017` 1、`S307` 1）——抑制等于空转；已启用规则上的失效/重复抑制（per-file-ignores 已覆盖的 `E402`、ruff 不触发的 `F401`/`F811`/`F821`）也没人回收，「有抑制」与「被管住」是两回事 | `select` 补 `RUF100`（落在未启用规则上的抑制即硬失败）；316 处 `noqa` 规则引用按性质三分：① 114 处（`BLE001` 70 / `ANN001` 13 / `ARG001` 13 / `PERF203` 5 / `ARG002` 2 / `D102` 4 / `S603` 2 / `B010` 2 / `PLC0415` 1 / `PLW0108` 1 / `B017` 1 / `S307` 1）改行内说明注释（`有意宽捕获：<失败后果与不窄化理由>` / `说明：<签名契约或入参对象>`）；② 6 个脚本门面的 200 个再导出名改由 `__all__` 声明（多行 import 的语句级 `# noqa: F401` 被 `RUF100` 判空转、删掉又会让 ruff 把再导出名整行删掉，故显式登记门面），行内 F401 抑制随之清零；③ 其余冗余/失效指令（`scripts/*.py` 已被 per-file-ignores 覆盖的 `E402`、已由 `__all__` 覆盖的 `F401`、未触发或未启用的 `F821`/`F811`/`E501`/`D400`）整条删除；5 处真 `E402`（`llm/api.py` 3、`report/html_writer.py` 1、`llm/skeleton.py` 1）保留抑制并补理由；`[tool.ruff.lint]` 上方写明「抑制只对启用规则生效」与评审口径落点，`BLE`/`ARG`/`ANN` 仍未启用（启用是数百处 finding 的重构，另行排期） |
+
+| **rf-1209** | `DESIGN.md` 的 Do-Don't #1 把「Chart 配置域」整域豁免裸色值、#10 又禁图表配置写颜色字面量：`src/static/chart-config.js` 的 `doughnutColors`/`benchmarkColors`（裸 hex 常量）正好落在两条规则之间——既能引 #1 豁免，又违反 #10 | #1 收紧为「仅 token 兜底默认值豁免」（`cssVar('--chart-*', fallback)` 的 fallback、`ChartTheme` 调色板常量、页内脚本 `|| '#…'` 兜底值）+ 双主题 override 块；#10 写明模板与页内脚本取值一律经 `window.ChartTheme`（半透明填充由 `.alpha()` 派生）；补 #13 把分类调色板（`doughnutColors`/`benchmarkColors`/`barColors`）定为 `ChartTheme` 常量、随主题切换整组替换 |
+
+| **rf-1210** | `core/check_sources.py` 的 5 处函数内反向 import（`fetcher.report_adapters` 两处、`providers.cninfo`、`providers.utils`、`providers.akshare_extras`），而 `check-import-surface` 的 `layer-inversion` 规则集不含 `core` ⇒ 最底层的反向上依赖既不被机检拦、也不在例外表登记，`technical.md` 只留一句「不入例外表」的口头豁免 | `layer-inversion` 规则集补 `core → fetcher/providers/analysis/report/llm/tui/web/cli`（允许函数内延迟导入的探针面，逐处登记）；4 条目标模块（覆盖 5 处调用）登记进 `scripts/_import_surface_exceptions.json`（探针须在链外直呼源实现、按源侧口径区分负缓存与真失败，带到期日与收敛方向「探针注册表」）；`technical.md` §9 同步 core 行、例外行与探针说明，§8.7 新增代码质量口径 |
+
 
 ### 归档档案
 - [`archived_review-findings.0.18.x.md`](../archive/v0.18.x/archived_review-findings.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-19）

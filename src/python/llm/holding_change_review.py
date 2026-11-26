@@ -98,7 +98,7 @@ def run_holding_change_review(
             llm_config=llm_config,
             purchase_constraint_block=purchase_constraint_block,
         )
-    except Exception as e:  # noqa: BLE001 — 归因失败不得影响主内容（报告照常产出）
+    except Exception as e:  # 有意宽捕获：归因失败不得影响主内容（报告照常产出）
         logger.warning("持仓变动复盘归因调用异常（不影响主内容）: %s", e)
         _register_skip_reason(f"归因调用异常：{e}")
         return False
@@ -123,7 +123,7 @@ def _build_signal_window_block(contract: dict[str, Any]) -> str:
         if not signal_ledger.is_active():
             return ""
         signals = signal_ledger.load_signals() or []
-    except Exception:  # noqa: BLE001 — 信号块缺席不影响归因主体
+    except Exception:  # 有意宽捕获：信号块缺席不影响归因主体
         logger.debug("窗口信号块构建失败（忽略）", exc_info=True)
         return ""
 
@@ -173,7 +173,7 @@ def _register_skip_reason(reason: str) -> None:
         from src.python.llm.prompts import LLM_MODULE_FAILURE
 
         LLM_MODULE_FAILURE[HOLDING_CHANGE_MODULE_KEY] = reason
-    except Exception:  # noqa: BLE001 — 登记失败不影响主流程
+    except Exception:  # 有意宽捕获：登记失败不影响主流程
         logger.debug("[holding_change_review] 失败原因登记失败", exc_info=True)
 
 

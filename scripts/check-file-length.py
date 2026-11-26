@@ -41,7 +41,7 @@ from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享模块（_checklib）
-from _shared.checklib import MANAGEMENTS_DIR, REPO_ROOT, add_common_args, rel, report  # noqa: E402
+from _shared.checklib import MANAGEMENTS_DIR, REPO_ROOT, add_common_args, rel, report
 
 # ── 阈值与检查域 ──────────────────────────────────────────────
 

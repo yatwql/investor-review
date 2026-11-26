@@ -76,6 +76,7 @@
   - [8.4 LLM 集成层约束](#84-llm-集成层约束)
   - [8.5 基础设施约束](#85-基础设施约束)
   - [8.6 测试约束](#86-测试约束)
+  - [8.7 代码质量口径（宽异常捕获 / 未用参数 / 注解缺失）](#87-代码质量口径宽异常捕获--未用参数--注解缺失)
 - [9. 导入面所有权](#9-导入面所有权)
   - [9.1 模块门面 re-export 面与退出条件](#91-模块门面-re-export-面与退出条件)
   - [9.2 形状容错归属（第三方变体 / 本方输入 / 本方旧结构）](#92-形状容错归属第三方变体--本方输入--本方旧结构)
@@ -3954,6 +3955,18 @@ web/ (Web 服务层，薄入口)
 | **C12** | **边缘测试文件隔离** — `@pytest.mark.edge` 标记的测试用例必须放置在 `*_edge.py` 文件中，不得与普通测试混放在同一文件 | edge 场景测试对运行环境有特殊要求（预期失败、网络不可达等），混放会导致普通测试运行被 edge 场景的 fixture 干扰 | 测试收集失败、`pytest_collection_modifyitems` 校验报错 | src/test/ 边缘测试文件 |
 | **C13** | **测试敏感路径隔离** — 运行测试时不得修改用户的配置文件（`data/config/`）、持仓文件（`data/holdings/`）、机器本地状态（`data/state/`）等敏感数据；`conftest.py` 的 `_isolate_sensitive_paths` autouse fixture 会自动将 `config.json`、`local_state.json`、缓存目录等重定向到临时目录 | 测试污染用户数据导致不可逆的配置丢失或持仓文件损坏 | 用户数据被污染、配置丢失 | src/test/ 所有测试用例 |
 
+### 8.7 代码质量口径（宽异常捕获 / 未用参数 / 注解缺失）
+
+lint 基线只有 `E4`/`E7`/`E9`/`F` + `RUF100`（`pyproject.toml` 的 `[tool.ruff.lint]`）：`BLE001`（宽捕获）、`ARG001`/`ARG002`（未用参数）、`ANN001`（缺注解）**不在** `select` 内，这三类因此只能是**评审口径**——靠行内一行理由交代清楚，不能靠 `# noqa` 假装被机检管住（落在未启用规则上的抑制由 `RUF100` 判死；启用 `BLE/ARG/ANN` 是数百处 finding 的重构，另行排期）。
+
+| 类别 | 允许的形态 | 行内须交代 | 禁止 |
+|:--|:--|:--|:--|
+| 宽异常捕获 | 降级边界（单源/单图/单项/单批失败不影响主链路）的 `except Exception` | 「有意宽捕获：<失败后调用方看到什么、为什么不窄化>」 | 在主链路上宽捕获掩盖缺陷；吞 `BaseException`（自检与测试收集除外） |
+| 未用参数 | 签名契约：回调、链层 `getattr` 调用、公开 API、测试桩须与对端签名一致 | 「说明：<对齐的是哪一方签名>」 | 为消警告改名 `_x` 破坏对端契约；留无契约依据的死参数 |
+| 注解缺失 | 内部助手入参为运行时取值对象（结构化协议、无共同基类，或注解会引入导入环） | 「说明：<入参是什么对象、为何暂不注解>」 | 公开函数缺注解；用 `Any` 顶替真实类型 |
+
+**收敛方向**：宽捕获密集处（如 `core/doctor.py` 的体检分组）优先收成「边界函数 + 显式结果类型」，把宽捕获收到一处；新增代码按上表交代，评审以「行内理由是否说清失败后果」为准。
+
 [↑ 回到顶部](#目录)
 
 ---
@@ -3978,7 +3991,7 @@ web/ (Web 服务层，薄入口)
 | LLM 响应解析 | `llm/_api_responses.py` | `llm/api_base.py` 公共 API | llm / report | 公共常量/函数保留；内部 helper 直接导入 owner |
 | Web 生成 / 健康路由 | `web/run_generation.py`、`web/handlers_health.py` | `web/handlers.py` 仅路由聚合 | web / tests | 测试 patch 指向 owner；门面不再转出私有实现 |
 
-**存量分层例外（`analysis`/`fetcher`/`providers` 反向依赖上层，冻结不新增）**：`check-import-surface` 的 `layer-inversion` 规则拦截**新增**越界（规则覆盖 `analysis → report/llm`、`fetcher → report/llm/analysis`、`providers → report/llm/analysis`、`report/llm → tui/web/cli`、`cache → report/llm/tui/web/cli`、`config → report/llm/analysis/tui/web/cli`）；下列存量经例外表登记（`scripts/_import_surface_exceptions.json`，含到期日与收敛方向），到期须下沉或续期并复核理由：
+**存量分层例外（`core`/`analysis`/`fetcher`/`providers` 反向依赖上层，冻结不新增）**：`check-import-surface` 的 `layer-inversion` 规则拦截**新增**越界（规则覆盖 `core → fetcher/providers/analysis/report/llm/tui/web/cli`（`core` 是最底层：仅允许**函数内延迟导入**的探针面，逐处登记）、`analysis → report/llm`、`fetcher → report/llm/analysis`、`providers → report/llm/analysis`、`report/llm → tui/web/cli`、`cache → report/llm/tui/web/cli`、`config → report/llm/analysis/tui/web/cli`）；下列存量经例外表登记（`scripts/_import_surface_exceptions.json`，含到期日与收敛方向），到期须下沉或续期并复核理由：
 
 | 违规文件 | 被依赖的上层模块 | 暂不下沉的理由 | 收敛方向 |
 |:---|:---|:---|:---|
@@ -3993,13 +4006,15 @@ web/ (Web 服务层，薄入口)
 | `cache/_cache_refresh.py` | `report.news_correlation` | 新闻预热复用报告侧行业关键词扩展（同一口径），实现居 report | 把行业关键词扩展下沉 core（如 core/news_keywords.py），预热与报告共同消费 |
 | `cache/_cache_refresh.py` | `report.fund_style_classify` | 基金风格扩展数据预取复用报告侧装配 | 风格扩展取数原语下沉 core/fetcher，报告只做装配 |
 | `cache/operations.py` | `report.market_value` | 刷新后判定交易日与市值构成需复用报告侧市值核算原语 | 市值核算与价格类型判定下沉 core（交易日原语已下沉，剩余为市值派生） |
+| `core/check_sources.py` | `fetcher.report_adapters`<br>`providers.cninfo`<br>`providers.utils`<br>`providers.akshare_extras` | 数据源健康检查须在链外直呼各源实现才测得到真实连通性（链路自带重试/降级），且探针要按源侧口径区分「负缓存跳过」与「本轮真失败」 | 探针面收成 core 侧探针注册表（各取数层追加注册探测函数），失败原因与负缓存判定原语下沉 core |
 | `config/_llm_providers.py` | `llm.pacing` | 线路配置落盘后需即时注册端点节流策略 | LLM 侧提供注册回调，config 只发配置事件（不直接调 llm） |
 | `config/_validation_llm.py` | `llm.depth_profile` | 思考档位枚举与默认值由 llm 侧单一真源提供 | 档位枚举下沉 core/config 注册表（llm 反向引用） |
 | `config/_validation_sections.py` | `analysis.drawdown_events` | 回撤窗口下限绑定分析层最少交易日常量 | 把 MIN_SPAN 常量下沉 core/constants（分析层再导出） |
 | `config/_validation_sections.py` | `analysis.fee_schedule_model` | 费率表校验复用分析层费率阶梯建模（同一口径） | 费率阶梯纯解析下沉 core/fee_schedule，分析与配置共同消费 |
 
 > 另：`core/check_sources.py` 直连 `providers/`/`fetcher/` 属**探针模块职责**（连通性检查必须在链外直呼各源），
-> 不入本规则例外表，理由记在模块 docstring；新增探针源时保持同一形态。
+> 形态上是 `core` 行的函数内反向依赖：**允许但必须逐处登记**例外表（`owner`/`reason`/`expiry`/`replacement`），
+> 判定理由同时记在模块 docstring；新增探针源时保持同一形态并补登记。
 
 **登记例外**（保留理由见代码注释与 `check-import-surface` 的例外登记口径）：
 
@@ -4014,9 +4029,9 @@ web/ (Web 服务层，薄入口)
 - `core.doctor` ↔ `core.doctor_logs`：自检入口与日志/缓存探针分组互引，`doctor` 在模块底部延迟导入以避开导入期环。
 - `llm.api` ↔ `llm._api_claude` / `_api_openai` / `_api_gemini`：API 分派根据 provider 名调用实现，实现共用 `api_base` 原语；新增 provider 时不得让实现反向导入 `llm.api`。
 
-**`noqa: F401` 保留口径**：包级公共聚合面（`analysis/__init__.py`、`core/registry.py`、`llm/__init__.py`、`llm/fact_checker/__init__.py`）的公开 API 再导出；动态调度面（`providers/sina.py` 的 K 线函数供 chain 按 provider 名 `getattr`）；显式副作用/类型导入。新增 `noqa: F401` 须在行内写明理由；测试私有导入只允许指向 owner。
+**再导出面声明口径**：包级公共聚合面与脚本门面（`scripts/` 下测试按脚本名访问的`check-doc-drift.py`/`check-doc-traces.py`/`perf-history.py`/`release.py`/`test-perf-report.py`/`_traces_code/patterns.py`）的再导出一律用 `__all__` 声明（再导出即公开面，增删门面名只改一处）——多行 import 上的语句级 `# noqa: F401` 会被 `RUF100` 判空转；**`noqa: F401` 保留口径**：包级公共聚合面（`core/registry.py`、`llm/__init__.py`、`llm/fact_checker/__init__.py`）的公开 API 再导出；动态调度面（`providers/sina.py` 的 K 线函数供 chain 按 provider 名 `getattr`）；显式副作用/类型导入。新增 `noqa: F401` 须在行内写明理由；测试私有导入只允许指向 owner。**抑制只对启用规则生效**（`select` 含 `RUF100`，未启用规则上的抑制即判死）：已由 `__all__` 显式再导出、ruff 不再报 `F401` 的聚合面（如 `analysis/__init__.py`）不挂 noqa；同理宽捕获/未用参数/缺注解不用 noqa 兜，写说明注释（口径见 §8.7）。
 
-**机检**：`scripts/check-import-surface.py`（守护清单成员，规则 compat-comment / private-all / cross-private / dynamic-target + exception-table）；包 `__all__` 私有名、兼容注释、跨包私有导入当前
+**机检**：`scripts/check-import-surface.py`（守护清单成员，规则 compat-comment / private-all / cross-private / dynamic-target / layer-inversion + exception-table）；包 `__all__` 私有名、兼容注释、跨包私有导入当前
 
 ### 9.1 模块门面 re-export 面与退出条件
 

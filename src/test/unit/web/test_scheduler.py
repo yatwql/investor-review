@@ -252,7 +252,7 @@ class TestFiredLedger:
             try:
                 for _ in range(20):
                     scheduler_mod._save_fired(dict(dates))
-            except BaseException as exc:  # noqa: BLE001 — 线程内异常需带回主线程断言
+            except BaseException as exc:  # 有意宽捕获：线程内异常需带回主线程断言
                 errors.append(exc)
 
         writers = [threading.Thread(target=_write) for _ in range(3)]

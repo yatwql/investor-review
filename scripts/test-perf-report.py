@@ -49,7 +49,7 @@ _PHASE1_STOCK_COUNT = 20  # Phase1/2 股票取样数（场外基金另见 SAMPLE
 _PHASE3_STOCK_COUNT = 50  # Phase3 压力股票取样数（须 ≤ len(SAMPLE_STOCKS)，否则被样本池截断）
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享包（_perf_report）
-from _perf_report.report import (  # noqa: E402, F401 — 报告渲染下沉，原面 re-export
+from _perf_report.report import (  # 报告渲染下沉，原面 re-export
     _TARGET_FULL_SECONDS,
     _TARGET_SECONDS,
     PerfSample,
@@ -58,6 +58,13 @@ from _perf_report.report import (  # noqa: E402, F401 — 报告渲染下沉，�
     _verdict,
     write_perf_report,
 )
+
+#: 测试与台账脚本按本模块名访问的再导出面（实现见对应子模块）
+__all__ = [
+    "_size_text",
+    "_test_time_text",
+    "_verdict",
+]
 
 
 # ── 离线策略：传输层离线 + 咽喉桩 ────────────────────

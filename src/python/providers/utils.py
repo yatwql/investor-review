@@ -258,7 +258,7 @@ def run_with_timeout(
             on_retry=_on_retry,
             sleep=time.sleep,
         )
-    except BaseException:  # noqa: BLE001 — 默认吞异常返回 None（与原行为一致）
+    except BaseException:  # 有意宽捕获：默认吞异常返回 None（与原行为一致）
         if raise_on_failure:
             raise  # 链路消费方：只有异常才能被识别为传输级失败（同源重试 + 熔断计数）
         return None

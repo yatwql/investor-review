@@ -23,15 +23,15 @@ if TYPE_CHECKING:  # ReportResult 定义在编排门面，运行期从生成入�
     from src.python.report.orchestrator import ReportResult
 from src.python.core.decision_header import strip_structured_header
 from src.python.report.progress import ProgressReporter
-from src.python.report._report_output import (  # noqa: F401  # 产物落盘子模块（消费方在本门面，patch 点不变）
+from src.python.report._report_output import (  # 产物落盘子模块（消费方在本门面，patch 点不变）
     _generate_full_excel_report,
     _generate_full_html_report,
 )
 
 # ── 子模块 re-export ────────────────────────────────────
 from src.python.report._chart_dataset_factory import _build_chart_datasets_for_report  # noqa: F401
-from src.python.report._full_risk_metrics import _prepare_full_risk_metrics  # noqa: F401
-from src.python.report._report_health import _collect_health_checks, _spawn_health_checks  # noqa: F401
+from src.python.report._full_risk_metrics import _prepare_full_risk_metrics
+from src.python.report._report_health import _collect_health_checks, _spawn_health_checks
 from src.python.report.run_integrity import bind_health, bind_perf
 from src.python.report._generation_shared import _record_llm_context
 from src.python.report._report_helpers import (  # noqa: F401

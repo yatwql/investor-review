@@ -323,7 +323,7 @@ _COMPILED_IDENTIFIER_PATTERNS: list[tuple[re.Pattern[str], str, str]] = [
 
 # ── 行级豁免表（原面 re-export：测试与调用方仍按 `_traces_code.patterns` 访问）──
 # 实现位于同包 `exemptions.py`——本模块只管「匹配什么」，豁免策略集中在那边。
-from _traces_code.exemptions import (  # noqa: E402, F401
+from _traces_code.exemptions import (
     EXCLUDE_LINE,
     TEST_META_EXCLUDE,
     _COMPILED_DASH_EXCLUDE,
@@ -339,3 +339,21 @@ from _traces_code.exemptions import (  # noqa: E402, F401
     _magic_excludes,
     _under_excludes,
 )
+
+#: 测试与台账脚本按本模块名访问的再导出面（实现见对应子模块）
+__all__ = [
+    "EXCLUDE_LINE",
+    "TEST_META_EXCLUDE",
+    "_COMPILED_DASH_EXCLUDE",
+    "_COMPILED_EXCLUDE",
+    "_COMPILED_MAGIC_EXCLUDE",
+    "_COMPILED_UNDER_EXCLUDE",
+    "_TEST_META_COMPILED",
+    "_dash_excludes",
+    "_is_dash_excluded",
+    "_is_excluded",
+    "_is_magic_match_excluded",
+    "_is_under_excluded",
+    "_magic_excludes",
+    "_under_excludes",
+]

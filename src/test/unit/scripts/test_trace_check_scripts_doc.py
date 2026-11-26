@@ -11,8 +11,8 @@ import pytest
 from src.test.unit.scripts.test_trace_check_scripts import (
     code_traces,  # noqa: F401
     doc_traces,  # noqa: F401
-    _doc_cat,  # noqa: F401
-    _doc_hit,  # noqa: F401
+    _doc_cat,
+    _doc_hit,
 )
 
 pytestmark = [

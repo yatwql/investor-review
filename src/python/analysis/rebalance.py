@@ -48,7 +48,7 @@ from src.python.core.code_utils import (
 from src.python.config import get_config, get_default
 from src.python.core.trading_calendar import count_trading_days_elapsed
 
-from ._rebalance_deviation import (  # noqa: E402
+from ._rebalance_deviation import (
     compute_target_deviation,
     equity_fixed_income_deviation,
     compute_rebalance_signals,

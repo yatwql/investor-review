@@ -337,7 +337,7 @@ def report_degradation_summary(max_items: int = 3) -> dict[str, Any]:
     """
     try:
         events = [e for e in get_tracker().get_log() if e.get("degraded")]
-    except Exception:  # noqa: BLE001
+    except Exception:  # 有意宽捕获（不窄化：降级日志读取失败按「无事件」返回，提示栏不因此中断）
         return {"count": 0, "events": 0, "lines": [], "text": ""}
     counter: dict[tuple[str, str], int] = {}
     for event in events:

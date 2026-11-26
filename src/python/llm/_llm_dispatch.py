@@ -96,7 +96,7 @@ def run_holding_change_in_worker(
             purchase_constraint_block=purchase_constraint_block,
             http_client=http_client,
         )
-    except Exception:  # noqa: BLE001 — 归因失败不得影响主内容
+    except Exception:  # 有意宽捕获：归因失败不得影响主内容
         logger.warning("持仓变动复盘归因并行调度异常（不影响主内容）", exc_info=True)
         return (None, False)
     return ("ok" if ok else None, False)
@@ -350,7 +350,7 @@ def _run_workers(
                 key = futures[future]
                 results_dict[key] = {"result": result, "cached": from_cache}
                 _log_module_outcome(key, result, label_map, budget_skipped)
-            except Exception:  # noqa: PERF203
+            except Exception:  # 说明：逐 future 容错，单线程异常只记日志并继续收集其余结果
                 logger.warning("LLM 生成线程异常", exc_info=True)
 
     _log_dispatch_tail(budget_skipped, label_map, thinking_limit)

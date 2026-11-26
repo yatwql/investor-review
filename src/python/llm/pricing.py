@@ -59,7 +59,7 @@ def _load_timezone(name: str) -> Any:
         from zoneinfo import ZoneInfo
 
         return ZoneInfo(name)
-    except Exception:  # noqa: BLE001 — 时区加载失败属非致命降级，任意异常均可接受
+    except Exception:  # 有意宽捕获：时区加载失败属非致命降级，任意异常均可接受
         return None
 
 
@@ -204,7 +204,7 @@ def _is_holiday(at_time: datetime | None) -> bool:
         if not trading_days:
             return False  # 无日历缓存：降级为不认定节假日（日历缺失不阻断计价）
         return date.strftime("%Y-%m-%d") not in set(trading_days)
-    except Exception:  # noqa: BLE001 — 交易日历不可用时降级为不认定节假日，不影响计价
+    except Exception:  # 有意宽捕获：交易日历不可用时降级为不认定节假日，不影响计价
         return False
 
 

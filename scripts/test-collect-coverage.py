@@ -32,24 +32,24 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 _SCRIPTS_DIR = Path(__file__).resolve().parent
-if str(_SCRIPTS_DIR) not in sys.path:  # noqa: E402
+if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))  # 同目录共享模块（_test_runner）
 
-from _test_runner.modes import (  # noqa: E402
+from _test_runner.modes import (
     MODES,
     UNIT_DOMAIN_LABELS,
     compile_marker_expr,
     mode_marker_expr,
 )
-from _shared.checklib import rel  # noqa: E402
-from _doc_drift._format import (  # noqa: E402
+from _shared.checklib import rel
+from _doc_drift._format import (
     _COUNT_CELL,
     _COUNT_NAME_ALIAS,
     _DOMAIN_LABEL_TO_MARKER,
     _TEST_COVERAGE_DOMAIN_ROW,
     _TEST_COVERAGE_ROW,
 )
-from _doc_drift._shared import (  # noqa: E402
+from _doc_drift._shared import (
     _FOLDERS_MD,
     _TEST_COVERAGE_MD,
     _split_table_row,

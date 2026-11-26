@@ -29,7 +29,9 @@ def _reader(sequence: list[str | None]):
     """可控行输入桩：按序弹出预设输入（耗尽后返回 None 结束循环）。"""
     it = iter(sequence)
 
-    def _read(prompt: str, arrows: bool = False) -> str | None:  # noqa: ARG001
+    def _read(
+        prompt: str, arrows: bool = False
+    ) -> str | None:  # 说明：桩函数签名须与运行时 read 回调一致（prompt/arrows 由运行时传入，桩内不用）
         return next(it, None)
 
     return _read
@@ -65,7 +67,9 @@ class TestPanelLoopGuardBranches:
         """未注入 read 时回落模块级 ``input_choice``（Esc 返回即退出）。"""
         seen: list[str] = []
 
-        def _fake_input_choice(prompt: str, arrows: bool = False) -> str | None:  # noqa: ARG001
+        def _fake_input_choice(
+            prompt: str, arrows: bool = False
+        ) -> str | None:  # 说明：桩函数签名须与运行时 read 回调一致（prompt/arrows 由运行时传入，桩内不用）
             seen.append(prompt)
             return None
 

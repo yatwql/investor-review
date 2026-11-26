@@ -39,7 +39,9 @@ def _record_block_failure(full_code: str, body: str) -> None:
     get_registry().record_failure("sina", f"kline:block_page:{full_code}")
 
 
-def fetch_kline(code: str, days: int = 30, start_from: str | None = None) -> list[dict]:  # noqa: ARG001 — 签名契约：chain 层经 getattr 无条件传 start_from=
+def fetch_kline(
+    code: str, days: int = 30, start_from: str | None = None
+) -> list[dict]:  # 说明：签名契约——chain 层经 getattr 无条件传 start_from
     """获取股票/ETF 历史 K 线数据（纯获取，Tencent 备用链路）。
 
     Endpoint: money.finance.sina.com.cn/getKLineData
@@ -75,7 +77,7 @@ def fetch_kline(code: str, days: int = 30, start_from: str | None = None) -> lis
     logger.debug("Sina K 线请求: %s, days=%d", full_code, days)
 
     # lazy import: 通过 sina 模块引用 make_http_client, 使现有测试 patch 生效
-    from src.python.providers import sina as _sina_mod  # noqa: E402
+    from src.python.providers import sina as _sina_mod
 
     try:
         with _sina_mod.make_http_client(timeout=_KLINE_TIMEOUT) as client:
@@ -97,7 +99,9 @@ def fetch_kline(code: str, days: int = 30, start_from: str | None = None) -> lis
     return _parse_kline_json(data)
 
 
-def fetch_index_kline(code: str, days: int = 30, start_from: str | None = None) -> list[dict]:  # noqa: ARG001 — 签名契约：chain 层经 getattr 无条件传 start_from=
+def fetch_index_kline(
+    code: str, days: int = 30, start_from: str | None = None
+) -> list[dict]:  # 说明：签名契约——chain 层经 getattr 无条件传 start_from
     """获取指数历史 K 线数据（备用链路）。
 
     与 fetch_kline() 的区别：
@@ -122,7 +126,7 @@ def fetch_index_kline(code: str, days: int = 30, start_from: str | None = None) 
         保留此实现作为代码级备用；环境恢复后自动生效。
     """
     # lazy import：sina.make_http_client 仍由测试 patch 替换，不缓存函数引用
-    from src.python.providers import sina as _sina_mod  # noqa: E402
+    from src.python.providers import sina as _sina_mod
 
     if not is_index_code(code):
         logger.debug("Sina 跳过非指数代码: %s", code)

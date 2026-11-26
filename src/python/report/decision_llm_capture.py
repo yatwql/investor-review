@@ -295,7 +295,7 @@ def register_llm_decisions(
         return {"registered": 0, "ids": []}
     try:
         rows = extract_llm_decisions(expert_review_html, holdings_details)
-    except Exception as exc:  # noqa: BLE001 — 解析兜底：LLM 文本异常不得中断报告生成
+    except Exception as exc:  # 有意宽捕获：解析兜底——LLM 文本异常不得中断报告生成
         logger.info("[decision_llm_capture] 解析兜底跳过本次登记: %s: %s", type(exc).__name__, exc)
         return {"registered": 0, "ids": []}
     ids: list[str] = []

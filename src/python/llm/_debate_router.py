@@ -124,7 +124,7 @@ def install_debate_route(
             logger.warning("[debate] pro/con 失败，回退普通生成")
             _clear_debate_info()
             return original(client, llm_config)
-        except Exception:  # noqa: BLE001 — 辩论整段失败不得拖垮 expert_review
+        except Exception:  # 有意宽捕获：辩论整段失败不得拖垮 expert_review
             logger.warning("[debate] 异常，回退普通生成", exc_info=True)
             _clear_debate_info()
             return original(client, llm_config)

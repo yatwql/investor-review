@@ -17,7 +17,7 @@ from typing import Any
 
 
 # 建议执行态与校验器：单源在 core（analysis 与 llm 两侧共用，避免跨层反向依赖）
-from src.python.core.recommendation_policy import (  # noqa: F401  (转出给既有导入面)
+from src.python.core.recommendation_policy import (  # (转出给既有导入面)
     EXECUTION_BLOCKED,
     EXECUTION_CONDITIONAL,
     EXECUTION_NOT_APPLICABLE,

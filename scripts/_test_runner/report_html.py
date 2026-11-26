@@ -6,7 +6,7 @@ import os
 
 from _test_runner.paths import _LATEST_DIR, _REPORTS_DIR
 from _test_runner.modes import MODES
-from src.python.core.constants import APP_NAME  # noqa: E402
+from src.python.core.constants import APP_NAME
 from datetime import datetime
 
 

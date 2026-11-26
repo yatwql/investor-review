@@ -20,7 +20,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from src.python.config import get_config
-from src.python.config import normalize_schedule_block, validate_schedule_block  # noqa: F401 — 面板与测试经本模块导入
+from src.python.config import normalize_schedule_block, validate_schedule_block  # 面板与测试经本模块导入
 from src.python.core.atomic_write import write_json_atomic
 from src.python.core.constants import PROJECT_ROOT
 

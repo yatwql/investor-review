@@ -25,7 +25,7 @@ from ._ttl import get_ttl
 
 #: 全量实例清单（模块级注册顺序即日志输出顺序）：供「一轮开始清零」与「报告级汇总」枚举，
 #: 新增一类负缓存只需在此登记，不再各自维护 lock/counter/reset 样板。
-_REGISTRY: list[NegativeCache] = []  # type: ignore[name-defined]  # noqa: F821 — 先声明后填充
+_REGISTRY: list[NegativeCache] = []  # type: ignore[name-defined]  # 先声明后填充
 _REGISTRY_LOCK = threading.Lock()
 
 

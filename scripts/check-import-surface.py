@@ -8,7 +8,8 @@
   private-all 公共 __all__  包 `__init__.py` 的 `__all__` 含 `_` 私有名
   cross-private 跨包私有导入  跨包 `from src.python.<pkg>._x import ...`（同包与测试私有导入除外）
   dynamic-target 动态导入字面量 `importlib.import_module("...")` 的直接字符串目标不可解析
-  layer-inversion 分层越界      analysis 层（纯计算）import `report/` 或 `llm/`（须改由 `core/` 提供共用面）
+  layer-inversion 分层越界      `core` 函数内反向依赖 `fetcher`/`providers`/…（探针面，逐处登记）；
+                            `analysis` 层（纯计算）import `report/` 或 `llm/`（须改由 `core/` 提供共用面）
   exception-table 例外表自审   每条例外须齐 owner/reason/expiry/replacement；`expiry` 到期即
                             finding（续期须显式改日期并复核理由），且登记项须仍命中违规
                             （规则已修复却留着例外 → 腐化成永久豁免，须清理）
@@ -39,7 +40,7 @@ from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _shared.checklib import REPO_ROOT, add_common_args, rel, report  # noqa: E402
+from _shared.checklib import REPO_ROOT, add_common_args, rel, report
 
 PY_ROOT = REPO_ROOT / "src" / "python"
 EXCEPTIONS_FILE = Path(__file__).resolve().parent / "_import_surface_exceptions.json"
@@ -216,6 +217,9 @@ def scan_dynamic(root: Path = PY_ROOT, exceptions=None) -> list[str]:
 
 #: 分层越界规则（层 → 禁止依赖的上层模块）：上层单向依赖下层，两侧共用的业务约束下沉 `core/`
 _LAYER_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    # `core` 是最底层：数据源探针需要在链外直呼具体源实现（见 check_sources.py），
+    # 属允许的**函数内**反向依赖，逐处登记例外表；新增探针源走同一形态并补登记
+    ("core", ("fetcher", "providers", "analysis", "report", "llm", "tui", "web", "cli")),
     ("analysis", ("report", "llm")),
     ("fetcher", ("report", "llm", "analysis")),
     ("providers", ("report", "llm", "analysis")),
@@ -233,7 +237,8 @@ def scan_layer_inversion(root: Path = PY_ROOT, exceptions=None) -> list[str]:
     """layer-inversion：下层不得 import 上层模块（规则见 :data:`_LAYER_RULES`）。
 
     分层纪律：`core` → `fetcher`/`providers` → `analysis` → `report`/`llm` → `tui`/`web`/`cli`，
-    上层单向依赖下层。取数层（fetcher/providers）反向依赖 `report/`/`llm/`/`analysis/`
+    上层单向依赖下层。`core`（最底层）经**函数内**延迟导入取数层属探针职责，允许但须逐处
+    登记例外表；取数层（fetcher/providers）反向依赖 `report/`/`llm/`/`analysis/`
     与纯计算层（analysis）反向依赖 `report/`/`llm/` 同属越界；两侧共用的业务约束
     （观测登记面、派生原语）应下沉 `core/`（例：`core/recommendation_policy.py`、
     `core/trading_calendar.py`）。存量越界走例外表（`path` = 违规文件，`name` = 被

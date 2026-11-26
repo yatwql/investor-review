@@ -16,11 +16,11 @@ from typing import Any, NamedTuple
 from src.python.report.progress import ProgressReporter
 
 # ── 子模块 re-export ────────────────────────────────────
-from src.python.report._report_aux_metrics import (  # noqa: F401
+from src.python.report._report_aux_metrics import (
     compute_correlation_data,
     compute_market_temperature_data,
 )
-from src.python.report._report_factor_metrics import (  # noqa: F401
+from src.python.report._report_factor_metrics import (
     _fetch_holding_bars,
     compute_factor_exposure_data,
     compute_industry_beta_data,

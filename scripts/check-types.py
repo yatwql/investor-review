@@ -51,7 +51,7 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享模块（_shared）
-from _shared.checklib import REPO_ROOT, add_common_args, rel, report  # noqa: E402
+from _shared.checklib import REPO_ROOT, add_common_args, rel, report
 
 #: 默认受检路径（与 `[tool.pyright] include` 同域；CLI 传路径即覆盖）
 DEFAULT_TARGETS: tuple[str, ...] = ("src/python", "scripts")

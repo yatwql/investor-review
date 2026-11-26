@@ -21,7 +21,9 @@ def _reader(sequence: list[str | None]) -> Callable[..., str | None]:
     """可控行输入桩：按序弹出预设输入（None 模拟 Esc）；忽略 arrows 参数。"""
     it = iter(sequence)
 
-    def _read(prompt: str, arrows: bool = False) -> str | None:  # noqa: ARG001
+    def _read(
+        prompt: str, arrows: bool = False
+    ) -> str | None:  # 说明：桩函数签名须与运行时 read 回调一致（prompt/arrows 由运行时传入，桩内不用）
         return next(it, None)
 
     return _read
@@ -346,14 +348,18 @@ class TestPanelLoopExceptions:
     """退出/异常语义矩阵：Ctrl+C/EOF/render 异常原样上抛，运行时不吞。"""
 
     def test_read_eof_propagates(self):
-        def _boom(prompt: str, arrows: bool = False) -> str | None:  # noqa: ARG001
+        def _boom(
+            prompt: str, arrows: bool = False
+        ) -> str | None:  # 说明：桩函数签名须与运行时 read 回调一致（prompt/arrows 由运行时传入，桩内不用）
             raise EOFError
 
         with pytest.raises(EOFError):
             panel_loop(_simple_items([]), render=_render_blank, prompt="> ", read=_boom)
 
     def test_read_keyboard_interrupt_propagates(self):
-        def _boom(prompt: str, arrows: bool = False) -> str | None:  # noqa: ARG001
+        def _boom(
+            prompt: str, arrows: bool = False
+        ) -> str | None:  # 说明：桩函数签名须与运行时 read 回调一致（prompt/arrows 由运行时传入，桩内不用）
             raise KeyboardInterrupt
 
         with pytest.raises(KeyboardInterrupt):

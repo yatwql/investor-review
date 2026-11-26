@@ -51,7 +51,7 @@ def _trim_guard_ledger(target: Path) -> None:
         staging = target.with_name(target.name + ".tmp")
         staging.write_text("\n".join(kept) + "\n", encoding="utf-8")
         os.replace(staging, target)
-    except Exception:  # noqa: BLE001 — 台账非关键
+    except Exception:  # 有意宽捕获：台账非关键
         return
 
 
@@ -73,7 +73,7 @@ def record_guard_run(finding_count: int, details: dict[str, int] | None = None) 
         }
         with target.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(record, ensure_ascii=False) + "\n")
-    except Exception:  # noqa: BLE001 — 台账非关键，绝不影响检查结论
+    except Exception:  # 有意宽捕获：台账非关键，绝不影响检查结论
         return
 
 

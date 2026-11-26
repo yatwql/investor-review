@@ -67,7 +67,7 @@ def _get_llm_config() -> dict[str, Any]:
         from src.python.config import get_llm_config
 
         return get_llm_config() or {}
-    except Exception:  # noqa: BLE001 — 配置不可读属降级路径：按空配置继续
+    except Exception:  # 有意宽捕获：配置不可读属降级路径，按空配置继续
         logger.debug("[cost_forecast] LLM 配置读取失败，按空配置处理", exc_info=True)
         return {}
 
@@ -77,7 +77,7 @@ def _load_perf_history() -> list[dict[str, Any]]:
         from src.python.core.perf import load_history
 
         return load_history()
-    except Exception:  # noqa: BLE001 — 历史不可读 → 退回静态兜底，不阻塞预估
+    except Exception:  # 有意宽捕获：历史不可读 → 退回静态兜底，不阻塞预估
         logger.debug("[cost_forecast] perf 历史读取失败，按无历史处理", exc_info=True)
         return []
 
@@ -123,7 +123,7 @@ def _module_model(llm_config: dict[str, Any], module_key: str) -> str:
         chain_model, _ = _resolve_first_provider_model_endpoint(llm_config, module_key)
         if chain_model:
             return str(chain_model)
-    except Exception:  # noqa: BLE001 — 链路解析失败回退顶层默认，不阻塞预估
+    except Exception:  # 有意宽捕获：链路解析失败回退顶层默认，不阻塞预估
         logger.debug("[cost_forecast] 多链模型解析失败，回退顶层默认", exc_info=True)
     return str(llm_config.get("model") or "")
 
@@ -247,7 +247,7 @@ def is_feature_enabled_for_debate() -> bool:
 
     try:
         return bool(is_feature_enabled("llm_debate_procon"))
-    except Exception:  # noqa: BLE001 — 特性读取失败按关闭处理（预估安全方向由历史兜底）
+    except Exception:  # 有意宽捕获：特性读取失败按关闭处理（预估安全方向由历史兜底）
         return False
 
 

@@ -180,7 +180,7 @@ def load_factor_inputs(
 
     try:
         index_bars = impl["index"]()
-    except Exception as exc:  # noqa: BLE001 —— 备数阶段逐类型容错（不外抛）
+    except Exception as exc:  # 有意宽捕获：备数阶段逐类型容错（不外抛）
         index_bars = []
         logger.warning("[factor_catalog] 指数历史取数异常: %s", exc)
     if index_bars:
@@ -191,7 +191,7 @@ def load_factor_inputs(
     for code in codes:
         try:
             bars = impl["bars"](code)
-        except Exception as exc:  # noqa: BLE001 —— 备数阶段逐码容错
+        except Exception as exc:  # 有意宽捕获：备数阶段逐码容错
             bars = []
             logger.warning("[factor_catalog] %s 日K取数异常: %s", code, exc)
         if bars:
@@ -201,7 +201,7 @@ def load_factor_inputs(
 
         try:
             val = impl["valuation"](code)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # 有意宽捕获（不窄化：单只标的估值取数异常降级为空值，目录按其余标的继续装载）
             val = None
             logger.warning("[factor_catalog] %s 估值取数异常: %s", code, exc)
         if isinstance(val, dict) and any(value_present(v) for v in val.values()):
@@ -211,7 +211,7 @@ def load_factor_inputs(
 
         try:
             fin = impl["fin"](code)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # 有意宽捕获（不窄化：单只标的财务指标取数异常降级为空值，目录按其余标的继续装载）
             fin = None
             logger.warning("[factor_catalog] %s 财务指标取数异常: %s", code, exc)
         if isinstance(fin, dict) and any(value_present(v) for v in fin.values()):

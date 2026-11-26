@@ -148,10 +148,10 @@ def _embed_brand_mark(ws: Worksheet) -> None:
         img.width = img.height = _BRAND_MARK_PX
         # 两个私有属性经 setattr 写入：openpyxl 无公开接口做「保活流 / 倍增复用字节」，
         # 而静态类型桩把 Image 的属性集固定死了，直接赋值会被判为未知属性。
-        setattr(img, "_brand_stream", stream)  # noqa: B010 — 保活底层流
-        setattr(img, "_data", lambda _b=png_bytes: _b)  # noqa: B010 — 两次保存都返回同一份字节
+        setattr(img, "_brand_stream", stream)  # 说明：保活底层流
+        setattr(img, "_data", lambda _b=png_bytes: _b)  # 说明：两次保存都返回同一份字节
         ws.add_image(img, "A1")
-    except Exception as exc:  # noqa: BLE001 — 品牌标记失败不得影响报告产出
+    except Exception as exc:  # 有意宽捕获：品牌标记失败不得影响报告产出
         logger.debug("品牌标记嵌入跳过：%s", exc)
 
 

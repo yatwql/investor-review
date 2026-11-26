@@ -60,9 +60,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享模块（_checklib）
-from _shared.checklib import REPO_ROOT, add_common_args, rel, report  # noqa: E402
+from _shared.checklib import REPO_ROOT, add_common_args, rel, report
 
-from _guardrails.rules import (  # noqa: E402, F401 — 规则声明下沉，原面 re-export
+from _guardrails.rules import (  # 规则声明下沉，原面 re-export
     DESIGN_DOC,
     FONT_TIERS,
     RADIUS_TIERS,

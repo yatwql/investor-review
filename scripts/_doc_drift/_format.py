@@ -17,7 +17,7 @@ from src.python.config.features import (
 )
 from src.python.core.registry import _REPORT_SECTION_DEFAULT, get_cache_ttl_defaults, get_llm_module_names
 
-from src.python.fetcher.chain import _DEFAULT_CHAINS  # noqa: E402
+from src.python.fetcher.chain import _DEFAULT_CHAINS
 from _doc_drift._shared import (
     _CLAUDE_MD,
     _MANAGEMENTS,

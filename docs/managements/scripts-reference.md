@@ -912,6 +912,8 @@ sh .githooks/install-hooks.sh --off   # 停用
 4. **dynamic-target 动态导入字面量**：`importlib.import_module("字面量")` 的目标不可解析即 finding；变量形目标由 `test_check_import_surface.py` 的 smoke 覆盖。
 5. **exception-table 例外表自审**：每条须齐 `path / name / owner / reason / expiry / replacement`；`expiry`（`YYYY-MM-DD`）到期即 finding——续期须显式改日期并复核理由；登记项若已不再命中任何违规（规则早修好）也判 finding（`[exception-stale]`），防例外腐化成永久豁免。例外表解析失败同样按 finding 报（不以 traceback 窜出契约码域）。
 
+**门面脚本的再导出面一律写进 `__all__`**：多行 `from x import (...)` 的语句级 `# noqa: F401` 兜不住——`F401` 诊断落在名单行，抑制写在语句行时 `RUF100` 判「空转」；而删掉抑制 ruff 就把再导出名当未用导入整行删除。`scripts/` 下测试按脚本名访问的再导出面（`check-doc-drift.py` / `check-doc-traces.py` / `perf-history.py` / `release.py` / `test-perf-report.py` / `_traces_code/patterns.py`）用 `__all__` 声明：再导出即公开面，增删门面名只改这一处，行内不再挂 `# noqa: F401`。
+
 例外登记在 `scripts/_import_surface_exceptions.json`。已入域（守护清单成员）：本地由 pre-commit 在 `src/python/` 变更时并行触发（~1s），CI `guards` job 与 P2 门禁恒全量覆盖——观察期结束条件（真实树零 finding、零例外）已满足，误报为零故无须继续观察。
 
 **使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）

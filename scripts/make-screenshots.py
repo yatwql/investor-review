@@ -42,7 +42,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # scripts/ 与内部包导入面
 
-from _screenshots import demo_workspace, tui_frame, web_shot, xlsx_frame  # noqa: E402
+from _screenshots import demo_workspace, tui_frame, web_shot, xlsx_frame
 
 
 def _demo(_: argparse.Namespace) -> int:

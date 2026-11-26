@@ -289,7 +289,7 @@ def _logic_key() -> str:
     parts = [f"{sys.version_info[0]}.{sys.version_info[1]}"]
     try:
         parts.append(metadata.version("pytest"))
-    except Exception:  # noqa: BLE001 — 元数据缺失只降级为不等，偏向全量
+    except Exception:  # 有意宽捕获：元数据缺失只降级为不等，偏向全量
         parts.append("?")
     for src_file in (REPO_ROOT / "scripts" / "test-collect-coverage.py", Path(__file__)):
         try:

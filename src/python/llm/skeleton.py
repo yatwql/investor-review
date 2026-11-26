@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     import httpx
 
-from src.python.cache import get as cache_get  # noqa: F401
+from src.python.cache import get as cache_get
 from src.python.cache import set as cache_set
 from src.python.core.retry import STRATEGY_FIXED, RetryPolicy, retry_transient
 from src.python.config import get_llm_config, get_llm_setting_default
@@ -906,4 +906,4 @@ def generate_llm_module(
 
 
 # bridge import — run_batch_mode 批量处理入口
-from src.python.llm._batch_mode import run_batch_mode  # noqa: F811, E402, E501
+from src.python.llm._batch_mode import run_batch_mode  # noqa: E402 — 批量入口须置于模块末尾以规避循环导入

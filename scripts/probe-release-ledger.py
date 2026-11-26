@@ -37,8 +37,8 @@ from collections import defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 共享设施包（_shared/checklib）
-from _release._timing import read_ledger_records as _read_ledger  # noqa: E402 — 台账读取单一入口
-from _shared.checklib import REPO_ROOT  # noqa: E402
+from _release._timing import read_ledger_records as _read_ledger  # 台账读取单一入口
+from _shared.checklib import REPO_ROOT
 
 DEFAULT_LEDGER = REPO_ROOT / "logs" / "release.jsonl"
 

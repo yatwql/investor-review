@@ -36,7 +36,7 @@ from typing import Any
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # scripts/ 共享模块（_checklib）
-from _shared.checklib import add_common_args, rel, report  # noqa: E402
+from _shared.checklib import add_common_args, rel, report
 
 #: 文字色目标（README 架构图里的文本/强调色）
 _TEXT_COLORS: tuple[tuple[int, int, int], ...] = (

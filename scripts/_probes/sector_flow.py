@@ -49,7 +49,7 @@ def _probe_channel(name: str, fetch, count: int) -> tuple[int, list[str]]:
         except _SectorFlowUnavailable as exc:
             dt = (time.time() - t0) * 1000
             detail.append(f"[{i}] 不可用 {dt:5.0f}ms  {exc.kind}")
-        except Exception as exc:  # noqa: BLE001 — 诊断脚本需覆盖所有异常
+        except Exception as exc:  # 有意宽捕获：诊断脚本需覆盖所有异常
             dt = (time.time() - t0) * 1000
             detail.append(f"[{i}] 异常 {dt:5.0f}ms  {type(exc).__name__}: {exc}")
     return ok, detail

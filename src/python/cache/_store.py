@@ -177,5 +177,5 @@ def clear(key: str) -> None:
                 if os.path.exists(p):
                     os.remove(p)
                     logger.debug("缓存已清除: %s", key)
-            except OSError as e:  # noqa: PERF203
+            except OSError as e:  # 说明：逐条清缓存，单文件失败只告警并继续后续条目
                 logger.warning("缓存清除失败 %s: %s", key, e)

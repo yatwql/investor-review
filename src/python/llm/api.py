@@ -439,9 +439,9 @@ def call_llm(
 
 
 # ── Provider 调用实现（从子模块导入） ─────────────────
-from src.python.llm._api_claude import call_claude  # noqa: E402, F401
-from src.python.llm._api_openai import call_openai  # noqa: E402, F401
-from src.python.llm._api_gemini import call_gemini  # noqa: E402, F401
+from src.python.llm._api_claude import call_claude  # noqa: E402 — Provider 实现须排在分派定义之后
+from src.python.llm._api_openai import call_openai  # noqa: E402 — Provider 实现须排在分派定义之后
+from src.python.llm._api_gemini import call_gemini  # noqa: E402 — Provider 实现须排在分派定义之后
 
 __all__ = [
     "call_llm",

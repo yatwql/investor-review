@@ -53,7 +53,7 @@ def panel_prompt(
     return " · ".join(parts) + ": "
 
 
-def keys_help_lines(items, *, columns: int | None = None) -> list[str]:  # noqa: ANN001 - PanelItem 协议
+def keys_help_lines(items, *, columns: int | None = None) -> list[str]:  # 说明：入参为 PanelItem 协议对象
     """``?`` 无参帮助：本面板可用键与作用（含导航与返回口径）。
 
     Args:
@@ -73,7 +73,9 @@ def keys_help_lines(items, *, columns: int | None = None) -> list[str]:  # noqa:
     return lines
 
 
-def item_detail_lines(item, *, hint: str | None = None, columns: int | None = None) -> list[str]:  # noqa: ANN001
+def item_detail_lines(
+    item, *, hint: str | None = None, columns: int | None = None
+) -> list[str]:  # 说明：入参为 PanelItem 协议对象
     """``?N`` 单项详情：键、名称与可选说明。
 
     Args:

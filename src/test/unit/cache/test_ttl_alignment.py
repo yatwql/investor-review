@@ -18,7 +18,7 @@ import json
 
 import pytest
 
-from src.test.unit.cache._cache_fixtures import (  # noqa: E402 — 夹具导入置于 marker 后保持既有结构
+from src.test.unit.cache._cache_fixtures import (  # 夹具导入置于 marker 后保持既有结构
     pre_open_ts,
     write_cache,
     write_cache_at,

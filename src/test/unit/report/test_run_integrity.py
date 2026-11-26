@@ -329,7 +329,9 @@ class TestGuardRun(_RunContextBase):
         """正常返回 → 产出值原样透传，上下文已清空。"""
 
         @guard_run
-        def _fake_generate(config: dict, reporter=None, report_type="basic", output_dir=None):  # noqa: ANN001
+        def _fake_generate(
+            config: dict, reporter=None, report_type="basic", output_dir=None
+        ):  # 说明：替身签名对齐 generate_all 调用面，其余形参按调用方传值
             self.assertIsNotNone(current_run())
             return "ok"
 
@@ -340,7 +342,9 @@ class TestGuardRun(_RunContextBase):
         """KeyboardInterrupt → 收口（经通道出提示）后原样 re-raise。"""
 
         @guard_run
-        def _fake_generate(config: dict, reporter=None, report_type="basic", output_dir=None):  # noqa: ANN001
+        def _fake_generate(
+            config: dict, reporter=None, report_type="basic", output_dir=None
+        ):  # 说明：替身签名对齐 generate_all 调用面，其余形参按调用方传值
             raise KeyboardInterrupt
 
         reporter = RecordingReporter()
@@ -354,7 +358,9 @@ class TestGuardRun(_RunContextBase):
         captured: dict = {}
 
         @guard_run
-        def _fake_generate(config: dict, reporter=None, report_type="basic", output_dir=None):  # noqa: ANN001
+        def _fake_generate(
+            config: dict, reporter=None, report_type="basic", output_dir=None
+        ):  # 说明：替身签名对齐 generate_all 调用面，其余形参按调用方传值
             captured["output_dir"] = current_run().output_dir
             return None
 
@@ -369,7 +375,9 @@ class TestGuardRun(_RunContextBase):
         captured: dict = {}
 
         @guard_run
-        def _fake_generate(config: dict, reporter=None, report_type="basic", output_dir=None):  # noqa: ANN001
+        def _fake_generate(
+            config: dict, reporter=None, report_type="basic", output_dir=None
+        ):  # 说明：替身签名对齐 generate_all 调用面，其余形参按调用方传值
             captured["output_dir"] = current_run().output_dir
             return None
 

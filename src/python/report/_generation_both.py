@@ -16,7 +16,7 @@ from src.python.report._report_output import (  # noqa: F401  # 产物落盘子�
 
 # ── 子模块 re-export ────────────────────────────────────
 # 健康检查与运行边界仍是本路径的编排水位（patch 点在此）：消费方就是下面的壳。
-from src.python.report._report_health import _collect_health_checks, _spawn_health_checks  # noqa: F401
+from src.python.report._report_health import _collect_health_checks, _spawn_health_checks
 from src.python.report.run_integrity import bind_health, bind_perf
 from src.python.report._report_helpers import (  # noqa: F401
     _validate_pipeline_snapshot,

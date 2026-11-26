@@ -33,7 +33,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 共享设施包（_shared/checklib）
-from _shared.checklib import REPO_ROOT, add_common_args, rel, report  # noqa: E402
+from _shared.checklib import REPO_ROOT, add_common_args, rel, report
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 TEST_DIR = REPO_ROOT / "src" / "test"

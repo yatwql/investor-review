@@ -139,6 +139,38 @@
       "reason": "费率表校验复用分析层费率阶梯建模（同一口径）",
       "expiry": "2027-06-30",
       "replacement": "费率阶梯纯解析下沉 core/fee_schedule，分析与配置共同消费"
+    },
+    {
+      "path": "src/python/core/check_sources.py",
+      "name": "src.python.fetcher.report_adapters",
+      "owner": "core（数据源健康检查）",
+      "reason": "DataSinking 财报探针与 cninfo orgId 探针须在链外直呼取数实现（链路自带重试/降级，经链测不到真实连通性），属编排面反向调用；改为事件表/注册表注入的收益不足以抵消改动面",
+      "expiry": "2027-06-30",
+      "replacement": "探针面收成 core 侧探针注册表（各取数层追加注册探测函数），core 只按注册表调用，删除函数内反向导入"
+    },
+    {
+      "path": "src/python/core/check_sources.py",
+      "name": "src.python.providers.cninfo",
+      "owner": "core（cninfo 探针）",
+      "reason": "orgId 探针须读源侧负缓存原因前缀（ORGID_MISS_CACHE_REASON_PREFIX）才能把「负缓存跳过」与「本轮真失败」分开报，属按源侧口径判定",
+      "expiry": "2027-06-30",
+      "replacement": "负缓存原因前缀与失败原因读取原语下沉 core，探针与源侧共同消费"
+    },
+    {
+      "path": "src/python/core/check_sources.py",
+      "name": "src.python.providers.utils",
+      "owner": "core（cninfo 探针）",
+      "reason": "探针用 providers.utils.take_last_reason() 取本轮失败原因，须与源侧写入口径一致（自建一套会读不到源侧记录）",
+      "expiry": "2027-06-30",
+      "replacement": "同上：失败原因原语下沉 core，探针与源侧共同消费"
+    },
+    {
+      "path": "src/python/core/check_sources.py",
+      "name": "src.python.providers.akshare_extras",
+      "owner": "core（行业资金流探针）",
+      "reason": "行业资金流不在 Provider Chain 内（akshare 双通道 + 负缓存 + 陈旧回退），探针须逐通道直连源侧探测函数才能回答「通道此刻能不能取到数」",
+      "expiry": "2027-06-30",
+      "replacement": "探针面收成 core 侧探针注册表，各通道追加注册探测函数"
     }
   ]
 }

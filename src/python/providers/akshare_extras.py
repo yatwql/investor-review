@@ -168,7 +168,7 @@ def _fetch_sector_flow_ths_industry() -> list[dict[str, Any]]:
 
     result: list[dict[str, Any]] = []
     try:
-        for row in rows:  # noqa: PERF203 —— 逐行容错，单行脏数据不弃整榜
+        for row in rows:  # 说明：逐行容错，单行脏数据不弃整榜
             _in = _safe_float(row.get("流入资金"))
             _out = _safe_float(row.get("流出资金"))
             _net = _safe_float(row.get("净额"))
@@ -210,7 +210,7 @@ def _struct_sector_flow_rows(df: Any, fields: tuple[tuple[str, str], ...], chann
     """按字段表把 DataFrame 归一到契约结构；解析异常规整为通道不可用。"""
     result: list[dict[str, Any]] = []
     try:
-        for _, row in df.iterrows():  # noqa: PERF203 —— 逐行容错，单行脏数据不弃整榜
+        for _, row in df.iterrows():  # 说明：逐行容错，单行脏数据不弃整榜
             item: dict[str, Any] = {}
             for key, col in fields:
                 item[key] = (
@@ -248,7 +248,7 @@ def probe_sector_flow_channels() -> list[tuple[str, bool, str]]:
         except _SectorFlowUnavailable as exc:
             results.append((label, False, exc.kind))
             continue
-        except Exception as exc:  # noqa: BLE001 — 探针不得因单通道异常中断整表
+        except Exception as exc:  # 有意宽捕获：探针不得因单通道异常中断整表
             results.append((label, False, f"{type(exc).__name__}: {exc}"[:60]))
             continue
         elapsed = (_time.perf_counter() - start) * 1000

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ._validation_common import (  # noqa: F401 — 共用原语
+from ._validation_common import (  # 共用原语
     _FETCH_MODES,
     _MISSING,
     _section,
