@@ -122,7 +122,7 @@ def test_read_holdings_empty_table_returns_none(tmp_path, caplog) -> None:
         result = _handlers._cli_read_holdings(config)
 
     assert result is None
-    assert caplog.text.strip() != ""
+    assert any(r.levelname == "ERROR" for r in caplog.records), "须以 ERROR 级记录读取失败"
 
 
 class TestConfirmCostForecastInterrupts:

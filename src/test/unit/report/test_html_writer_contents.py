@@ -384,7 +384,7 @@ class TestWriteHtmlReportLlmType(unittest.TestCase):
 
         return mock_llm
 
-    def test_generate_all_llm_receives_dict_indices(self):
+    def test_html_writer_does_not_call_generate_all_llm(self):
         """LLM 内容由 orchestrator 预生成后传入 html_writer，html_writer 自身不调用 generate_all_llm。"""
         mock_llm = self._run_with_mocks()
 

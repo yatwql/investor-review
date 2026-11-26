@@ -419,8 +419,7 @@ class TestSanitizeMetricEdge:
         """-0.0 → 0.0 视同正常值。"""
         from src.python.analysis.metrics import sanitize_metric
 
-        result = sanitize_metric(-0.0)
-        assert result == 0.0 or result == -0.0
+        assert sanitize_metric(-0.0) == 0.0
 
 
 # ═══════════════════════════════════════════════════════════════

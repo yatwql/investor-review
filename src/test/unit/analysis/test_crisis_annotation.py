@@ -101,7 +101,7 @@ class TestBuildCrisisAnnotation:
         assert all(it["interval_drawdown_pct"] is None for it in c["intervals"])
 
     def test_2018_interval_annotated_with_stats(self):
-        """窗口与 2018 贸易摩擦重叠 → 区间回撤 30.0%、最深日、恢复 31 天、已恢复。"""
+        """窗口与 2018 贸易摩擦重叠 → 区间回撤 30.0%、最深日、恢复 22 个交易日、已恢复。"""
         c = build_crisis_annotation(_history(_2018_BARS, "2018-06-15", "2018-12-31"))
         it = _interval(c, "2018 贸易摩擦")
         assert it["in_range"] is True

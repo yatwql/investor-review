@@ -119,7 +119,7 @@ class TestCopyFileAtomicFailures:
 # ── 熔断状态委派 / 代码分档 ───────────────────────────
 
 
-def test_circuit_breaker_status_delegation_returns_mapping():
+def test_circuit_breaker_status_returns_mapping():
     assert isinstance(circuit_breaker.get_provider_breaker_status(), dict)
     assert isinstance(circuit_breaker.get_llm_endpoint_status(), dict)
 

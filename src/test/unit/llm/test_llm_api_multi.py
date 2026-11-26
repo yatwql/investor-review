@@ -259,7 +259,6 @@ class TestChainFailureTracking(unittest.TestCase):
 
         result = LLM_MODULE_FAILURE.get("global_macro")
         self.assertIsInstance(result, dict)
-        assert isinstance(result, dict)  # for type narrowing
         attempted = result.get("attempted", [])
         self.assertEqual(len(attempted), 2)
         # 每条记录应以 "provider_name: " 开头
@@ -290,7 +289,6 @@ class TestChainFailureTracking(unittest.TestCase):
 
         result = LLM_MODULE_FAILURE.get("expert_review")
         self.assertIsInstance(result, dict)
-        assert isinstance(result, dict)
         attempted = result.get("attempted", [])
         self.assertEqual(len(attempted), 2)
         self.assertIn("p1: ", attempted[0])
@@ -314,7 +312,6 @@ class TestChainFailureTracking(unittest.TestCase):
 
         result = LLM_MODULE_FAILURE.get("health_check")
         self.assertIsInstance(result, dict)
-        assert isinstance(result, dict)
         self.assertEqual(result.get("final_status"), "success")
         self.assertIn("p1: SUCCESS", result.get("attempted", []))
 

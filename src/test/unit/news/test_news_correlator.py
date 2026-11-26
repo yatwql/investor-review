@@ -42,9 +42,10 @@ class TestCorrelateNewsWithHoldings(unittest.TestCase):
     def test_keyword_matched(self) -> None:
         """新闻标题含关键词 → matched_keywords 包含该词。"""
         result = correlate_news_with_holdings(self.sample_news, self.keywords)
-        for news in result:
-            if "长江电力" in news.get("title", ""):
-                self.assertIn("长江电力", news["matched_keywords"])
+        matched = [n for n in result if "长江电力" in n.get("title", "")]
+        assert matched, "样本须含长江电力条目，否则本用例断言空转"
+        for news in matched:
+            self.assertIn("长江电力", news["matched_keywords"])
 
     def test_no_match(self) -> None:
         """无匹配关键词 → 结果为空。"""

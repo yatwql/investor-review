@@ -114,6 +114,7 @@ class TestDetectStartupState:
             encoding="utf-8",
         )
         assert _llm_key_present() is True
+        assert _detect_startup_state(_config())["llm_key_ok"] is True
 
 
 # ── llm_key 写入 ─────────────────────────────────────────────

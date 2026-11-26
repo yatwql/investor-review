@@ -21,8 +21,8 @@ class TestBudgetManagement:
         reset_budget()
         status = get_budget_status()
         assert status["budget"] == DEFAULT_INPUT_BUDGET
-        assert status["used"] >= 0
-        assert status["remaining"] <= DEFAULT_INPUT_BUDGET
+        assert status["used"] == 0
+        assert status["remaining"] == DEFAULT_INPUT_BUDGET
 
     def test_set_custom_budget(self):
         """设置自定义预算。"""

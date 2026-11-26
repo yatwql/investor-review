@@ -77,8 +77,7 @@ class TestFetchFunctionBehavior(unittest.TestCase):
         mock_fetch.return_value = [{"title": "t1", "url": "http://u1"}]
         fn = _FETCH_MAP["sina"]
         result = fn(num=3)
-        self.assertIsInstance(result, list)
-        self.assertGreater(len(result), 0)
+        self.assertEqual(result, [{"title": "t1", "url": "http://u1"}])
 
     @patch("src.python.providers.sina_news.fetch_news")
     def test_fetch_from_sina_dedup_by_url(self, mock_fetch: MagicMock) -> None:

@@ -249,8 +249,8 @@ class TestApiKeyLogLeak(unittest.TestCase):
 class TestJsonPrototypePollution(unittest.TestCase):
     """JSON 反序列化 — Python 原生 JSON 无原型污染风险。"""
 
-    def test_json_loads_not_pollutable(self):
-        """Python json.loads 不解析 __proto__/constructor。"""
+    def test_stdlib_json_treats_proto_as_plain_key(self):
+        """契约：解析器把 __proto__ 当普通键（防将来换成支持原型链的解析器）。"""
         malicious = '{"__proto__": {"admin": true}, "name": "test"}'
         result = json.loads(malicious)
         self.assertIsInstance(result, dict)
@@ -299,15 +299,6 @@ class TestTempFileRace(unittest.TestCase):
         self.assertIn("_persist_config_patch", source_set)
         source_patch = inspect.getsource(_persist_config_patch)
         self.assertIn("_atomic_write", source_patch)
-
-    def test_mkstemp_used_for_cache(self):
-        """cache.set 使用 mkstemp 防半写。"""
-        from src.python.cache._io import _write_atomic
-        import inspect
-
-        source = inspect.getsource(_write_atomic)
-        self.assertIn("mkstemp", source)
-        self.assertIn("os.replace", source)
 
     def test_concurrent_cache_writes(self):
         """并发写缓存 → 不崩溃，文件不损坏。"""

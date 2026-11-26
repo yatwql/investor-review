@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.18.8-dev
-> **编号源**：`rf-next = 1225`（新增问题提出后更新为 +1；已用最大 rf-1224，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1235`（新增问题提出后更新为 +1；已用最大 rf-1234，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -18,6 +18,10 @@
 
 | # | 问题 | 修复方向 |
 | --- | --- | --- |
+| rf-1231 | 用例归属与所在目录/域标记不一致 11 处：`unit/analysis/test_analysis_residual_branches.py:20`（归属 access 模块）、`unit/core/test_models.py:72`（极端值用例类不在 `*_edge.py`）、`unit/llm/test_llm_api_base.py:147/154/177/183`（边界场景不在 `_edge` 文件）、`unit/llm/test_failure_classifier.py:10`、`unit/llm/test_llm_backtest_ev.py:14`（模块级标记与文件名不符）、`unit/llm/test_llm_api_robustness.py:78`（标 `unit_llm_http`，内容属 responses 装配）、`unit/cli/test_cli_report.py:13`（测 `report.cli_progress` 却置于 cli 域）、`unit/news/test_news_sources.py:17/179`（同模块用例分裂在 news/providers 两域、去重用例不在去重文件）、`unit/report/test_security_edge.py:21`（域标记 `unit_report`，8 例主体测 cache/config/llm/reader） | 按被测模块就近归位并同步域标记；边界场景统一进 `*_edge.py` 并标 `@pytest.mark.edge`；归位后同步 `folders.md` 与 `test-coverage.md` 计数 |
+| rf-1232 | 跨文件语义重复 13 组：`unit/report/test_fund_performance.py` / `test_fund_performance_branches.py`（同一 TO 后缀边界）、`unit/report/test_correlation_sheet.py:218`、`unit/report/test_financial_data_completeness.py:89`、`unit/report/test_data_source_matrix.py` / `test_data_source_coverage.py`（3 组）、`unit/llm/test_cache_sequence_matrix.py:64/100/144/149` / `test_cache_matrix.py`、`unit/llm/test_debate_generators.py:120` / `test_llm_input_guards.py:150`、`unit/llm/test_llm_api_base.py:250` / `test_llm_api_core.py`（429 限速同形断言）、`unit/news/test_news_sources.py:271/323`、`unit/cli/test_cli_holdings_hint.py:20` / `test_cli_handler_branches.py:73/81`、`unit/cli/test_cli_report.py` / `integration/test_cli_integration.py`、`unit/scripts/test_check_doc_drift_partitions.py:42`、`unit/core/test_datasource_credential_edge.py:58`、`unit/core/test_check_sources.py:398` | 逐组保留一处，另一侧承担该模块专属差异断言（矩阵行为、参数化样本），避免合并后覆盖下降；合并后刷新用例计数 |
+| rf-1233 | 弱断言残留 14 处：`unit/analysis/test_metrics.py:352`（`min>=-100`/`max<=100` 对恒等实现同样成立，未区分截断前后集合）、`unit/analysis/test_metrics_edge.py:64`（docstring 允许 None 或正常值，断言只接受 None/NaN）、`unit/analysis/test_factor_evaluator_identity_edge.py:74/81`（`min<=值==max` 未钉住具体差异）、`unit/core/test_models.py:95`（断言内容即构造入参回显）、`unit/core/test_phase_timeout.py:92`（仅断言 `len==3`）、`unit/report/test_fund_performance_branches.py:22`（取硬边界值而非相邻差值）、`unit/report/test_fund_performance_boundaries.py:84`（类型层级蕴含断言）、`unit/report/test_financial_data_completeness.py:75`（断言恰等于实现拼装串）、`unit/report/test_evolution_sheet.py:112`（`assertIn('-')` 任意单元格命中）、`unit/report/test_loader_boundary.py:95`（docstring 与断言重复、无断言的辅助类）、`unit/report/test_data_source_matrix.py:272`（写死 12 分类数） | 取可区分的期望值（截断前后集合、显式 stale 值、具体单元格定位、相邻档位差）；写死条数取结构关系断言（`set<=CATALOG`、序号连续） |
+| rf-1234 | 用例名与体内验证行为不对应 10 处：`unit/analysis/test_metric_driver_decomposition.py:242`（名为高基数场景，只跑两组）、`unit/report/test_datasource.py:112`（名为按优先级排序，验证的是同 label 不覆盖）、`unit/report/test_summary_row_boundary.py:24`（常量回显）、`unit/report/test_security_edge.py:173`（名为符号链接防护，未造符号链接）、`unit/llm/test_llm_pacing.py:278`（名为上限配置，验的是静态方法探测）、`unit/llm/test_llm_cache_disk.py:45`（名为磁盘缓存损坏，用 monkeypatch 替换索引）、`unit/providers/test_news_sources.py:36`（名 `returns_partial`，断言空结果）、`unit/news/test_news_context.py:60`（名为并发，流程串行）、`unit/news/test_news_sources.py:323`（名 `bg2_high_ratio`，docstring 自述走 `bg>=3` 主干）、`unit/news/test_news_correlator.py:55`（输入已降序且断言用 `>=`，排序缺失仍然通过） | 名字与体内行为取同一口径：按名字补齐断言（造符号链接、打乱输入、断并发时序）或按行为命名 |
 
 ### P3 — 持续监控：兼容残留
 
@@ -63,6 +67,12 @@
 
 | # | 问题 | 修复方向 |
 |---|------|----------|
+| **rf-1230** | 用例名与体内验证行为不对应 8 处：`report/test_security_edge.py` 的 `test_json_loads_not_pollutable`（内容属 stdlib 契约）、`report/test_html_writer_contents.py` 的 `test_generate_all_llm_receives_dict_indices`（内容为 `assert_not_called`）、`core/test_guard_branch_coverage.py` 的 `test_..._delegation_...`（仅验证类型）、`cli/test_cli_edge.py` 四处（`_EXIT_SEVERE`/默认值/多文件自动选/无 input）、`startup/test_startup_wizard.py` 该类仅验 `_llm_key_present`，未验状态检测 | 名字与体内行为取同一口径；能按名字补断言的补上（cache 路径补 `input` mock 断言、启动用例补 `_detect_startup_state()["llm_key_ok"]`） |
+| **rf-1229** | `report/test_security_edge.py` 用 `inspect.getsource` 断言源码含 `mkstemp`/`os.replace` 字面（实现一变即红，与运行时行为脱钩） | 删除源码字面断言，原子写完整性由并写用例覆盖 |
+| **rf-1228** | 断言结构失效 3 处：`core/test_filesystem_edge.py:40` 的 `assertIn(x, msg or "..." in msg)` 使第二条件永不生效、`cli/test_cli_edge.py:28` 用 `"input" not in str(mock_gen.call_args)` 检查无关字符串、`cli/test_cli_handler_branches.py:125` 的 `caplog.text.strip() != ""` 任意日志即可通过 | 拆成独立断言；取 `patch("builtins.input")` + `assert_not_called()`；日志断言取级别与文案 |
+| **rf-1227** | 与实现同式的恒等式断言 2 处：`core/test_data_freshness.py:345` 用输出字段 `prev_trading_day` 反推 `stale`、`llm/test_cost_tracker.py:25` 的 `used>=0`/`remaining<=budget` 对 `max(0, ·)` 恒真 | 取显式期望值（`stale is False`、`used==0` 且 `remaining==budget`） |
+| **rf-1226** | 可空过的断言 4 处：`analysis/test_liquidity_otc.py` 两处遍历 `result` 前无结构断言、`news/test_news_correlator.py:42` 断言写在 `if 关键词 in title` 内、`news/test_news_sources.py:81` mock 直返 list 后只做 `assertIsInstance` | 遍历前断言结果非空；条件断言取「先筛命中项再断非空」；对返回值取具体断言 |
+| **rf-1225** | 恒真/自比较/死代码断言 6 处：`analysis/test_factor_evaluator_edge.py:30` 的 `len(x)==len(x) and x`、`analysis/test_metrics_edge.py:423` 的 `== 0.0 or == -0.0`、`analysis/test_correlation_edge.py` 的 `list(reversed(seq)) and seq`、丢弃返回值语句、`if exact["available"]` 条件式断言、`news/test_news_dedup_perf.py:76` 同输入自比 | 取结构关系断言（目录派生条数）；删恒真分支与死语句；条件断言取无条件口径；自比较取与未缓存实现对比 |
 | **rf-1224** | `_beta_se` 用 `sum()` 算均值，Python 3.12+ 的补偿求和与 3.11 朴素累加末位不同——恒定基准下 Σ(x-x̄)² 在 3.11 上残留约 1e-35，零方差未被识别，标准误算出 1.1e15（CI 3.11 单档红） | 均值/SSE/SSX 一律改用 `math.fsum`（正确舍入、跨解释器一致），并以「基准极差为 0」判定零方差 |
 
 ### 归档档案

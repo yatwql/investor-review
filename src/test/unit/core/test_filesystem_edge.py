@@ -37,7 +37,7 @@ class TestEncryptedExcel(unittest.TestCase):
         with patch("src.python.core.reader.os.path.exists", return_value=True):
             with self.assertRaises(ValueError) as ctx:
                 read_holdings("encrypted.xlsx")
-        self.assertIn("encrypted", str(ctx.exception).lower() or "格式错误" in str(ctx.exception))
+        self.assertIn("encrypted", str(ctx.exception).lower())
 
     def test_xlsm_not_listed_as_xlsx(self):
         """xlsm 文件不被 list_xlsx_files 识别（只认 .xlsx）。"""
