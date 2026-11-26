@@ -63,7 +63,7 @@ def _probe_once(index: int) -> tuple[bool, str]:
         return False, f"[{index}] 异常  {dt:.0f}ms  {type(e).__name__}: {e}"
 
 
-def run(args) -> int:
+def run(args) -> int:  # noqa: ARG001 — 探测协议统一入口签名（probe.py 按 run(args) 调用）
     """主入口：连续探测并汇总结果。"""
     print(f"探测 {_URL}")
     print(f"参数: {_PARAMS}")

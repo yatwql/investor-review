@@ -530,7 +530,7 @@ def _write_review_block(
     ws: Worksheet,
     row: int,
     review_data: dict[str, Any],
-    ncols: int,
+    _ncols: int,
 ) -> int:
     """写入行动页签内的「历史决策复盘」子块。
 

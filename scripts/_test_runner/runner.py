@@ -76,14 +76,12 @@ def run_mode(
     parallel_level: str | None = None,
     timeout_override: int | None = None,
     no_timeout: bool = False,
-    phased: bool = False,
 ) -> dict:
     """运行指定模式的测试。
 
     Args:
         mode_key: 模式名
         coverage: 是否启用覆盖率
-        phased: 启用分阶段运行（模式支持时有效）
 
     Returns:
         包含测试结果统计的字典

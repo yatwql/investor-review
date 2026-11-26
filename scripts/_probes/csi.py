@@ -87,7 +87,7 @@ def probe_code(code: str, days: int, provider: str = "tencent") -> list[dict[str
 
 def evaluate(
     freshness: dict[str, int],
-    threshold: int,
+    threshold: int,  # noqa: ARG001 — 签名契约：探针按位置传阈值（判定当前只用 stale）
     stale: int,
 ) -> dict[str, Any]:
     """按 technical.md §4.8 因子暴露分析 — 数据新鲜度判定标准评估可用性。

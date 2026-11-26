@@ -240,7 +240,7 @@ _ENV.filters["thousands"] = _jinja_thousands
 _ENV.filters["sentiment_colorize"] = _jinja_sentiment_colorize
 _ENV.filters["anon_code"] = _jinja_anon_code
 
-_ENV.globals["section_visible"] = lambda key: False  # fail-closed 默认值，生产环境由 context 变量覆盖
+_ENV.globals["section_visible"] = lambda _key: False  # fail-closed 默认值，生产环境由 context 变量覆盖
 
 # 章节显示名单源：模板/partials 标题一律 {{ section_names[key] }}（与导航、Excel 页签同源于
 # core/registry.py 的 _REPORT_SECTION_DEFAULT[].name），改名收敛为注册表单点变更

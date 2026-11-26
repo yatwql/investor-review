@@ -296,7 +296,7 @@ def json_cap_log(cap: Any) -> float | None:
     return round(math.log10(value) * 100, 2)
 
 
-def _pool_mean_returns(bars_by_code: dict[str, list[dict]], index_bars: list[dict]) -> dict[str, float]:
+def _pool_mean_returns(bars_by_code: dict[str, list[dict]], _index_bars: list[dict]) -> dict[str, float]:
     """池内等权日收益（风格族滚动 Beta 的组合腿）。"""
     per_code: dict[str, dict[str, float]] = {}
     for code, bars in bars_by_code.items():

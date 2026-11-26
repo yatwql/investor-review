@@ -40,7 +40,9 @@ def _record_block_failure(full_code: str, body: str) -> None:
 
 
 def fetch_kline(
-    code: str, days: int = 30, start_from: str | None = None
+    code: str,
+    days: int = 30,
+    start_from: str | None = None,  # noqa: ARG001 — 链层 index_kline 统一签名（start_from 本实现不消费）
 ) -> list[dict]:  # 说明：签名契约——chain 层经 getattr 无条件传 start_from
     """获取股票/ETF 历史 K 线数据（纯获取，Tencent 备用链路）。
 
@@ -100,7 +102,9 @@ def fetch_kline(
 
 
 def fetch_index_kline(
-    code: str, days: int = 30, start_from: str | None = None
+    code: str,
+    days: int = 30,
+    start_from: str | None = None,  # noqa: ARG001 — 链层 index_kline 统一签名（start_from 本实现不消费）
 ) -> list[dict]:  # 说明：签名契约——chain 层经 getattr 无条件传 start_from
     """获取指数历史 K 线数据（备用链路）。
 

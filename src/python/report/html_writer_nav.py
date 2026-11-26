@@ -42,7 +42,7 @@ _LLM_SUPPORTED_SECTIONS: frozenset[str] = frozenset(
 
 def _compute_section_visibility(
     order: list[dict],
-    manager_analysis: dict | None,
+    _manager_analysis: dict | None,
     overlap_matrix: dict | None,
     concentration_analysis: dict | None,
     style_analysis: dict | None,

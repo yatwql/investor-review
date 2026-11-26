@@ -19,7 +19,7 @@ logger = logging.getLogger("invest")
 
 
 def compute_market_temperature_data(
-    config: dict,
+    config: dict,  # noqa: ARG001 — 报告编排统一签名（config 由编排层按位置传）
     reporter: ProgressReporter,
 ) -> dict | None:
     """编排市场温度数据（`market_temperature_data` 数据契约）。

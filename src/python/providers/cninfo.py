@@ -229,7 +229,7 @@ def _with_transient_retry(
         return None
 
 
-def _looks_like_hang(exc: BaseException, timeout: float) -> bool:
+def _looks_like_hang(exc: BaseException, _timeout: float) -> bool:
     """该异常是否属「挂起型」：连接/读超时（与 ``with_connect_retry`` 的判据同源）。"""
     from src.python.core.retry import is_transient_exception
 

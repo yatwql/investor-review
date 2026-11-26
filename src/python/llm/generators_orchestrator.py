@@ -368,7 +368,7 @@ def _plan_module_needs(llm_config: dict, precheck_results: dict) -> dict[str, bo
 
 def _log_precheck_summary(
     results: dict[str, dict],
-    llm_config: dict,
+    _llm_config: dict,
     cache_info: dict[str, dict],
 ) -> None:
     """每份报告打一行缓存命中概况：命中/未命中分别哪些模块，未命中的是否因重新生成。

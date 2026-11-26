@@ -30,7 +30,7 @@ def build_parser():
     return parser
 
 
-def _probe_channel(name: str, fetch, count: int) -> tuple[int, list[str]]:
+def _probe_channel(_name: str, fetch, count: int) -> tuple[int, list[str]]:
     """连续调用某通道取数函数，返回 (成功次数, 每次结果描述)。"""
     from src.python.providers.akshare_extras import _SectorFlowUnavailable
 

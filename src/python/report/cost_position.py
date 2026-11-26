@@ -54,7 +54,10 @@ COST_POSITION_FOOTNOTE = (
 )
 
 
-def compute_cost_position_data(holdings: list[Any], config: dict | None = None) -> dict | None:
+def compute_cost_position_data(
+    holdings: list[Any],
+    config: dict | None = None,  # noqa: ARG001 — 报告 pane 统一签名（config 按位置传）
+) -> dict | None:
     """编排持仓成本区间位置数据（``cost_position_data`` 数据契约）。
 
     功能开关 ``cost_position`` 关闭返回 None（列不渲染）；开启时对每条持仓

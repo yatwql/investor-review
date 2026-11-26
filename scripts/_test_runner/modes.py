@@ -225,7 +225,7 @@ def compile_marker_expr(expr: str) -> Callable[[Collection[str]], bool]:
 
     def matches(markers: Collection[str]) -> bool:
         names = frozenset(markers)
-        return bool(compiled.evaluate(lambda name, /, **kwargs: name in names))
+        return bool(compiled.evaluate(lambda name, /, **_kwargs: name in names))
 
     return matches
 

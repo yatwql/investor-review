@@ -14,7 +14,7 @@ logger = logging.getLogger("hallucination_sampler")
 def _run_fact_check(
     llm_output: str,
     holdings_details: list[dict],
-    module_label: str,
+    module_label: str,  # noqa: ARG001 — 调用方按关键字传模块标签（本函数不消费，标签由调用方汇总）
     extra_valid_codes: set[str] | None = None,
     is_penetration_module: bool = False,
 ) -> dict[str, Any]:

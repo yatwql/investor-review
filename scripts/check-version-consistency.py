@@ -148,7 +148,7 @@ def _auto_fix_header(path: Path, version: str) -> bool:
     text = path.read_text(encoding="utf-8")
     new_text, count = re.subn(
         r"^[ \t]*>[ \t]*文档版本：.*$",
-        lambda m: f"> 文档版本：{version}",
+        lambda _match: f"> 文档版本：{version}",
         text,
         count=1,
         flags=re.MULTILINE,

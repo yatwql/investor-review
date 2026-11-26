@@ -395,7 +395,7 @@ def _dispatch_llm_workers(
     metrics: dict | None = None,
     force_modules: Iterable[str] | None = None,
     data_quality_text: str = "",
-    comparison_indices: dict[str, str] | None = None,
+    comparison_indices: dict[str, str] | None = None,  # noqa: ARG001 — 数据上下文统一签名（调用方按关键字传参）
     history_data: dict | None = None,
     _debate_info_container: list | None = None,
     competitive_context: str = "",

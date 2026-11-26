@@ -73,7 +73,9 @@ def _make_holdings_xlsx() -> bytes:
     return buf.getvalue()
 
 
-def _fake_health(max_timeout: float = 15.0):
+def _fake_health(
+    max_timeout: float = 15.0,  # noqa: ARG001 — 替身须与健康探测入口同签名
+):
     """罐头健康探测结果（避免真实网络）。"""
     return [{"name": "mock_source", "label": "测试行情源", "ok": True, "latency_ms": 1.0, "message": "ok"}]
 
@@ -86,7 +88,10 @@ def _fake_history():
 def _fake_executor(output_dir: str):
     """全链路 fake executor：写产物到 output_dir + 推送事件 + 成功返回。"""
 
-    def _exec(state, params):
+    def _exec(
+        state,
+        params,  # noqa: ARG001 — 执行器协议签名（params 由真实执行器消费）
+    ):
         state.output_dir = str(output_dir)
         state.push_event("info", "正在获取行情数据...")
         state.push_event("ok", "报告生成完成")

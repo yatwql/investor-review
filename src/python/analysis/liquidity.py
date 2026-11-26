@@ -96,7 +96,7 @@ def _compute_avg_daily_turnover(code: str) -> float | None:
 
 def check_liquidity(
     holdings_details: list[dict[str, Any]] | None,
-    total_mv: float,  # 说明：公开 API 契约——组合总市值（22 处调用点传参），预留权重计算
+    total_mv: float,  # noqa: ARG001 — 公开 API 契约：组合总市值（22 处调用点传参），预留权重计算
     redemption_limits: dict[str, float] | None = None,
 ) -> list[dict[str, Any]]:
     """检查持仓流动性风险。

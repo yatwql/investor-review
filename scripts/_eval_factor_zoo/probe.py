@@ -131,7 +131,7 @@ def _value_present(value: Any) -> bool:
 
 
 def probe_fields(
-    catalog: list[dict[str, Any]], pool: dict[str, Any], probes: dict[str, Callable[..., Any]] | None = None
+    _catalog: list[dict[str, Any]], pool: dict[str, Any], probes: dict[str, Callable[..., Any]] | None = None
 ) -> dict[str, Any]:
     """逐字段类型探测池内可得性（每类型记录耗时；因子可得性在 metric_a 判定）。
 

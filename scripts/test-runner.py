@@ -247,7 +247,6 @@ def main() -> None:
         parallel_level=args.parallel,
         timeout_override=args.timeout,
         no_timeout=args.no_timeout,
-        phased=args.phased,
     )
     aborted_modes: list[str] = []
     try:

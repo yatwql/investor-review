@@ -245,7 +245,7 @@ def _index_source_of(items: Any) -> str:
     return _SRC_INDEX_DATASINK
 
 
-def _record_index_failure(symbol: str, reason: str) -> None:
+def _record_index_failure(_symbol: str, reason: str) -> None:
     """索引主源异常且备源亦无命中时登记降级事件——使「财报索引不可用」在健康矩阵中可见。
 
     只在主源**异常**（连接级重试已耗尽）且巨潮备源亦无命中时登记；「该标的无财报」

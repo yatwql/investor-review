@@ -325,7 +325,7 @@ def call_llm(
     max_tokens: int | None = None,
     config_field: str = "max_tokens",
     temperature: float | None = None,
-    model: str | None = None,
+    model: str | None = None,  # noqa: ARG001 — call_llm 公开签名（provider 链按关键字传 provider 模型）
 ) -> tuple[str | None, dict | None, dict | None]:
     """调用 LLM API 生成文本（多 Provider 链式）。
 

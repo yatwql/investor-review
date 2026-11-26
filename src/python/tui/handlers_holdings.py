@@ -395,7 +395,7 @@ def _collect_trade_fields(
     return shares, price, trade_date, [], reference
 
 
-def _collect_otc_buy(code: str, name: str) -> tuple[float, float, str, list[str], float] | None:
+def _collect_otc_buy(code: str, _name: str) -> tuple[float, float, str, list[str], float] | None:
     """场外买入：按金额（当日）或按份额（净值已公布后才成立）。
 
     按金额：份额 = 金额 / 该交易日官方净值；净值未公布（或该日无净值）时无法换算，

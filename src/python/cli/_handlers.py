@@ -833,7 +833,7 @@ def _handle_config_set(args) -> int:
     return _EXIT_SUCCESS
 
 
-def _handle_config(args, config) -> int:
+def _handle_config(args, config) -> int:  # noqa: ARG001 — 子命令 handler 统一签名 (args, config)
     """config 子命令：list / get / set（持久化写入走共享编辑层）。"""
     from src.python.config.edit_ops import ConfigEditError
 
@@ -849,7 +849,7 @@ def _handle_config(args, config) -> int:
         return _EXIT_SEVERE
 
 
-def _handle_settle_decisions(args: argparse.Namespace, config: dict) -> int:
+def _handle_settle_decisions(args: argparse.Namespace, config: dict) -> int:  # noqa: ARG001 — 子命令 handler 统一签名 (args, config)
     """处理 settle-decisions 子命令——决策账本多视界结算（独立于报告生成）。
 
     判重键 ``(decision_id, 目标视界)``：同决策同视界幂等，未到期/行情不可得

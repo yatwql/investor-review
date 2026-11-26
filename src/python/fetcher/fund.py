@@ -123,7 +123,7 @@ def _normalize_hithink_holdings(raw: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _normalize_hold_payload(raw: dict[str, Any], source_label: str = "") -> dict[str, Any]:
+def _normalize_hold_payload(raw: dict[str, Any], _source_label: str = "") -> dict[str, Any]:
     """provider 原始载荷 → 规范化持仓契约。
 
     天天基金侧本来就是这个形态（原样透传，保证主源输出逐字不变）；同花顺侧为官方
