@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 
 from openpyxl.styles import Font
+from openpyxl.worksheet.worksheet import Worksheet
 
 from src.python.report.excel_writer import (
     auto_width,
@@ -64,7 +65,7 @@ def build_coverage_block(position_status: dict | None) -> dict:
 
 
 def write_data_quality_sheet(
-    ws,
+    ws: Worksheet,
     matrix: list[dict],
     position_status: dict | None,
     data_freshness: dict | None = None,
@@ -132,7 +133,7 @@ def _apply_history_staleness(matrix: list[dict], history_staleness: dict | None)
     return out
 
 
-def _write_source_health_block(ws, row: int, matrix: list[dict]) -> int:
+def _write_source_health_block(ws: Worksheet, row: int, matrix: list[dict]) -> int:
     """写入区块 A：源健康（数据源可用性矩阵，现状保留 + 「命中源」列）。
 
     列宽取 :data:`data_source_matrix.MATRIX_HEADERS`（矩阵行的展示契约），
@@ -190,7 +191,7 @@ def _write_source_health_block(ws, row: int, matrix: list[dict]) -> int:
     return row
 
 
-def write_source_catalog_block(ws, row: int, catalog: list[dict] | None = None) -> int:
+def write_source_catalog_block(ws: Worksheet, row: int, catalog: list[dict] | None = None) -> int:
     """写入数据源说明区块（实际使用清单：用途 / 计费 / 凭据要求）。
 
     Args:
@@ -231,7 +232,7 @@ def write_source_catalog_block(ws, row: int, catalog: list[dict] | None = None) 
 
 
 def _write_coverage_block(
-    ws,
+    ws: Worksheet,
     row: int,
     position_status: dict | None,
     ncols: int,
@@ -278,7 +279,7 @@ def _write_coverage_block(
 _FRESHNESS_PLACEHOLDER = "未获取可信度数据，新鲜度/跳变无法判定"
 
 
-def _write_freshness_block(ws, row: int, data_freshness: dict | None, ncols: int) -> int:
+def _write_freshness_block(ws: Worksheet, row: int, data_freshness: dict | None, ncols: int) -> int:
     """写入区块 C：可信度（逐品种新鲜度分类 + 单日跳变）。
 
     data_freshness 不可用（None / available=False）时写降级占位。

@@ -188,3 +188,31 @@ def test_quarter_walk_replay_is_stable_when_clock_advances(monkeypatch):
 
     assert data is not None
     assert data["date"], "报告期须取自录制内容（锚定后不因当前时间改变而失配）"
+
+
+class TestParserForAndRecordingAnchor:
+    """登记表出口与录制锚点：未登记名返回 None，锚点缺失/格式非法同样返回 None。"""
+
+    def test_parser_for_unknown_name_returns_none(self):
+        from src.python.fetcher.cassette_checks import parser_for
+
+        assert parser_for("not_a_cassette") is None
+
+    def test_parser_for_known_name_returns_callable(self):
+        from src.python.fetcher.cassette_checks import parser_for
+
+        assert callable(parser_for("tencent_quote"))
+
+    def test_anchor_falls_back_to_none_for_bad_timestamp(self, monkeypatch):
+        from src.python.fetcher import cassette_checks
+
+        monkeypatch.setattr(cassette_checks, "list_cassettes", lambda: [{"name": "x", "recorded_at": "不是时间"}])
+
+        assert cassette_checks._recording_anchor("x") is None
+
+    def test_anchor_falls_back_to_none_when_name_absent(self, monkeypatch):
+        from src.python.fetcher import cassette_checks
+
+        monkeypatch.setattr(cassette_checks, "list_cassettes", lambda: [{"name": "other", "recorded_at": "2025-01-02"}])
+
+        assert cassette_checks._recording_anchor("x") is None

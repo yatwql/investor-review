@@ -10,7 +10,8 @@
   - 大小上限：10MB（读流计数，超限即拒；Flask MAX_CONTENT_LENGTH 兜底）。
   - 内容校验：读前 4 字节校验 PK zip 魔数（``PK\\x03\\x04``），防改扩展名
     伪装；zip-bomb 由大小上限兜底。
-  - 落盘：``tempfile.mkstemp`` 到 ``_UPLOAD_DIR`` + ``os.replace`` 原子写。
+  - 落盘：委托 `core.atomic_write.write_bytes_atomic` 的原子写原语
+    （同目录临时文件 + ``os.replace``），落点在 ``_UPLOAD_DIR``。
   - 预检：立即内容预检（行数上限 5000 + 空持仓/无有效账户即拒，避免
     "上传成功、生成失败"的坏体验）；预检通过才注册 file_id。
   - file_id：``secrets.token_urlsafe(16)`` 生成（不可预测）；内存映射

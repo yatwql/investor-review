@@ -276,3 +276,47 @@ class TestOverlapEdgeCases(unittest.TestCase):
         # 所以第一对应该是 110011-162605
         scores = [max(p["jaccard"], 0.01 if p["common_count"] > 0 else 0) for p in result["pairs"]]
         self.assertEqual(scores, sorted(scores, reverse=True))
+
+
+class TestHeatClass:
+    """重合度热力档阈值（0.50 / 0.30 / 0.15）与 class 名的单一事实源。"""
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            (1.0, "heat-strong"),
+            (0.50, "heat-strong"),
+            (0.49, "heat-mid"),
+            (0.30, "heat-mid"),
+            (0.29, "heat-weak"),
+            (0.15, "heat-weak"),
+            (0.14, "heat-faint"),
+            (0.0001, "heat-faint"),
+            (0.0, ""),
+            (-0.5, ""),
+        ],
+    )
+    def test_tier_boundaries(self, value, expected):
+        from src.python.report.position_overlap import heat_class
+
+        assert heat_class(value) == expected
+
+    @pytest.mark.parametrize("bad", [None, "not-a-number", object()])
+    def test_non_numeric_is_uncoloured(self, bad):
+        from src.python.report.position_overlap import heat_class
+
+        assert heat_class(bad) == ""
+
+    def test_matrix_ships_parallel_class_matrix(self):
+        """结果同时给 heat_classes 矩阵，供模板直接取用（模板内不再做比较）。"""
+        fund_holdings = {
+            "F1": [{"code": "600900", "name": "长江电力", "ratio": 10}],
+            "F2": [{"code": "600900", "name": "长江电力", "ratio": 10}],
+        }
+
+        result = compute_overlap_matrix(fund_holdings)
+
+        assert len(result["heat_classes"]) == len(result["funds"])
+        assert result["heat_classes"][0][1] == "heat-strong"
+        # 对角＝自身重合，语义上恒 1.0 → 最热档（重叠度矩阵不在对角做特判）
+        assert result["heat_classes"][0][0] == "heat-strong"

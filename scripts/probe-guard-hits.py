@@ -26,7 +26,7 @@ from collections import defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 共享设施包（_shared/checklib）
-from _shared.checklib import GUARD_HITS_LEDGER, add_common_args  # noqa: E402
+from _shared.checklib import GUARD_HITS_LEDGER, add_common_args
 
 #: 处置判定
 _KEEP = "保留"

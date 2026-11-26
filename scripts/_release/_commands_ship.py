@@ -10,6 +10,7 @@ import datetime as _dt
 import re
 import sys
 import time
+from typing import Any
 
 from _release._cli import RELEASE_BENCH_MODES
 from _release._commands_base import (
@@ -46,7 +47,7 @@ from _release._versioning import (
 )
 
 
-def cmd_refresh(args: argparse.Namespace, env, runner=None) -> int:
+def cmd_refresh(args: argparse.Namespace, env: Any, runner: Any = None) -> int:
     force = bool(getattr(args, "force_refresh", False))
     full_bench = bool(getattr(args, "full_bench", False))
     bench_scope = "bench" if full_bench else ",".join(RELEASE_BENCH_MODES)
@@ -119,7 +120,7 @@ def cmd_refresh(args: argparse.Namespace, env, runner=None) -> int:
     return 0
 
 
-def cmd_evolution(args: argparse.Namespace, env, runner=None) -> int:
+def cmd_evolution(args: argparse.Namespace, env: Any, runner: Any = None) -> int:
     print("[..] 版本演进快照（git 清单 + 逐文件行数）")
     started = time.perf_counter()
     stats = build_evolution_stats(env.REPO_ROOT, runner)
@@ -164,7 +165,7 @@ def cmd_evolution(args: argparse.Namespace, env, runner=None) -> int:
     return 0
 
 
-def cmd_publish(args: argparse.Namespace, env, runner=None) -> int:
+def cmd_publish(args: argparse.Namespace, env: Any, runner: Any = None) -> int:
     print("[..] publish 预检（发布形态；工作树此时允许带 prepare 待提交改动）")
     if not _print_results(env.run_preflight(env.REPO_ROOT, expect_release=True, runner=runner, require_clean=False)):
         print("[ERR] 预检未通过，publish 中止")
@@ -289,7 +290,9 @@ def cmd_publish(args: argparse.Namespace, env, runner=None) -> int:
     return 0
 
 
-def _release_closure_problems(env, release_version: str, next_dev: str, runner=None) -> tuple[list[str], list[str]]:
+def _release_closure_problems(
+    env: Any, release_version: str, next_dev: str, runner: Any = None
+) -> tuple[list[str], list[str]]:
     """发布闭环校验：返回 ``(errors, warnings)``。
 
     闭环口径（`CLAUDE.md`「每次正式发布都必须把 dev 合并入 master 并推送」）：
@@ -331,7 +334,7 @@ def _release_closure_problems(env, release_version: str, next_dev: str, runner=N
     return errors, warnings
 
 
-def cmd_devbump(args: argparse.Namespace, env, runner=None) -> int:
+def cmd_devbump(args: argparse.Namespace, env: Any, runner: Any = None) -> int:
     branch = _current_branch(env.REPO_ROOT, runner)
     if branch != "dev":
         print(f"[ERR] 当前分支 {branch or '<获取失败>'}，devbump 仅在 dev 上执行")

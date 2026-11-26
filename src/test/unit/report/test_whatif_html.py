@@ -351,8 +351,24 @@ class TestSwitchOffGoldenBaseline(unittest.TestCase):
     # @media 块数、以及去样式后的正文逐字符哈希三者与改动前完全一致（正文哈希
     # 822813842e30f32465d7cfdd12363c639c13b8d924c661dc3c0ca2aafe2197ed，样式规则集哈希
     # 505214c481ef2963a9c17517d681fdaaf843b8db1316e0a327a2df54f497e28a）。
-    _GOLDEN_BASE_SHA256 = "d29d82feb070e8e6485eb13f8ecf6b1355f618a558268b185776d57f9167d050"
-    _GOLDEN_FULL_SHA256 = "bec364bcdbb3547421062e69f088740dbc945340814de6e72e0d4306d07ceb55"
+    # 基线复核记录（2026-11-26，图表配色 token 化批次）：字节差异仅来自三个图表数据集的
+    # 描边/填充取色处使用 window.ChartTheme 引用（基准蓝/目标橙/业绩基准绿 +
+    # ChartTheme.alpha 派生半透明填充）；label/data/options 一字未动，
+    # 关态业务字节面（数据、文案、结构、章节顺序）零变化。
+    #
+    # 基线复核记录（2026-11-26，模板灰色内联色归位语义类批次）：字节差异仅来自样式块
+    # 新增 `.text-muted` / `.text-faint` 两条工具类，以及模板里原先写在 style 属性中的
+    # `color: var(--text-muted)` / `color: var(--text-faint)` 声明移到元素 class 上；
+    # 类的声明与旧内联值一字不差，其余 style 声明（字号/间距）原样保留。
+    # 已按「结构与文案不变」验证：剥除全部 class/style 属性后的 HTML 与改动前逐字符
+    # 一致（唯一文本差异即上述两条 CSS 规则），CSS 规则集多重集仅增 2 条、无删无改。
+    #
+    # 基线复核记录（2026-11-26，彩色内联色归位语义类批次）：本批只改报告侧
+    # `partials/_report_styles.html` 的语义色工具类块，whatif 页样式链
+    # （`partials/_base_styles.html` + `partials/_whatif_styles.html`）不在改动域；
+    # 两个基线常量与渲染字节逐字节对上，不需重标定。
+    _GOLDEN_BASE_SHA256 = "5aa6d8fc46b07dd1e69ee808791e595c840aa5e026c61e146b45298cf57a56db"
+    _GOLDEN_FULL_SHA256 = "ce4718d4385d9f3bda4ea03319279f3ef9a139a0e9d13a9da6e010707f53ca22"
 
     def _render(self, **extra) -> str:
         from unittest.mock import patch

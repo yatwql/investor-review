@@ -239,7 +239,7 @@ def _group_penetration_and_perf(state: HtmlAssembly) -> None:
         """补齐单张图：失败只跳过该图（图表缺失不该影响整份报告）。"""
         try:
             charts[key] = build()
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 — 有意宽捕获（不窄化：单张图数据补齐失败只跳过该图，不影响整份报告）
             logger.warning("[chart] %s 数据补齐失败，保留原数据集", key, exc_info=True)
 
     _fill("category_doughnut", lambda: _build_category_doughnut_dataset(None, state.cat_data))

@@ -52,7 +52,7 @@ _SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
-from _shared.checklib import REPO_ROOT, add_common_args, rel, report  # noqa: E402
+from _shared.checklib import REPO_ROOT, add_common_args, rel, report
 
 _TEST_ROOT = REPO_ROOT / "src" / "test"
 

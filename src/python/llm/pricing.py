@@ -268,7 +268,7 @@ def reload_pricing() -> None:
         PRICING_IDLE_PERIODS[:] = config["idle_periods"]
         PRICING_WEEKEND_ALWAYS_IDLE = bool(config["weekend_always_idle"])
         PRICING_HOLIDAY_ALWAYS_IDLE = bool(config["holiday_always_idle"])
-    except Exception:
+    except Exception:  # noqa: BLE001 — 加载计价参考失败，使用内置定价
         logger.debug("加载计价参考失败，使用内置定价", exc_info=True)
     finally:
         # 显式重载即「已加载」：否则下一次计费的懒加载会再读一次文件，把调用方

@@ -12,6 +12,7 @@ chart_data_builder 调用本模块，避免其超过行数预算（≤400 行，
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime
 
 # ── 下采样阈值（§4.9）─────────────────────────────────────
@@ -19,7 +20,7 @@ DOWNSAMPLE_WEEK_THRESHOLD = 500  # 日频 > 500 点（约 2 年）→ 周聚合
 DOWNSAMPLE_MONTH_THRESHOLD = 200  # 周聚合仍 > 200 点 → 月聚合兜底
 
 
-def aggregate_bars_last(bars: list, key_fn) -> list:
+def aggregate_bars_last(bars: list, key_fn: Callable[[str], object]) -> list:
     """按 key_fn 分组合并，每组取最后一条（bars 已按日期升序）。
 
     保证曲线形态不畸变：取周期末值而非平均（§4.9）。

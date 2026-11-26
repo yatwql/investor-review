@@ -17,9 +17,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # scripts/（`_shared` 与 `_test_redundancy` 均从此解析）
-from _shared.checklib import REPO_ROOT, rel  # noqa: E402
+from _shared.checklib import REPO_ROOT, rel
 
-from _test_redundancy._common import _TEST_ROOT as TEST_DIR  # noqa: E402
+from _test_redundancy._common import _TEST_ROOT as TEST_DIR
 
 #: 标记注册的单一事实来源（`pytest_configure` 里的 `addinivalue_line("markers", …)`）
 CONFTEST_PATH = REPO_ROOT / "src" / "test" / "conftest.py"

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ._validation_common import (  # noqa: F401 — 域内复用
+from ._validation_common import (  # 域内复用
     _MISSING,
     _section,
 )

@@ -33,6 +33,7 @@ import os  # noqa: F401 — 测试以 `rel.os.cpu_count` 重定向并行度探�
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONSTANTS_FILE = REPO_ROOT / "src" / "python" / "core" / "constants.py"
@@ -74,21 +75,21 @@ BENCH_STAMP_FILE = REPO_ROOT / "logs" / "release-bench-stamp.json"
 # ── 内部实现拆分（_release/ 包）：入口只保留路径常量、env 投影、薄包装与 main ──
 sys.path.insert(0, str(REPO_ROOT))  # 仓库根：耗时台账复用 core 层 JSONL 原子追加原语
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享设施（_release 包）
-from _release import _commands_base as _cmd_base  # noqa: E402
-from _release import _commands_prep as _cmd_prep  # noqa: E402
-from _release import _commands_ship as _cmd_ship  # noqa: E402
-from _release import _gate  # noqa: E402
-from _release._archive_flow import ArchiveContext  # noqa: E402, F401 — 归档上下文类型面
-from _release._archive_init import init_archive  # noqa: E402, F401
-from _release._changelog_archive import SECTION_NOTE as _SECTION_NOTE  # noqa: E402, F401
-from _release._changelog_archive import (  # noqa: E402, F401 — 纯函数面经入口 re-export
+from _release import _commands_base as _cmd_base
+from _release import _commands_prep as _cmd_prep
+from _release import _commands_ship as _cmd_ship
+from _release import _gate
+from _release._archive_flow import ArchiveContext  # 归档上下文类型面
+from _release._archive_init import init_archive
+from _release._changelog_archive import SECTION_NOTE as _SECTION_NOTE
+from _release._changelog_archive import (  # 纯函数面经入口 re-export
     apply_changelog_release,
     release_section_has_entries,
     render_archive_header,
     write_archive_release,
 )
-from _release._cli import RELEASE_BENCH_MODES, build_parser, run_cli  # noqa: E402, F401
-from _release._commands_base import (  # noqa: E402, F401 — 共用原语
+from _release._cli import RELEASE_BENCH_MODES, build_parser, run_cli
+from _release._commands_base import (  # 共用原语
     _failure_context,
     _gate_workers,
     _print_results,
@@ -98,9 +99,9 @@ from _release._commands_base import (  # noqa: E402, F401 — 共用原语
     _timer,
     run_preflight,
 )
-from _release._commands_prep import run_archive  # noqa: E402, F401
-from _release._common import ReleaseError, exec_command as _exec  # noqa: E402, F401
-from _release._evolution import (  # noqa: E402, F401 — 演进纯函数面
+from _release._commands_prep import run_archive
+from _release._common import ReleaseError, exec_command as _exec
+from _release._evolution import (  # 演进纯函数面
     build_evolution_stats,
     check_evolution_freshness,
     fmt_pair as _fmt_pair,
@@ -109,7 +110,7 @@ from _release._evolution import (  # noqa: E402, F401 — 演进纯函数面
     update_evolution_table,
     update_ratio_note,
 )
-from _release._ledger_archive import (  # noqa: E402, F401 — 台账变换纯函数面
+from _release._ledger_archive import (  # 台账变换纯函数面
     RF_PLACEHOLDER,
     _INDEX_RANGE_RE,
     _RF_ARCHIVE_HEAD_FMT,
@@ -133,7 +134,7 @@ from _release._ledger_archive import (  # noqa: E402, F401 — 台账变换纯�
     stale_reference_files,
     unreferenced_docs,
 )
-from _release._timing import (  # noqa: E402, F401 — 耗时台账纯函数面
+from _release._timing import (  # 耗时台账纯函数面
     agent_identity,
     build_record,
     format_agent,
@@ -141,7 +142,7 @@ from _release._timing import (  # noqa: E402, F401 — 耗时台账纯函数面
     release_token_usage,
     session_usage,
 )
-from _release._versioning import (  # noqa: E402, F401 — 版本纯函数面
+from _release._versioning import (  # 版本纯函数面
     DEV_VERSION_RE as _DEV_VERSION_RE,
     RELEASE_VERSION_RE as _RELEASE_VERSION_RE,
     next_dev_version_of,
@@ -151,6 +152,62 @@ from _release._versioning import (  # noqa: E402, F401 — 版本纯函数面
     render_app_version,
     render_readme_version,
 )
+
+#: 测试与台账脚本按本模块名访问的再导出面（实现见对应子模块）
+__all__ = [
+    "init_archive",
+    "_SECTION_NOTE",
+    "apply_changelog_release",
+    "render_archive_header",
+    "write_archive_release",
+    "RELEASE_BENCH_MODES",
+    "build_parser",
+    "_failure_context",
+    "_print_results",
+    "_record_failure",
+    "_run_step",
+    "run_preflight",
+    "run_archive",
+    "build_evolution_stats",
+    "_fmt_pair",
+    "_line_count",
+    "update_case_note",
+    "update_evolution_table",
+    "update_ratio_note",
+    "RF_PLACEHOLDER",
+    "_INDEX_RANGE_RE",
+    "_RF_ARCHIVE_HEAD_FMT",
+    "_bump_index_range",
+    "_collapse_superseded_placeholders",
+    "apply_plan_archive",
+    "apply_rf_archive",
+    "archive_header_findings",
+    "count_rf_rows",
+    "design_doc_candidates",
+    "drop_migration_placeholders",
+    "move_tree_entry",
+    "open_ids",
+    "pending_rf_rows",
+    "plan_completed_sections",
+    "unmarked_completed_plan_sections",
+    "recompute_current_iteration",
+    "rewrite_doc_refs",
+    "stale_reference_files",
+    "unreferenced_docs",
+    "agent_identity",
+    "build_record",
+    "format_agent",
+    "format_tokens",
+    "release_token_usage",
+    "session_usage",
+    "_DEV_VERSION_RE",
+    "_RELEASE_VERSION_RE",
+    "next_dev_version_of",
+    "normalize_release_title",
+    "release_version_of",
+    "render_app_version",
+    "render_readme_version",
+]
 
 
 # ─────────────────────────── 环境投影（测试重定向的单一入口） ───────────────────────────
@@ -222,15 +279,15 @@ def archive_prerequisites(release_version: str) -> list[str]:
     return _cmd_base.archive_prerequisites(release_version, _env())
 
 
-def _tree_fingerprint(runner=None) -> str:
+def _tree_fingerprint(runner: Any = None) -> str:
     return _cmd_base._tree_fingerprint(_env(), runner)
 
 
-def _code_fingerprint(runner=None) -> str:
+def _code_fingerprint(runner: Any = None) -> str:
     return _cmd_base._code_fingerprint(_env(), runner)
 
 
-def _bench_covers_verify(runner=None) -> dict | None:
+def _bench_covers_verify(runner: Any = None) -> dict | None:
     return _cmd_base._bench_covers_verify(_env(), runner)
 
 
@@ -255,42 +312,42 @@ def _gate_stamp_matches(version: str, fingerprint: str) -> dict | None:
 # ─────────────────────────── 命令薄包装（保持既有调用面） ───────────────────────────
 
 
-def cmd_check(args: argparse.Namespace, runner=None) -> int:
+def cmd_check(args: argparse.Namespace, runner: Any = None) -> int:
     return _cmd_prep.cmd_check(args, _env(), runner)
 
 
-def cmd_archive_init(args: argparse.Namespace, runner=None) -> int:
+def cmd_archive_init(args: argparse.Namespace, runner: Any = None) -> int:
     return _cmd_prep.cmd_archive_init(args, _env(), runner)
 
 
-def cmd_prepare(args: argparse.Namespace, runner=None) -> int:
+def cmd_prepare(args: argparse.Namespace, runner: Any = None) -> int:
     return _cmd_prep.cmd_prepare(args, _env(), runner)
 
 
-def cmd_archive(args: argparse.Namespace, runner=None) -> int:
+def cmd_archive(args: argparse.Namespace, runner: Any = None) -> int:
     return _cmd_prep.cmd_archive(args, _env(), runner)
 
 
-def cmd_refresh(args: argparse.Namespace, runner=None) -> int:
+def cmd_refresh(args: argparse.Namespace, runner: Any = None) -> int:
     return _cmd_ship.cmd_refresh(args, _env(), runner)
 
 
-def cmd_evolution(args: argparse.Namespace, runner=None) -> int:
+def cmd_evolution(args: argparse.Namespace, runner: Any = None) -> int:
     return _cmd_ship.cmd_evolution(args, _env(), runner)
 
 
-def cmd_publish(args: argparse.Namespace, runner=None) -> int:
+def cmd_publish(args: argparse.Namespace, runner: Any = None) -> int:
     return _cmd_ship.cmd_publish(args, _env(), runner)
 
 
-def cmd_devbump(args: argparse.Namespace, runner=None) -> int:
+def cmd_devbump(args: argparse.Namespace, runner: Any = None) -> int:
     return _cmd_ship.cmd_devbump(args, _env(), runner)
 
 
 # ─────────────────────────── gate ───────────────────────────
 
 
-def cmd_gate(args: argparse.Namespace, runner=None) -> int:
+def cmd_gate(args: argparse.Namespace, runner: Any = None) -> int:
     """P2 门禁编排（实现在 `_release/_gate.py`；依赖按当前模块状态注入）。"""
     ctx = SimpleNamespace(
         check_evolution_freshness=check_evolution_freshness,

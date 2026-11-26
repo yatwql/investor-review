@@ -51,7 +51,7 @@ def write_news_sheet(
         if build_news_data is not None:
             try:
                 news_data, _meta = build_news_data(holdings, top_n=news_top_count, penetrated_assets=penetrated_assets)
-            except Exception:
+            except Exception:  # noqa: BLE001 — 新闻取数失败仍写出警示行，Excel 不得因新闻缺失中断
                 prog.add_error("新闻数据获取失败（详情请查看日志）")
                 news_data, _meta = [], {}
         else:

@@ -24,6 +24,7 @@ import pytest
 
 from src.python.llm.pacing import (
     PacingGate,
+    PacingPolicy,
     get_policy,
     parse_policy,
     register_policies,
@@ -409,3 +410,11 @@ class TestCallDurationExcludesPacingWait:
         assert recorded["duration"] == pytest.approx(0.1, abs=0.1), (
             f"须扣除排队 0.2s（0.3s 墙钟 → 约 0.1s），实际记 {recorded['duration']:.3f}s"
         )
+
+
+class TestPacingPolicyRepr:
+    def test_repr_shows_every_constraint(self):
+        """`__repr__` 是诊断面：三个约束字段都必须可读（缺一就看不出策略为何生效）。"""
+        policy = PacingPolicy(min_interval=0.5, jitter=0.2, max_concurrency=3)
+
+        assert repr(policy) == "PacingPolicy(min_interval=0.5, jitter=0.2, max_concurrency=3)"

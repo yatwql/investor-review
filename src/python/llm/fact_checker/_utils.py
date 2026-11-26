@@ -406,7 +406,7 @@ def _subject_spans(
     text: str,
     holding_codes: set[str],
     name_to_code: dict[str, str] | None,
-    anchor: int = 0,
+    _anchor: int = 0,
 ) -> list[tuple[int, int, str]]:
     """主体出现区间 ``[(start, end, code), ...]``——代码/全名/简称归一的**单源实现**。
 

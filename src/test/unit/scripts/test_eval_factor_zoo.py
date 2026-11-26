@@ -383,7 +383,7 @@ def test_inlined_formulas_match_src_implementation():
     """评测内联的涨跌幅/滚动 Beta 与 `analysis/_factor_formulas` 逐值一致。"""
     from src.python.analysis import _factor_formulas as src_impl
 
-    from _eval_factor_zoo import metrics as zoo  # noqa: F401 —— 由 load_script 加入 sys.path
+    from _eval_factor_zoo import metrics as zoo  # 由 load_script 加入 sys.path
 
     closes = [10.0, 10.5, 10.2, 10.8, 11.3, 11.0, 11.6]
     bars = [{"close": c} for c in closes]

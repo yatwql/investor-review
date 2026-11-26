@@ -36,7 +36,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.python.analysis.metrics_returns import (  # noqa: F401
+from src.python.analysis.metrics_returns import (
     annualized_return,
     calmar_ratio,
     check_data_sufficiency,
@@ -48,7 +48,7 @@ from src.python.analysis.metrics_returns import (  # noqa: F401
     sharpe_ratio,
     truncate_extreme_values,
 )
-from src.python.analysis.metrics_risk import (  # noqa: F401
+from src.python.analysis.metrics_risk import (
     hhi,
     individual_volatility,
     portfolio_beta,

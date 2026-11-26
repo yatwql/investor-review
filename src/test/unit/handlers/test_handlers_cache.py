@@ -859,3 +859,41 @@ class TestPositionResultFreshnessOutput(unittest.TestCase):
             hc._print_position_result(result)
 
         self.assertNotIn("取价口径", buf.getvalue())
+
+
+@pytest.mark.unit_core
+class TestLagTradingDaysAndHoldFailure(unittest.TestCase):
+    """交易日落后计算的两条降级路径 + 持仓缓存部分失败的告警口径。"""
+
+    def test_missing_date_returns_none(self):
+        """任一日期缺失 → 不猜落后天数（返回 None）。"""
+        from src.python.tui.handlers_cache import _lag_trading_days
+
+        self.assertIsNone(_lag_trading_days("", "2026-07-01"))
+        self.assertIsNone(_lag_trading_days("2026-06-01", ""))
+
+    def test_calendar_error_returns_none(self):
+        """历法不可用（异常）→ 返回 None，不让新鲜度展示中断刷新流程。"""
+        from src.python.core import trading_calendar
+        from src.python.tui.handlers_cache import _lag_trading_days
+
+        with patch.object(
+            trading_calendar,
+            "count_trading_days_elapsed",
+            side_effect=RuntimeError("历法不可用"),
+        ):
+            self.assertIsNone(_lag_trading_days("2026-06-01", "2026-07-01"))
+
+    def test_partial_fund_holdings_failure_is_warned(self):
+        """部分基金持仓抓取失败 → 该行显示 [!] 与失败只数（不谎报全部成功）。"""
+        from src.python.cache.operations import CacheUpdateResult
+        from src.python.tui.handlers_cache import _print_cache_refresh_report
+
+        result = CacheUpdateResult(total_funds=3, perf_ok=3, hold_ok=2, bm_ok=3)
+        stdout = io.StringIO()
+        with patch("sys.stdout", stdout):
+            _print_cache_refresh_report(result)
+
+        output = stdout.getvalue()
+        self.assertIn("[!]", output)
+        self.assertIn("(2/3 成功, 1 只失败)", output)

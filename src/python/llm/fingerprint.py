@@ -123,7 +123,7 @@ def build_llm_fingerprint(
     penetrated_assets: list[dict] | None = None,
     categories: dict | None = None,
     full_penetration: bool = False,
-    history_data: dict | None = None,
+    history_data: dict | None = None,  # noqa: ARG001 — 公开指纹 API 签名（调用方按关键字传历史）
 ) -> str:
     """构建 LLM 模块的缓存指纹：**只锁结构与口径，不锁行情**。
 

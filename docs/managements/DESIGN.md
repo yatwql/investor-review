@@ -24,7 +24,9 @@
 | 盈 / 涨 | `.profit` | `--profit` |
 | 亏 / 跌 | `.loss` | `--loss` |
 | 评级（优秀 / 偏差 / 较差 / 稳定） | `.rating-excellent` / `.rating-deviation` / `.rating-poor` / `.rating-stable` | 同名 token |
-| 告警文字 / 次级文字 / 主色文字 | `.text-warn` / `.text-muted` / `.text-primary` | `--warn-text` / `--text-muted` / `--primary` |
+| 告警文字 / 次级文字 / 弱化文字 / 主色文字 | `.text-warn` / `.text-muted` / `.text-faint` / `.text-secondary` / `.text-primary` | `--warn-text` / `--text-muted` / `--text-faint` / `--text-secondary` / `--primary` |
+| 三级文字 / 危险文字 | `.text-tertiary` / `.text-danger` | `--text-tertiary` / `--danger-text` |
+| LLM 调用状态文字（停用 / 失败 / 缓存命中 / 成功 / 未知 / 思考中） | `.llm-status-disabled` / `.llm-status-failed` / `.llm-status-cached` / `.llm-status-success` / `.llm-status-unknown` / `.llm-status-thinking` | 同名 token |
 | 相关性热力（强正 / 正 / 强负） | `.corr-pos-strong` / `.corr-pos-mid` / `.corr-neg-strong` | 同名 token |
 | 配置分布条填充 | `.fill-primary` / `.fill-alloc-mid` / `.fill-alloc-low` | `--primary` / `--alloc-mid` / `--alloc-low` |
 | 字重 / 字号 | `.fw-600` / `.fs-table-sm` / `.fs-kpi` | `--fs-table-sm` / `--fs-kpi` |
@@ -135,7 +137,7 @@
 
 ## Do's and Don'ts — 护栏（与样式机检同源）
 
-1. **DO** 新增颜色一律引用语义角色变量；**DON'T** 在新增声明里写裸 hex/rgb（Chart 配置域与双主题 override 块除外）。
+1. **DO** 新增颜色一律引用语义角色变量；**DON'T** 在新增声明里写裸 hex/rgb（豁免仅限 token 兜底默认值——`cssVar('--chart-*', fallback)` 的 fallback、`ChartTheme` 的调色板常量、页内脚本在 token/`ChartTheme` 缺席时的 `|| '#…'` 兜底值——以及双主题 override 块）。
 2. **DO** 圆角、间距只取档位值；**DON'T** 引入档外新值。
 3. **DO** 保持单一强调色（品牌蓝）；**DON'T** 引入第二强调色或把状态色当品牌色用。
 4. **DO** 涨跌域（红涨绿跌）与状态域（绿 ok 红 error）各司其职；**DON'T** 跨域互换或混用变量。
@@ -144,9 +146,10 @@
 7. **DO** 空态与状态文案只用 Data States 口径；**DON'T** 同义多口径并存。
 8. **DO** 新组件过六态清单（含 focus-visible）；**DON'T** 交付只写 default 的组件。
 9. **DO** 类名与文案用中文语义（英文语义词亦可）；**DON'T** 把任务编号、内部代号写进类名/文案。
-10. **DO** 图表配色只走 `--chart-*` 并经 `theme.js` 烘焙链；**DON'T** 在图表配置里散写颜色字面量。
+10. **DO** 图表配色只走 `--chart-*` 并经 `theme.js` 烘焙链，模板与页内脚本取值一律经 `window.ChartTheme`（半透明填充由 `.alpha()` 派生）；**DON'T** 在图表配置里散写颜色字面量（除第 1 条豁免的兜底默认值）。
 11. **DO** 品牌标记（猫头鹰「守望」）只作身份识别、尺寸 ≤40px（favicon 32px / Excel 首页 ≤48px）；**DON'T** 把它放大成 hero、加动效、或塞进正文区块当装饰。
 12. **DO** 分组标题（域/块/组、报告章节区标题）统一取结构色 `--primary` + 分隔线/竖线，跨渠道同一色调同一风格；**DON'T** 用状态色（绿/黄/红）做组标题，或让分组标题随状态变化。
+13. **DO** 分类/分色语义调色板（`ChartTheme.doughnutColors` / `benchmarkColors` / `barColors`）登记为 `ChartTheme` 常量，随主题切换整组替换；**DON'T** 在图表配置里按点位散写调色板色值。
 
 > **机检**（`scripts/check-style-guardrails.py`，复用 `_shared/checklib` 契约）：**E 级判 finding**（`--ci` 退出 2）——护栏 3 强调色越权（品牌蓝 hex 集从 `:root` 强调系 token 动态提取）、护栏 5 明暗同步（dark 覆盖变量根缺）、Colors「同名对齐」段双面 token 对表（表↔实现双向）、**W3 内联色值**（E 级判 finding）；**W 级观察统计不判 finding**——护栏 1 裸色值统计、护栏 2 圆角档位（`-v` 明细）；**W4 档外字号 / W5 档外间距**（W1 的引号整行豁免为 JS 图表配置设计，HTML 内联 `style=` 色值由 W3 按位置级判定覆盖；W4/W5 把 Do-Don't「不发明新档」落为可观察项，只判字面量、token 用法不命中）。**门禁归属**：由 unit 测试快反馈 + `release.py gate` 执行，不入 pre-commit 钩子域与 CI guards（护栏 4/6/7/9/10 由既有测试与 code-traces 等守护分担）。
 

@@ -15,6 +15,9 @@ patch 点有效（与 ``[S]`` 面板同一手法）。
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import ModuleType
+from typing import TYPE_CHECKING
+
 from src.python.core.ansi_colors import DIM, GREEN, RESET, YELLOW
 from src.python.tui.panel_runtime import NavState, PanelItem, panel_loop
 from src.python.tui.prompt_text import panel_prompt
@@ -33,6 +36,9 @@ from src.python.tui.text_layout import (
     style_heading,
     truncate_display,
 )
+
+if TYPE_CHECKING:  # 仅类型标注：章节条目由注册表提供，运行期本模块靠惰性导入取用
+    from src.python.config.chapter_registry import ChapterEntry
 
 COST_HISTORY_DAYS = 7
 """LLM 章节行尾历史费用摘要的回看窗口天数（与 ``perf.module_cost_summary`` 同口径）。"""
@@ -139,7 +145,7 @@ class _ChaptersPanel:
     主循环只剩编排。行为与单函数版本一致（既有渲染、写盘、闸门、帮助用例覆盖）。
     """
 
-    def __init__(self, hc) -> None:  # noqa: ANN001 — handlers_config（调用方传入，避免导入环）
+    def __init__(self, hc: ModuleType) -> None:  # 说明：入参为 handlers_config 模块（调用方传入，避免导入环）
         from src.python.config import default_enabled_llm
         from src.python.core.registry import get_llm_module_names
         from src.python.tui.tui_menu import filter_menu_llm_modules
@@ -161,11 +167,11 @@ class _ChaptersPanel:
             from src.python.core.perf import module_cost_summary
 
             return module_cost_summary(COST_HISTORY_DAYS)
-        except Exception:
+        except Exception:  # noqa: BLE001 — [C] LLM 章节费用摘要读取失败，静默省略
             self._hc.logger.debug("[C] LLM 章节费用摘要读取失败，静默省略", exc_info=True)
             return {}
 
-    def status(self, entry) -> bool:  # noqa: ANN001 — ChapterEntry（运行时取值，避免导入环）
+    def status(self, entry: ChapterEntry) -> bool:
         """当前开关态：三块各按自己的来源读（config / llm_settings / features）。"""
         from src.python.config import get_config
         from src.python.config.chapter_registry import SOURCE_CONFIG, SOURCE_LLM
@@ -182,7 +188,7 @@ class _ChaptersPanel:
         for line in wrap_hanging(message, inner_width(terminal_columns())):
             print(line)
 
-    def toggle_chapter(self, entry) -> None:  # noqa: ANN001
+    def toggle_chapter(self, entry: ChapterEntry) -> None:
         """切一章（LLM 章同步内存态，避免同屏继续读到旧值）。"""
         from src.python.config.chapter_registry import SOURCE_LLM, chapter_edit_key, chapter_label
 
@@ -194,7 +200,7 @@ class _ChaptersPanel:
             self.emit(f"  {GREEN}[OK]{RESET} {label}已{'启用' if not current else '禁用'}")
             self._hc.refresh_config()
 
-    def toggle_sub(self, flag: str, parent) -> None:  # noqa: ANN001
+    def toggle_sub(self, flag: str, parent: ChapterEntry) -> None:
         """切一个生成子项（父章未开时只提示、不写盘）。"""
         from src.python.config.chapter_registry import chapter_label, chapter_number
         from src.python.config.features import feature_switch_registry, is_feature_enabled
@@ -425,7 +431,7 @@ def run_report_chapters_panel() -> None:
     _ChaptersPanel(hc).run()
 
 
-def _chapter_detail(entry, llm_names) -> str:  # noqa: ANN001
+def _chapter_detail(entry: ChapterEntry, llm_names: dict[str, str]) -> str:
     """面板单项详情：来源文件 + 写键 + 出厂默认 + 影响面（``?编号`` 用）。"""
     from src.python.config.chapter_registry import (
         SOURCE_FILES,
@@ -441,7 +447,7 @@ def _chapter_detail(entry, llm_names) -> str:  # noqa: ANN001
     )
 
 
-def _print_detail(chapter, flag: str, llm_names, cost_history) -> bool:  # noqa: ANN001
+def _print_detail(chapter: ChapterEntry, flag: str, llm_names: dict[str, str], cost_history: dict) -> bool:
     """打印章节 / 子项详情（只读）；未知目标返回 False 交运行时通用帮助。"""
     from src.python.config.chapter_registry import (
         SOURCE_FILES,

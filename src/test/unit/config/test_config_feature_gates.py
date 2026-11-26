@@ -12,6 +12,7 @@
 from __future__ import annotations
 import json
 import unittest
+from unittest.mock import MagicMock
 from src.python import config as cfg
 import pytest
 
@@ -225,3 +226,40 @@ class TestReportSectionOrderTemplateMatchesRegistry:
         assert set(order) <= get_report_section_keys(), f"模板含未知模块: {set(order) - get_report_section_keys()}"
         for key, num in order.items():
             assert defaults[key] == num, f"{key} 模板序号 {num} != 注册表默认 {defaults[key]}"
+
+
+class TestAccessorDefaultConfigSource:
+    """访问器未传 config 时读全局配置；Provider 配置文件已存在时不做任何写入。"""
+
+    def test_datasink_feature_ready_reads_global_config(self, monkeypatch):
+        getter = MagicMock(return_value={"enable_datasink": False})
+        monkeypatch.setattr(cfg._core, "get_config", getter)
+
+        cfg._core.datasink_feature_ready()
+
+        getter.assert_called_once_with()
+
+    def test_comparison_candidates_read_global_config(self, monkeypatch):
+        monkeypatch.setattr(cfg._core, "get_config", lambda: {"comparison_candidates": [1, "110022"]})
+
+        assert cfg._core.get_comparison_candidates() == ["000001", "110022"]
+
+    def test_providers_file_untouched_when_present(self, tmp_path, monkeypatch):
+        existing = tmp_path / "llm_providers.json"
+        existing.write_text("{}", encoding="utf-8")
+        write = MagicMock()
+        monkeypatch.setattr(cfg._core._llm_providers, "_get_llm_providers_path", lambda: str(existing))
+        monkeypatch.setattr(cfg._core, "_atomic_write", write)
+
+        cfg._core._ensure_llm_providers_file()
+
+        write.assert_not_called()
+
+    def test_providers_file_creation_failure_is_logged_not_raised(self, tmp_path, monkeypatch):
+        target = tmp_path / "data" / "llm_providers.json"
+        monkeypatch.setattr(cfg._core._llm_providers, "_get_llm_providers_path", lambda: str(target))
+        monkeypatch.setattr(cfg._core, "_atomic_write", MagicMock(side_effect=OSError("只读文件系统")))
+
+        cfg._core._ensure_llm_providers_file()
+
+        assert not target.exists()

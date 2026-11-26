@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from src.python.core.constants import PROJECT_ROOT
+from src.python.core.dates import parse_datetime_iso
 from src.python.core.jsonl_store import append_jsonl_atomic
 
 logger = logging.getLogger("invest")
@@ -106,7 +107,7 @@ def record_attempt(
             noun="报告追问账本",
             max_lines=_QA_USAGE_MAX_LINES,
         )
-    except Exception:  # 埋点不得影响追问主链路（含只读文件系统/磁盘满）
+    except Exception:  # noqa: BLE001 — 埋点不得影响追问主链路（含只读文件系统/磁盘满）
         logger.debug("[qa_telemetry] 记录失败，忽略", exc_info=True)
 
 
@@ -119,7 +120,7 @@ def _cost_of(model: str | None, input_tokens: int, output_tokens: int) -> float 
 
         value = compute_cost_value(model, input_tokens, output_tokens)
         return round(value, 6) if value is not None else None
-    except Exception:
+    except Exception:  # noqa: BLE001 — [qa_telemetry] 费用估算失败
         logger.debug("[qa_telemetry] 费用估算失败", exc_info=True)
         return None
 
@@ -129,7 +130,7 @@ def _basename(report: str | None) -> str:
         return ""
     try:
         return Path(str(report)).name
-    except Exception:
+    except Exception:  # noqa: BLE001 — 遥测文件名字面量，输入非常规对象时降级为空名
         return ""
 
 
@@ -217,7 +218,7 @@ def _currency_mixed(records: list[dict[str, Any]]) -> bool:
             from src.python.llm.pricing import model_currency
 
             currencies.add(model_currency(str(model)))
-        except Exception:
+        except Exception:  # noqa: BLE001 — 币种解析失败跳过该项费用展示，不影响其余遥测
             continue
     return len(currencies) > 1
 
@@ -241,11 +242,9 @@ def _load_records(days: int, path: Path | None = None) -> list[dict[str, Any]]:
             continue
         ts = row.get("ts")
         if isinstance(ts, str):
-            try:
-                if datetime.fromisoformat(ts) < cutoff:
-                    continue
-            except ValueError:
-                pass
+            ts_dt = parse_datetime_iso(ts)
+            if ts_dt is not None and ts_dt < cutoff:
+                continue
         rows.append(row)
     return rows
 

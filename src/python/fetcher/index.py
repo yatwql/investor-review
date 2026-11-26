@@ -14,7 +14,10 @@ from collections.abc import Callable
 from concurrent.futures import as_completed
 
 from src.python.core.concurrency import worker_pool
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from src.python.fetcher.chain_diagnostics import FailureDiagnostics
 
 from src.python.cache import NegativeCache
 from src.python.cache import get as cache_get
@@ -51,7 +54,7 @@ INDEX_HISTORY_BACKOFF = NegativeCache(
 _DETERMINISTIC_EMPTY_REASONS = frozenset({"返回空", "无结果"})
 
 
-def _empty_is_deterministic(diag) -> bool:
+def _empty_is_deterministic(diag: FailureDiagnostics) -> bool:
     """全链空是否为**确定性**（各源应答但无数据）——只有这类才配 12h 负缓存。"""
     if not diag.has_failure:
         return True
@@ -376,7 +379,7 @@ def fetch_index_history(code: str, days: int = 365) -> list[dict] | None:
             )
             clear_incremental_cache(chain_name, code)
             result = fetch_with_incremental_fallback(chain_name, code, days, diagnostics=diag)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — [index] 指数历史日线获取异常: %s
         logger.warning("[index] 指数历史日线获取异常: %s", code, exc_info=True)
         result = []
         diag.add(chain_name, f"{type(exc).__name__}")
@@ -450,7 +453,7 @@ def _fetch_us_indices_uncached() -> dict[str, dict[str, Any]]:
                 backoff,
             ),
         )
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — 美股指数新浪 API 请求失败（重试耗尽）: %s
         logger.warning("美股指数新浪 API 请求失败（重试耗尽）: %s", e)
         sina_data = {}
     if sina_data:
@@ -467,7 +470,7 @@ def _fetch_us_indices_uncached() -> dict[str, dict[str, Any]]:
         try:
             tencent_data = _fetch_us_from_tencent(missing)
             indices.update(tencent_data)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — 美股指数腾讯备用链路也失败: %s
             logger.warning("美股指数腾讯备用链路也失败: %s", e)
 
     # 全部失败 → 降级使用过期缓存

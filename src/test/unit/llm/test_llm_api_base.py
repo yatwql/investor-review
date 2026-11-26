@@ -603,3 +603,50 @@ class TestLoneSurrogateBoundary(unittest.TestCase):
 
         self.assertEqual(result, "\ufffd正文")
         self.assertEqual(result.encode("utf-8"), b"\xef\xbf\xbd\xe6\xad\xa3\xe6\x96\x87")
+
+
+class TestQuotaRejectionPaths:
+    """403 端点配额/风控拒绝：判为不可重试的 quota，且不按 429 走长冷却。"""
+
+    @patch("src.python.llm.api_base.post_with_deadline")
+    def test_attempt_api_call_403_is_quota(self, mock_post, caplog) -> None:
+        """403 → ("quota", 403)，日志带响应体片段便于定位配额/风控原因。"""
+        import logging
+
+        from src.python.llm.api_base import _attempt_api_call
+
+        resp = MagicMock()
+        resp.status_code = 403
+        resp.text = "quota exceeded for this billing window"
+        mock_post.return_value = resp
+        with caplog.at_level(logging.WARNING):
+            kind, info = _attempt_api_call(MagicMock(), "https://api.test.com", {}, {}, 30.0)
+        assert (kind, info) == ("quota", 403)
+        assert "403" in caplog.text
+        assert "quota exceeded" in caplog.text, "应回显响应体片段"
+
+    @patch("src.python.llm.api_base._cb_is_open", return_value=False)
+    @patch("src.python.llm.api_base._attempt_api_call")
+    @patch("src.python.llm.api_base._cb_record_failure")
+    def test_quota_403_records_plain_failure(self, mock_record_failure, mock_attempt, mock_cb_open) -> None:
+        """quota 且 info 非 429（403）→ 常规记录失败（无 force / 无长冷却覆盖）。"""
+        from src.python.llm.api_base import call_llm_with_retry
+
+        mock_attempt.return_value = ("quota", 403)
+        result, usage = call_llm_with_retry(
+            "Test",
+            MagicMock(),
+            "https://api.test.com",
+            {},
+            {},
+            30.0,
+            2,
+            1000,
+            "max_tokens",
+            extract_fn=lambda d: None,
+            check_truncation_fn=lambda d, mt: False,
+            provider="claude",
+        )
+        assert result is None
+        assert usage is None
+        mock_record_failure.assert_called_once_with("https://api.test.com")

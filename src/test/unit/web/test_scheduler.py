@@ -371,3 +371,24 @@ class TestSchedulerPanelWiring:
         assert "function saveScheduler()" in src
         assert "safeRun(loadScheduler" in src
         assert "els.schedSave.addEventListener('click', saveScheduler)" in src
+
+
+class TestLoopFaultTolerance:
+    """线程循环兜底：tick 抛异常只记日志，线程继续跑到 stop（不得崩溃退出）。"""
+
+    def test_tick_exception_is_logged_and_loop_continues(self, monkeypatch, caplog):
+        service = SchedulerService(_FakeRunManager())
+        calls: list[int] = []
+
+        def _boom(now=None):
+            calls.append(1)
+            service._stop_event.set()  # 首次 tick 炸掉后即收敛，避免用例空转
+            raise RuntimeError("tick 炸了")
+
+        monkeypatch.setattr(service, "tick", _boom)
+        service.start()
+        service.stop()
+
+        assert len(calls) == 1
+        assert "定时生成调度 tick 异常" in caplog.text
+        assert service._thread is None

@@ -54,7 +54,7 @@
             <div class="summary-tag" style="margin-bottom: 8px;">
                 基于最近 <strong>{{ sf_data["window"] }}</strong> 个交易日 OLS 回归（有效样本 {{ sf_data["sample_count"] }} 期）
                 {% if sf_data.get("stale_factors") %}
-                <span style="color:var(--warn-text);"> · 已剔除停更因子：{{ sf_data["stale_factors"] | join("、") }}</span>
+                <span class="text-warn"> · 已剔除停更因子：{{ sf_data["stale_factors"] | join("、") }}</span>
                 {% endif %}
             </div>
             <table>
@@ -90,7 +90,7 @@
             <div class="penetration-notes">
                 <div>* 因子间相关性：{% for pair, v in sf_data["factor_correlations"].items() %}{{ pair }}={{ v }}　{% endfor %}</div>
                 {% if sf_data.get("correlation_note") %}
-                <div style="color:var(--warn-text);">* {{ sf_data["correlation_note"] }}</div>
+                <div class="text-warn">* {{ sf_data["correlation_note"] }}</div>
                 {% endif %}
             </div>
             {% endif %}
@@ -178,7 +178,7 @@
                 池内 <strong>{{ fc_data.get("pool_size", 0) }}</strong> 只 · 可算
                 <strong>{{ fc_data.get("computed", 0) }}</strong>/{{ fc_data.get("catalog_size", 0) }} ·
                 {{ fc_data.get("rating", "--") }}
-                <span style="color:var(--warn-text);"> · 实验功能（输出质量可能不稳定）</span>
+                <span class="text-warn"> · 实验功能（输出质量可能不稳定）</span>
             </div>
             <table>
                 <thead>

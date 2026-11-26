@@ -220,7 +220,14 @@ def _cat_num_formats(
     return fmt
 
 
-def _apply_profit_colors(ws, start_row: int, end_row: int, profit_col: int, rate_col: int, today_col: int) -> None:
+def _apply_profit_colors(
+    ws: Worksheet,
+    start_row: int,
+    end_row: int,
+    profit_col: int,
+    rate_col: int,
+    today_col: int,
+) -> None:
     """对区块①盈亏列（12）、收益率列（13）、本日盈亏列（14）着色。"""
     for r in range(start_row, end_row + 1):
         for col in (profit_col, today_col):
@@ -232,7 +239,7 @@ def _apply_profit_colors(ws, start_row: int, end_row: int, profit_col: int, rate
             rate_cell.font = profit_font(rate_cell.value)
 
 
-def _apply_category_profit_colors(ws, start_row: int, end_row: int) -> None:
+def _apply_category_profit_colors(ws: Worksheet, start_row: int, end_row: int) -> None:
     """对区块②盈亏列 (7)、收益率列 (8)、本日盈亏列 (9) 着色。"""
     for r in range(start_row, end_row + 1):
         for col in (7, 9):
@@ -244,7 +251,7 @@ def _apply_category_profit_colors(ws, start_row: int, end_row: int) -> None:
             rate_cell.font = profit_font(rate_cell.value)
 
 
-def _apply_price_type_colors(ws, start_row: int, end_row: int) -> None:
+def _apply_price_type_colors(ws: Worksheet, start_row: int, end_row: int) -> None:
     """对取价方式列（第 7 列）着色：蓝色代表价格来源可靠/时效性高。"""
     for r in range(start_row, end_row + 1):
         cell = ws.cell(row=r, column=_PRICE_TYPE_COL)
@@ -259,7 +266,7 @@ def _apply_price_type_colors(ws, start_row: int, end_row: int) -> None:
 
 
 def _write_account_groupings(
-    ws,
+    ws: Worksheet,
     details: list[DetailRow],
     data_start: int,
     fund_flow_data: dict | None = None,
@@ -305,9 +312,6 @@ def _write_account_groupings(
             if has_flow:
                 vals += [_weighted_avg_cost(cost_map.get(d.code))]
             if show_purchase:
-                # 补齐到申购状态列前的槽位（资金加权成本缺值时保持列对齐）
-                while len(vals) < base_ncols:
-                    vals.append(None)
                 vals += [format_purchase_status_cell(purchase_status_data, d.code, purchase_level)]
             if show_cost_pos:
                 vals += [

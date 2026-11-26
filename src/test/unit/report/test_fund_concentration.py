@@ -336,3 +336,24 @@ class TestSnapshot(unittest.TestCase):
         self.assertEqual(args[0], "fund_concentration_snapshot")
         self.assertIn("110011", args[1])
         self.assertAlmostEqual(args[1]["110011"]["top10_pct"], 35.5)
+
+
+class TestSaveHistorySnapshotSkipsCodelessRows(unittest.TestCase):
+    """无 code 的集中度行不进快照（快照按基金代码索引，空键会污染下次环比）。"""
+
+    def test_row_without_code_is_not_persisted(self):
+        from unittest.mock import patch
+
+        from src.python.report.fund_concentration import _save_history_snapshot
+
+        current = [
+            {"code": "", "top3_pct": 1.0, "top5_pct": 2.0, "top10_pct": 3.0, "report_period": "2026Q3"},
+            {"code": "110011", "top3_pct": 10.0, "top5_pct": 20.0, "top10_pct": 35.5, "report_period": "2026Q3"},
+        ]
+        with patch("src.python.report.fund_concentration.cache_set") as mock_set:
+            _save_history_snapshot(current)
+
+        mock_set.assert_called_once()
+        _key, snapshot = mock_set.call_args.args
+        self.assertEqual(set(snapshot), {"110011"})
+        self.assertAlmostEqual(snapshot["110011"]["top10_pct"], 35.5)

@@ -23,15 +23,15 @@ if TYPE_CHECKING:  # ReportResult 定义在编排门面，运行期从生成入�
     from src.python.report.orchestrator import ReportResult
 from src.python.core.decision_header import strip_structured_header
 from src.python.report.progress import ProgressReporter
-from src.python.report._report_output import (  # noqa: F401  # 产物落盘子模块（消费方在本门面，patch 点不变）
+from src.python.report._report_output import (  # 产物落盘子模块（消费方在本门面，patch 点不变）
     _generate_full_excel_report,
     _generate_full_html_report,
 )
 
 # ── 子模块 re-export ────────────────────────────────────
 from src.python.report._chart_dataset_factory import _build_chart_datasets_for_report  # noqa: F401
-from src.python.report._full_risk_metrics import _prepare_full_risk_metrics  # noqa: F401
-from src.python.report._report_health import _collect_health_checks, _spawn_health_checks  # noqa: F401
+from src.python.report._full_risk_metrics import _prepare_full_risk_metrics
+from src.python.report._report_health import _collect_health_checks, _spawn_health_checks
 from src.python.report.run_integrity import bind_health, bind_perf
 from src.python.report._generation_shared import _record_llm_context
 from src.python.report._report_helpers import (  # noqa: F401
@@ -72,14 +72,16 @@ def _fetch_sector_flow(reporter: ProgressReporter, perf: PerfCollector) -> list[
 
             failure = sector_flow_failure()
             failure_type = "empty" if failure == "empty" else "unreachable"
+            # 与陈旧回退/异常两态同键：矩阵「资金流向」行的前缀是 ff_，空载荷分支
+            # 若登记成 fund_flow 就既不同源、也匹配不上任何行前缀（事件在矩阵里失联）。
             mark_data_unavailable(
-                "fund_flow",
+                "ff_sector_flow",
                 "T4",
                 failure_type=failure_type,
                 message=f"akshare（{sector_flow_hint()}）",
             )
             reporter.warn(f"行业资金流向{sector_flow_hint()}，将继续生成报告")
-    except Exception:
+    except Exception:  # noqa: BLE001 — 行业资金流向属可选数据，取数失败仅标记数据不可用并继续生成
         sector_flow = None
         from src.python.core.degradation import mark_data_unavailable
 

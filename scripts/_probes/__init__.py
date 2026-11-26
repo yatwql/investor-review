@@ -12,7 +12,10 @@ target 生命周期：
 from __future__ import annotations
 
 import importlib
-from typing import Protocol, cast
+from typing import TYPE_CHECKING, Protocol, cast
+
+if TYPE_CHECKING:  # 注解只在静态期求值：探针子模块自带 build_parser，本包不构造 Namespace
+    import argparse
 
 
 class ProbeTarget(Protocol):
@@ -22,7 +25,7 @@ class ProbeTarget(Protocol):
 
     def build_parser(self): ...
 
-    def run(self, args) -> int: ...
+    def run(self, args: argparse.Namespace) -> int: ...
 
 
 _MODULES = ("_probes.csi", "_probes.push2", "_probes.sector_flow")

@@ -18,41 +18,14 @@ import pytest
 
 from src.python.providers import hithink as ht
 from src.python.providers import utils as pu
+from src.test._fixtures.http import FakeClient, FakeResponse
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_providers]
 
 
-class _FakeResp:
-    def __init__(self, status_code: int = 200, payload=None, json_error: bool = False) -> None:
-        self.status_code = status_code
-        self._payload = payload
-        self._json_error = json_error
-
-    def json(self):
-        if self._json_error:
-            raise ValueError("not json")
-        return self._payload
-
-
-class _FakeClient:
-    def __init__(self, resp: _FakeResp) -> None:
-        self._resp = resp
-        self.calls: list[dict] = []
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *_exc):
-        return False
-
-    def get(self, url, params=None, headers=None):
-        self.calls.append({"url": url, "params": params, "headers": headers})
-        return self._resp
-
-
-def _prepare(monkeypatch, resp: _FakeResp, key: str = "test-key") -> _FakeClient:
+def _prepare(monkeypatch, resp: FakeResponse, key: str = "test-key") -> FakeClient:
     """注入假凭据 + 假 HTTP 客户端 + 无操作限速器，返回客户端以便断言请求。"""
-    client = _FakeClient(resp)
+    client = FakeClient(resp)
     monkeypatch.setattr(ht, "missing_credential", lambda _sid: None)
     monkeypatch.setattr(ht, "credential_value", lambda _sid: key)
     monkeypatch.setattr(ht, "make_http_client", lambda **_kw: client)
@@ -92,7 +65,7 @@ class TestCredentialGate:
         assert ht.fetch_trading_days() is None
 
     def test_key_sent_in_header_and_never_in_url(self, monkeypatch):
-        client = _prepare(monkeypatch, _FakeResp(payload={"code": 0, "data": {"item": []}}))
+        client = _prepare(monkeypatch, FakeResponse(json_body={"code": 0, "data": {"item": []}}))
         ht.fetch_trading_days()
         call = client.calls[0]
         assert call["headers"]["X-api-key"] == "test-key"
@@ -102,24 +75,24 @@ class TestCredentialGate:
 
 class TestEnvelope:
     def test_success_returns_data(self, monkeypatch):
-        _prepare(monkeypatch, _FakeResp(payload={"code": 0, "message": "success", "data": {"item": [1]}}))
+        _prepare(monkeypatch, FakeResponse(json_body={"code": 0, "message": "success", "data": {"item": [1]}}))
         assert ht.fetch_trading_days() == {"item": [1]}
 
     @pytest.mark.parametrize("code", [1001, 2001, 3001, 4001, 5003])
     def test_business_error_code_returns_none(self, monkeypatch, code):
-        _prepare(monkeypatch, _FakeResp(payload={"code": code, "message": "err", "data": None}))
+        _prepare(monkeypatch, FakeResponse(json_body={"code": code, "message": "err", "data": None}))
         assert ht.fetch_trading_days() is None
 
     def test_data_null_returns_none(self, monkeypatch):
-        _prepare(monkeypatch, _FakeResp(payload={"code": 0, "data": None}))
+        _prepare(monkeypatch, FakeResponse(json_body={"code": 0, "data": None}))
         assert ht.fetch_trading_days() is None
 
     def test_non_dict_body_returns_none(self, monkeypatch):
-        _prepare(monkeypatch, _FakeResp(payload=[1, 2, 3]))
+        _prepare(monkeypatch, FakeResponse(json_body=[1, 2, 3]))
         assert ht.fetch_trading_days() is None
 
     def test_non_json_returns_none(self, monkeypatch):
-        _prepare(monkeypatch, _FakeResp(payload=None, json_error=True))
+        _prepare(monkeypatch, FakeResponse(json_body=None, json_error=True))
         assert ht.fetch_trading_days() is None
 
     @pytest.mark.parametrize("code", [1002, 3001, 3002, 3004])
@@ -131,14 +104,14 @@ class TestEnvelope:
         """
         import logging
 
-        _prepare(monkeypatch, _FakeResp(payload={"code": code, "message": "unknown thscode"}))
+        _prepare(monkeypatch, FakeResponse(json_body={"code": code, "message": "unknown thscode"}))
         with caplog.at_level(logging.INFO, logger="invest"):
             assert ht.fetch_trading_days() is None
         assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
         assert any("该源无此标的" in r.getMessage() for r in caplog.records)
 
     def test_business_error_logged_with_hint(self, monkeypatch, caplog):
-        _prepare(monkeypatch, _FakeResp(payload={"code": 2001, "message": "unauthorized"}))
+        _prepare(monkeypatch, FakeResponse(json_body={"code": 2001, "message": "unauthorized"}))
         with caplog.at_level("WARNING"):
             ht.fetch_trading_days()
         assert "未认证" in caplog.text
@@ -147,12 +120,12 @@ class TestEnvelope:
 class TestHttpStatus:
     @pytest.mark.parametrize("status", [401, 403, 500, 503])
     def test_error_status_returns_none(self, monkeypatch, status):
-        _prepare(monkeypatch, _FakeResp(status_code=status, payload={}))
+        _prepare(monkeypatch, FakeResponse(status_code=status, json_body={}))
         assert ht.fetch_trading_days() is None
 
     def test_rate_limited_429_not_retried(self, monkeypatch):
         """官方要求触发限流后不要立即连续重试：429 直接返回空（客户端只被调一次）。"""
-        client = _prepare(monkeypatch, _FakeResp(status_code=429, payload={}))
+        client = _prepare(monkeypatch, FakeResponse(status_code=429, json_body={}))
         assert ht.fetch_trading_days() is None
         assert len(client.calls) == 1
 
@@ -168,7 +141,7 @@ class TestHttpStatus:
             clock["t"] += 0.15
             return clock["t"]
 
-        class _HangClient(_FakeClient):
+        class _HangClient(FakeClient):
             def get(self, url, params=None, headers=None):
                 attempts["n"] += 1
                 raise httpx.ConnectTimeout("handshake operation timed out")
@@ -176,7 +149,7 @@ class TestHttpStatus:
         monkeypatch.setattr(ht, "_TIMEOUT", 0.2)
         monkeypatch.setattr(ht, "missing_credential", lambda _sid: None)
         monkeypatch.setattr(ht, "credential_value", lambda _sid: "test-key")
-        monkeypatch.setattr(ht, "make_http_client", lambda **_kw: _HangClient(_FakeResp(payload={})))
+        monkeypatch.setattr(ht, "make_http_client", lambda **_kw: _HangClient(FakeResponse(json_body={})))
         monkeypatch.setattr(ht, "_get_limiter", lambda: _NoopLimiter())
         monkeypatch.setattr(
             pu,
@@ -199,14 +172,14 @@ class TestHttpStatus:
         sleeps: list[float] = []
         attempts = {"n": 0}
 
-        class _TimeoutClient(_FakeClient):
+        class _TimeoutClient(FakeClient):
             def get(self, url, params=None, headers=None):
                 attempts["n"] += 1
                 raise httpx.ConnectTimeout("handshake operation timed out")
 
         monkeypatch.setattr(ht, "missing_credential", lambda _sid: None)
         monkeypatch.setattr(ht, "credential_value", lambda _sid: "test-key")
-        monkeypatch.setattr(ht, "make_http_client", lambda **_kw: _TimeoutClient(_FakeResp(payload={})))
+        monkeypatch.setattr(ht, "make_http_client", lambda **_kw: _TimeoutClient(FakeResponse(json_body={})))
         # 限速器换零等待替身（否则其内部 sleep 会混入 sleeps 断言）
         monkeypatch.setattr(ht, "_get_limiter", lambda: _NoopLimiter())
         monkeypatch.setattr(pu.time, "sleep", sleeps.append)
@@ -219,7 +192,7 @@ class TestHttpStatus:
 
 class TestLimiter:
     def test_limiter_acquired_before_request(self, monkeypatch):
-        client = _prepare(monkeypatch, _FakeResp(payload={"code": 0, "data": {}}))
+        client = _prepare(monkeypatch, FakeResponse(json_body={"code": 0, "data": {}}))
         limiter = _NoopLimiter()
         monkeypatch.setattr(ht, "_get_limiter", lambda: limiter)
         ht.fetch_trading_days()
@@ -472,7 +445,7 @@ class TestEndpointParams:
     """四域接口的路径与参数拼装（字段名以官方契约为准）。"""
 
     def _capture(self, monkeypatch):
-        client = _prepare(monkeypatch, _FakeResp(payload={"code": 0, "data": {"item": []}}))
+        client = _prepare(monkeypatch, FakeResponse(json_body={"code": 0, "data": {"item": []}}))
         return client
 
     def test_income_statements_limit_mode(self, monkeypatch):
@@ -578,3 +551,31 @@ class TestFetchIndexKline:
         assert ht.fetch_index_kline("sh000300", days=30) == []
         assert ht.fetch_index_kline("gb_inx", days=30) == []
         assert not hasattr(ht, "to_index_thscode")
+
+
+class TestParsingAndLimiterGuards:
+    """限速器配置降级、K 线与基金持仓的脏条目过滤。"""
+
+    def test_limiter_config_failure_falls_back_to_default(self, monkeypatch, caplog):
+        """配置不可读（无配置文件/测试环境）→ 按默认 qps 建限速器，不影响取数。"""
+        import src.python.config as config_module
+
+        monkeypatch.setattr(config_module, "get_config", lambda: (_ for _ in ()).throw(RuntimeError("无配置")))
+        ht.reset_hithink_limiter()
+        with caplog.at_level("DEBUG", logger="invest"):
+            limiter = ht._get_limiter()
+
+        assert limiter is not None
+        assert "qps 配置不可读" in caplog.text
+
+    def test_kline_skips_non_dict_and_undated_items(self, monkeypatch):
+        """K 线条目非 dict / 无可用日期 → 跳过，不产出空日期 bar。"""
+        monkeypatch.setattr(ht, "_request", lambda path, params: {"item": ["坏条目", {"date_ms": 0}]})
+
+        assert ht._kline_for_symbol("600519.SH", 5, None) == []
+
+    def test_fund_holdings_skips_empty_item_payload(self, monkeypatch):
+        """首个候选返回空 item 列表 → 换下一个候选继续试（不返回空载荷）。"""
+        monkeypatch.setattr(ht, "fetch_fund_portfolio_holdings", lambda thscode: {"item": []})
+
+        assert ht.fetch_fund_holdings("016055") is None

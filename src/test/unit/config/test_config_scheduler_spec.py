@@ -81,3 +81,19 @@ class TestValidateField:
     def test_invalid_values_raise(self, field, value):
         with pytest.raises(ValueError):
             validate_field(field, value)
+
+
+class TestSchedulerFieldCoercion:
+    """周内日字段的非整数项：归一化按默认处理、单字段校验报中文错误。"""
+
+    def test_normalize_block_ignores_unparsable_weekdays(self):
+        block = normalize_block({"weekdays": ["一", "二"]})
+
+        assert block["weekdays"] == DEFAULT_BLOCK["weekdays"]
+
+    def test_validate_enabled_returns_boolean_as_is(self):
+        assert validate_field("enabled", False) is False
+
+    def test_validate_weekdays_rejects_non_integer_items(self):
+        with pytest.raises(ValueError, match="须为 0-6 整数"):
+            validate_field("weekdays", ["一"])

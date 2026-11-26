@@ -9,12 +9,16 @@
 
 from __future__ import annotations
 
-from collections.abc import Collection
-from concurrent.futures import Future
+from collections.abc import Callable, Collection
+from concurrent.futures import Future, ThreadPoolExecutor
 
 import time
+from typing import TYPE_CHECKING, cast
 
 from src.python.report.progress import ProgressReporter
+
+if TYPE_CHECKING:
+    from src.python.core.perf import PhaseBreakdownRecorder
 
 logger = __import__("logging").getLogger("invest")
 
@@ -58,7 +62,9 @@ def _report_llm_module_results(
         reporter.info("所有 LLM 内容已跳过，未调用 LLM")
 
 
-def _timed_news_fetch(recorder, build_fn, *args, **kwargs) -> tuple:
+def _timed_news_fetch(
+    recorder: PhaseBreakdownRecorder | None, build_fn: Callable[..., tuple], *args, **kwargs
+) -> tuple:
     """执行新闻获取并记入子项耗时（`recorder` 为 None 时零行为变化）。"""
     started = time.perf_counter()
     try:
@@ -69,7 +75,7 @@ def _timed_news_fetch(recorder, build_fn, *args, **kwargs) -> tuple:
 
 
 def _submit_llm_future(
-    pool,
+    pool: ThreadPoolExecutor,
     holdings: list,
     prep_data: dict,
     sector_flow: list | None,
@@ -81,7 +87,7 @@ def _submit_llm_future(
     history_data: dict | None = None,
     comparison_indices: dict[str, str] | None = None,
     metrics: dict | None = None,
-    span_recorder=None,
+    span_recorder: PhaseBreakdownRecorder | None = None,
 ) -> Future | None:
     """向线程池提交 LLM 生成任务，返回 Future 或 None。
 
@@ -123,13 +129,13 @@ def _submit_llm_future(
 
 
 def _submit_news_future(
-    pool,
+    pool: ThreadPoolExecutor,
     holdings: list,
     prep_data: dict,
     enable_news: bool,
     purchase_constraint_block: str = "",
     force_news: bool = False,
-    span_recorder=None,
+    span_recorder: PhaseBreakdownRecorder | None = None,
 ) -> Future | None:
     """向线程池提交新闻获取任务，返回 Future 或 None。
 
@@ -154,7 +160,7 @@ def _submit_news_future(
     )
 
 
-def _collect_llm_future_result(fut, reporter) -> tuple:
+def _collect_llm_future_result(fut: Future, reporter: ProgressReporter) -> tuple:
     """收集 LLM 生成结果，返回 (llm_content, debate_info)。"""
     try:
         _result = fut.result()
@@ -163,20 +169,20 @@ def _collect_llm_future_result(fut, reporter) -> tuple:
         _report_llm_module_results(llm_content, _cached, reporter)
         debate_info = _result[8] if len(_result) > 8 else None
         return llm_content, debate_info
-    except Exception:
+    except Exception:  # noqa: BLE001 — LLM 内容生成异常（详情请查看日志）
         reporter.add_error("LLM 内容生成异常（详情请查看日志文件 logs/app.log）")
         reporter.error("LLM 内容生成异常（详情请查看日志）")
         return (None, None, None, None), None
 
 
-def _collect_news_future_result(fut, reporter) -> tuple:
+def _collect_news_future_result(fut: Future, reporter: ProgressReporter) -> tuple:
     """收集新闻获取结果，返回 (news_data, news_llm_meta, news_ok)。"""
     try:
         news_data, news_llm_meta = fut.result()
         news_ok = bool(news_data)
         reporter.ok(f"新闻获取完成，共 {len(news_data)} 条")
         return news_data, news_llm_meta, news_ok
-    except Exception:
+    except Exception:  # noqa: BLE001 — 新闻源处第三方边界，异常即空新闻集（报告其余部分照常生成）
         reporter.add_error("新闻获取异常（详情请查看日志文件 logs/app.log）")
         reporter.warn("新闻获取异常（详情请查看日志）")
         return [], {}, False
@@ -196,7 +202,7 @@ def _fetch_llm_and_news(
     history_data: dict | None = None,
     comparison_indices: dict[str, str] | None = None,
     metrics: dict | None = None,
-    span_recorder=None,
+    span_recorder: PhaseBreakdownRecorder | None = None,
 ) -> tuple[tuple, list, dict, bool, dict | None]:
     """并行获取 LLM 内容 + 新闻数据，统一处理 4 分支。
 
@@ -255,7 +261,7 @@ def _fetch_llm_and_news(
                 _force_news,
                 span_recorder=span_recorder,
             )
-            news_data, news_llm_meta, news_ok = _collect_news_future_result(_news_fut, reporter)
+            news_data, news_llm_meta, news_ok = _collect_news_future_result(cast(Future, _news_fut), reporter)
             from src.python.report._experimental_seams import inject_event_impact_data
 
             _t0 = time.perf_counter()

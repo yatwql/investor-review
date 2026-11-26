@@ -71,7 +71,7 @@ class TestVocabularyWordAsSubstring:
 
 
 class TestDecorationAndPunctuation:
-    """emoji / 全角标点 / HTML 包裹。"""  # noqa: D400
+    """emoji / 全角标点 / HTML 包裹。"""
 
     @pytest.mark.parametrize(
         ("text", "expected"),

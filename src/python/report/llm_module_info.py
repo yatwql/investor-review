@@ -116,7 +116,7 @@ def build_llm_endpoint_display(module_info: list[dict[str, Any]], llm_config: di
             from src.python.config import get_llm_config
 
             llm_config = get_llm_config()
-        except Exception:  # 配置不可用时降级为无标注拼接
+        except Exception:  # noqa: BLE001 — 配置不可用时降级为无标注拼接
             llm_config = {}
     pmap = _endpoint_priority_map(llm_config)
     if not pmap or any(ep not in pmap for ep in seen):

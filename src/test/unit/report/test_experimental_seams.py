@@ -30,7 +30,7 @@ import pytest
 from src.python.core.constants import PROJECT_ROOT
 from src.python.core import decision_ledger as dl
 from src.python.report import _experimental_seams as seams
-from src.python.report.progress import ProgressReporter
+from src.test._fixtures.reporters import RecordingReporter
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
 
@@ -51,32 +51,9 @@ _SKIPPED_HINT = "执行异常，已跳过"
 _PREP = {"today_str": "2026-09-10", "holdings_details": {"600900": {"name": "长江电力"}}}
 
 
-class _RecordingReporter(ProgressReporter):
-    """记录各级消息的进度报告器（默认 ProgressReporter 各方法为空实现）。"""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.messages: list[tuple[str, str]] = []
-
-    def info(self, msg: str) -> None:
-        self.messages.append(("info", msg))
-
-    def ok(self, msg: str) -> None:
-        self.messages.append(("ok", msg))
-
-    def warn(self, msg: str) -> None:
-        self.messages.append(("warn", msg))
-
-    def error(self, msg: str) -> None:
-        self.messages.append(("error", msg))
-
-    def warns(self) -> list[str]:
-        return [msg for level, msg in self.messages if level == "warn"]
-
-
 @pytest.fixture
-def reporter() -> _RecordingReporter:
-    return _RecordingReporter()
+def reporter() -> RecordingReporter:
+    return RecordingReporter()
 
 
 def _patch_active(module: str, active: bool):
@@ -124,7 +101,43 @@ class TestDeterministicDecisions:
         ok_messages = [msg for level, msg in reporter.messages if level == "ok"]
         assert any("已结算 2 条" in msg for msg in ok_messages)
         assert any("登记 1 条确定性建议" in msg for msg in ok_messages)
-        assert reporter.warns() == []
+        assert reporter.warns == []
+
+    def test_no_settled_but_deferred_reports_info(self, reporter):
+        """无到期已结但有延后/跳过 → 走 info 口径（不谎报已结算）。"""
+        with (
+            _patch_active("decision_ledger", True),
+            patch(
+                "src.python.report.decision_settlement.settle_pending_decisions",
+                return_value={"settled": 0, "deferred": 2, "skipped": 1},
+            ),
+            patch(
+                "src.python.report.decision_record.register_action_decisions",
+                return_value={"registered": 0},
+            ),
+        ):
+            seams.record_deterministic_decisions(_PREP, {"sell": []}, reporter)
+
+        infos = [msg for level, msg in reporter.messages if level == "info"]
+        assert infos == ["决策复盘：无到期可结算决策"], "延后/跳过须按 info 口径上报"
+
+    def test_empty_registration_logs_info(self, reporter, caplog):
+        """登记为空（无卖出信号或无基线）→ 只记 info 日志，不打扰用户。"""
+        with (
+            _patch_active("decision_ledger", True),
+            patch(
+                "src.python.report.decision_settlement.settle_pending_decisions",
+                return_value={"settled": 1},
+            ),
+            patch(
+                "src.python.report.decision_record.register_action_decisions",
+                return_value={"registered": 0},
+            ),
+            caplog.at_level("INFO", logger="invest"),
+        ):
+            seams.record_deterministic_decisions(_PREP, {"sell": []}, reporter)
+
+        assert "确定性建议登记为空" in caplog.text
 
     def test_downstream_exception_warns_only(self, reporter, caplog):
         """结算抛异常 → 只告警 + 异常日志，不外抛，且不再继续登记。"""
@@ -141,9 +154,9 @@ class TestDeterministicDecisions:
             seams.record_deterministic_decisions(_PREP, {"sell": []}, reporter)
 
         register.assert_not_called()
-        assert len(reporter.warns()) == 1
-        assert "决策复盘（确定性结算/登记）" in reporter.warns()[0]
-        assert _SKIPPED_HINT in reporter.warns()[0]
+        assert len(reporter.warns) == 1
+        assert "决策复盘（确定性结算/登记）" in reporter.warns[0]
+        assert _SKIPPED_HINT in reporter.warns[0]
         assert any("[decision_reflection]" in record.message for record in caplog.records)
 
 
@@ -192,6 +205,41 @@ class TestLlmDecisionsAndReviewBlock:
         ok_messages = [msg for level, msg in reporter.messages if level == "ok"]
         assert any("登记 3 条 LLM 操作建议" in msg for msg in ok_messages)
 
+    def test_contract_lookup_failure_registers_with_empty_verdict(self, reporter):
+        """契约载体不可用 → 判定短语留空照常登记（不阻断登记链路）。"""
+        pipeline_data: dict = {}
+
+        with (
+            _patch_active("decision_ledger", True),
+            patch(
+                "src.python.llm.research_contract.get_module_contracts",
+                side_effect=ImportError("契约不可用"),
+            ),
+            patch(
+                "src.python.report.decision_llm_capture.register_llm_decisions",
+                return_value={"registered": 1},
+            ) as register,
+            patch("src.python.report.decision_review_block.build_review_block", return_value={}),
+        ):
+            seams.record_llm_decisions_and_review_block(_PREP, (None, "| 代码 | 方向 |"), True, pipeline_data, reporter)
+
+        assert register.call_args.kwargs["module_verdict"] == "", "契约不可用时判定短语须为空串"
+
+    def test_empty_llm_registration_logs_info(self, reporter, caplog):
+        """LLM 登记为空（无方向建议或同日已登记）→ 只记 info 日志。"""
+        with (
+            _patch_active("decision_ledger", True),
+            patch(
+                "src.python.report.decision_llm_capture.register_llm_decisions",
+                return_value={"registered": 0},
+            ),
+            patch("src.python.report.decision_review_block.build_review_block", return_value={}),
+            caplog.at_level("INFO", logger="invest"),
+        ):
+            seams.record_llm_decisions_and_review_block(_PREP, (None, "| 代码 | 方向 |"), True, None, reporter)
+
+        assert "LLM 操作建议登记为空" in caplog.text
+
     def test_flag_on_without_llm_skips_registration_but_builds_block(self, reporter):
         """LLM 关闭 → 不登记（回退占位非真实意见），复盘区块仍装配。"""
         pipeline_data: dict = {}
@@ -222,7 +270,7 @@ class TestLlmDecisionsAndReviewBlock:
         ):
             seams.record_llm_decisions_and_review_block(_PREP, (None, None), False, None, reporter)
 
-        assert reporter.warns() == []
+        assert reporter.warns == []
 
     def test_downstream_exception_warns_only(self, reporter):
         """下游异常 → 只告警，不外抛，pipeline_data 保持未注入。"""
@@ -238,8 +286,8 @@ class TestLlmDecisionsAndReviewBlock:
             seams.record_llm_decisions_and_review_block(_PREP, (None, "专家复盘内容"), True, pipeline_data, reporter)
 
         assert pipeline_data == {}
-        assert len(reporter.warns()) == 1
-        assert "决策复盘（LLM 登记/复盘装配）" in reporter.warns()[0]
+        assert len(reporter.warns) == 1
+        assert "决策复盘（LLM 登记/复盘装配）" in reporter.warns[0]
 
 
 # ── LLM 输出评级 ───────────────────────────────────────────
@@ -269,9 +317,9 @@ class TestApplyModuleQualityBanners:
             result = seams.apply_module_quality_banners(incoming, reporter)
 
         assert result is incoming
-        assert len(reporter.warns()) == 1
-        assert "LLM 输出评级" in reporter.warns()[0]
-        assert _SKIPPED_HINT in reporter.warns()[0]
+        assert len(reporter.warns) == 1
+        assert "LLM 输出评级" in reporter.warns[0]
+        assert _SKIPPED_HINT in reporter.warns[0]
 
     def test_missing_downstream_symbol_returns_input_unchanged(self, reporter):
         """下游符号缺失 → 同样回退入参原值。
@@ -286,7 +334,7 @@ class TestApplyModuleQualityBanners:
             result = seams.apply_module_quality_banners(incoming, reporter)
 
         assert result is incoming
-        assert len(reporter.warns()) == 1
+        assert len(reporter.warns) == 1
 
 
 # ── 确定性数值信号沉淀 ───────────────────────────────────────
@@ -337,8 +385,8 @@ class TestDeterministicSignals:
         ):
             seams.record_deterministic_signals({}, _PREP, reporter)
 
-        assert len(reporter.warns()) == 1
-        assert "确定性信号沉淀" in reporter.warns()[0]
+        assert len(reporter.warns) == 1
+        assert "确定性信号沉淀" in reporter.warns[0]
 
 
 # ── ⑤ 景气度框架诊断 ────────────────────────────────────────
@@ -358,7 +406,7 @@ class TestProsperityDiagnosisMount:
         with patch("src.python.config.features.is_feature_enabled", return_value=False):
             seams.record_prosperity_diagnosis(None, None, None, {}, reporter, pipeline_data=pipeline_data)
         assert pipeline_data == {}
-        assert reporter.warns() == []
+        assert reporter.warns == []
 
     def test_flag_on_injects_contract(self, reporter):
         """开关打开 → 契约写入 ``pipeline_data``。"""
@@ -377,7 +425,7 @@ class TestProsperityDiagnosisMount:
             patch(self._AUX_PATCH, return_value={"available": True}),
         ):
             seams.record_prosperity_diagnosis(None, None, None, {}, reporter, pipeline_data=None)
-        assert reporter.warns() == []
+        assert reporter.warns == []
 
     def test_downstream_exception_warns_only(self, reporter):
         """下游异常 → 一条告警 + 契约缺席，不外抛、不中断报告。"""
@@ -388,8 +436,8 @@ class TestProsperityDiagnosisMount:
         ):
             seams.record_prosperity_diagnosis(None, None, None, {}, reporter, pipeline_data=pipeline_data)
         assert pipeline_data == {}
-        assert len(reporter.warns()) == 1
-        assert "景气度框架诊断" in reporter.warns()[0]
+        assert len(reporter.warns) == 1
+        assert "景气度框架诊断" in reporter.warns[0]
 
 
 # ── ⑥ 持仓变动复盘 ────────────────────────────────────────
@@ -411,7 +459,7 @@ class TestHoldingChangeMount:
         with patch("src.python.config.features.is_feature_enabled", return_value=False):
             seams.inject_holding_change_data(pipeline_data, {}, reporter)
         assert pipeline_data == {}
-        assert reporter.warns() == []
+        assert reporter.warns == []
 
     def test_flag_on_injects_contract(self, reporter):
         """开关打开 → 契约写入 ``pipeline_data``，命名空间透传。"""
@@ -446,7 +494,7 @@ class TestHoldingChangeMount:
             patch(self._PANEL_BUILD, return_value={"available": True}),
         ):
             seams.inject_holding_change_data(None, {}, reporter)
-        assert reporter.warns() == []
+        assert reporter.warns == []
 
     def test_downstream_exception_warns_only(self, reporter):
         """下游异常 → 一条告警 + 契约缺席，不外抛、不中断报告。"""
@@ -457,8 +505,8 @@ class TestHoldingChangeMount:
         ):
             seams.inject_holding_change_data(pipeline_data, {}, reporter)
         assert pipeline_data == {}
-        assert len(reporter.warns()) == 1
-        assert "持仓变动复盘" in reporter.warns()[0]
+        assert len(reporter.warns) == 1
+        assert "持仓变动复盘" in reporter.warns[0]
 
 
 # ── 接线守卫 ─────────────────────────────────────────────────

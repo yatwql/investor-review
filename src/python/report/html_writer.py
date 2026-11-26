@@ -781,4 +781,4 @@ from src.python.report.html_renderers import (  # noqa: E402, F401
     _render_penetration_section,
     _render_style_analysis,
 )
-from src.python.report.html_save import _save_html_report  # noqa: E402, F401
+from src.python.report.html_save import _save_html_report  # noqa: E402 — 保存实现排在渲染分区之后再导出

@@ -195,6 +195,6 @@ def _call_llm_module(
         else:
             content = None
         return content, {"cached": cached if content else False}
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — 模块 %s 调用失败: %s
         logger.error("模块 %s 调用失败: %s", module_name, e)
         return None, {"error": str(e)}

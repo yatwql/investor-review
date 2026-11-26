@@ -100,7 +100,7 @@ def probe_bars(code: str) -> list[dict]:
 
     try:
         return fetch_with_incremental_fallback("history_stock", code, LOOKBACK_DAYS) or []
-    except Exception:
+    except Exception:  # noqa: BLE001 — [factor_catalog] {code} 日K失败: {type(exc).__name__}: {exc}
         logger.warning("[factor_catalog] {code} 日K失败: {type(exc).__name__}: {exc}")
         return []
 
@@ -111,7 +111,7 @@ def probe_index() -> list[dict]:
 
     try:
         return fetch_index_history(BENCHMARK_INDEX, LOOKBACK_DAYS) or []
-    except Exception:
+    except Exception:  # noqa: BLE001 — [factor_catalog] 指数历史失败: {type(exc).__name__}: {exc}
         logger.warning("[factor_catalog] 指数历史失败: {type(exc).__name__}: {exc}")
         return []
 
@@ -122,7 +122,7 @@ def probe_valuation(code: str) -> dict | None:
 
     try:
         return fetch_valuation_fields(code)
-    except Exception:
+    except Exception:  # noqa: BLE001 — [factor_catalog] {code} 估值失败: {type(exc).__name__}: {exc}
         logger.warning("[factor_catalog] {code} 估值失败: {type(exc).__name__}: {exc}")
         return None
 
@@ -133,7 +133,7 @@ def probe_fin_indicator(code: str) -> dict | None:
 
     try:
         return fetch_latest_indicator(code)
-    except Exception:
+    except Exception:  # noqa: BLE001 — [factor_catalog] {code} 财务指标失败: {type(exc).__name__}: {exc}
         logger.warning("[factor_catalog] {code} 财务指标失败: {type(exc).__name__}: {exc}")
         return None
 
@@ -180,7 +180,7 @@ def load_factor_inputs(
 
     try:
         index_bars = impl["index"]()
-    except Exception as exc:  # noqa: BLE001 —— 备数阶段逐类型容错（不外抛）
+    except Exception as exc:  # noqa: BLE001 — 备数阶段逐类型容错（不外抛）
         index_bars = []
         logger.warning("[factor_catalog] 指数历史取数异常: %s", exc)
     if index_bars:
@@ -191,7 +191,7 @@ def load_factor_inputs(
     for code in codes:
         try:
             bars = impl["bars"](code)
-        except Exception as exc:  # noqa: BLE001 —— 备数阶段逐码容错
+        except Exception as exc:  # noqa: BLE001 — 备数阶段逐码容错
             bars = []
             logger.warning("[factor_catalog] %s 日K取数异常: %s", code, exc)
         if bars:
@@ -201,7 +201,7 @@ def load_factor_inputs(
 
         try:
             val = impl["valuation"](code)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001 — 有意宽捕获（不窄化：单只标的估值取数异常降级为空值，目录按其余标的继续装载）
             val = None
             logger.warning("[factor_catalog] %s 估值取数异常: %s", code, exc)
         if isinstance(val, dict) and any(value_present(v) for v in val.values()):
@@ -211,7 +211,7 @@ def load_factor_inputs(
 
         try:
             fin = impl["fin"](code)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001 — 有意宽捕获（不窄化：单只标的财务指标取数异常降级为空值，目录按其余标的继续装载）
             fin = None
             logger.warning("[factor_catalog] %s 财务指标取数异常: %s", code, exc)
         if isinstance(fin, dict) and any(value_present(v) for v in fin.values()):

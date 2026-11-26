@@ -55,6 +55,7 @@
 | `perf-history.py` | 运维 | 性能历史趋势查看（读取 perf_history.jsonl → 版本演进总表 + P95/P99 分位概览 + 离群/尾部归因 + 异常运行/同版本漂移 + 秒每品种归一化 + 并发预算段（档位/预算/峰值/缩容合计，标注跨档位不可直接比耗时）+ 时段聚合（耗时与费用合计/环比/缩容列）/机读输出（llm_cost、by_period 费用字段、CSV 增 budget/peak/clamps 三列）；实现拆在 `_perf_history/`——`stats.py` 统计原语 / `data.py` 派生 / `report.py` 渲染 / `cli.py` 入口，主入口只留 docstring 与 re-export） |
 | `probe.py` | 运维 | 探测统一入口（按 target 分发到 `_probes/` 子模块；新探针实现契约面登记即用） |
 | `probe-guard-hits.py` | 运维 | 守护项命中统计（读 `logs/guard-hits.jsonl`，输出「运行次数/命中次数/处置」表；非门禁） |
+| `probe-release-ledger.py` | 运维 | 发布台账按版本汇总（读 `logs/release.jsonl`，按 `version` 去 `-dev` 切段，输出每版墙钟/分步耗时/会话 token 增量/失败步；`--last N`、`--version`、`--json`；非门禁） |
 | `probe-report-claims.py` | 运维观测 | 批量重放历史报告做确定性数值核对（覆盖率/告警/自动改写，零 LLM 调用、只读；不入门禁） |
 | `eval-factor-zoo.py` | 评测 | 因子动物园目录评测（非生产代码；五个来源族各抽 5 个因子，评测 A 字段可得率 / B 与既有信号族增量 / C 全量计算耗时占比三项指标，A/B/C 全过才转正立项；子命令 catalog / fields / signals / timing / verdict / all，产物只落 `docs/tmp/factor-zoo/`；实现拆在 `_eval_factor_zoo/`） |
 | `eval-decision-quality.py` | 评测 | 投资决策质量待验证项回测（决策视界命中率 / 因子单因子 IC / 估值两口径区分度；判据预注册于脚本常量，样本门槛 100、IC 绝对值拒绝线 0.05；子命令 horizon / factor-ic / valuation / all，产物落 `docs/tmp/decision-quality/`） |
@@ -911,6 +912,8 @@ sh .githooks/install-hooks.sh --off   # 停用
 4. **dynamic-target 动态导入字面量**：`importlib.import_module("字面量")` 的目标不可解析即 finding；变量形目标由 `test_check_import_surface.py` 的 smoke 覆盖。
 5. **exception-table 例外表自审**：每条须齐 `path / name / owner / reason / expiry / replacement`；`expiry`（`YYYY-MM-DD`）到期即 finding——续期须显式改日期并复核理由；登记项若已不再命中任何违规（规则早修好）也判 finding（`[exception-stale]`），防例外腐化成永久豁免。例外表解析失败同样按 finding 报（不以 traceback 窜出契约码域）。
 
+**门面脚本的再导出面一律写进 `__all__`**：多行 `from x import (...)` 的语句级 `# noqa: F401` 兜不住——`F401` 诊断落在名单行，抑制写在语句行时 `RUF100` 判「空转」；而删掉抑制 ruff 就把再导出名当未用导入整行删除。`scripts/` 下测试按脚本名访问的再导出面（`check-doc-drift.py` / `check-doc-traces.py` / `perf-history.py` / `release.py` / `test-perf-report.py` / `_traces_code/patterns.py`）用 `__all__` 声明：再导出即公开面，增删门面名只改这一处，行内不再挂 `# noqa: F401`。
+
 例外登记在 `scripts/_import_surface_exceptions.json`。已入域（守护清单成员）：本地由 pre-commit 在 `src/python/` 变更时并行触发（~1s），CI `guards` job 与 P2 门禁恒全量覆盖——观察期结束条件（真实树零 finding、零例外）已满足，误报为零故无须继续观察。
 
 **使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
@@ -1143,6 +1146,12 @@ sh .githooks/install-hooks.sh --off   # 停用
 **设计逻辑**：生产报告里的收益率声称是否与持仓真值相符，单份看不出规律——本脚本扫 `reports/` 下最近 N 份报告，复用 `--from-report` 的解析与确定性校验（章节按 `id="sec-<key>"` 切分、持仓取自报告自身的明细表），逐份输出「百分比声称 / 已比对 / 告警 / 自动改写」并附告警明细。它的用途是**发现系统性偏差**：实测 10 份重放出 26 条告警里 20 条是检查器归因错位（仓位/净利同比/风险指标被当成持仓收益率），据此才补出精度护栏；只有 1 条是 LLM 真写错。只读、零 LLM 调用、不写业务状态。
 
 **使用逻辑**：`python scripts/probe-report-claims.py [--limit N] [--since DAYS] [--output FILE]`。退出码 0 正常（有告警也是 0——告警是内容线索不是脚本失败）、2 找不到可核对报告。已比对率低说明「多数声称被跳过」，样本里以权重/敞口/风险度为主属正常；要逐条判定跳过是否合理，用 `eval-llm-hallucination.py --from-report <html> --dump-skipped <模块|all>`。
+
+**`probe-release-ledger.py` — 发布台账按版本汇总（非门禁）**
+
+**读数口径**：台账每命令一行、`session_usage` 是 **agent 会话级累加值**，所以单版成本只能靠切段 + 相邻行取增量：`version` 去掉 `-dev` 为所属台账版本（`X.Y.Z-dev` 的 check/prepare 与 `X.Y.Z` 的 publish 同属一版）；token 列 = 同 `agent.session_id` 内 `session_usage.total` 的前后差（新会话首行与累计回退记 0），**含期间的对话与改码，不是发布命令本身的成本**。失败步取自记录的 `ok=false`（含 `failure` 明细）。
+
+**使用逻辑**：`python scripts/probe-release-ledger.py [--last N] [--version X] [--json] [-v] [--ci]`。`-v` 逐命令与逐步骤展开，`--json` 供其他脚本消费（不含原始行）。`--ci` **不是**检查脚本的公共口径：它只隐去说明段（表格/JSON 内容不变），`失败步` 只作台账事实展示、不以退出码 2 表达 finding。只读，不改台账写入路径、不动发布步骤。台账读取走 `scripts/_release/_timing.read_ledger_records(path)`（与发布编排尾行的 token 统计同一入口：文件缺失视为空台账，空行/损坏 JSON/非 dict/缺 `command` 的行跳过）。
 
 **`probe-guard-hits.py` — 守护项命中统计（非门禁）**
 

@@ -454,7 +454,7 @@ class TestS0dSpecialCharacters(unittest.TestCase):
             mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
             try:
                 _write_market_value_block(ws, details, None, 1)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — 测试断言口径：该调用预期不抛异常，抛出即判失败
                 self.fail(f"市值明细区块写入含特殊字符名称崩溃: {e}")
 
     def test_special_chars_html_filters(self):
@@ -474,7 +474,7 @@ class TestS0dSpecialCharacters(unittest.TestCase):
                     _jinja_shares(100.0)
                     _jinja_price(10.50)
                     _jinja_pct(0.0523)
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001 — 测试断言口径：该调用预期不抛异常，抛出即判失败
                     self.fail(f"HTML 过滤器对名称 '{name}' 崩溃: {e}")
 
 

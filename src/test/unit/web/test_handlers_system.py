@@ -16,7 +16,7 @@ from src.python.web.runs import RunManager
 
 # ruff: noqa: F811 — 参数与模块级夹具同名（pytest 按名注入），非重定义
 from src.test.unit.web.test_handlers import (
-    _fake_executor,  # noqa: F401
+    _fake_executor,
     app_client,  # noqa: F401
 )
 

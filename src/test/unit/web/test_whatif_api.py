@@ -225,3 +225,16 @@ class TestWhatifErrors:
         resp = app_client.post("/api/whatif", json={"candidate_file_id": cand_file_id})
         assert resp.status_code == 500
         assert resp.get_json()["error_code"] == "WHATIF_FAILED"
+
+
+def test_unreadable_candidate_holdings_422(app_client, cand_file_id, monkeypatch):
+    """基线持仓可读、候选持仓读空 → 422 且点名候选文件（不得用基线口径顶替）。"""
+    reads = iter([list(_HOLDINGS), []])
+    monkeypatch.setattr("src.python.core.reader.read_holdings", lambda path: next(reads, []))
+
+    resp = app_client.post("/api/whatif", json={"candidate_file_id": cand_file_id})
+
+    assert resp.status_code == 422
+    body = resp.get_json()
+    assert body["error_code"] == "WHATIF_UNAVAILABLE"
+    assert "目标持仓读取失败或为空" in body["error"]

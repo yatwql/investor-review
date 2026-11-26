@@ -703,3 +703,40 @@ class TestPush2ExtendedSessionCache(unittest.TestCase):
         assert _push2_extended("005827") is None
         assert _push2_extended("005827") is None
         self.assertEqual(mock_fetch_ind.call_count, 1, "取不到的代码须进会话缓存，否则每轮重探")
+
+
+class TestAnalyzeStyleEdgeCases(unittest.TestCase):
+    """无持仓明细的基金跳过 / 估算风格在非首检时进备注。"""
+
+    @patch("src.python.report.fund_style_report._update_snapshot")
+    @patch("src.python.report.fund_style_report._load_snapshot")
+    def test_fund_without_holdings_is_skipped(self, mock_load, mock_update):
+        """holdings 为空 → 该基金不入结果、不写快照。"""
+        mock_load.return_value = None
+        result = analyze_style_for_all_funds({"110011": {"name": "空仓基金", "holdings": []}})
+
+        self.assertEqual(result["results"], [])
+        self.assertFalse(result["snapshot_updated"])
+        mock_update.assert_not_called()
+
+    @patch("src.python.report.fund_style_report._update_snapshot")
+    @patch("src.python.report.fund_style_report.classify_fund_style")
+    @patch("src.python.report.fund_style_report._load_snapshot")
+    def test_estimated_style_noted_on_later_check(self, mock_load, mock_classify, mock_update):
+        """非首检 + 降级判定 → 备注含「估算风格」，且不写「基准确立中」。"""
+        mock_load.return_value = {"110011": {"style": "大盘成长", "check_date": "2026-06-01"}}
+        mock_classify.return_value = {"style": "小盘成长", "is_estimated": True, "details": []}
+        fund_holdings = {
+            "110011": {
+                "name": "易方达",
+                "holdings": [{"name": "某小盘股", "code": "300001", "ratio": 100}],
+            },
+        }
+
+        result = analyze_style_for_all_funds(fund_holdings)
+
+        row = result["results"][0]
+        self.assertIn("估算风格", row["remark"])
+        self.assertNotIn("基准确立中", row["remark"])
+        self.assertTrue(row["is_estimated"])
+        self.assertFalse(row["is_first_check"])

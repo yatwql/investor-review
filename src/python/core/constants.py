@@ -34,12 +34,17 @@ def _find_project_root() -> str:
 # data/ 与 reports/ 整体搬到另一个根，真实持仓与产物零接触。缺省行为不变。
 PROJECT_ROOT = os.environ.get("INVEST_PROJECT_ROOT") or _find_project_root()
 
+# 源码包相对仓库根的路径（**覆盖率量测域的唯一来源**）：pytest-cov 的 `--cov` 与子进程
+# `coverage run --source` 都取此值。度量域一旦放宽到 `src`，测试文件自身就被计进语句
+# 总数，TOTAL 语句数与覆盖率百分比同时失真。
+SOURCE_PACKAGE_REL = os.path.join("src", "python")
+
 # ── 项目名称与版本 ─────────────────────────────────────────
 
 # 应用名称（单一来源，TUI 首页 / 启动日志 / Web 首页 / HTML 报告首页 / Excel 首页统一引用）
 APP_NAME = "投资复盘助手"
 
-APP_VERSION = "0.18.6"
+APP_VERSION = "0.18.7"
 
 # ── 报告产物文件名（单一来源：Excel/HTML 写入器与 Web 预览下载统一引用） ──
 # 报告产物文件基名（归档名 = 基名 + 时间戳后缀）

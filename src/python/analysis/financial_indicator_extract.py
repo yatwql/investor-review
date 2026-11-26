@@ -119,15 +119,17 @@ def _to_float(token: str) -> float | None:
 
 
 def _is_plausible(kind: str, value: float) -> bool:
-    """取值合理性校验（金额=元、percent=百分数、ratio=小数比例、每股=元/股）。"""
+    """取值合理性校验（金额=元、percent=百分数、每股=元/股）。
+
+    ``kind`` 只来自 ``_ANCHORS`` 声明的口径（amount/percent/per_share），
+    其余一律按元/股上界判。
+    """
     if not math.isfinite(value):
         return False
     if kind == "amount":
         return abs(value) < 1e15  # 千亿级以上的「金额」几可断定是误切
     if kind == "percent":
         return -100.0 <= value <= 100.0
-    if kind == "ratio":
-        return -10.0 <= value <= 10.0
     return abs(value) < 1e4
 
 
@@ -142,10 +144,10 @@ def _read_numbers(segment: str, kind: str, take: int) -> list[float]:
         for match in pattern.finditer(segment):
             if not numbers and match.start() > _MAX_GAP:
                 break  # 锚点后迟迟不出现数值 → 判为下一行
-            value = _to_float(match.group())
-            if value is None:
-                continue
-            numbers.append(value)
+            # _PATTERNS 各分支只匹配数字/千分位逗号/单小数点，float() 必可解析
+            token = _to_float(match.group())
+            if token is not None:
+                numbers.append(token)
             if len(numbers) >= take:
                 return numbers
         if numbers:
@@ -224,9 +226,8 @@ def extract_indicators(
         current = numbers[0] * scale
         prior = numbers[1] * scale if len(numbers) >= 2 and _is_plausible(anchor.kind, numbers[1]) else None
         if anchor.kind == "percent":
+            # 上方 _is_plausible("percent", …) 已把取值限在 ±100，除 100 后必在 ratio 合法域 ±10 内
             current, prior = current / 100.0, (prior / 100.0 if prior is not None else None)
-            if not _is_plausible("ratio", current) or (prior is not None and not _is_plausible("ratio", prior)):
-                continue
 
         values[anchor.field] = round(current, 6)
         yoy_field = _YOY_FIELDS.get(anchor.field)

@@ -136,7 +136,7 @@ def _safe_holdings_view(
     """持仓视角清单（异常时返回空清单，不影响契约其余部分）。"""
     try:
         return _holdings_view(holdings_details, roe_by_code, cfg, estimated_codes=estimated_codes)
-    except Exception:
+    except Exception:  # noqa: BLE001 — [prosperity_framework] 持仓视角清单构建异常，已置空
         logger.warning("[prosperity_framework] 持仓视角清单构建异常，已置空", exc_info=True)
         return []
 
@@ -196,7 +196,7 @@ def build_prosperity_framework_data(
     roe_by_code: dict[str, float] = {}
     try:
         roe_dim, roe_by_code = _score_roe(details, financial_indicator_data, fund_roe_estimates)
-    except Exception:
+    except Exception:  # noqa: BLE001 — [prosperity_framework] 维度「ROE 低位弹性」计算异常，已降级为未验证
         logger.warning("[prosperity_framework] 维度「ROE 低位弹性」计算异常，已降级为未验证", exc_info=True)
         roe_dim = _unverified_dimension("roe_elasticity", "ROE 低位弹性", _W_ROE, "该维计算异常，已跳过（详见日志）")
 
@@ -204,7 +204,7 @@ def build_prosperity_framework_data(
     turnover: float | None = None
     try:
         concentration_dim, concentration, turnover = _score_concentration(details, snapshots, cfg)
-    except Exception:
+    except Exception:  # noqa: BLE001 — [prosperity_framework] 维度「集中度与周期拼接」计算异常，已降级为未验证
         logger.warning("[prosperity_framework] 维度「集中度与周期拼接」计算异常，已降级为未验证", exc_info=True)
         concentration_dim = _unverified_dimension(
             "concentration_cycle", "集中度与周期拼接", _W_CONCENTRATION, "该维计算异常，已跳过（详见日志）"

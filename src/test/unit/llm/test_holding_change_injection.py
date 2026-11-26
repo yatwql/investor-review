@@ -684,3 +684,37 @@ def test_self_review_receives_text_without_fact_check_blocks():
         if text:
             assert "事实校验" not in text, f"{name}: 自检输入不得含校验摘要段落"
             assert "<p>正文</p>" in text
+
+
+class TestSignalBlockAndSkipReasonFaults:
+    """信号块 / 失败原因登记自身的异常不得冒泡（归因主体优先于诊断旁支）。"""
+
+    def test_signal_ledger_read_failure_returns_empty_block(self, monkeypatch, caplog):
+        from src.python.core import signal_ledger
+        from src.python.llm.holding_change_review import _build_signal_window_block
+
+        monkeypatch.setattr(signal_ledger, "is_active", lambda: True)
+
+        def _boom(*a, **kw):
+            raise RuntimeError("账本读失败")
+
+        monkeypatch.setattr(signal_ledger, "load_signals", _boom)
+        with caplog.at_level("DEBUG", logger="invest"):
+            block = _build_signal_window_block({"window_start": "20260806", "window_end": "20261005"})
+
+        assert block == "", "信号块缺席时提示词不加该节"
+        assert "窗口信号块构建失败" in caplog.text
+
+    def test_skip_reason_registration_failure_is_swallowed(self, monkeypatch, caplog):
+        from src.python.llm import prompts
+        from src.python.llm.holding_change_review import _register_skip_reason
+
+        class _UnwritableRegistry(dict):
+            def __setitem__(self, key, value):
+                raise RuntimeError("登记表不可写")
+
+        monkeypatch.setattr(prompts, "LLM_MODULE_FAILURE", _UnwritableRegistry())
+        with caplog.at_level("DEBUG", logger="invest"):
+            _register_skip_reason("复盘内容为空")
+
+        assert "失败原因登记失败" in caplog.text

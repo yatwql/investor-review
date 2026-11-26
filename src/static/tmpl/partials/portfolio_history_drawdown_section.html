@@ -48,7 +48,7 @@
                 </div>
                 <div class="summary-card">
                     <h3>最大回撤</h3>
-                    <div class="value" style="color: var(--profit);">{{ history_data.max_drawdown_pct | abs | change }}</div>
+                    <div class="value profit">{{ history_data.max_drawdown_pct | abs | change }}</div>
                     <div class="meta">
                         {{ history_data.max_drawdown | abs | money }}
                         {% if history_data.drawdown_start %} · {{ history_data.drawdown_start }} → {{ history_data.drawdown_end or "至今" }}{% endif %}
@@ -75,17 +75,17 @@
                 {% if _tail_ok %}
                 <div class="summary-card">
                     <h3>VaR(95)</h3>
-                    <div class="value" style="color:var(--profit);">{{ tail_risk_data.var95 | change }}</div>
+                    <div class="value profit">{{ tail_risk_data.var95 | change }}</div>
                     <div class="meta">单日最大可能损失（95% 置信）</div>
                 </div>
                 <div class="summary-card">
                     <h3>VaR(99)</h3>
-                    <div class="value" style="color:var(--profit);">{{ tail_risk_data.var99 | change }}</div>
+                    <div class="value profit">{{ tail_risk_data.var99 | change }}</div>
                     <div class="meta">单日最大可能损失（99% 置信）</div>
                 </div>
                 <div class="summary-card">
                     <h3>最大单日跌幅</h3>
-                    <div class="value" style="color:var(--profit);">{{ tail_risk_data.max_single_day_drop | change }}</div>
+                    <div class="value profit">{{ tail_risk_data.max_single_day_drop | change }}</div>
                     {% if tail_risk_data.max_single_day_drop_date %}
                     <div class="meta">{{ tail_risk_data.max_single_day_drop_date }}</div>
                     {% endif %}
@@ -100,7 +100,7 @@
                 <div class="summary-card">
                     <h3>最大跌幅后恢复</h3>
                     {% if tail_risk_data.recovery_state == "unrecovered" %}
-                    <div class="value" style="color:var(--profit);">未恢复</div>
+                    <div class="value profit">未恢复</div>
                     <div class="meta">数据窗口内未回到跌幅前水平</div>
                     {% elif tail_risk_data.recovery_state == "none" %}
                     <div class="value">—</div>
@@ -118,7 +118,7 @@
                 </div>
                 {% endif %}
             </div>
-            <div style="text-align:center;font-size: var(--fs-table-sm);color:var(--text-muted);margin-top:4px;">说明：尾部风险基于历史日收益序列（历史模拟法 VaR）；恢复天数指自最大单日跌幅日收复跌幅前水平所需交易日</div>
+            <div class="text-muted" style="text-align:center;font-size: var(--fs-table-sm);margin-top:4px;">说明：尾部风险基于历史日收益序列（历史模拟法 VaR）；恢复天数指自最大单日跌幅日收复跌幅前水平所需交易日</div>
             {# 量化指标 Radar：3 张摘要卡片 + 雷达图增强（三级降级，同改造前） #}
             <div class="chart-box" style="height:320px;margin-top:16px;">
                 {% if data_unavailable %}
@@ -133,7 +133,7 @@
             <div class="chart-caption">组合量化指标画像</div>
             {% endif %}
             {% if not data_unavailable and chart_datasets and chart_datasets.get("radar", {}).get("labels") and chart_datasets["radar"]["datasets"][0].get("note") %}
-            <div style="text-align:center;font-size: var(--fs-table-sm);color:var(--text-muted);margin-top:4px;">{{ chart_datasets["radar"]["datasets"][0]["note"] }}</div>
+            <div class="text-muted" style="text-align:center;font-size: var(--fs-table-sm);margin-top:4px;">{{ chart_datasets["radar"]["datasets"][0]["note"] }}</div>
             {% endif %}
             <!-- ── 二、回撤矩阵：回撤走势 + 回撤明细表 ── -->
             {% if history_data.bars and history_data.get("drawdown_available") %}
@@ -156,7 +156,7 @@
                         <td>{{ e.peak_date }}</td>
                         <td>{{ e.trough_date }}</td>
                         <td>{{ e.recovery_date or "—" }}</td>
-                        <td style="color:var(--profit); font-weight:600;">{{ "%.2f"|format(e.drawdown_pct) }}%</td>
+                        <td class="profit" style="font-weight:600;">{{ '%.2f'|format(e.drawdown_pct) }}%</td>
                         <td>{{ e.duration_days }} 天</td>
                         <td>{% if e.recovery_days is not none %}{{ e.recovery_days }} 天{% else %}—{% endif %}</td>
                         <td>{% if e.recovered %}✅ 已恢复{% else %}⏳ 未恢复{% endif %}</td>
@@ -184,12 +184,12 @@
                     <tr>
                         <td>{{ it.name }}</td>
                         <td>{{ it.start }} ~ {{ it.end }}</td>
-                        <td style="color:var(--profit); font-weight:600;">{% if it.in_range and it.portfolio_return_pct is not none %}{{ "%.2f"|format(it.portfolio_return_pct) }}%{% else %}—{% endif %}</td>
-                        <td style="color:var(--profit); font-weight:600;">{% if it.in_range and it.interval_drawdown_pct is not none %}{{ "%.2f"|format(it.interval_drawdown_pct) }}%{% else %}—{% endif %}</td>
+                        <td class="profit" style="font-weight:600;">{% if it.in_range and it.portfolio_return_pct is not none %}{{ '%.2f'|format(it.portfolio_return_pct) }}%{% else %}—{% endif %}</td>
+                        <td class="profit" style="font-weight:600;">{% if it.in_range and it.interval_drawdown_pct is not none %}{{ '%.2f'|format(it.interval_drawdown_pct) }}%{% else %}—{% endif %}</td>
                         <td>{{ it.trough_date or "—" if it.in_range else "—" }}</td>
                         <td>{% if it.in_range and it.recovery_days is not none %}{{ it.recovery_days }} 天{% elif it.in_range and it.recovered is false %}未恢复{% else %}—{% endif %}</td>
-                        <td>{% if it.index_available and it.index_return_pct is not none %}{{ "%.2f"|format(it.index_return_pct) }}%{% else %}—{% endif %}</td>
-                        <td>{% if it.index_available and it.index_drawdown_pct is not none %}{{ "%.2f"|format(it.index_drawdown_pct) }}%{% else %}—{% endif %}</td>
+                        <td>{% if it.index_available and it.index_return_pct is not none %}{{ '%.2f'|format(it.index_return_pct) }}%{% else %}—{% endif %}</td>
+                        <td>{% if it.index_available and it.index_drawdown_pct is not none %}{{ '%.2f'|format(it.index_drawdown_pct) }}%{% else %}—{% endif %}</td>
                         <td>{% if it.in_range %}{% if it.recovered %}✅ 已恢复{% elif it.recovered is false %}⏳ 未恢复{% else %}—{% endif %}{% else %}组合窗口外{% endif %}</td>
                     </tr>
                     {% endfor %}
@@ -210,7 +210,7 @@
                     <tr>
                         <td>{{ it.name }}</td>
                         <td>{{ it.start }} ~ {{ it.end }}</td>
-                        <td style="color:var(--profit); font-weight:600;">{% if it.interval_drawdown_pct is not none %}{{ "%.2f"|format(it.interval_drawdown_pct) }}%{% else %}—{% endif %}</td>
+                        <td class="profit" style="font-weight:600;">{% if it.interval_drawdown_pct is not none %}{{ '%.2f'|format(it.interval_drawdown_pct) }}%{% else %}—{% endif %}</td>
                         <td>{{ it.trough_date or "—" }}</td>
                         <td>{% if it.recovery_days is not none %}{{ it.recovery_days }} 天{% else %}—{% endif %}</td>
                         <td>{% if it.recovered %}✅ 已恢复{% elif it.recovered is false %}⏳ 未恢复{% else %}—{% endif %}</td>
@@ -267,11 +267,11 @@
                     {% for bm in risk_adjusted_excess_data.benchmarks %}
                     <tr>
                         <td>{{ bm.name }}</td>
-                        <td class="text-right">{% if bm.ir_annual is not none %}{{ "%.2f"|format(bm.ir_annual) }}{% else %}—{% endif %}</td>
-                        <td class="text-right">{% if bm.te_annual is not none %}{{ "%.2f"|format(bm.te_annual) }}{% else %}—{% endif %}</td>
-                        <td class="text-right{% if bm.excess_annual_pct is not none %} fw-600 {{ bm.excess_annual_pct | profit_class }}{% endif %}">{% if bm.excess_annual_pct is not none %}{{ "%.2f"|format(bm.excess_annual_pct) }}%{% else %}—{% endif %}</td>
-                        <td class="text-right">{% if bm.win_rate_12m is not none %}{{ "%.1f"|format(bm.win_rate_12m) }}%{% else %}数据不足{% endif %}</td>
-                        <td class="text-right">{% if bm.win_rate_24m is not none %}{{ "%.1f"|format(bm.win_rate_24m) }}%{% else %}数据不足{% endif %}</td>
+                        <td class="text-right">{% if bm.ir_annual is not none %}{{ '%.2f'|format(bm.ir_annual) }}{% else %}—{% endif %}</td>
+                        <td class="text-right">{% if bm.te_annual is not none %}{{ '%.2f'|format(bm.te_annual) }}{% else %}—{% endif %}</td>
+                        <td class="text-right{% if bm.excess_annual_pct is not none %} fw-600 {{ bm.excess_annual_pct | profit_class }}{% endif %}">{% if bm.excess_annual_pct is not none %}{{ '%.2f'|format(bm.excess_annual_pct) }}%{% else %}—{% endif %}</td>
+                        <td class="text-right">{% if bm.win_rate_12m is not none %}{{ '%.1f'|format(bm.win_rate_12m) }}%{% else %}数据不足{% endif %}</td>
+                        <td class="text-right">{% if bm.win_rate_24m is not none %}{{ '%.1f'|format(bm.win_rate_24m) }}%{% else %}数据不足{% endif %}</td>
                         <td class="text-right">{{ bm.complete_months }}</td>
                     </tr>
                     {% endfor %}
@@ -300,7 +300,7 @@
                 {% endif %}
                 {% if history_data.failed_holdings %}
                 <div style="margin-top:8px;font-size: var(--fs-table);">
-                    <div style="font-weight:600;color:var(--text-tertiary);margin-bottom:4px;">⬇ 以下持仓无历史走势数据（不含/不支持/获取失败）：</div>
+                    <div class="text-tertiary" style="font-weight:600;margin-bottom:4px;">⬇ 以下持仓无历史走势数据（不含/不支持/获取失败）：</div>
                     {% for h in history_data.failed_holdings %}
                     <div class="data-status-warn" style="border-left-color: var(--border-strong);">✗ {{ h }}</div>
                     {% endfor %}
@@ -308,7 +308,7 @@
                 {% endif %}
                 {% if history_data.successful_holdings %}
                 <div style="margin-top:8px;font-size: var(--fs-table);">
-                    <div style="font-weight:600;color:var(--text-tertiary);margin-bottom:4px;">⬆ 以下持仓已纳入走势计算：</div>
+                    <div class="text-tertiary" style="font-weight:600;margin-bottom:4px;">⬆ 以下持仓已纳入走势计算：</div>
                     {% for h in history_data.successful_holdings %}
                     <div class="data-status-ok">✓ {{ h }}</div>
                     {% endfor %}
@@ -321,12 +321,12 @@
         <div class="section-content">
             <div class="empty-note">
                 <p><strong>组合历史走势与回撤数据暂不可用</strong></p>
-                <p style="margin-top:8px;font-size: var(--fs-table);color:var(--text-muted);">
+                <p class="text-muted" style="margin-top:8px;font-size: var(--fs-table);">
                     模块说明：基于当前持仓份额假设历史持仓不变（as-if 模拟），使用历史股价/净值
                     回溯计算组合的模拟走势与回撤，包括累计收益率、最大回撤、年化波动率等关键指标，
                     并标注历史上 A 股主要危机时段。
                 </p>
-                <p style="margin-top:12px;font-size: var(--fs-table-sm);color: var(--text-faint);">
+                <p class="text-faint" style="margin-top:12px;font-size: var(--fs-table-sm);">
                     功能入口：菜单 L（生成全系列完整版报告）将自动获取历史数据 |
                     可在 config.json 的 history.fetch_mode 中设为 "auto" 自动获取
                 </p>

@@ -191,7 +191,7 @@ class IndicatorBreaker:
                     success=False,
                     failure_type="unreachable",
                 )
-            except Exception:
+            except Exception:  # noqa: BLE001 — [breaker] DegradationTracker 不可用，跳过失败记录
                 logger.debug("[breaker] DegradationTracker 不可用，跳过失败记录", exc_info=True)
 
         self._save_state()
@@ -244,7 +244,7 @@ class IndicatorBreaker:
             result = compute_fn(*args, **kwargs)
             self.record_success(indicator_name)
             return result
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — 熔断器须统计被测函数内部任意异常（含非 Exception 子类之外的第三方库异常），否则熔断判据失真
             context = f"{type(e).__name__}: {e}"
             self.record_failure(indicator_name, context)
             return None

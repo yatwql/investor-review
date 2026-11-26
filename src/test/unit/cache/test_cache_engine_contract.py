@@ -265,3 +265,27 @@ class TestConcurrency:
             stop.set()
             thread.join(timeout=5)
         assert results, "读线程应至少读到一次"
+
+
+class TestMalformedTimestampCoercion:
+    """`_ts` 非数值：读侧一律按「无时间戳 / 已过期」处理，绝不把异常抛给调用链。
+
+    缓存契约是「坏了就当没缓存」——畸形时间戳属同一类畸形残留，读侧（`get` /
+    `get_cache_age`）与清理侧必须共用同一个时间戳解读，否则同一份文件在清理侧被
+    容忍、在读取侧抛 `TypeError`，把取数链路整条打断。
+    """
+
+    @pytest.mark.parametrize("raw_ts", ["not-a-number", None, {"nested": 1}], ids=["str", "none", "dict"])
+    def test_non_numeric_ts_is_miss_not_typeerror(self, cache_env, raw_ts):
+        from src.python.cache import get as cache_get
+
+        path = cache_env / f"price_600519_{_CACHE_KEY_VERSION}.json"
+        path.write_text(json.dumps({"_ts": raw_ts, "_data": {"v": 1}}, ensure_ascii=False), encoding="utf-8")
+        assert cache_get("price_600519", 86400) is None
+
+    def test_cache_age_tolerates_non_numeric_ts(self, cache_env):
+        from src.python.cache import get_cache_age
+
+        path = cache_env / f"price_600519_{_CACHE_KEY_VERSION}.json"
+        path.write_text(json.dumps({"_ts": "not-a-number", "_data": {"v": 1}}), encoding="utf-8")
+        assert get_cache_age("price_600519") is None, "无法判定年龄时返回 None（不抛异常）"

@@ -42,7 +42,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # scripts/ 与内部包导入面
 
-from _screenshots import demo_workspace, tui_frame, web_shot, xlsx_frame  # noqa: E402
+from _screenshots import demo_workspace, tui_frame, web_shot, xlsx_frame
 
 
 def _demo(_: argparse.Namespace) -> int:
@@ -100,7 +100,7 @@ def _web(args: argparse.Namespace) -> int:
             server.terminate()
             try:
                 server.wait(timeout=10)
-            except Exception:  # 收尾失败不影响截图结果
+            except Exception:  # noqa: BLE001 — 收尾失败不影响截图结果
                 server.kill()
 
 
@@ -155,7 +155,7 @@ def _start_demo_server(url: str) -> tuple:
         try:
             urllib.request.urlopen(target, timeout=1).read(64)
             break
-        except Exception:
+        except OSError:
             time.sleep(0.5)
     return server, target
 

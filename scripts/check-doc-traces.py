@@ -124,7 +124,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享包（_traces_code）
-from _traces_code.exemptions import (  # noqa: E402
+from _traces_code.exemptions import (
     _COMPILED_CHAPTER_EXCLUDE,
     _COMPILED_ROUND_EXCLUDE,
     _chapter_excludes,
@@ -141,9 +141,17 @@ __all__ = [
     "_is_chapter_excluded",
     "_is_round_excluded",
     "_round_excludes",
+    "_DOC_PATTERNS",
+    "_COMPILED_EXCLUDE",
+    "TREE_ONLY_PATTERNS",
+    "_CUR_DEFS",
+    "_DELETED_CAND_RE",
+    "_HIST_DEFS",
+    "_current_defs",
+    "_historical_defs",
 ]
 
-from _shared.checklib import (  # noqa: E402
+from _shared.checklib import (
     MANAGEMENTS_DIR,
     MANUALS_DIR,
     PLAN_DOCS_DIR,
@@ -156,7 +164,7 @@ from _shared.checklib import (  # noqa: E402
 
 #: 结构性冗余（DUPLICATE）扫描后端原面 re-export：实现位于 scripts/_traces_doc/，
 #: 测试与调用方仍按本脚本名访问——见 _traces_doc 包文档
-from _traces_doc import scan_structural_duplicates  # noqa: E402
+from _traces_doc import scan_structural_duplicates
 
 README_PATH = REPO_ROOT / "README.md"
 #: 结论缓存的逻辑版本指纹面：CLI 自身 + 扫描后端模块。只列 CLI 会让后端实现
@@ -218,7 +226,7 @@ CIPHER_EXEMPT_FILES = {"technical.md", "llm-technical.md"}
 # ── 模式表 / 行级豁免 ──
 # 实现位于同目录 `_traces_doc/patterns.py`（原面 re-export：测试与调用方仍按本
 # 脚本名访问 _DOC_PATTERNS / _is_excluded；共享历史叙述词表见 `_traces_common`）。
-from _traces_doc.patterns import (  # noqa: E402, F401  原面 re-export（测试按脚本名访问）
+from _traces_doc.patterns import (  # 原面 re-export（测试按脚本名访问）
     DOC_PATTERNS as _DOC_PATTERNS,
     EXCLUDE_PATTERNS as _COMPILED_EXCLUDE,
     TREE_ONLY_PATTERNS,
@@ -243,18 +251,18 @@ _NAME_CODE = re.compile(
 )
 
 # ── 编译镜像 / 模式子集（实现见 `_traces_doc/bundle.py`；原面 re-export）──
-from _traces_doc.bundle import (  # noqa: E402
+from _traces_doc.bundle import (
     ALL_CATEGORIES as _ALL_CATEGORIES,
     HIGH_CATEGORIES,
     REGULAR_CATEGORIES as _REGULAR_CATEGORIES,
     pattern_bundle as _pattern_bundle,
 )
-from _traces_doc import _read_doc_impl  # noqa: E402
-from _traces_doc.findings import (  # noqa: E402, F401 — 结论输出下沉，原面 re-export
+from _traces_doc import _read_doc_impl
+from _traces_doc.findings import (  # 结论输出下沉，原面 re-export
     _replay_conclusion,
     _render_summary,
 )
-from _traces_doc.deleted_refs import (  # noqa: E402, F401 — 原面 re-export（测试按脚本名访问）
+from _traces_doc.deleted_refs import (  # 原面 re-export（测试按脚本名访问）
     _CUR_DEFS,
     _DELETED_CAND_RE,
     _HIST_DEFS,

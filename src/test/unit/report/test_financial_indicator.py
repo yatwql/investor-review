@@ -287,3 +287,17 @@ class TestSwitchAndWiring:
         assert 'include "partials/fundamental_snapshot_section.html"' in template
         assert 'section_visible("fundamental_snapshot")' in partial
         assert "financial_indicator_data" in partial
+
+
+class TestReporterProgress:
+    """传入进度报告器 → 取数前播报标的数（与财报摘要章同一可见性口径）。"""
+
+    def test_reporter_told_how_many_targets(self, monkeypatch):
+        from unittest.mock import MagicMock
+
+        monkeypatch.setattr(fi, "fetch_indicator_series", lambda code, limit=8: [_record()])
+        reporter = MagicMock()
+
+        fi.build_financial_indicator([_holding(), _holding("600519", "贵州茅台")], reporter=reporter)
+
+        reporter.info.assert_called_once_with("正在获取 2 只 A 股的财务指标...")

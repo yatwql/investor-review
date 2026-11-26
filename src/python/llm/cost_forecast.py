@@ -67,7 +67,7 @@ def _get_llm_config() -> dict[str, Any]:
         from src.python.config import get_llm_config
 
         return get_llm_config() or {}
-    except Exception:  # noqa: BLE001 — 配置不可读属降级路径：按空配置继续
+    except Exception:  # noqa: BLE001 — 配置不可读属降级路径，按空配置继续
         logger.debug("[cost_forecast] LLM 配置读取失败，按空配置处理", exc_info=True)
         return {}
 

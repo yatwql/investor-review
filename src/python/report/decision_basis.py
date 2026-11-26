@@ -38,6 +38,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.python.report._format import fmt_pct_points
+
 from src.python.analysis.portfolio_constraints import evaluate_constraints, max_single_weight, status_of
 from src.python.config import get_config
 from src.python.config.features import is_feature_enabled
@@ -108,11 +110,6 @@ RISK_UNCONFIGURED = "未配置上限"
 RISK_UNEVALUATED = "未评估"
 
 
-def _fmt_pct(value: float | None) -> str:
-    """百分比展示（百分数数值口径，与 `discipline.*_pct` 同源；None → —）。"""
-    return "—" if value is None else f"{value:g}%"
-
-
 def _to_float(value: Any, default: float = 0.0) -> float:
     """配置值 → float（非数值/缺失回退默认值，不抛错：配置由用户手改）。"""
     try:
@@ -164,8 +161,8 @@ def build_risk_budget(
             "max_pct": round(single_max_pct, 2),
             "current_pct": None if single_pct is None else round(single_pct, 2),
             "breached": single_pct is not None and single_pct > single_max_pct,
-            "max_label": _fmt_pct(round(single_max_pct, 2)),
-            "current_label": RISK_UNEVALUATED if single_pct is None else _fmt_pct(round(single_pct, 2)),
+            "max_label": fmt_pct_points(round(single_max_pct, 2)),
+            "current_label": RISK_UNEVALUATED if single_pct is None else fmt_pct_points(round(single_pct, 2)),
             "note": f"最大：{single_holder}" if single_holder else "无有效市值行",
         }
     )
@@ -198,8 +195,8 @@ def build_risk_budget(
                 "max_pct": round(drawdown_max_pct, 2),
                 "current_pct": round(current_drawdown, 2),
                 "breached": current_drawdown <= drawdown_max_pct,
-                "max_label": _fmt_pct(round(drawdown_max_pct, 2)),
-                "current_label": _fmt_pct(round(current_drawdown, 2)),
+                "max_label": fmt_pct_points(round(drawdown_max_pct, 2)),
+                "current_label": fmt_pct_points(round(current_drawdown, 2)),
                 "note": "相对历史峰值",
             }
         )
@@ -210,7 +207,7 @@ def build_risk_budget(
                 "max_pct": round(drawdown_max_pct, 2),
                 "current_pct": None,
                 "breached": False,
-                "max_label": _fmt_pct(round(drawdown_max_pct, 2)),
+                "max_label": fmt_pct_points(round(drawdown_max_pct, 2)),
                 "current_label": RISK_UNEVALUATED,
                 "note": "缺历史峰值",
             }
@@ -318,10 +315,7 @@ def build_discipline_detail(
         raw_distance = sig.get("distance_pct")
         distance_value: float | None = None
         if isinstance(raw_distance, (int, float)) and not isinstance(raw_distance, bool):
-            try:
-                distance_value = float(raw_distance)
-            except (TypeError, ValueError):  # 防御性：异常载荷按无距阈值呈现
-                distance_value = None
+            distance_value = float(raw_distance)
         note, stance = _discipline_note(rule, regime, stop_present=stop_present)
         items.append(
             {

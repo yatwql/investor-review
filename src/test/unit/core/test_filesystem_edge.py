@@ -146,7 +146,7 @@ class TestUncPath(unittest.TestCase):
         mock_load.return_value = mock_wb
         try:
             read_holdings(unc_path)
-        except Exception:
+        except Exception:  # noqa: BLE001 — 测试断言口径：UNC 路径预期不冒未处理异常，抛出即判失败
             self.fail("UNC path should not cause unexpected error")
 
     def test_unc_path_listing(self):

@@ -42,7 +42,7 @@ from _shared.checklib import (
     MANAGEMENTS_DIR as _CK_MANAGEMENTS,
     add_common_args,
     report,
-)  # noqa: E402
+)
 
 MANAGEMENTS_DIR = _CK_MANAGEMENTS
 ARCHIVE_DIR = _CK_ARCHIVE

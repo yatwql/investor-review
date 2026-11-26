@@ -49,7 +49,7 @@ _PHASE1_STOCK_COUNT = 20  # Phase1/2 股票取样数（场外基金另见 SAMPLE
 _PHASE3_STOCK_COUNT = 50  # Phase3 压力股票取样数（须 ≤ len(SAMPLE_STOCKS)，否则被样本池截断）
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享包（_perf_report）
-from _perf_report.report import (  # noqa: E402, F401 — 报告渲染下沉，原面 re-export
+from _perf_report.report import (  # 报告渲染下沉，原面 re-export
     _TARGET_FULL_SECONDS,
     _TARGET_SECONDS,
     PerfSample,
@@ -58,6 +58,13 @@ from _perf_report.report import (  # noqa: E402, F401 — 报告渲染下沉，�
     _verdict,
     write_perf_report,
 )
+
+#: 测试与台账脚本按本模块名访问的再导出面（实现见对应子模块）
+__all__ = [
+    "_size_text",
+    "_test_time_text",
+    "_verdict",
+]
 
 
 # ── 离线策略：传输层离线 + 咽喉桩 ────────────────────
@@ -99,7 +106,12 @@ def _stub_trading_calendar() -> set[str]:
     return dates
 
 
-def _mock_bars(chain_name: str, code: str, days: int = 30, **_kw: Any) -> list[dict[str, Any]]:
+def _mock_bars(
+    chain_name: str,  # noqa: ARG001 — 桩须与 fetch 链 K 线函数同签名
+    code: str,
+    days: int = 30,
+    **_kw: Any,
+) -> list[dict[str, Any]]:
     """历史K线桩：约 `days` 自然日窗口内的工作日 OHLC 序列（确定性、升序、零网络）。
 
     至少返回 5 根（极短窗口/周末起步也要给出可计算样本）；收盘价带周期性波动，
@@ -128,7 +140,10 @@ def _mock_bars(chain_name: str, code: str, days: int = 30, **_kw: Any) -> list[d
     return rows
 
 
-def _mock_quote(code: str, expected_name: str = "") -> dict[str, Any]:
+def _mock_quote(
+    code: str,  # noqa: ARG001 — 桩须与 fetch_market_data(code, expected_name) 同签名
+    expected_name: str = "",
+) -> dict[str, Any]:
     """行情桩：固定价格，让市值/盈亏/行情明细走真实计算路径（而非降级占位）。
 
     与 `fetch_market_data(code, expected_name)` 同签名；键集满足明细行消费

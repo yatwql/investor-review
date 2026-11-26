@@ -116,7 +116,7 @@ def _get_limiter() -> Any:
                     raw = (get_config().get("hithink") or {}).get("qps")
                     if isinstance(raw, (int, float)) and raw > 0:
                         qps = float(raw)
-                except Exception:  # 配置不可用（如测试环境）→ 用默认值
+                except Exception:  # noqa: BLE001 — 配置不可用（如测试环境）→ 用默认值
                     logger.debug("hithink qps 配置不可读，按默认值 %.1f 处理", DEFAULT_QPS, exc_info=True)
                 _limiter = RateLimiter({SOURCE_ID: 1.0 / qps})
     return _limiter
@@ -259,7 +259,11 @@ def fetch_kline(code: str, days: int = 30, start_from: str | None = None) -> lis
     return _kline_for_symbol(to_thscode(code), days, start_from)
 
 
-def fetch_index_kline(code: str, days: int = 30, start_from: str | None = None) -> list[dict[str, Any]]:
+def fetch_index_kline(
+    code: str,  # noqa: ARG001 — 链层 index_kline 统一签名（本源不支持，三参均不消费）
+    days: int = 30,  # noqa: ARG001 — 链层 index_kline 统一签名（本源不支持，三参均不消费）
+    start_from: str | None = None,  # noqa: ARG001 — 链层 index_kline 统一签名（本源不支持）
+) -> list[dict[str, Any]]:
     """指数历史日 K —— **本源不支持**，恒返回空列表（由链路继续降级到下一源）。
 
     依据：本源只有 A 股口径的 ``/api/a-share/prices/historical``，指数 thscode

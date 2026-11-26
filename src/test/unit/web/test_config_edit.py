@@ -447,3 +447,22 @@ class TestLlmTuningSurface:
             assert row["min"] == spec["min"] and row["max"] == spec["max"]
             assert row["label"] and row["hint"]
             assert isinstance(row["value"], (int, float))
+
+
+def test_logging_surface_falls_back_to_spec_defaults_when_read_fails(monkeypatch, caplog):
+    """logger.json 读不出来（版本不符等）→ 面板仍按出厂默认渲染六项，不抛给前端。"""
+    import src.python.config as config_pkg
+    from src.python.config.edit_ops import LOGGING_SPECS
+    from src.python.web import config_edit as ce
+
+    def _boom():
+        raise ValueError("logger.json 版本不符")
+
+    monkeypatch.setattr(config_pkg, "read_logger_config", _boom)
+
+    surface = ce._logging_surface()
+
+    assert [item["key"] for item in surface["items"]] == [f"logging.{key}" for key in LOGGING_SPECS]
+    for item in surface["items"]:
+        assert item["value"] == LOGGING_SPECS[item["key"].split(".", 1)[1]].get("default")
+    assert "日志设置按默认展示" in caplog.text

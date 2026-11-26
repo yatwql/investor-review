@@ -23,7 +23,7 @@
             {% set top_b = _fund_names.get(top.fund_b, top.fund_b) %}
             <div class="notice-banner" style="margin-bottom: 12px;">
                 🔔 最高重叠：<strong>{{ top_a }}({{ top.fund_a }})</strong> × <strong>{{ top_b }}({{ top.fund_b }})</strong>
-                — Jaccard {{ "%.2f"|format(top.jaccard * 100) }}%，共同持有 {{ top.common_count }} 只标的
+                — Jaccard {{ '%.2f'|format(top.jaccard * 100) }}%，共同持有 {{ top.common_count }} 只标的
             </div>
             {% endif %}
 
@@ -45,16 +45,13 @@
                     <tr>
                         <td style="font-weight: bold; font-size: var(--fs-footnote); max-width: 80px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
                             title="{{ _fund_names.get(_funds[i], _funds[i]) }}">{{ _fund_names.get(_funds[i], _funds[i]) }}</td>
-                        <td style="font-size: var(--fs-footnote); color: var(--text-muted);">({{ _funds[i] }})</td>
+                        <td class="text-muted" style="font-size: var(--fs-footnote);">({{ _funds[i] }})</td>
                         {% for j in range(_funds | length) %}
                         {% set val = _matrix[i][j] %}
-                        <td style="text-align: center; font-size: var(--fs-table-sm);
-                            {% if val >= 0.50 %}background-color: var(--heat-strong); color: white; font-weight: bold;
-                            {% elif val >= 0.30 %}background-color: var(--heat-mid); color: white;
-                            {% elif val >= 0.15 %}background-color: var(--heat-weak);
-                            {% elif val > 0 %}background-color: var(--heat-faint);
-                            {% endif %}">
-                            {{ "%.2f"|format(val * 100) }}%
+                        {# 档位 class 由 Python 侧 position_overlap.heat_class 计算（阈值单源） #}
+                        <td class="{{ _heat_classes[i][j] if i < _heat_classes|length and j < _heat_classes[i]|length else '' }}"
+                            style="text-align: center; font-size: var(--fs-table-sm);">
+                            {{ '%.2f'|format(val * 100) }}%
                         </td>
                         {% endfor %}
                     </tr>
@@ -85,7 +82,7 @@
                         <td class="text-left">{{ _fund_names.get(p.fund_a, p.fund_a) }}({{ p.fund_a }})</td>
                         <td class="text-left">{{ _fund_names.get(p.fund_b, p.fund_b) }}({{ p.fund_b }})</td>
                         <td>{{ p.common_count }}</td>
-                        <td>{{ "%.2f"|format(p.jaccard * 100) }}%</td>
+                        <td>{{ '%.2f'|format(p.jaccard * 100) }}%</td>
                         <td class="text-left" style="font-size: var(--fs-table-sm);">
                             {% if p.common_stocks %}
                             {% set stock_names = [] %}
@@ -116,7 +113,7 @@
             {% set _corr_top = _corr_pairs[0] %}
             <div class="notice-banner" style="margin-bottom: 12px;">
                 🔔 相关度最高：<strong>{{ _corr_top.name_a }}({{ _corr_top.code_a | anon_code }})</strong> × <strong>{{ _corr_top.name_b }}({{ _corr_top.code_b | anon_code }})</strong>
-                — r={{ "%.2f"|format(_corr_top.pearson) }}，p={{ "%.4f"|format(_corr_top.p_value) }}{% if _corr_top.significant %}（显著）{% else %}（不显著）{% endif %}
+                — r={{ '%.2f'|format(_corr_top.pearson) }}，p={{ '%.4f'|format(_corr_top.p_value) }}{% if _corr_top.significant %}（显著）{% else %}（不显著）{% endif %}
             </div>
             {% endif %}
 
@@ -138,30 +135,30 @@
                     <tr>
                         <td style="font-weight: bold; font-size: var(--fs-footnote); max-width: 80px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
                             title="{{ _corr_names.get(_corr_codes[i], _corr_codes[i]) }}">{{ _corr_names.get(_corr_codes[i], _corr_codes[i]) }}</td>
-                        <td style="font-size: var(--fs-footnote); color: var(--text-muted);">({{ _corr_codes[i] }})</td>
+                        <td class="text-muted" style="font-size: var(--fs-footnote);">({{ _corr_codes[i] }})</td>
                         {% for j in range(_corr_codes | length) %}
                         {% if j == i %}
-                        <td style="background-color: var(--row-first-check-bg); color: var(--text-faint);" title="自相关">1.00</td>
+                        <td class="text-faint" style="background-color: var(--row-first-check-bg);" title="自相关">1.00</td>
                         {% elif j < i %}
                         {% set _corr_r = _corr_matrix[i][j] %}
                         {% if _corr_r is none %}
-                        <td style="background-color: var(--cell-na-bg); color: var(--text-faint);" title="重叠样本不足，未计算">N/A</td>
+                        <td class="text-faint" style="background-color: var(--cell-na-bg);" title="重叠样本不足，未计算">N/A</td>
                         {% else %}
                         {% set _corr_p = _corr_pvals[i][j] %}
                         {% if _corr_p is not none and _corr_p >= 0.05 %}
-                        <td style="background-color: var(--surface); color: var(--text-faint);" title="p={{ "%.4f"|format(_corr_p) }}，不显著">{{ "%.2f"|format(_corr_r) }}</td>
+                        <td class="text-faint" style="background-color: var(--surface);" title="p={{ '%.4f'|format(_corr_p) }}，不显著">{{ '%.2f'|format(_corr_r) }}</td>
                         {% elif _corr_r >= 0.5 %}
-                        <td style="background-color: var(--corr-pos-strong); color: white; font-weight: bold;" title="r={{ "%.2f"|format(_corr_r) }}，p={{ "%.4f"|format(_corr_p) }}">强正</td>
+                        <td class="corr-pos-strong" title="r={{ '%.2f'|format(_corr_r) }}，p={{ '%.4f'|format(_corr_p) }}">强正</td>
                         {% elif _corr_r >= 0.3 %}
-                        <td style="background-color: var(--corr-pos); color: var(--text);" title="r={{ "%.2f"|format(_corr_r) }}，p={{ "%.4f"|format(_corr_p) }}">{{ "%.2f"|format(_corr_r) }}</td>
+                        <td style="background-color: var(--corr-pos);" title="r={{ '%.2f'|format(_corr_r) }}，p={{ '%.4f'|format(_corr_p) }}">{{ '%.2f'|format(_corr_r) }}</td>
                         {% elif _corr_r > 0 %}
-                        <td style="background-color: var(--corr-pos-weak); color: var(--text);" title="r={{ "%.2f"|format(_corr_r) }}，p={{ "%.4f"|format(_corr_p) }}">{{ "%.2f"|format(_corr_r) }}</td>
+                        <td style="background-color: var(--corr-pos-weak);" title="r={{ '%.2f'|format(_corr_r) }}，p={{ '%.4f'|format(_corr_p) }}">{{ '%.2f'|format(_corr_r) }}</td>
                         {% elif _corr_r <= -0.5 %}
-                        <td style="background-color: var(--corr-neg-strong); color: white; font-weight: bold;" title="r={{ "%.2f"|format(_corr_r) }}，p={{ "%.4f"|format(_corr_p) }}">强负</td>
+                        <td class="corr-neg-strong" title="r={{ '%.2f'|format(_corr_r) }}，p={{ '%.4f'|format(_corr_p) }}">强负</td>
                         {% elif _corr_r <= -0.3 %}
-                        <td style="background-color: var(--corr-neg); color: var(--text);" title="r={{ "%.2f"|format(_corr_r) }}，p={{ "%.4f"|format(_corr_p) }}">{{ "%.2f"|format(_corr_r) }}</td>
+                        <td style="background-color: var(--corr-neg);" title="r={{ '%.2f'|format(_corr_r) }}，p={{ '%.4f'|format(_corr_p) }}">{{ '%.2f'|format(_corr_r) }}</td>
                         {% else %}
-                        <td style="background-color: var(--corr-neg-weak); color: var(--text);" title="r={{ "%.2f"|format(_corr_r) }}，p={{ "%.4f"|format(_corr_p) }}">{{ "%.2f"|format(_corr_r) }}</td>
+                        <td style="background-color: var(--corr-neg-weak);" title="r={{ '%.2f'|format(_corr_r) }}，p={{ '%.4f'|format(_corr_p) }}">{{ '%.2f'|format(_corr_r) }}</td>
                         {% endif %}
                         {% endif %}
                         {% else %}
@@ -211,9 +208,9 @@
                         <td class="text-left">{{ p.name_a }}({{ p.code_a | anon_code }})</td>
                         <td class="text-left">{{ p.name_b }}({{ p.code_b | anon_code }})</td>
                         <td class="fw-600 {% if p.pearson >= 0.5 %}corr-pos-strong{% elif p.pearson > 0 %}corr-pos-mid{% elif p.pearson <= -0.5 %}corr-neg-strong{% else %}text-primary{% endif %}">
-                            {{ "%.2f"|format(p.pearson) }}
+                            {{ '%.2f'|format(p.pearson) }}
                         </td>
-                        <td>{{ "%.4f"|format(p.p_value) }}</td>
+                        <td>{{ '%.4f'|format(p.p_value) }}</td>
                         <td>{{ p.samples }}</td>
                         <td>{% if p.significant %}✅ 显著{% else %}— 不显著{% endif %}</td>
                     </tr>
@@ -246,8 +243,8 @@
                         {% set s120 = fp.series["120"] %}
                         <tr>
                             <td class="text-left">{{ fp.name_a }}({{ fp.code_a | anon_code }}) × {{ fp.name_b }}({{ fp.code_b | anon_code }})</td>
-                            <td class="text-right">{{ "%.2f"|format(s60[-1].value) if s60 else "--" }}</td>
-                            <td class="text-right">{{ "%.2f"|format(s120[-1].value) if s120 else "--" }}</td>
+                            <td class="text-right">{{ '%.2f'|format(s60[-1].value) if s60 else "--" }}</td>
+                            <td class="text-right">{{ '%.2f'|format(s120[-1].value) if s120 else "--" }}</td>
                             <td class="text-right">{{ "%.2f → %.2f"|format(s60[0].value, s60[-1].value) if s60 else "--" }}</td>
                         </tr>
                         {% endfor %}
@@ -265,7 +262,7 @@
 
             {% if position_relationship_data.get("insufficient_codes") %}
             <div class="penetration-notes">
-                <div style="color:var(--warn-text);">* 下列品种重叠样本不足 {{ position_relationship_data["window"] }} 期，相关性格标为 N/A（灰色）：{{ position_relationship_data["insufficient_codes"] | map("anon_code") | join("、") }}</div>
+                <div class="text-warn">* 下列品种重叠样本不足 {{ position_relationship_data["window"] }} 期，相关性格标为 N/A（灰色）：{{ position_relationship_data["insufficient_codes"] | map("anon_code") | join("、") }}</div>
             </div>
             {% endif %}
             <div class="penetration-notes">
@@ -306,13 +303,13 @@
                         <td class="fs-table-sm{{ ' text-warn' if r.get('report_stale') }}">
                             {{ r.get("report_period", "") }}{% if r.get("report_stale") %}（陈旧）{% endif %}
                         </td>
-                        <td>{{ "%.2f"|format(r["top3_pct"]) }}%</td>
-                        <td>{{ "%.2f"|format(r["top5_pct"]) }}%</td>
-                        <td>{{ "%.2f"|format(r["top10_pct"]) }}%</td>
+                        <td>{{ '%.2f'|format(r["top3_pct"]) }}%</td>
+                        <td>{{ '%.2f'|format(r["top5_pct"]) }}%</td>
+                        <td>{{ '%.2f'|format(r["top10_pct"]) }}%</td>
                         {% if r.get("prev_top10_pct") is not none %}
-                        <td>{{ "%.2f"|format(r["prev_top10_pct"]) }}%</td>
+                        <td>{{ '%.2f'|format(r["prev_top10_pct"]) }}%</td>
                         {% else %}
-                        <td style="color: var(--text-muted);">—</td>
+                        <td class="text-muted">—</td>
                         {% endif %}
                         {% if r.get("is_first_check") %}
                         <td><span class="gray-text">基线已记录</span></td>

@@ -22,6 +22,7 @@ from collections.abc import Callable
 from datetime import datetime, timedelta
 
 from src.python.core.constants import BEIJING_TZ
+from src.python.core.dates import parse_datetime_ymd
 
 import threading
 
@@ -152,7 +153,7 @@ def cached_trading_days() -> list[str]:
         return []
     try:
         cached = cache.get(_TRADING_CALENDAR_CACHE_KEY, cache.get_ttl("calendar"))
-    except Exception:  # 缓存不可用时按「无日历」处理，回落自然日阈值
+    except Exception:  # noqa: BLE001 — 缓存不可用时按「无日历」处理，回落自然日阈值
         return []
     if not isinstance(cached, list):
         return []
@@ -214,7 +215,7 @@ def _get_trading_calendar() -> set[str]:
                 _calendar_failure_clear()
                 logger.info("交易日历已更新（%d 个交易日）", len(dates))
                 return dates
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — 获取交易日历失败: %s，尝试同花顺官方序列兜底
             logger.warning("获取交易日历失败: %s，尝试同花顺官方序列兜底", exc)
 
     # akshare 不可用 → 官方序列兜底（需 key；缺凭据/失败则返回空集合，
@@ -232,7 +233,7 @@ def _get_trading_calendar() -> set[str]:
             for item in (data.get("item") or [])
             if isinstance(item, dict) and str(item.get("date") or "").strip()
         }
-    except Exception as exc:  # 兜底源不可用同样降级，不抛
+    except Exception as exc:  # noqa: BLE001 — 兜底源不可用同样降级，不抛
         logger.warning("交易日历兜底失败: %s", exc)
         _calendar_failure_mark()
         return set()
@@ -394,10 +395,9 @@ def count_trading_days_elapsed(start: str, end: str) -> int | None:
     Returns:
         经过的交易日数；start >= end 时返回 0；日期格式非法返回 None
     """
-    try:
-        start_dt = datetime.strptime(start, "%Y-%m-%d")
-        end_dt = datetime.strptime(end, "%Y-%m-%d")
-    except (ValueError, TypeError):
+    start_dt = parse_datetime_ymd(start)
+    end_dt = parse_datetime_ymd(end)
+    if start_dt is None or end_dt is None:
         return None
     if start_dt >= end_dt:
         return 0

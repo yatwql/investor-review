@@ -87,7 +87,7 @@ def probe_code(code: str, days: int, provider: str = "tencent") -> list[dict[str
 
 def evaluate(
     freshness: dict[str, int],
-    threshold: int,
+    threshold: int,  # noqa: ARG001 — 签名契约：探针按位置传阈值（判定当前只用 stale）
     stale: int,
 ) -> dict[str, Any]:
     """按 technical.md §4.8 因子暴露分析 — 数据新鲜度判定标准评估可用性。
@@ -155,7 +155,7 @@ def build_parser():
     return parser
 
 
-def run(args) -> int:
+def run(args: argparse.Namespace) -> int:
     """主入口（参数已由 probe.py 经 build_parser 解析）。"""
 
     days = min(max(args.days, 5), 2000)  # Tencent K 线实际上限约 2000 天（3650 返回空/崩溃，见 probe 说明）

@@ -29,6 +29,7 @@ from src.python.report.progress import (
     timing_records,
 )
 from src.python.tui.progress import TuiProgressReporter
+from src.test._fixtures.reporters import RecordingReporter
 import pytest
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
@@ -365,17 +366,6 @@ class TestTuiProgressReporter(unittest.TestCase):
             self.r._timing_records.extend(saved_records)
 
 
-class _RecordingReporter(ProgressReporter):
-    """捕获 info 消息的测试报告器（基类 info 为静默空实现）。"""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.messages: list[str] = []
-
-    def info(self, msg: str) -> None:
-        self.messages.append(msg)
-
-
 class TestStageProgress(unittest.TestCase):
     """stage_progress — 阶段状态行（ETA 基于 perf 历史同阶段中位数）。"""
 
@@ -386,55 +376,55 @@ class TestStageProgress(unittest.TestCase):
 
     def test_emits_eta_line(self) -> None:
         """历史可得 → 输出阶段 + 已耗时 + 预计剩余。"""
-        r = _RecordingReporter()
+        r = RecordingReporter()
         perf = self._perf({"phase": "行情获取", "elapsed": 2.0})
         history = [{"report_type": "full", "phases": {"行情获取": 100.0}}]
         with patch("src.python.core.perf.load_history", return_value=history):
             r.stage_progress(perf)
-        self.assertEqual(r.messages, ["「行情获取」· 已耗时 2s · 预计剩余 ~98s"])
+        self.assertEqual(r.infos, ["「行情获取」· 已耗时 2s · 预计剩余 ~98s"])
 
     def test_no_active_stage_silent(self) -> None:
         """无活跃阶段 → 不输出。"""
-        r = _RecordingReporter()
+        r = RecordingReporter()
         r.stage_progress(self._perf(None))
-        self.assertEqual(r.messages, [])
+        self.assertEqual(r.infos, [])
 
     def test_history_insufficient_shows_elapsed_only(self) -> None:
         """历史不足但已耗时 ≥1s → 仅显示已耗时（无预计剩余）。"""
-        r = _RecordingReporter()
+        r = RecordingReporter()
         perf = self._perf({"phase": "LLM+新闻", "elapsed": 5.0})
         with patch("src.python.core.perf.load_history", return_value=[]):
             r.stage_progress(perf)
-        self.assertEqual(r.messages, ["「LLM+新闻」· 已耗时 5s"])
-        self.assertNotIn("预计剩余", r.messages[0])
+        self.assertEqual(r.infos, ["「LLM+新闻」· 已耗时 5s"])
+        self.assertNotIn("预计剩余", r.infos[0])
 
     def test_history_insufficient_and_fresh_stage_silent(self) -> None:
         """历史不足且已耗时 <1s（阶段刚开）→ 不输出无可报信息。"""
-        r = _RecordingReporter()
+        r = RecordingReporter()
         perf = self._perf({"phase": "快照对比", "elapsed": 0.0})
         with patch("src.python.core.perf.load_history", return_value=[]):
             r.stage_progress(perf)
-        self.assertEqual(r.messages, [])
+        self.assertEqual(r.infos, [])
 
     def test_instant_stage_silent(self) -> None:
         """历史显示瞬时完成（预估剩余 <1s）→ 不刷屏。"""
-        r = _RecordingReporter()
+        r = RecordingReporter()
         perf = self._perf({"phase": "快照对比", "elapsed": 0.0})
         history = [{"report_type": "both", "phases": {"快照对比": 0.2}}]
         with patch("src.python.core.perf.load_history", return_value=history):
             r.stage_progress(perf)
-        self.assertEqual(r.messages, [])
+        self.assertEqual(r.infos, [])
 
     def test_estimate_failure_silent(self) -> None:
         """预估计算抛异常 → 静默降级为无输出，不向上传播。"""
-        r = _RecordingReporter()
+        r = RecordingReporter()
         perf = self._perf({"phase": "行情获取", "elapsed": 3.0})
         with patch(
             "src.python.core.perf.estimate_stage_eta",
             side_effect=RuntimeError("预估故障"),
         ):
             r.stage_progress(perf)  # 不应抛出
-        self.assertEqual(r.messages, [])
+        self.assertEqual(r.infos, [])
 
     def test_cli_verbose_wires_eta_to_stderr(self) -> None:
         """CLI verbose 通道：状态行经 info 以 [..] 前缀写入 stderr（同源受益）。"""

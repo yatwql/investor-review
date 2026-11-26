@@ -12,7 +12,7 @@ from src.python.core.constants import CACHE_DAILY
 from src.python.core.market_hours import is_market_open as _is_market_open
 from src.python.core.registry import get_cache_ttl_defaults, get_market_ttl_map
 
-from ._io import _read_cache_data
+from ._io import _read_cache_data, payload_timestamp
 from ._paths import _GZIP_SUFFIX, _cache_path
 
 logger = logging.getLogger("invest")
@@ -38,8 +38,8 @@ def get_cache_age(key: str) -> float | None:
     for fpath in (gz_path, path):
         data = _read_cache_data(fpath, key)
         if data is not None:
-            ts = data.get("_ts", 0)
-            if isinstance(ts, (int, float)) and ts > 0:
+            ts = payload_timestamp(data)
+            if ts > 0:
                 return time.time() - ts
     return None
 

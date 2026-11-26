@@ -62,5 +62,5 @@ def _mark_provider_used(data_type: str, provider_name: str, display_name: str) -
         from src.python.core.degradation import mark_provider_used
 
         mark_provider_used(data_type, provider_name, display_name)
-    except Exception:  # 观测失败不影响主链路
+    except Exception:  # noqa: BLE001 — 观测失败不影响主链路
         logger.debug("[chain] provider 归属登记失败（非关键）: %s/%s", data_type, provider_name, exc_info=True)

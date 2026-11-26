@@ -33,7 +33,7 @@ class TestFundManagerSheetEmpty(unittest.TestCase):
         """manager_data=[] → 占位文本。"""
         from src.python.report.fund_performance import _write_manager_block
 
-        _write_manager_block(self.ws, 1, [])  # noqa: E501
+        _write_manager_block(self.ws, 1, [])
         placeholder = self.ws.cell(row=4, column=1).value
         self.assertIsNotNone(placeholder)
         self.assertIn("暂不可用", str(placeholder))
@@ -42,7 +42,7 @@ class TestFundManagerSheetEmpty(unittest.TestCase):
         """占位文本来自 STATUS_MESSAGES。"""
         from src.python.report.fund_performance import _write_manager_block
 
-        _write_manager_block(self.ws, 1, [])  # noqa: E501
+        _write_manager_block(self.ws, 1, [])
         self.assertEqual(
             self.ws.cell(row=4, column=1).value,
             STATUS_MESSAGES["manager_unavailable"],

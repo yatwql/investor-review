@@ -438,3 +438,93 @@ class TestPerfModuleLatency:
         entry = (recorded.get("modules") or {}).get("global_macro") or {}
         assert entry.get("cached") is True
         assert entry.get("duration_seconds") == 0.0
+
+
+class TestPostModuleBaselineAttribution:
+    """后置模块（`self_review` / `holding_change` 等）的重算原因也读**跨报告基线**。
+
+    缺陷场景：`start_report_run()` 在每份报告边界清空进程内「上一轮键」，而基线快照
+    原先只落四个基础模块的键 —— 后置模块跨轮拿不到上一轮键，同键未命中也被记成
+    `cache_miss`（预检路径同场景记 `ttl_expired`），同一个 `recompute_reasons`
+    计数器里混进两种含义，`ttl_expired` 分支对后置模块实际不可达。
+    """
+
+    KEY = "llm_self_review_probe"
+
+    def _miss_with(self, sink):
+        """真实走骨架：无缓存 + 有观测汇聚器 → 记录该模块的重算原因。"""
+        from src.python.llm import skeleton
+
+        with patch("src.python.llm.skeleton._execute_llm_with_finalize", return_value=(None, False)):
+            with patch("src.python.llm.observation.current_llm_observation", return_value=sink):
+                skeleton.generate_llm_content(
+                    {},
+                    self.KEY,
+                    3600,
+                    "sys",
+                    "user",
+                    cache_enabled=True,
+                    force=False,
+                    max_tokens=16,
+                    timeout=5,
+                    temperature=None,
+                    model=None,
+                    config_field="model_self_review",
+                    module_key="self_review",
+                )
+        return sink.module_recompute_reasons()
+
+    def test_same_baseline_key_is_ttl_expired(self, llm_cache_dir):
+        """同键未命中 → `ttl_expired`（内容没变，只是到点）。"""
+        from src.python.llm import fingerprint_baseline
+        from src.python.report._run_scope import start_report_run
+
+        fingerprint_baseline.save_baseline({}, {"self_review": self.KEY})
+        start_report_run()  # 报告边界：进程内上轮键清空，只剩跨报告基线
+        assert self._miss_with(LlmObservation()) == {"self_review": "ttl_expired"}
+
+    def test_changed_baseline_key_is_fingerprint_changed(self, llm_cache_dir):
+        """基线里是另一个键 → `fingerprint_changed`（输入变了）。"""
+        from src.python.llm import fingerprint_baseline
+        from src.python.report._run_scope import start_report_run
+
+        fingerprint_baseline.save_baseline({}, {"self_review": "llm_self_review_OLD"})
+        start_report_run()
+        assert self._miss_with(LlmObservation()) == {"self_review": "fingerprint_changed"}
+
+    def test_no_baseline_is_cache_miss(self, llm_cache_dir):
+        """无任何上轮基线（冷启动）→ `cache_miss`，不臆测原因。"""
+        from src.python.report._run_scope import start_report_run
+
+        start_report_run()
+        assert self._miss_with(LlmObservation()) == {"self_review": "cache_miss"}
+
+    def test_in_process_key_is_fallback_when_no_baseline(self, llm_cache_dir):
+        """无跨报告基线时回落进程内记录（同进程内换键 → `fingerprint_changed`）。"""
+        from src.python.llm import skeleton
+
+        skeleton._PREV_MODULE_CACHE_KEY["self_review"] = "llm_self_review_OLD"
+        assert self._miss_with(LlmObservation()) == {"self_review": "fingerprint_changed"}
+
+
+class TestBaselineRecordsPostModuleKeys:
+    """基线快照落**本轮全部模块**的键（含后置模块），否则下份报告没有「上一轮键」。"""
+
+    def test_finalize_writes_post_module_keys(self, llm_cache_dir):
+        from src.python.llm import fingerprint_baseline, skeleton
+        from src.python.llm.generators_orchestrator import _finalize_llm_run
+
+        skeleton._PREV_MODULE_CACHE_KEY["self_review"] = "llm_self_review_X"
+        _finalize_llm_run(
+            {},
+            {},
+            cache_info={"expert_review": {"key": "llm_expert_review_Y"}},
+            debate_info=None,
+            has_debate=False,
+        )
+        assert fingerprint_baseline.baseline_module_key("self_review") == "llm_self_review_X", (
+            "后置模块的键只在生成骨架侧，基线必须一并落盘"
+        )
+        assert fingerprint_baseline.baseline_module_key("expert_review") == "llm_expert_review_Y", (
+            "基础模块的键仍取自预检 cache_info（缓存命中时骨架不记录）"
+        )

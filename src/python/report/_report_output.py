@@ -12,9 +12,13 @@ from __future__ import annotations
 
 import logging
 import time
+from typing import TYPE_CHECKING
 
 from src.python.report._chart_dataset_factory import _build_chart_datasets_for_report
 from src.python.report.progress import ProgressReporter
+
+if TYPE_CHECKING:
+    from src.python.report.orchestrator import ReportResult
 
 logger = logging.getLogger("invest")
 
@@ -39,7 +43,7 @@ def _generate_full_excel_report(
     enable_history: bool,
     enable_llm: bool,
     debate_info: dict | None,
-    result,
+    result: ReportResult,
     enable_portfolio_evolution: bool = True,
     enable_action: bool = False,
     enable_cost_lots: bool = False,
@@ -118,7 +122,7 @@ def _generate_full_html_report(
     enable_history: bool,
     enable_llm: bool,
     debate_info: dict | None,
-    result,
+    result: ReportResult,
     metrics: dict | None = None,
     style_factor_data: dict | None = None,
     factor_catalog_data: dict | None = None,

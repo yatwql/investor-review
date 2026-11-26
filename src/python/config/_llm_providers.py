@@ -256,10 +256,8 @@ def _parse_providers_list(raw_config: dict) -> list[dict] | None:
     """
     providers = raw_config.get("providers")
     if not providers or not isinstance(providers, list):
-        logger.warning("LLM providers 配置中 providers 字段缺失或不是数组")
-        return None
-    if len(providers) == 0:
-        logger.warning("LLM providers 配置中 providers 数组为空")
+        # 空列表/缺失/非数组同一文案：`not providers` 已涵盖 `len(providers) == 0`
+        logger.warning("LLM providers 配置中 providers 字段缺失、为空或不是数组")
         return None
 
     validated: list[dict] = []

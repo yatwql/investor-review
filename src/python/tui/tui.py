@@ -8,6 +8,7 @@ import os
 import sys
 import time
 from collections.abc import Callable
+from typing import TextIO
 
 # 确保项目根目录在 sys.path 中（支持直接执行 python src/python/tui/tui.py）
 _src_dir = os.path.dirname(os.path.abspath(__file__))
@@ -127,7 +128,7 @@ def _bind_callbacks() -> None:
 class _FrameLineCounter:
     """透明代理：累计 write 的换行数并透传到底层流（原地重绘需知道上一帧占用行数）。"""
 
-    def __init__(self, stream):
+    def __init__(self, stream: TextIO):
         self._stream = stream
         self.lines = 0
 
@@ -174,7 +175,7 @@ def _can_repaint_inplace() -> bool:
         return False
     try:
         return os.name == "posix" and sys.stdout.isatty()
-    except Exception:
+    except (AttributeError, OSError, ValueError):
         return False
 
 
@@ -284,7 +285,7 @@ def main() -> None:
         from src.python.report.privacy_notice import show_privacy_notice_if_needed
 
         show_privacy_notice_if_needed()
-    except Exception:
+    except Exception:  # noqa: BLE001 — 隐私提示显示失败（非关键）
         logger.debug("隐私提示显示失败（非关键）", exc_info=True)
 
     # 首次运行引导（检测缺失资源并交互式提示）
@@ -292,7 +293,7 @@ def main() -> None:
         from src.python.startup_wizard import show_startup_wizard_if_needed
 
         show_startup_wizard_if_needed()
-    except Exception:
+    except Exception:  # noqa: BLE001 — 首次运行引导显示失败（非关键）
         logger.debug("首次运行引导显示失败（非关键）", exc_info=True)
 
     # 读取缺省菜单选项（config.json → default_menu_key），仅支持 E/B/L/W/Q/D/1/2/3/P/I/A/S/R/V/H/T/X

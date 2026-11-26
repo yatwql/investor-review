@@ -145,10 +145,7 @@ def _build_holdings_index(holdings_details: list[dict[str, Any]] | None) -> dict
         code = str(holding.get("code") or "").strip()
         if not code:
             continue
-        try:
-            price = finite_or(holding.get("price"))
-        except (TypeError, ValueError):
-            price = 0.0
+        price = finite_or(holding.get("price"))
         entry = {"name": str(holding.get("name") or "").strip(), "price": price}
         index.setdefault(code, entry)
         # 非裸 6 位持仓代码（sh600000 / 600000.SH 等交易所前缀）→ 补挂裸 6 位别名，
@@ -197,30 +194,29 @@ def extract_llm_decisions(
             row = _parse_table_row(line)
             if row:
                 _note(_collect_decision(best, row, holdings))
-            elif extract_code(line) is not None:
+            elif (line_code := extract_code(line)) is not None:
                 # 有品种代码却没解析出方向：区分「不操作/观望」与真正的异常行。
                 # 「不操作」本身是可评估的建议（事后看「不动」对不对），登记为不动作类
                 # （direction=0，强度 low），由结算写 `flat_hit`、折叠进 `inaction` 统计。
+                # 代码在分支条件里取值一次（walrus），不在体内重取也不靠 assert 收紧——
+                # assert 会被 `python -O` 剥离，届时 None 会当代码继续往下走。
                 cells = _split_cells(line)
                 op_cell = cells[2] if len(cells) >= 4 else ""
                 if _is_no_action(op_cell):
-                    code = extract_code(line)
-                    if code is not None:
-                        _note(
-                            _collect_decision(
-                                best,
-                                {
-                                    "code": code,
-                                    "name": _strip_code(cells[1]) if len(cells) >= 4 else "",
-                                    "direction": dl.DIRECTION_FLAT,
-                                    "magnitude": "low",
-                                    "detail": op_cell.strip(),
-                                },
-                                holdings,
-                            )
+                    code = line_code
+                    _note(
+                        _collect_decision(
+                            best,
+                            {
+                                "code": code,
+                                "name": _strip_code(cells[1]) if len(cells) >= 4 else "",
+                                "direction": dl.DIRECTION_FLAT,
+                                "magnitude": "low",
+                                "detail": op_cell.strip(),
+                            },
+                            holdings,
                         )
-                    else:
-                        _note("no_direction")
+                    )
                 else:
                     _note("unparsed")
     if skipped:
@@ -299,7 +295,7 @@ def register_llm_decisions(
         return {"registered": 0, "ids": []}
     try:
         rows = extract_llm_decisions(expert_review_html, holdings_details)
-    except Exception as exc:  # noqa: BLE001 — 解析兜底：LLM 文本异常不得中断报告生成
+    except Exception as exc:  # noqa: BLE001 — 解析兜底——LLM 文本异常不得中断报告生成
         logger.info("[decision_llm_capture] 解析兜底跳过本次登记: %s: %s", type(exc).__name__, exc)
         return {"registered": 0, "ids": []}
     ids: list[str] = []

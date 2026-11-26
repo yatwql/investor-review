@@ -473,3 +473,112 @@ class TestPromptEscCancel(unittest.TestCase):
             result = hr._prompt_generate_confirm(reporter, {"history": {"fetch_mode": "auto"}})
         self.assertIsNone(result)
         self.assertIn("已取消本次生成", buf.getvalue())
+
+
+class TestRunGenerateSkeleton:
+    """`_run_generate` 的通用骨架：持仓未就绪 / 可选参数透传 / 生成异常不冒泡 / 命令入口分派。"""
+
+    def test_no_holdings_returns_none_without_orchestrating(self):
+        from src.python.tui import handlers_report
+
+        with (
+            patch("src.python.tui.handlers_report.prepare_holdings", return_value=None),
+            patch("src.python.tui.handlers_report.orchestrator.generate_report") as gen,
+        ):
+            assert handlers_report._run_generate("basic") is None
+        gen.assert_not_called()
+
+    def test_force_llm_modules_forwarded_to_orchestrator(self):
+        from src.python.tui import handlers_report
+
+        with (
+            patch("src.python.tui.handlers_report.prepare_holdings", return_value=([], [], {})),
+            patch("src.python.tui.handlers_report.TuiProgressReporter"),
+            patch("src.python.tui.handlers_report.finish_report"),
+            patch("src.python.tui.handlers_report.orchestrator.generate_report") as gen,
+        ):
+            handlers_report._run_generate("full", force_llm=True, force_llm_modules=["global_macro"])
+
+        assert gen.call_args.kwargs["force_llm_modules"] == ["global_macro"]
+        assert gen.call_args.kwargs["force_llm"] is True
+
+    def test_generate_exception_is_reported_not_raised(self):
+        from src.python.tui import handlers_report
+
+        with (
+            patch("src.python.tui.handlers_report.prepare_holdings", return_value=([], [], {})),
+            patch("src.python.tui.handlers_report.TuiProgressReporter"),
+            patch("src.python.tui.handlers_report.finish_report") as finished,
+            patch(
+                "src.python.tui.handlers_report.orchestrator.generate_report",
+                side_effect=RuntimeError("boom"),
+            ),
+            patch("src.python.tui.handlers_report.print_error_with_hint") as hinted,
+        ):
+            reporter = handlers_report._run_generate("basic")
+
+        hinted.assert_called_once()
+        finished.assert_called_once_with(reporter), "异常路径也必须收口状态条"
+
+    def test_excel_command_uses_basic_profile(self):
+        from src.python.tui import handlers_report
+
+        with patch.object(handlers_report, "_run_generate") as run:
+            handlers_report._cmd_generate_excel()
+
+        run.assert_called_once_with("basic")
+
+    def test_both_command_uses_both_profile_with_history_prompt(self):
+        from src.python.tui import handlers_report
+
+        with (
+            patch.object(handlers_report, "_run_generate") as run,
+            patch.object(handlers_report, "_prompt_history", return_value=True),
+        ):
+            handlers_report._cmd_generate_both()
+
+        run.assert_called_once_with("both", fetch_history=True)
+
+
+class TestSelectForceModulesInterrupt:
+    """模块多选时读取中断：按「全部模块」继续，不抛出。"""
+
+    def test_eof_treated_as_full_force(self):
+        from src.python.tui import handlers_report
+
+        with patch("src.python.tui.handlers_report.input_choice", side_effect=EOFError):
+            assert handlers_report._select_force_modules(MagicMock()) == (True, None)
+
+    def test_fetch_history_forwarded_when_explicit(self):
+        from src.python.tui import handlers_report
+
+        with (
+            patch("src.python.tui.handlers_report.prepare_holdings", return_value=([], [], {})),
+            patch("src.python.tui.handlers_report.TuiProgressReporter"),
+            patch("src.python.tui.handlers_report.finish_report"),
+            patch("src.python.tui.handlers_report.orchestrator.generate_report") as gen,
+        ):
+            handlers_report._run_generate("both", fetch_history=True)
+
+        assert gen.call_args.kwargs["fetch_history"] is True
+
+
+class TestPromptGenerateConfirmInterrupt:
+    """生成前问句屏读取中断：一律中止（不进入生成），不抛出。"""
+
+    def _call(self, *, exceeded: bool):
+        from src.python.tui import handlers_report
+
+        with (
+            patch("src.python.tui.handlers_report.forecast_run_cost", return_value={}),
+            patch("src.python.tui.handlers_report.budget_status", return_value={"exceeded": exceeded}),
+            patch("src.python.tui.handlers_report.forecast_summary_lines", return_value=[]),
+            patch("src.python.tui.handlers_report.input_choice", side_effect=EOFError),
+        ):
+            return handlers_report._prompt_generate_confirm(MagicMock(), {})
+
+    def test_eof_on_budget_exceeded_screen_aborts(self):
+        assert self._call(exceeded=True) is None
+
+    def test_eof_on_question_screen_aborts(self):
+        assert self._call(exceeded=False) is None

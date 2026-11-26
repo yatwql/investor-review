@@ -220,7 +220,7 @@ def _with_transient_retry(
             label=label,
             before_attempt=_before_attempt,
         )
-    except Exception as e:  # 瞬时重试耗尽 / 非瞬时失败：降级为 None（不计熔断）
+    except Exception as e:  # noqa: BLE001 — 瞬时重试耗尽 / 非瞬时失败：降级为 None（不计熔断）
         suffix = f"（已试 {tried['n']} 次）" if tried["n"] > 1 else ""
         logger.warning("[cninfo] 请求失败 %s: %s%s", label, e, suffix)
         if url and _looks_like_hang(e, _timeout):
@@ -229,7 +229,7 @@ def _with_transient_retry(
         return None
 
 
-def _looks_like_hang(exc: BaseException, timeout: float) -> bool:
+def _looks_like_hang(exc: BaseException, _timeout: float) -> bool:
     """该异常是否属「挂起型」：连接/读超时（与 ``with_connect_retry`` 的判据同源）。"""
     from src.python.core.retry import is_transient_exception
 
@@ -497,7 +497,7 @@ def _parse_pdf_text(pdf_bytes: bytes) -> str:
                 if text.strip():
                     pages.append(text)
         return "\n".join(pages)
-    except Exception as e:  # 损坏/加密/非标准 PDF：返回空，交链路降级
+    except Exception as e:  # noqa: BLE001 — 损坏/加密/非标准 PDF：返回空，交链路降级
         logger.warning("[cninfo] PDF 解析失败：%s", e)
         return ""
 

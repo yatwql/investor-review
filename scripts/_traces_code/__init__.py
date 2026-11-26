@@ -9,6 +9,7 @@
   - layers     core 反向依赖 AST 守卫
   - logging_discipline 日志统一 AST 守卫（print() 仅限交互呈现层 + 日志器名称须为 "invest"）
   - config_defaults 配置默认值单源 AST 守卫（禁止与默认表同值的字面量兜底）
+  - pragma_exemptions `pragma: no cover` 豁免清单校验（覆盖率口径债防增长）
 """
 
 from __future__ import annotations
@@ -80,4 +81,9 @@ from _traces_code.patterns import (  # noqa: F401
 from _traces_code.scan import (  # noqa: F401
     _scan_identifiers,
     scan_file,
+)
+from _traces_code.pragma_exemptions import (  # noqa: F401
+    PRAGMA_EXEMPTION_DOC,
+    _load_exemptions,
+    _scan_pragma_no_cover,
 )

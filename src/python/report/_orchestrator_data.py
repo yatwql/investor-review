@@ -11,16 +11,16 @@ import logging
 import time
 
 from datetime import datetime
-from typing import Any, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 from src.python.report.progress import ProgressReporter
 
 # ── 子模块 re-export ────────────────────────────────────
-from src.python.report._report_aux_metrics import (  # noqa: F401
+from src.python.report._report_aux_metrics import (
     compute_correlation_data,
     compute_market_temperature_data,
 )
-from src.python.report._report_factor_metrics import (  # noqa: F401
+from src.python.report._report_factor_metrics import (
     _fetch_holding_bars,
     compute_factor_exposure_data,
     compute_industry_beta_data,
@@ -29,16 +29,19 @@ from src.python.report._report_factor_metrics import (  # noqa: F401
 from src.python.config import get_default, resolve_output_dir
 from src.python.report.progress import MSG_FETCHING_MARKET
 
+if TYPE_CHECKING:
+    from src.python.core.perf import PhaseBreakdownRecorder
+
 logger = logging.getLogger("invest")
 
 
-def _record_span(recorder, name: str, started: float) -> None:
+def _record_span(recorder: PhaseBreakdownRecorder | None, name: str, started: float) -> None:
     """记录一个子阶段耗时（recorder 为 None 时零行为变化）。"""
     if recorder is not None:
         recorder.record(name, time.perf_counter() - started)
 
 
-def _warm_render_contracts(holdings: list, details: list, reporter, config: dict) -> None:
+def _warm_render_contracts(holdings: list, details: list, reporter: ProgressReporter, config: dict) -> None:
     """预取渲染阶段才需要的基金业绩/风格数据（失败不阻断：渲染阶段会自行重取）。
 
     Args:
@@ -51,14 +54,14 @@ def _warm_render_contracts(holdings: list, details: list, reporter, config: dict
         from src.python.report.html_builders import _build_perf_data
 
         _build_perf_data(holdings, details, progress=reporter)
-    except Exception:  # 预取失败不阻断主链路：渲染阶段会重取并各自降级
+    except Exception:  # noqa: BLE001 — 预取失败不阻断主链路：渲染阶段会重取并各自降级
         logger.debug("[prefetch] 基金业绩预取失败，渲染阶段重取", exc_info=True)
     try:
         # 穿透块的附属取数（盈利预测 ≈2000+ 只、股息率）：载入本身约 2~3s
         from src.python.report.html_renderers import prefetch_penetration_side_data
 
         prefetch_penetration_side_data(holdings, details)
-    except Exception:
+    except Exception:  # noqa: BLE001 — [prefetch] 穿透附属取数预取失败，渲染阶段重取
         logger.debug("[prefetch] 穿透附属取数预取失败，渲染阶段重取", exc_info=True)
     try:
         # 开关判定必须走 config 解析器（缺失键默认 True）：直接读原始键会把「配置里没写」
@@ -69,7 +72,7 @@ def _warm_render_contracts(holdings: list, details: list, reporter, config: dict
             from src.python.report.html_renderers import _render_style_analysis
 
             _render_style_analysis(holdings, True, reporter)
-    except Exception:
+    except Exception:  # noqa: BLE001 — [prefetch] 基金风格预取失败，渲染阶段重取
         logger.debug("[prefetch] 基金风格预取失败，渲染阶段重取", exc_info=True)
 
 
@@ -295,7 +298,7 @@ def prepare_report_data(
     reporter: ProgressReporter,
     config: dict,
     transactions: list | None = None,
-    recorder=None,
+    recorder: PhaseBreakdownRecorder | None = None,
 ) -> dict:
     """获取行情、指数、穿透数据，整理持仓明细字典列表。
 
@@ -395,7 +398,7 @@ def prepare_report_data(
             from src.python.analysis.factor_evaluator import build_factor_catalog_data, derive_factor_pool
 
             factor_catalog_data = build_factor_catalog_data(derive_factor_pool(details, penetrated_assets)["codes"])
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — [factor_catalog] 因子目录计算失败，降级为不可用占位: %s
             logger.warning("[factor_catalog] 因子目录计算失败，降级为不可用占位: %s", exc)
             factor_catalog_data = {"available": False, "reason": f"计算异常: {type(exc).__name__}"}
 
@@ -614,7 +617,7 @@ def compute_valuation_data(
                     code = _futs[_fut]
                     try:
                         _val = _fut.result()
-                    except Exception:
+                    except Exception:  # noqa: BLE001 — [valuation] %s 估值取数异常，该标的按无估值处理
                         # 逐代码记一行：单只估值取数异常与「该标的本来无估值」必须可区分，
                         # 否则报告里只是少一行，排障时与「该标的本来无估值」不可区分
                         logger.warning("[valuation] %s 估值取数异常，该标的按无估值处理", code, exc_info=True)
@@ -694,11 +697,11 @@ def _real_valuation_for_code(code: str, bars: list[dict]) -> dict:
 
     try:
         records = fetch_indicator_series(code)
-    except Exception:
+    except Exception:  # noqa: BLE001 — [valuation] %s 指标序列取数失败，真实估值分位降级
         logger.debug("[valuation] %s 指标序列取数失败，真实估值分位降级", code, exc_info=True)
         records = []
     try:
         return compute_real_valuation(bars, records)
-    except Exception:
+    except Exception:  # noqa: BLE001 — [valuation] %s 真实估值分位计算异常，降级
         logger.debug("[valuation] %s 真实估值分位计算异常，降级", code, exc_info=True)
         return {"available": False, "reason": "compute_failed"}

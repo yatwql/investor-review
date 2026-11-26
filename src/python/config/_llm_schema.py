@@ -137,7 +137,8 @@ def apply_flat_updates(document: dict[str, Any], updates: dict[str, Any]) -> dic
     advanced = doc.setdefault("advanced", {})
     module_names = set(get_llm_module_names())
 
-    runtime_by_flat = dict(RUNTIME_FIELDS)
+    # 扁平键 → runtime 字段（查表用的是扁平键，键序不能按 RUNTIME_FIELDS 的 (field, flat) 建字典）
+    runtime_by_flat = {flat_key: field for field, flat_key in RUNTIME_FIELDS}
     handled: set[str] = set()
 
     for key, value in updates.items():

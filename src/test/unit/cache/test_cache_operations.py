@@ -355,3 +355,50 @@ class TestRefreshKeepsTrackingBaseline:
 
         assert snapshot.exists(), "跟踪基线被刷新流程误删 → 下次报告必「首检」"
         assert not payload.exists(), "本流程会回填的域必须清（否则刷新无效）"
+
+
+class TestCacheStatsFaultBranches:
+    """目录列举/文件体积查询失败时的统计旁路降级，以及 .json.gz 命名解析。"""
+
+    def test_listdir_failure_returns_empty_stats(self, tmp_path, monkeypatch):
+        """目录在 isdir 与 listdir 之间消失 → 返回空统计而不抛。"""
+        from src.python.cache import _stats
+
+        monkeypatch.setattr(_stats, "_CACHE_DIR", str(tmp_path))
+        monkeypatch.setattr(_stats, "os", _OsFailingOnListdir())
+
+        stats = _stats.get_cache_stats()
+
+        assert stats["total_files"] == 0
+        assert stats["top_by_size"] == []
+
+    def test_gz_files_named_by_stem_and_getsize_failure_skipped(self, tmp_path, monkeypatch):
+        """``.json.gz`` 去 8 字符后缀取 stem；单文件体积查询失败只跳过该文件。"""
+        from src.python.cache import _stats
+
+        (tmp_path / "fund_perf_a.json.gz").write_bytes(b"x")
+        (tmp_path / "fund_hold_b.json").write_bytes(b"y")
+        monkeypatch.setattr(_stats, "_CACHE_DIR", str(tmp_path))
+        real_getsize = _stats.os.path.getsize
+        monkeypatch.setattr(
+            _stats.os.path,
+            "getsize",
+            lambda path: (_ for _ in ()).throw(OSError("坏链")) if str(path).endswith(".json") else real_getsize(path),
+        )
+
+        stats = _stats.get_cache_stats()
+
+        assert stats["by_prefix"] == {"fund": 1}, "只有 .json.gz 文件计入前缀统计"
+        assert [key for key, _size in stats["top_by_size"]] == ["fund_perf_a"]
+
+
+class _OsFailingOnListdir:
+    """``os`` 代理：``listdir`` 抛 OSError（模拟并发删除/无权限），其余直通。"""
+
+    def __getattr__(self, name):
+        import os
+
+        return getattr(os, name)
+
+    def listdir(self, path):
+        raise OSError("目录已消失")

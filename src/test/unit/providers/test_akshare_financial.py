@@ -53,7 +53,7 @@ class _FakeAk:
     def __init__(self, frame):
         self._frame = frame
 
-    def stock_financial_abstract(self, symbol: str):  # noqa: ARG002
+    def stock_financial_abstract(self, symbol: str):  # 说明：替身方法签名对齐 akshare 接口，symbol 在桩内不用
         return self._frame
 
 

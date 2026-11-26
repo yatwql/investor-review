@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from datetime import datetime
 
 from src.python.core.models import Holding
@@ -29,7 +30,7 @@ def _self_review_block() -> str | None:
     return get_self_review_block()
 
 
-def _safe_build_data_status(builder, *args, label: str = "", **kwargs) -> DataStatus:
+def _safe_build_data_status(builder: Callable[..., DataStatus], *args, label: str = "", **kwargs) -> DataStatus:
     """安全构建数据状态，异常时返回空字典并记录日志。
 
     统一处理 data_status 构建中的 try/except/log 三步骤，
@@ -46,7 +47,7 @@ def _safe_build_data_status(builder, *args, label: str = "", **kwargs) -> DataSt
     try:
         result = builder(*args, **kwargs)
         return result if isinstance(result, dict) else {}
-    except Exception:
+    except Exception:  # noqa: BLE001 — HTML 报告构建%s数据状态失败（非关键）
         logger.debug("HTML 报告构建%s数据状态失败（非关键）", label, exc_info=True)
         return {}
 

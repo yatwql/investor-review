@@ -234,3 +234,63 @@ class TestFetchNews(unittest.TestCase):
         result = fetch_news(num=10)
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["title"], "有效")
+
+
+# ── 翻页游标 / 部分失败分支 ─────────────────────────────
+
+
+def _page(count: int, sort_end: str = "") -> dict:
+    """构造一页 200 条上限内的快讯响应（``sort_end`` 非空时带下一页游标）。"""
+    items = [
+        {"title": f"新闻{i}", "code": f"c{i}", "summary": "摘要", "showTime": "2026-07-01 10:00"} for i in range(count)
+    ]
+    data: dict = {"fastNewsList": items}
+    if sort_end:
+        data["sortEnd"] = sort_end
+    return {"data": data}
+
+
+def _mock_client(factory: MagicMock) -> MagicMock:
+    """按模块工厂的调用约定造出可作上下文管理器的 mock client。"""
+    client = MagicMock()
+    client.__enter__.return_value = client
+    factory.return_value = client
+    return client
+
+
+def test_zero_requested_returns_empty_without_request():
+    """num=0 → 首轮剩余配额即非正，直接返回空列表（不发请求）。"""
+    with patch("src.python.providers.eastmoney_news.make_http_client") as factory:
+        client = _mock_client(factory)
+
+        assert fetch_news(num=0) == []
+
+    client.get.assert_not_called()
+
+
+def test_unchanged_cursor_stops_pagination(caplog):
+    """服务端游标未变化 → 视为翻到底停止（不打满 10 页安全上限）。"""
+    with patch("src.python.providers.eastmoney_news.make_http_client") as factory:
+        client = _mock_client(factory)
+        client.get.return_value = MagicMock(raise_for_status=lambda: None, json=lambda: _page(200, "cursor-1"))
+        with caplog.at_level("DEBUG", logger="invest"):
+            result = fetch_news(num=5000)
+
+    assert len(result) == 400, "游标不变即停：已收两页各 200 条"
+    assert client.get.call_count == 2
+    assert "游标未变化" in caplog.text
+
+
+def test_partial_page_request_error_reports_collected_count(caplog):
+    """第二页请求失败但已收首批 → 警告带已收条数（区别于首批即失败的提示）。"""
+    import httpx
+
+    with patch("src.python.providers.eastmoney_news.make_http_client") as factory:
+        client = _mock_client(factory)
+        first = MagicMock(raise_for_status=lambda: None, json=lambda: _page(200, "cursor-1"))
+        client.get.side_effect = [first, httpx.RequestError("网络断了")]
+        with caplog.at_level("WARNING", logger="invest"):
+            result = fetch_news(num=5000)
+
+    assert len(result) == 200
+    assert "翻页失败 (已收 200 条)" in caplog.text

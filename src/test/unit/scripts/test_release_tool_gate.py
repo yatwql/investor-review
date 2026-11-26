@@ -552,3 +552,28 @@ class TestTimingTelemetry:
         rel._reset_timer()
         rel._finish_timing("gate", 0)  # 不抛即通过
         assert "耗时记录未写入" in capsys.readouterr().out
+
+    def test_read_ledger_records_skips_dirty_and_commandless_rows(self, tmp_path):
+        """台账读取单一入口：脏行/非 dict/缺 `command` 的行跳过，合法行原样保留。"""
+        _timing = load_script("_release/_timing.py")
+
+        assert _timing.read_ledger_records(tmp_path / "nope.jsonl") == [], "首次使用：文件缺失视为空台账"
+
+        log = tmp_path / "release.jsonl"
+        log.write_text(
+            "\n".join(
+                [
+                    json.dumps({"command": "gate", "elapsed_s": 1.5}),
+                    "{不是 json",
+                    "",
+                    json.dumps(["不是 dict"]),
+                    json.dumps({"elapsed_s": 2.0}),
+                    json.dumps({"command": "publish", "elapsed_s": 3.0}),
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        records = _timing.read_ledger_records(log)
+        assert [row["command"] for row in records] == ["gate", "publish"]
+        assert records[1]["elapsed_s"] == pytest.approx(3.0)

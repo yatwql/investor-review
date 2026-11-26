@@ -55,13 +55,13 @@ class TestResetClearsBothBaselines:
 
     def test_reset_clears_in_process_prev_keys(self, tmp_path, monkeypatch):
         from src.python.llm import fingerprint_baseline, skeleton
-        from src.python.llm.generators_orchestrator import _key_changed_from_baseline
+        from src.python.llm.cache_policy import key_changed_from_baseline
 
         monkeypatch.setattr(fingerprint_baseline, "BASELINE_FILE", str(tmp_path / "snap.json"))
         skeleton._PREV_MODULE_CACHE_KEY["penetration_deep"] = "llm_penetration_deep_OLD"
         fingerprint_baseline.reset_baseline_cache()
         assert skeleton._PREV_MODULE_CACHE_KEY == {}, "reset 须清空进程内上轮键"
-        assert _key_changed_from_baseline("llm_penetration_deep_NEW", "penetration_deep") is None, (
+        assert key_changed_from_baseline("llm_penetration_deep_NEW", "penetration_deep") is None, (
             "无任何基线时不得臆测为「键变了」，应回落冷启动"
         )
 
@@ -71,31 +71,31 @@ class TestAttributionUsesKeyBaseline:
 
     def test_key_changed_across_process_is_fingerprint_changed(self, tmp_path, monkeypatch):
         from src.python.llm import fingerprint_baseline
-        from src.python.llm.generators_orchestrator import _key_changed_from_baseline
+        from src.python.llm.cache_policy import key_changed_from_baseline
 
         monkeypatch.setattr(fingerprint_baseline, "BASELINE_FILE", str(tmp_path / "snap.json"))
         fingerprint_baseline.reset_baseline_cache()
         fingerprint_baseline.save_baseline({}, {"expert_review": "llm_expert_review_OLD_deepseek-main"})
         fingerprint_baseline.reset_baseline_cache()
-        assert _key_changed_from_baseline("llm_expert_review_NEW_deepseek-main", "expert_review") is True
+        assert key_changed_from_baseline("llm_expert_review_NEW_deepseek-main", "expert_review") is True
 
     def test_same_key_across_process_means_only_ageing(self, tmp_path, monkeypatch):
         from src.python.llm import fingerprint_baseline
-        from src.python.llm.generators_orchestrator import _key_changed_from_baseline
+        from src.python.llm.cache_policy import key_changed_from_baseline
 
         monkeypatch.setattr(fingerprint_baseline, "BASELINE_FILE", str(tmp_path / "snap.json"))
         fingerprint_baseline.reset_baseline_cache()
         fingerprint_baseline.save_baseline({}, {"health_check": "llm_health_check_SAME"})
         fingerprint_baseline.reset_baseline_cache()
-        assert _key_changed_from_baseline("llm_health_check_SAME", "health_check") is False
+        assert key_changed_from_baseline("llm_health_check_SAME", "health_check") is False
 
     def test_no_baseline_is_none_not_guess(self, tmp_path, monkeypatch):
         from src.python.llm import fingerprint_baseline
-        from src.python.llm.generators_orchestrator import _key_changed_from_baseline
+        from src.python.llm.cache_policy import key_changed_from_baseline
 
         monkeypatch.setattr(fingerprint_baseline, "BASELINE_FILE", str(tmp_path / "snap.json"))
         fingerprint_baseline.reset_baseline_cache()
-        assert _key_changed_from_baseline("llm_penetration_deep_X", "penetration_deep") is None
+        assert key_changed_from_baseline("llm_penetration_deep_X", "penetration_deep") is None
         from src.python.llm.generators_orchestrator import _recompute_reason
         from src.python.llm.observation import RECOMPUTE_CACHE_MISS
 

@@ -143,7 +143,7 @@ def _fetch_trading_status_from_official() -> int | None:
                 status = inner.get("f100")
                 if status is not None:
                     return int(status)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — 获取东方财富交易状态失败: %s
         logger.debug("获取东方财富交易状态失败: %s", e)
     return None
 
@@ -417,6 +417,6 @@ def is_market_open() -> bool:
         _memo.result = result
         return result
 
-    except Exception:
+    except Exception:  # noqa: BLE001 — is_market_open 异常，保守返回 False
         logger.warning("is_market_open 异常，保守返回 False", exc_info=True)
         return False  # 异常时保守处理：视为非交易时段（不入 memo，下次重新判断）

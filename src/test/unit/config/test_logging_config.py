@@ -176,3 +176,13 @@ class TestRotationAndDegradation:
         record = logging.LogRecord("invest", logging.ERROR, __file__, 1, "红色的错误", (), None)
         formatted = console.formatter.format(record)
         assert "\033[" not in formatted
+
+
+@pytest.mark.unit
+class TestDefaultsSingleSource:
+    """日志缺省值事实位唯一：`core/logging_defaults.py`，config 侧 re-export 同一对象。"""
+
+    def test_config_reexports_core_defaults_object(self):
+        from src.python.core import logging_defaults
+
+        assert _logging.DEFAULTS is logging_defaults.DEFAULTS

@@ -156,6 +156,164 @@ def _anchor_branch(record: dict[str, Any]) -> str:
     return str(record.get("rule") or "")
 
 
+def _anchor_snapshot(target_path: str, stats: dict[str, Any]) -> dict[str, tuple[int, int]]:
+    """读取前快照各分片 ``(size, mtime_ns)``，并把体积累加进 ``before_bytes``。"""
+    snapshot: dict[str, tuple[int, int]] = {}
+    for anchor_path in anchor_shard_paths(target_path):
+        try:
+            st = os.stat(anchor_path)
+        except OSError:
+            continue
+        snapshot[anchor_path] = (st.st_size, st.st_mtime_ns)
+        stats["before_bytes"] += st.st_size
+    return snapshot
+
+
+def _validate_snapshot(snapshot: dict[str, tuple[int, int]]) -> str | None:
+    """读取后复核快照：期间被并发追加/删除则返回放弃原因，未变返回 None。"""
+    for anchor_path, sig in snapshot.items():
+        try:
+            st = os.stat(anchor_path)
+        except OSError:
+            return "vanished-after-read"
+        if (st.st_size, st.st_mtime_ns) != sig:
+            return "concurrent-write"
+    return None
+
+
+def _select_kept_lines(
+    lines: list[str],
+    cutoff: datetime | None,
+    stats: dict[str, Any],
+) -> list[tuple[int, dict[str, Any], str, datetime]]:
+    """行筛选：每 key 最新 + 保留期 + 规则指纹归因，返回 ``(行号, 记录, 原文, 排序时刻)``。"""
+    latest: dict[str, int] = {}
+    by_idx: dict[int, dict[str, Any]] = {}
+    for idx, line in enumerate(lines):
+        text = line.strip()
+        if not text:
+            continue
+        stats["before_lines"] += 1
+        try:
+            record = json.loads(text)
+        except json.JSONDecodeError:
+            continue
+        if not _anchor_within_retention(record, cutoff):
+            stats["expired"] += 1
+            continue
+        by_idx[idx] = record
+        latest[_anchor_key(record)] = idx
+    stats["unique_keys"] = len(latest)
+
+    kept: list[tuple[int, dict[str, Any], str, datetime]] = []
+    for idx, record in by_idx.items():
+        if latest[_anchor_key(record)] != idx:
+            if record.get(ANCHOR_RULES_FIELD, "") != _ANCHOR_RULES_VERSION:
+                stats["legacy_era"] += 1
+            continue
+        text = lines[idx] if lines[idx].endswith("\n") else lines[idx] + "\n"
+        if not anchor_rules_version(record):
+            # 早期版本写入的行没有规则指纹（无法归因到任何时代）：直接丢弃——
+            # 不保留旧数据文件形态，混入只会污染规则时代样本。
+            stats["unattributed"] += 1
+            continue
+        when = _anchor_parse_ts(record.get("ts")) or _anchor_parse_ts(record.get("written_at"))
+        kept.append((idx, record, text, when or datetime.max))
+    return kept
+
+
+def _trim_to_target(
+    kept: list[tuple[int, dict[str, Any], str, datetime]],
+    cap: int,
+    quota: int,
+) -> tuple[list[tuple[int, dict[str, Any], str, datetime]], dict[str, int]]:
+    """体积裁剪：按时间从最旧丢到目标体积内，每分支最新 ``quota`` 条不被裁。"""
+    total = sum(len(text.encode("utf-8")) for _, _, text, _ in kept)
+    trimmed_by_branch: dict[str, int] = {}
+    if cap and total > cap:
+        protected: set[int] = set()
+        per_branch: dict[str, list[tuple[datetime, int]]] = {}
+        for pos, (_, record, _, when) in enumerate(kept):
+            per_branch.setdefault(_anchor_branch(record), []).append((when, pos))
+        for rows in per_branch.values():
+            for _, pos in sorted(rows, reverse=True)[:quota]:
+                protected.add(pos)
+        drop: set[int] = set()
+        for pos in sorted(range(len(kept)), key=lambda p: (kept[p][3], p)):
+            if total <= cap:
+                break
+            if pos in protected:
+                continue
+            drop.add(pos)
+            total -= len(kept[pos][2].encode("utf-8"))
+            branch = _anchor_branch(kept[pos][1])
+            trimmed_by_branch[branch] = trimmed_by_branch.get(branch, 0) + 1
+        if drop:
+            kept = [entry for pos, entry in enumerate(kept) if pos not in drop]
+    return kept, trimmed_by_branch
+
+
+def _persist_compact(
+    target_path: str,
+    kept: list[tuple[int, dict[str, Any], str, datetime]],
+    stats: dict[str, Any],
+) -> None:
+    """落盘：按分片分组原子重写 + 备份 + 清理被裁空分片（失败写进 ``stats["aborted"]``）。"""
+    directory = os.path.dirname(target_path) or "."
+    grouped: dict[str, list[str]] = {}
+    for _, record, text, _ in kept:
+        grouped.setdefault(_anchor_shard_name(record), []).append(text)
+
+    backups: list[str] = []
+    written: list[str] = []
+    try:
+        os.makedirs(directory, exist_ok=True)
+        for name in sorted(grouped):
+            shard_path = os.path.join(directory, name)
+            tmp_path = f"{shard_path}.compact.tmp"
+            with gzip.open(tmp_path, "wt", encoding="utf-8") as f:
+                f.writelines(grouped[name])
+            if not _compact_verified(tmp_path):
+                os.remove(tmp_path)
+                stats["aborted"] = "verify-failed"
+                return
+            if os.path.exists(shard_path):
+                backup = f"{shard_path}.bak"
+                shutil.copy2(shard_path, backup)
+                backups.append(backup)
+            os.replace(tmp_path, shard_path)
+            written.append(name)
+        # 整月被裁空的分片：删掉，否则读侧会把已裁掉的样本再读回来。
+        # 删除前按 `INVEST_DEDUP_KEEP_BACKUP` 留一份备份——否则「整月被裁空」这条路径
+        # 会绕过重写前的 .bak，用户没有任何回滚点。
+        for stale in anchor_shard_paths(target_path):
+            if os.path.basename(stale) in written:
+                continue
+            if os.environ.get(_ANCHOR_KEEP_BACKUP_ENV, "0").strip() not in ("0", "", "false"):
+                try:
+                    shutil.copy2(stale, stale + ".bak")
+                except OSError:
+                    pass
+            try:
+                os.remove(stale)
+            except OSError:
+                continue
+    except OSError as e:
+        stats["aborted"] = f"write-failed: {e}"
+        return
+    stats["written"] = True
+    stats["shards"] = written
+    stats["after_bytes"] = anchor_total_bytes(target_path)
+    keep_backup = os.environ.get(_ANCHOR_KEEP_BACKUP_ENV, "0").strip() not in ("0", "", "false")
+    if not keep_backup:
+        for backup in backups:
+            if _compact_verified(backup[: -len(".bak")]):
+                try:
+                    os.remove(backup)
+                except OSError:
+                    pass
+
+
 def compact_anchor_file(
     path: str | None = None,
     *,
@@ -204,14 +362,7 @@ def compact_anchor_file(
         "written": False,
         "shards": [],
     }
-    snapshot: dict[str, tuple[int, int]] = {}
-    for anchor_path in anchor_shard_paths(target_path):
-        try:
-            st = os.stat(anchor_path)
-        except OSError:
-            continue
-        snapshot[anchor_path] = (st.st_size, st.st_mtime_ns)
-        stats["before_bytes"] += st.st_size
+    snapshot = _anchor_snapshot(target_path, stats)
     if not snapshot:
         return stats
     cutoff = _anchor_retention_cutoff(retention)
@@ -219,71 +370,13 @@ def compact_anchor_file(
     quota = _ANCHOR_BRANCH_MIN_KEEP if branch_min_keep is None else max(0, int(branch_min_keep))
 
     lines = read_anchor_lines(target_path)
-    for anchor_path, sig in snapshot.items():
-        try:
-            st = os.stat(anchor_path)
-        except OSError:
-            stats["aborted"] = "vanished-after-read"
-            return stats
-        if (st.st_size, st.st_mtime_ns) != sig:
-            stats["aborted"] = "concurrent-write"
-            return stats
+    aborted = _validate_snapshot(snapshot)
+    if aborted:
+        stats["aborted"] = aborted
+        return stats
 
-    latest: dict[str, int] = {}
-    by_idx: dict[int, dict[str, Any]] = {}
-    for idx, line in enumerate(lines):
-        text = line.strip()
-        if not text:
-            continue
-        stats["before_lines"] += 1
-        try:
-            record = json.loads(text)
-        except json.JSONDecodeError:
-            continue
-        if not _anchor_within_retention(record, cutoff):
-            stats["expired"] += 1
-            continue
-        by_idx[idx] = record
-        latest[_anchor_key(record)] = idx
-    stats["unique_keys"] = len(latest)
-
-    kept: list[tuple[int, dict[str, Any], str, datetime]] = []
-    for idx, record in by_idx.items():
-        if latest[_anchor_key(record)] != idx:
-            if record.get(ANCHOR_RULES_FIELD, "") != _ANCHOR_RULES_VERSION:
-                stats["legacy_era"] += 1
-            continue
-        text = lines[idx] if lines[idx].endswith("\n") else lines[idx] + "\n"
-        if not anchor_rules_version(record):
-            # 早期版本写入的行没有规则指纹（无法归因到任何时代）：直接丢弃——
-            # 不保留旧数据文件形态，混入只会污染规则时代样本。
-            stats["unattributed"] += 1
-            continue
-        when = _anchor_parse_ts(record.get("ts")) or _anchor_parse_ts(record.get("written_at"))
-        kept.append((idx, record, text, when or datetime.max))
-
-    total = sum(len(text.encode("utf-8")) for _, _, text, _ in kept)
-    trimmed_by_branch: dict[str, int] = {}
-    if cap and total > cap:
-        protected: set[int] = set()
-        per_branch: dict[str, list[tuple[datetime, int]]] = {}
-        for pos, (_, record, _, when) in enumerate(kept):
-            per_branch.setdefault(_anchor_branch(record), []).append((when, pos))
-        for rows in per_branch.values():
-            for _, pos in sorted(rows, reverse=True)[:quota]:
-                protected.add(pos)
-        drop: set[int] = set()
-        for pos in sorted(range(len(kept)), key=lambda p: (kept[p][3], p)):
-            if total <= cap:
-                break
-            if pos in protected:
-                continue
-            drop.add(pos)
-            total -= len(kept[pos][2].encode("utf-8"))
-            branch = _anchor_branch(kept[pos][1])
-            trimmed_by_branch[branch] = trimmed_by_branch.get(branch, 0) + 1
-        if drop:
-            kept = [entry for pos, entry in enumerate(kept) if pos not in drop]
+    kept = _select_kept_lines(lines, cutoff, stats)
+    kept, trimmed_by_branch = _trim_to_target(kept, cap, quota)
     stats["trimmed_by_branch"] = trimmed_by_branch
     stats["trimmed"] = sum(trimmed_by_branch.values())
 
@@ -296,59 +389,7 @@ def compact_anchor_file(
     if stats["after_lines"] == stats["before_lines"] and not stats["trimmed"] and not stats["unattributed"]:
         return stats  # 无事可做：不重写任何分片
 
-    directory = os.path.dirname(target_path) or "."
-    grouped: dict[str, list[str]] = {}
-    for _, record, text, _ in kept:
-        grouped.setdefault(_anchor_shard_name(record), []).append(text)
-
-    backups: list[str] = []
-    written: list[str] = []
-    try:
-        os.makedirs(directory, exist_ok=True)
-        for name in sorted(grouped):
-            shard_path = os.path.join(directory, name)
-            tmp_path = f"{shard_path}.compact.tmp"
-            with gzip.open(tmp_path, "wt", encoding="utf-8") as f:
-                f.writelines(grouped[name])
-            if not _compact_verified(tmp_path):
-                os.remove(tmp_path)
-                stats["aborted"] = "verify-failed"
-                return stats
-            if os.path.exists(shard_path):
-                backup = f"{shard_path}.bak"
-                shutil.copy2(shard_path, backup)
-                backups.append(backup)
-            os.replace(tmp_path, shard_path)
-            written.append(name)
-        # 整月被裁空的分片：删掉，否则读侧会把已裁掉的样本再读回来。
-        # 删除前按 `INVEST_DEDUP_KEEP_BACKUP` 留一份备份——否则「整月被裁空」这条路径
-        # 会绕过重写前的 .bak，用户没有任何回滚点。
-        for stale in anchor_shard_paths(target_path):
-            if os.path.basename(stale) in written:
-                continue
-            if os.environ.get(_ANCHOR_KEEP_BACKUP_ENV, "0").strip() not in ("0", "", "false"):
-                try:
-                    shutil.copy2(stale, stale + ".bak")
-                except OSError:
-                    pass
-            try:
-                os.remove(stale)
-            except OSError:
-                continue
-    except OSError as e:
-        stats["aborted"] = f"write-failed: {e}"
-        return stats
-    stats["written"] = True
-    stats["shards"] = written
-    stats["after_bytes"] = anchor_total_bytes(target_path)
-    keep_backup = os.environ.get(_ANCHOR_KEEP_BACKUP_ENV, "0").strip() not in ("0", "", "false")
-    if not keep_backup:
-        for backup in backups:
-            if _compact_verified(backup[: -len(".bak")]):
-                try:
-                    os.remove(backup)
-                except OSError:
-                    pass
+    _persist_compact(target_path, kept, stats)
     return stats
 
 
@@ -364,7 +405,7 @@ def _compact_anchor_file(size: int) -> bool:
         return False
     try:
         result = compact_anchor_file(_anchor_store._ANCHOR_PATH)
-    except Exception:  # 压缩失败绝不阻断报告
+    except Exception:  # noqa: BLE001 — 压缩失败绝不阻断报告
         logger.warning("[dedup] 锚点文件维护压缩失败（继续使用原文件）", exc_info=True)
         return False
     if result["aborted"]:
@@ -513,7 +554,6 @@ def _flush_anchors() -> None:
             continue
         seen.add(key)
         new_records.append(record)
-    if not new_records:
-        return
+    # new_records 必非空：records 在入口处已判非空，而循环里第一条记录必然不在 seen 中
     if _append_anchor_lines([json.dumps(r, ensure_ascii=False) + "\n" for r in new_records]):
         _maybe_maintain_anchor_file()

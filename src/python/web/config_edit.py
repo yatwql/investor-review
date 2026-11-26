@@ -22,7 +22,7 @@ from src.python.config.features import (
     GROUP_LABELS,
     experimental_flags,
     feature_switch_registry,
-)  # noqa: F401  # 公开再导出
+)  # 公开再导出
 
 logger = logging.getLogger("invest")
 
@@ -173,7 +173,7 @@ def _logging_surface() -> dict:
 
     try:
         values = read_logger_config()
-    except Exception:  # 版本不符等：面板照常渲染默认值，写入侧仍会给出具体拒绝原因
+    except Exception:  # noqa: BLE001 — 版本不符等：面板照常渲染默认值，写入侧仍会给出具体拒绝原因
         logger.warning("读取 logger.json 失败，日志设置按默认展示", exc_info=True)
         values = {}
 

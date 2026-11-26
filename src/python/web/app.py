@@ -17,9 +17,10 @@ from __future__ import annotations
 import logging
 import os
 import time
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from flask import Flask, g, request
+from flask import Flask, Response, g, request
 from flask.json.provider import DefaultJSONProvider
 
 from src.python.core.constants import PROJECT_ROOT
@@ -27,13 +28,16 @@ from src.python.web.handlers import _err, create_handlers
 from src.python.web.run_generation import _run_generation
 from src.python.web.upload import _MAX_BYTES
 
+if TYPE_CHECKING:  # 仅类型标注：runs 在函数内惰性导入，此处不引入运行期依赖
+    from src.python.web.runs import RunManager
+
 logger = logging.getLogger("invest")
 
 # Web UI 前端目录：Jinja 模板 + 静态资产统一归 src/static/web/（与报告模板同属前端资源）
 _WEB_FRONTEND_DIR = os.path.join(PROJECT_ROOT, "src", "static", "web")
 
 
-def create_app(run_manager=None) -> Flask:
+def create_app(run_manager: RunManager | None = None) -> Flask:
     """创建 Flask 应用。
 
     Args:
@@ -75,7 +79,7 @@ def create_app(run_manager=None) -> Flask:
         g.request_id = uuid4().hex[:8]
 
     @app.after_request
-    def _log_access(response):
+    def _log_access(response: Response) -> Response:
         # 隐私边界：仅记录 method/path/状态/耗时，不记录请求体/文件名/持仓内容
         # `g.get` 未取到 _start_ts 时以当前时刻兜底（耗时记 0），无需异常兜底——
         # perf_counter 不抛异常，外层 try/except 属不可达分支的死防御代码。
@@ -96,16 +100,16 @@ def create_app(run_manager=None) -> Flask:
 
     # ── 统一 JSON 错误处理 ──
     @app.errorhandler(413)
-    def _too_large(_e):
+    def _too_large(_e: Exception):
         logger.warning("[web %s] 上传超过 10MB 上限", getattr(g, "request_id", "-"))
         return _err("UPLOAD_TOO_LARGE", "文件超过 10MB 上限"), 413
 
     @app.errorhandler(404)
-    def _not_found(_e):
+    def _not_found(_e: Exception):
         return _err("NOT_FOUND", "接口不存在"), 404
 
     @app.errorhandler(500)
-    def _server_error(e):
+    def _server_error(e: Exception):
         # 记录详细 error 日志（含堆栈），但响应不回显绝对路径/内部细节
         logger.exception("[web %s] 服务器内部错误: %s", getattr(g, "request_id", "-"), e)
         return _err("SERVER_ERROR", "服务器内部错误"), 500

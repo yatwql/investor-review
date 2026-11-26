@@ -112,7 +112,7 @@ def check_config_freshness() -> list[dict[str, Any]]:
 
     try:
         config = get_config()
-    except Exception:  # noqa: BLE001 —— 自检链路必须吞掉一切异常
+    except Exception:  # noqa: BLE001 — 自检链路必须吞掉一切异常
         return []
 
     targets = (

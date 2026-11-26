@@ -289,3 +289,88 @@ class TestFetchNews(unittest.TestCase):
         result = fetch_news(num=10)
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["title"], "有效")
+
+
+class TestFetchNewsPaging(unittest.TestCase):
+    """翻页游标路径：凑够条数即停、次页带 cursor、畸形/重复条目跳过。"""
+
+    def _client(self, mock_factory, responses):
+        mock_client = MagicMock()
+        mock_client.__enter__.return_value = mock_client
+        mock_factory.return_value = mock_client
+        mock_client.get.side_effect = responses
+        return mock_client
+
+    @staticmethod
+    def _resp(payload: dict):
+        resp = MagicMock()
+        resp.raise_for_status.return_value = None
+        resp.json.return_value = payload
+        return resp
+
+    @patch("src.python.providers.wallstreetcn_news.make_http_client")
+    def test_stops_when_enough_items_collected(self, mock_factory):
+        """首页满 100 条带游标 → 次轮开头发现条数已够即停（不足一页时不再翻）。"""
+        full_page = [{"title": f"新闻{i}", "content_text": "内容", "display_time": "0", "id": i} for i in range(100)]
+        client = self._client(mock_factory, [self._resp({"data": {"items": full_page, "cursor": "c2"}})])
+
+        result = fetch_news(num=1)
+
+        assert len(result) == 100
+        # 只发一次请求：第二轮回合在取数前就 break
+        assert client.get.call_count == 1
+
+    @patch("src.python.providers.wallstreetcn_news.make_http_client")
+    def test_second_page_carries_cursor(self, mock_factory):
+        """首页满 100 条、目标条数仍未凑够 → 次轮请求 params 携带首页给的 cursor。"""
+        page1 = [{"title": f"新闻{i}", "content_text": "内容", "display_time": "0", "id": i} for i in range(100)]
+        page2 = [{"title": "第二页", "content_text": "内容", "display_time": "0", "id": 200}]
+        client = self._client(
+            mock_factory,
+            [self._resp({"data": {"items": page1, "cursor": "c2"}}), self._resp({"data": {"items": page2}})],
+        )
+
+        result = fetch_news(num=150)
+
+        assert len(result) == 101
+        assert client.get.call_args_list[1][1]["params"]["cursor"] == "c2"
+        # 次页请求的 limit 按剩余条数收窄
+        assert client.get.call_args_list[1][1]["params"]["limit"] == 50
+
+    @patch("src.python.providers.wallstreetcn_news.make_http_client")
+    def test_non_dict_item_skipped(self, mock_factory):
+        """items 里混入非对象条目 → 跳过该条，其余照常解析。"""
+        self._client(
+            mock_factory,
+            [
+                self._resp(
+                    {"data": {"items": ["裸字符串", {"title": "有效", "content_text": "内容", "display_time": "0"}]}}
+                )
+            ],
+        )
+
+        result = fetch_news(num=5)
+
+        assert [item["title"] for item in result] == ["有效"]
+
+    @patch("src.python.providers.wallstreetcn_news.make_http_client")
+    def test_duplicate_item_id_skipped(self, mock_factory):
+        """同一 id 在翻页中重复出现 → 只保留首次（游标翻页的跨界重复）。"""
+        page1 = [{"title": f"新闻{i}", "content_text": "内容", "display_time": "0", "id": i} for i in range(100)]
+        dup = {"title": "重复条目", "content_text": "内容", "display_time": "0", "id": 50}
+        fresh = {"title": "新条目", "content_text": "内容", "display_time": "0", "id": 300}
+        self._client(
+            mock_factory,
+            [
+                self._resp({"data": {"items": page1, "cursor": "c2"}}),
+                self._resp({"data": {"items": [dup, fresh]}}),
+            ],
+        )
+
+        result = fetch_news(num=150)
+
+        titles = [item["title"] for item in result]
+        # id=50 的字幕与首页同 id 但标题不同：按 id 去重，次页那条不入列
+        assert "重复条目" not in titles and "新闻50" in titles
+        assert "新条目" in titles
+        assert len(result) == 101

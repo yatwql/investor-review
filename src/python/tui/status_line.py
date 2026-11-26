@@ -92,7 +92,7 @@ def _last_report_part() -> _Segment:
         if str(records[-1].get("status") or "") == "interrupted":
             return _Segment(f"上次报告 {stamp}（已中断）", ACTION_TEMPLATES["report_interrupted"])
         return _Segment(f"上次报告 {stamp}")
-    except Exception:
+    except Exception:  # noqa: BLE001 — 状态行「上次报告」取数失败，降级为 —
         logger.debug("状态行「上次报告」取数失败，降级为 —", exc_info=True)
         return _Segment("上次报告 —")
 
@@ -112,7 +112,7 @@ def _cache_expired_part() -> _Segment:
         if stats.expired:
             return _Segment(f"缓存过期 {stats.expired}", ACTION_TEMPLATES["cache_expired"])
         return _Segment("")
-    except Exception:
+    except Exception:  # noqa: BLE001 — 状态行「缓存过期」取数失败，本段不上屏
         logger.debug("状态行「缓存过期」取数失败，本段不上屏", exc_info=True)
         return _Segment("")
 
@@ -160,7 +160,7 @@ def _freshness_part() -> _Segment:
         if summary["stale"]:
             return _Segment(f"{YELLOW}{text}{RESET}", ACTION_TEMPLATES["freshness"])
         return _Segment(text)
-    except Exception:
+    except Exception:  # noqa: BLE001 — 状态行「新鲜度」取数失败，降级为 —
         logger.debug("状态行「新鲜度」取数失败，降级为 —", exc_info=True)
         return _Segment("新鲜度 —")
 
@@ -177,7 +177,7 @@ def _degraded_part() -> _Segment:
         if fails:
             return _Segment(f"{YELLOW}数据源失败 {fails}{RESET}", ACTION_TEMPLATES["degraded_sources"])
         return _Segment("数据源失败 0")
-    except Exception:
+    except Exception:  # noqa: BLE001 — 状态行「数据源失败」取数失败，降级为 —
         logger.debug("状态行「数据源失败」取数失败，降级为 —", exc_info=True)
         return _Segment("数据源失败 —")
 
@@ -196,7 +196,7 @@ def _llm_part() -> _Segment:
             head = status.get("chain_head")
             return _Segment(f"LLM {GREEN}●{RESET}" + (f" {head}" if head else ""))
         return _Segment(f"LLM {YELLOW}○{RESET}", ACTION_TEMPLATES["llm_unconfigured"])
-    except Exception:
+    except Exception:  # noqa: BLE001 — 状态行「LLM」取数失败，降级为 —
         logger.debug("状态行「LLM」取数失败，降级为 —", exc_info=True)
         return _Segment("LLM —")
 
@@ -243,7 +243,7 @@ def build_status_line(*, now: float | None = None) -> str:
         actions = [part.action for part in parts if part.action]
         if actions:
             line += _render_actions(actions)
-    except Exception:
+    except Exception:  # noqa: BLE001 — 状态行组装失败，降级显示
         logger.debug("状态行组装失败，降级显示", exc_info=True)
         line = "状态 │ —"
     _memo["line"] = line
@@ -273,7 +273,7 @@ def machine_ip_line(*, now: float | None = None) -> str:
         ip = str(get_machine_ip() or "")
         # unknown 是取数原语的失败哨兵值，上屏按「—」降级（不向用户暴露内部哨兵）
         text = f"本机 IP {ip}" if ip and ip != "unknown" else "本机 IP —"
-    except Exception:
+    except Exception:  # noqa: BLE001 — 首页页脚「本机 IP」取数失败，降级为 —
         logger.debug("首页页脚「本机 IP」取数失败，降级为 —", exc_info=True)
         text = "本机 IP —"
     _memo["machine_ip"] = text

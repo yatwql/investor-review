@@ -32,7 +32,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from src.python.core.code_utils import (
@@ -45,18 +44,15 @@ from src.python.core.code_utils import (
     is_otc_fund_by_name,
     is_qdii_extended,
     is_convertible_bond_by_name,
-    is_etf_by_name_or_code,
 )
 from src.python.config import get_config, get_default
 from src.python.core.trading_calendar import count_trading_days_elapsed
 
-from ._rebalance_deviation import (  # noqa: E402
+from ._rebalance_deviation import (
     compute_target_deviation,
     equity_fixed_income_deviation,
     compute_rebalance_signals,
 )
-
-logger = logging.getLogger("invest")
 
 __all__ = [
     "classify_holding",
@@ -188,21 +184,12 @@ def classify_holding(name: str, code: str) -> str:
     if is_bond_fund_by_name(name):
         return "fixed_income"
 
-    # 场内 ETF/LOF → 按代码细分（优先于 A 股判断）
+    # 场内 ETF/LOF → 权益（债券/货币 ETF 已在上方按名称判定为固收/货币）
     if is_exchange_fund_code(code):
-        if is_etf_by_name_or_code(name, code):
-            # 债券 ETF → 固收；货币 ETF → 货币；其余 → 权益
-            if is_bond_fund_by_name(name):
-                return "fixed_income"
-            if is_money_fund_by_name(name):
-                return "money_market"
-            return "equity"
-        return "alternative"  # LOF/Reits 等归入 alternative
+        return "equity"
 
     # 场外基金（名称匹配 + 00 代码重叠区判断，放在 A 股检查前）
     if is_otc_fund_by_name(name, code) or is_index_fund_by_name(name):
-        if is_bond_fund_by_name(name):
-            return "fixed_income"
         return "fund_equity"
 
     # A 股 / 港股通 → 权益

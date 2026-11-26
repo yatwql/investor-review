@@ -175,7 +175,9 @@ class TestSwitchPanelUndoKeys:
         seq = iter(keys)
         writes: list[dict] = []
 
-        def _read(prompt: str = "", arrows: bool = False):  # noqa: ARG001
+        def _read(
+            prompt: str = "", arrows: bool = False
+        ):  # 说明：桩函数签名须与运行时 read 回调一致（prompt/arrows 由运行时传入，桩内不用）
             try:
                 return next(seq)
             except StopIteration:
@@ -314,3 +316,13 @@ class TestProvidersPanelUndo:
         assert len(writes) == 2, writes
         assert writes[0]["order"] == ["乙", "甲"], "交换写入新顺序"
         assert writes[1]["order"] == ["甲", "乙"], "u 应重放交换前的顺序"
+
+    def test_picking_same_line_twice_writes_nothing(self, capsys):
+        """导航配对通道（两次 Enter 选中同一条线路）：不写盘，给统一范围提示。"""
+        from src.python.tui.tui_keys import KEY_DOWN
+
+        # 方向键先「engage」导航态，两次 Enter 收满配对（同一编号 → 不合法）
+        writes = self._drive([KEY_DOWN, "", "", "0"])
+
+        assert writes == []
+        assert "请输入两个不同的编号交换位置" in capsys.readouterr().out

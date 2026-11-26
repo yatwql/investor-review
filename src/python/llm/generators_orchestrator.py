@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 
 from src.python.cache import get as cache_get
@@ -65,7 +65,7 @@ from src.python.llm._llm_context_blocks import (  # noqa: F401  # 上下文块�
     extract_purchase_constraint_block,
     extract_schedule_replay_block,
 )
-from src.python.llm._llm_post_pass import (  # noqa: F401  # 生成后一遍（锚定/自检/跨模块核对）
+from src.python.llm._llm_post_pass import (  # 生成后一遍（锚定/自检/跨模块核对）
     BASE_MODULES,
     anchor_fact_checks,
     apply_generation_post_pass,
@@ -76,9 +76,13 @@ from src.python.llm._llm_dispatch import (  # noqa: F401  # 并发分发子模�
     reset_thinking_wait_total,
     thinking_wait_total_seconds,
 )
-from src.python.llm._llm_news_correlation import (  # noqa: F401
+from src.python.llm._llm_news_correlation import (
     run_news_correlation_safe,
 )
+
+if TYPE_CHECKING:
+    from src.python.core.perf import PhaseBreakdownRecorder
+    from src.python.llm.observation import LlmObservation
 
 
 __all__ = [
@@ -96,8 +100,8 @@ __all__ = [
 
 def _compute_module_cache_info(
     llm_config: dict,
-    a_indices,
-    us_indices,
+    a_indices: dict[str, dict[str, Any]],
+    us_indices: dict[str, dict[str, Any]],
     total_mv: float,
     total_cost: float,
     total_profit: float,
@@ -224,22 +228,6 @@ def _compute_module_cache_info(
     return info
 
 
-def _key_changed_from_baseline(current_key: str, module_key: str) -> bool | None:
-    """该模块当前的缓存键相对**上轮键**是否变化（进程内优先，其次跨进程快照）。
-
-    Returns:
-        ``True`` 键变了（输入变）；``False`` 键未变（只是内容读不到 ⇒ 老化）；
-        ``None`` 无任何上轮基线（冷启动，不臆测原因）。
-    """
-    from src.python.llm.fingerprint_baseline import baseline_module_key
-    from src.python.llm.skeleton import module_cache_key
-
-    prev = module_cache_key(module_key) or baseline_module_key(module_key)
-    if not prev:
-        return None
-    return prev != current_key
-
-
 def _recompute_reason(cache_info: dict, fingerprint_changed: bool | None) -> str:
     """未命中原因：强制刷新 / 指纹变化 / 纯 TTL 到点 / 冷启动（取值来自 ``RECOMPUTE_REASONS``）。"""
     from src.python.llm.observation import (
@@ -256,7 +244,7 @@ def _recompute_reason(cache_info: dict, fingerprint_changed: bool | None) -> str
     return RECOMPUTE_FINGERPRINT_CHANGED if fingerprint_changed else RECOMPUTE_TTL_EXPIRED
 
 
-def _note_recompute_reason(sink, module_key: str, reason: str) -> None:
+def _note_recompute_reason(sink: LlmObservation | None, module_key: str, reason: str) -> None:
     """把重算原因记入观测汇聚器（无汇聚器时静默跳过，不增加任何调用）。"""
     if sink is None or not hasattr(sink, "note_recompute_reason"):
         return
@@ -297,12 +285,20 @@ def _precheck_one_cache(
         # 直接决定 TTL 该不该放宽。
         # **判据以「键是否变化」为准**：键=生成输入的内容地址，键变即输入变；组件映射
         # 表只是解释用的细分（可能滞后于指纹函数的实际入参），单看它会把换键误报成 ttl_expired。
-        # 基线先取进程内上轮键，再取上次进程落盘的键；两者皆无 ⇒ 冷启动（不臆测）。
+        # 「上一轮键」经 `cache_policy.key_changed_from_baseline` 取（与生成骨架同一取数点）：
+        # 跨报告基线优先，无基线时回落本进程记录；两者皆无 ⇒ 冷启动（不臆测）。
+        # 报告边界会清空进程内记录，只有基线能回答「相对上一份报告换键了吗」。
+        from src.python.llm.cache_policy import key_changed_from_baseline
+        from src.python.llm.skeleton import module_cache_key
+
         _module_key = module_key or cache_info["key"]
         _note_recompute_reason(
             _sink,
             _module_key,
-            _recompute_reason(cache_info, _key_changed_from_baseline(cache_info["key"], _module_key)),
+            _recompute_reason(
+                cache_info,
+                key_changed_from_baseline(cache_info["key"], _module_key, module_cache_key(_module_key)),
+            ),
         )
         return (None, False)
     thinking_enabled = llm_config.get(cache_info["thinking_key"], False)
@@ -376,7 +372,7 @@ def _plan_module_needs(llm_config: dict, precheck_results: dict) -> dict[str, bo
 
 def _log_precheck_summary(
     results: dict[str, dict],
-    llm_config: dict,
+    _llm_config: dict,
     cache_info: dict[str, dict],
 ) -> None:
     """每份报告打一行缓存命中概况：命中/未命中分别哪些模块，未命中的是否因重新生成。
@@ -494,11 +490,15 @@ def _finalize_llm_run(
     )
     # 落盘跨进程基线（组件哈希 + 各模块本轮缓存键）：下个进程据此判定「键变了还是只是老化」
     from src.python.llm.fingerprint_baseline import save_baseline
+    from src.python.llm.skeleton import module_cache_keys
 
-    save_baseline(
-        _LAST_FP_COMPONENTS or {},
-        {mk: str((info.get("key") or "")) for mk, info in (cache_info or {}).items() if isinstance(info, dict)},
-    )
+    _baseline_keys = {
+        mk: str((info.get("key") or "")) for mk, info in (cache_info or {}).items() if isinstance(info, dict)
+    }
+    # 后置模块（`self_review` / `holding_change` 等）的键只在生成骨架侧记录，预检 info 里没有：
+    # 不并进来下份报告取不到它们的「上一轮键」，只能恒判冷启动。
+    _baseline_keys.update(module_cache_keys())
+    save_baseline(_LAST_FP_COMPONENTS or {}, _baseline_keys)
     if has_debate:
         return (gm_r, er_r, hc_r, pd_r, gm_c, er_c, hc_c, pd_c, debate_info)
     return (gm_r, er_r, hc_r, pd_r, gm_c, er_c, hc_c, pd_c)
@@ -523,7 +523,7 @@ def generate_all_llm(
     metrics: dict | None = None,
     degradation_events: list[dict] | None = None,
     comparison_indices: dict[str, str] | None = None,
-    span_recorder=None,
+    span_recorder: PhaseBreakdownRecorder | None = None,
 ) -> (
     tuple[str | None, str | None, str | None, str | None, bool, bool, bool, bool]
     | tuple[str | None, str | None, str | None, str | None, bool, bool, bool, bool, dict | None]

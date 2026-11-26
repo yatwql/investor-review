@@ -39,7 +39,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享模块（_checklib）
-from _shared.checklib import MANAGEMENTS_DIR, REPO_ROOT, add_common_args, rel as repo_rel  # noqa: E402
+from _shared.checklib import MANAGEMENTS_DIR, REPO_ROOT, add_common_args, rel as repo_rel
 
 # ── 读取事实源 ──────────────────────────────────────────────
 
@@ -148,7 +148,7 @@ def _auto_fix_header(path: Path, version: str) -> bool:
     text = path.read_text(encoding="utf-8")
     new_text, count = re.subn(
         r"^[ \t]*>[ \t]*文档版本：.*$",
-        lambda m: f"> 文档版本：{version}",
+        lambda _match: f"> 文档版本：{version}",
         text,
         count=1,
         flags=re.MULTILINE,

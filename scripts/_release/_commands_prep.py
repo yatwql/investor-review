@@ -9,6 +9,7 @@ import argparse
 import datetime as _dt
 import sys
 import time
+from typing import Any
 
 from _release._archive_flow import run_archive as archive_flow
 from _release._archive_init import init_archive
@@ -29,7 +30,7 @@ from _release._versioning import (
 )
 
 
-def cmd_check(args: argparse.Namespace, env, runner=None) -> int:
+def cmd_check(args: argparse.Namespace, env: Any, runner: Any = None) -> int:
     print("[..] 发布预检")
     ok = _print_results(env.run_preflight(env.REPO_ROOT, expect_release=False, runner=runner))
     if not ok:
@@ -85,7 +86,7 @@ def cmd_check(args: argparse.Namespace, env, runner=None) -> int:
     return 0
 
 
-def cmd_archive_init(args: argparse.Namespace, env, runner=None) -> int:
+def cmd_archive_init(args: argparse.Namespace, env: Any, runner: Any = None) -> int:
     """新小版本归档骨架初始化：三份归档文件 + 目录树块 + 三处索引行（幂等）。"""
     dev_version = read_app_version(env.CONSTANTS_FILE.read_text(encoding="utf-8"))
     version = args.version or (release_version_of(dev_version) if dev_version.endswith("-dev") else dev_version)
@@ -113,7 +114,7 @@ def cmd_archive_init(args: argparse.Namespace, env, runner=None) -> int:
     return 0
 
 
-def _rollback_prepare(env, runner=None) -> None:
+def _rollback_prepare(env: Any, runner: Any = None) -> None:
     """prepare 失败后把工作树恢复到 prepare 前（仅预检确认干净树时可安全执行）。
 
     只回滚受版本控制的文件；未跟踪文件不自动删除（可能含用户产物），逐条打印。
@@ -130,7 +131,7 @@ def _rollback_prepare(env, runner=None) -> None:
         print(status.rstrip())
 
 
-def cmd_prepare(args: argparse.Namespace, env, runner=None) -> int:
+def cmd_prepare(args: argparse.Namespace, env: Any, runner: Any = None) -> int:
     clean_start = _worktree_clean(env.REPO_ROOT, runner)
     try:
         rc = _prepare_impl(args, env, runner)
@@ -143,7 +144,7 @@ def cmd_prepare(args: argparse.Namespace, env, runner=None) -> int:
     return rc
 
 
-def _prepare_impl(args: argparse.Namespace, env, runner=None) -> int:
+def _prepare_impl(args: argparse.Namespace, env: Any, runner: Any = None) -> int:
     constants_text = env.CONSTANTS_FILE.read_text(encoding="utf-8")
     dev_version = read_app_version(constants_text)
     derived = release_version_of(dev_version) if dev_version.endswith("-dev") else dev_version
@@ -219,7 +220,7 @@ def _prepare_impl(args: argparse.Namespace, env, runner=None) -> int:
     return 0
 
 
-def cmd_archive(args: argparse.Namespace, env, runner=None) -> int:
+def cmd_archive(args: argparse.Namespace, env: Any, runner: Any = None) -> int:
     """发布归档迁移的机械部分（条目内容是否该归档仍由人复核）。"""
     return run_archive(
         date=args.date or _dt.date.today().isoformat(),
@@ -230,7 +231,7 @@ def cmd_archive(args: argparse.Namespace, env, runner=None) -> int:
     )
 
 
-def run_archive(date: str, env, runner=None, dry: bool = False, skip_design_docs: bool = False) -> int:
+def run_archive(date: str, env: Any, runner: Any = None, dry: bool = False, skip_design_docs: bool = False) -> int:
     """台账 + 设计文件归档迁移（`prepare` 内置步；实现见 `_release/_archive_flow.py`）。"""
     version = read_app_version(env.CONSTANTS_FILE.read_text(encoding="utf-8"))
     if version.endswith("-dev"):  # 版本形态校验先于路径推导（开发版推不出归档名）

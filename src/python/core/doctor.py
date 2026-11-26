@@ -34,7 +34,7 @@ from src.python.core.constants import APP_NAME, APP_VERSION, PROJECT_ROOT
 
 # 分组常量与结果构造器下沉 `doctor_common`：`doctor_logs` 的探针实现需要它们，
 # 放在本文件会让两个模块互相 import（环）；下沉后依赖单向：doctor_common ← doctor_logs ← doctor。
-from src.python.core.doctor_common import (  # noqa: E402
+from src.python.core.doctor_common import (
     GROUP_ADAPTER,
     GROUP_CONFIG,
     GROUP_CREDENTIAL,
@@ -84,7 +84,7 @@ NETWORK_TIMEOUT_CEILING = 15.0
 
 
 def normalize_network_timeout(
-    value,
+    value: Any,
     *,
     default: float = NETWORK_TIMEOUT_DEFAULT,
     ceiling: float | None = NETWORK_TIMEOUT_CEILING,
@@ -112,8 +112,8 @@ _WRITE_PROBE = ".doctor_write_probe"
 # ── 目录探针目标 ────────────────────────────────────────────
 # module-level 常量，测试时可通过 setattr 重定向（测试隔离模式，同 core/perf.py 的
 # 持久化路径）。挂在常量上而非内联拼接：探针会**真实写盘**，不重定向则每次自检
-# 测试都会瞬写用户真实的 reports/ 与 data/cache、logs/ 目录。
-_CACHE_DIR = os.path.join(PROJECT_ROOT, "data", "cache")
+# 测试都会瞬写用户真实的 reports/ 与 logs/ 目录（缓存目录不设常量：唯一解析器在
+# `cache/_paths.py`，见 `_probe_targets` 惰性取用）。
 _LOGS_DIR = os.path.join(PROJECT_ROOT, "logs")
 # 输出目录的缺省值：与 config/_config_defaults.py 的 output_dir 默认值同源。
 # 仅当配置里该键取空值（空串）时才用到——此时报告仍会落到默认目录，探针跟着
@@ -217,7 +217,7 @@ def _check_config() -> list[dict[str, Any]]:
 
         init_config()
         config = get_config()
-    except Exception as exc:  # noqa: BLE001 —— 自检必须吞掉一切异常
+    except Exception as exc:  # noqa: BLE001 — 自检必须吞掉一切异常
         return [
             _item(
                 GROUP_CONFIG,
@@ -318,7 +318,7 @@ def _check_llm_credentials() -> list[dict[str, Any]]:
         from src.python.config import get_llm_config
 
         llm_config = get_llm_config()
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 — 有意宽捕获（不窄化：单项体检异常降级为一条失败项，不让单项拖垮整份体检）
         return [_item(GROUP_CONFIG, "LLM 凭据", False, f"读取失败: {type(exc).__name__}: {exc}")]
 
     if not llm_config:
@@ -356,19 +356,23 @@ def _check_llm_credentials() -> list[dict[str, Any]]:
 def _probe_targets() -> list[tuple[str, str]]:
     """目录探针目标 ``[(标签, 目录)]`` —— 会**真实写盘**，故收敛于单一函数。
 
-    输出目录取自配置（未设时回落到报告实际落盘目录）；缓存与日志目录固定取项目
-    子目录。测试经 conftest 对本函数 ``setattr`` 重定向到临时目录——探针写盘若指向
+    输出目录取自配置（未设时回落到报告实际落盘目录）；缓存目录取缓存层的唯一
+    解析器（``INVEST_CACHE_DIR`` 覆盖生效，演示/基准隔离 run 不探测真实
+    ``data/cache`` 也不报出与实际生效目录不一致的路径）；日志目录固定取项目子目录。
+    测试经 conftest 对本函数 ``setattr`` 重定向到临时目录——探针写盘若指向
     真实 ``reports/`` / ``data/cache/`` / ``logs/``，用例中途失败即留下残留。
     """
+    from src.python.cache import get_cache_dir
+
     try:
         from src.python.config import get_config
 
         output_dir = get_config().get("output_dir") or _DEFAULT_OUTPUT_DIR
-    except Exception:  # noqa: BLE001 —— 配置坏掉已由配置组报错，此处不重复报也不抛出
+    except Exception:  # noqa: BLE001 — 配置坏掉已由配置组报错，此处不重复报也不抛出
         output_dir = _DEFAULT_OUTPUT_DIR
     return [
         ("输出目录", output_dir),
-        ("缓存目录", _CACHE_DIR),
+        ("缓存目录", get_cache_dir()),
         ("日志目录", _LOGS_DIR),
     ]
 
@@ -395,7 +399,7 @@ def _check_directories() -> list[dict[str, Any]]:
         from src.python.config import get_config
 
         config = get_config()
-    except Exception:  # noqa: BLE001 —— 配置已在上一条报错，此处静默跳过
+    except Exception:  # noqa: BLE001 — 配置已在上一条报错，此处静默跳过
         return results
 
     holdings_dir = config.get("holdings_dir") or ""
@@ -442,7 +446,7 @@ def _check_experimental_features() -> list[dict[str, Any]]:
         from src.python.config.features import experimental_flags, is_feature_enabled
 
         enabled = [(d.label, d.desc) for flag, d in experimental_flags() if is_feature_enabled(flag)]
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 — 有意宽捕获（不窄化：单项体检异常降级为一条失败项，不让单项拖垮整份体检）
         return [_item(GROUP_FEATURES, "实验功能", False, f"读取失败: {type(exc).__name__}: {exc}")]
 
     if not enabled:
@@ -457,7 +461,7 @@ def _check_eval_status() -> list[dict[str, Any]]:
         from src.python.core.eval_status import format_eval_hint
 
         return [_item(GROUP_LOG_CACHE, "决策质量回测", True, format_eval_hint())]
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 — 有意宽捕获（不窄化：单项体检异常降级为一条失败项，不让单项拖垮整份体检）
         return [_item(GROUP_LOG_CACHE, "决策质量回测", False, f"读取失败: {type(exc).__name__}: {exc}")]
 
 
@@ -472,7 +476,7 @@ def _check_report_qa_usage() -> list[dict[str, Any]]:
 
         summary = summarize_qa_usage(days=30)
         lines = format_summary_block(summary, days=30)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 — 有意宽捕获（不窄化：单项体检异常降级为一条失败项，不让单项拖垮整份体检）
         return [_item(GROUP_FEATURES, "报告追问效果", False, f"读取失败: {type(exc).__name__}: {exc}")]
     return [_item(GROUP_FEATURES, "报告追问效果", True, "\n".join(lines))]
 
@@ -489,7 +493,7 @@ def _check_experiment_verdicts() -> list[dict[str, Any]]:
         verdicts = collect_verdicts()
         lines = format_verdict_lines(verdicts)
         notices = action_notices(verdicts)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 — 有意宽捕获（不窄化：单项体检异常降级为一条失败项，不让单项拖垮整份体检）
         return [_item(GROUP_FEATURES, "实验项裁决", False, f"读取失败: {type(exc).__name__}: {exc}")]
     message = "\n".join(lines + notices) if lines or notices else "无可裁决的实验项"
     return [_item(GROUP_FEATURES, "实验项裁决", True, message)]
@@ -538,7 +542,7 @@ def _check_review_ledger_overview() -> list[dict[str, Any]]:
                     )
                     _msg += f" · 不动作类{_ina_text}"
             items.append(_item(GROUP_FEATURES, "决策复盘账本", True, _msg))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001 — 有意宽捕获（不窄化：单项体检异常降级为一条失败项，不让单项拖垮整份体检）
             items.append(_item(GROUP_FEATURES, "决策复盘账本", False, f"读取失败: {type(exc).__name__}: {exc}"))
 
         # ── 确定性信号账本 ──
@@ -553,7 +557,7 @@ def _check_review_ledger_overview() -> list[dict[str, Any]]:
             else:
                 _msg = f"累计 {_live + _demo} 条（实时 {_live} / 非实时 {_demo}）— 统计窗口 {_first} ~ {_last}"
             items.append(_item(GROUP_FEATURES, "确定性信号账本", True, _msg))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001 — 有意宽捕获（不窄化：单项体检异常降级为一条失败项，不让单项拖垮整份体检）
             items.append(_item(GROUP_FEATURES, "确定性信号账本", False, f"读取失败: {type(exc).__name__}: {exc}"))
 
         # ── 实验功能使用统计 ──
@@ -568,9 +572,9 @@ def _check_review_ledger_overview() -> list[dict[str, Any]]:
                 ]
                 _msg = "；".join(_parts)
             items.append(_item(GROUP_FEATURES, "实验功能使用统计", True, _msg))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001 — 有意宽捕获（不窄化：单项体检异常降级为一条失败项，不让单项拖垮整份体检）
             items.append(_item(GROUP_FEATURES, "实验功能使用统计", False, f"读取失败: {type(exc).__name__}: {exc}"))
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 — 有意宽捕获（不窄化：单项体检异常降级为一条失败项，不让单项拖垮整份体检）
         items.append(_item(GROUP_FEATURES, "复盘账本概览", False, f"初始化失败: {type(exc).__name__}: {exc}"))
     return items
 
@@ -612,7 +616,7 @@ def _check_source_adapters() -> list[dict[str, Any]]:
                 )
             ]
         reports = _adapter_survey()
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 — 有意宽捕获（不窄化：单项体检异常降级为一条失败项，不让单项拖垮整份体检）
         return [_item(GROUP_ADAPTER, "适配契约", False, f"执行失败: {type(exc).__name__}: {exc}")]
 
     if not reports:
@@ -658,7 +662,7 @@ def _check_datasource_credentials() -> list[dict[str, Any]]:
         from src.python.core.datasource_credential import credential_readiness
 
         rows = credential_readiness()
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 — 有意宽捕获（不窄化：单项体检异常降级为一条失败项，不让单项拖垮整份体检）
         return [_item(GROUP_CREDENTIAL, "凭据就绪", False, f"执行失败: {type(exc).__name__}: {exc}")]
 
     if not rows:
@@ -685,7 +689,7 @@ def _check_network(max_timeout: float) -> list[dict[str, Any]]:
         from src.python.core.check_sources import run_health_checks
 
         raw = run_health_checks(max_timeout=max_timeout)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 — 有意宽捕获（不窄化：单项体检异常降级为一条失败项，不让单项拖垮整份体检）
         return [_item(GROUP_NETWORK, "数据源检查", False, f"执行失败: {type(exc).__name__}: {exc}")]
 
     results: list[dict[str, Any]] = []

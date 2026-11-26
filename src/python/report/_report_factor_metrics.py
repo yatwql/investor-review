@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from datetime import datetime
+from typing import Any
 
 from src.python.analysis.unavailable_contracts import factor_unavailable_result, industry_unavailable_result
 from src.python.core.code_utils import is_six_digit_code
@@ -27,7 +29,7 @@ logger = logging.getLogger("invest")
 _SLOW_FETCH_WARN_SECONDS = SLOW_SPAN_WARN_SECONDS
 
 
-def _timed_fetch(fn, *args, label: str = "", **kwargs):
+def _timed_fetch(fn: Callable[..., Any], *args, label: str = "", **kwargs):
     """包一层单路取数计时：超阈值时告警（带标的标签），不改变返回语义。"""
     started = time.perf_counter()
     try:
@@ -166,7 +168,7 @@ def compute_factor_exposure_data(
             for _fut, h in bar_futs.items():
                 try:
                     _bars = _fut.result()
-                except Exception:  # 单品种 K 线失败不阻断同类其余品种，但要留痕
+                except Exception:  # noqa: BLE001 — 单品种 K 线失败不阻断同类其余品种，但要留痕
                     logger.debug("[factor] 持仓 K 线获取失败：%s %s", h.code, h.name, exc_info=True)
                     _bars = None
                 if _bars:
@@ -174,7 +176,7 @@ def compute_factor_exposure_data(
             for _fut, f in idx_futs.items():
                 try:
                     factor_klines[f] = _fut.result() or []
-                except Exception:  # 因子空拉取计入 excluded 并降级判据，缺日志会看不出是异常还是真无数据
+                except Exception:  # noqa: BLE001 — 因子空拉取计入 excluded 并降级判据，缺日志会看不出是异常还是真无数据
                     logger.debug("[factor] 因子指数 K 线获取失败：%s", f, exc_info=True)
                     factor_klines[f] = []
 
@@ -309,7 +311,7 @@ def compute_industry_beta_data(
                 h = _futs[_fut]
                 try:
                     _bars = _fut.result()
-                except Exception:  # 单品种失败不阻断其余，留痕以便区分「无数据」与「取数异常」
+                except Exception:  # noqa: BLE001 — 单品种失败不阻断其余，留痕以便区分「无数据」与「取数异常」
                     logger.debug("[industry_beta] 持仓 K 线获取失败：%s %s", h.code, h.name, exc_info=True)
                     _bars = None
                 if _bars:
@@ -338,7 +340,7 @@ def compute_industry_beta_data(
                     i = _futs[_fut]
                     try:
                         industry_klines[i] = _fut.result() or []
-                    except Exception:  # 行业指数失败计入「无数据」，留痕区分异常与真无数据
+                    except Exception:  # noqa: BLE001 — 行业指数失败计入「无数据」，留痕区分异常与真无数据
                         logger.debug("[industry_beta] 行业指数 K 线获取失败：%s", i, exc_info=True)
                         industry_klines[i] = []
 

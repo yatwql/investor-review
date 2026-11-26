@@ -15,7 +15,10 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from src.python.core.perf import PhaseBreakdownRecorder
 
 from src.python.core.models import Holding
 from src.python.providers.news_aggregator import (
@@ -40,7 +43,7 @@ def aggregate_news(
     per_source: int = 100,
     progress_callback: Callable[[str, int, str], None] | None = None,
     lightweight_keywords: set[str] | None = None,
-    span_recorder=None,
+    span_recorder: PhaseBreakdownRecorder | None = None,
 ) -> list[dict[str, Any]]:
     """从多个新闻源获取新闻，去重后按关键词关联度排序。
 

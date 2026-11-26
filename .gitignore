@@ -35,6 +35,8 @@ test-reports/
 
 # ── coverage ────────────────────────────────────────
 .coverage
+# pytest-cov 并行（xdist/多进程）时写出 .coverage.<host>.pid<PID>.<rand>，不得入库
+.coverage.*
 htmlcov/
 
 # ── 崩溃转储（core dump，进程被信号打断时由内核写出）──

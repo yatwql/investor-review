@@ -173,3 +173,48 @@ class TestResolveMarketDataFlow(unittest.TestCase):
         )
         # 开关关闭 → 真实 _build_flow_data 直接返回 None，不触发任何成本流水计算
         self.assertIsNone(data["fund_flow_data"])
+
+
+class TestResolveMarketDataDegrades(unittest.TestCase):
+    """行情明细缺失 / 全不可用两条降级分支——都必须在进度条上留痕。"""
+
+    @staticmethod
+    def _detail(**kwargs):
+        from types import SimpleNamespace
+
+        base = {
+            "code": "600519",
+            "market_value": 0.0,
+            "cost": 100.0,
+            "profit": -100.0,
+            "today_profit": 0.0,
+            "price": None,
+        }
+        base.update(kwargs)
+        return SimpleNamespace(**base)
+
+    def test_missing_generator_reports_error_and_keeps_empty_details(self):
+        """行情市值计算模块缺失 → 报错并把明细落空（不抛异常）。"""
+        prog = MagicMock()
+
+        data = resolve_market_data(holdings=[MagicMock()], details=None, modules={}, prog=prog)
+
+        prog.add_error.assert_called_once_with("行情市值计算模块缺失，行情明细为空")
+        self.assertEqual(data["details"], [])
+        self.assertEqual(data["total_mv"], 0)
+        self.assertEqual(data["update_status"], (0, 0, True))
+
+    def test_all_market_values_zero_reports_placeholder_error(self):
+        """市值全 0 而有成本 → 报错声明报告为占位数据（避免静默显示 -100%）。"""
+        prog = MagicMock()
+
+        data = resolve_market_data(
+            holdings=[MagicMock()],
+            details=[self._detail()],
+            modules={"classify_holdings": MagicMock(return_value={})},
+            prog=prog,
+        )
+
+        prog.add_error.assert_called_once_with("行情数据全部不可用（非交易时段/网络异常），报告部分数据为占位显示")
+        self.assertEqual(data["total_cost"], 100.0)
+        self.assertEqual(data["total_profit"], -100.0)

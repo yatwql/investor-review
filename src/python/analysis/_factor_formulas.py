@@ -61,12 +61,8 @@ def _ema(values: list[float], span: int) -> list[float | None]:
     out: list[float | None] = []
     prev: float | None = None
     for i, value in enumerate(values):
-        if i == 0:
-            prev = value
-        elif prev is None:
-            prev = value
-        else:
-            prev = alpha * value + (1 - alpha) * prev
+        # prev 仅在首轮为 None（此后必为上一步的 float）
+        prev = value if prev is None else alpha * value + (1 - alpha) * prev
         out.append(prev if i >= span - 1 else None)
     return out
 

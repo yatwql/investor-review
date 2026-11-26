@@ -68,7 +68,7 @@ def resolve_nav_on_trade_date(code: str, trade_date: str) -> dict | None:
     window = min(max((date.today() - date.fromisoformat(target)).days + 15, _MIN_WINDOW_DAYS), _MAX_WINDOW_DAYS)
     try:
         bars = fetch_with_incremental_fallback("history_fund_otc", code.strip(), window)
-    except Exception:  # 取数链路异常不得打断录入会话
+    except Exception:  # noqa: BLE001 — 取数链路异常不得打断录入会话
         logger.warning("[净值查询] 历史净值取数异常: %s", code, exc_info=True)
         return None
     if not bars:

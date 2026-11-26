@@ -275,7 +275,7 @@ def build_factor_catalog_data(codes: list[str]) -> dict[str, Any]:
         return _placeholder("股票池为空", version, len(entries))
     try:
         inputs = load_factor_inputs(codes)
-    except Exception as exc:  # fail-soft：备数异常不崩报告
+    except Exception as exc:  # noqa: BLE001 — fail-soft：备数异常不崩报告
         logger.error("[factor_catalog] 因子目录备数异常，降级为不可用占位: %s", exc)
         return _placeholder(f"备数异常: {type(exc).__name__}", version, len(entries))
     return evaluate_factor_catalog(inputs, entries=entries, version=version)

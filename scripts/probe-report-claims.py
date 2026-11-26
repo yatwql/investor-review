@@ -34,7 +34,7 @@ if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # _eval_halluc_sampler
 
-from _eval_halluc_sampler.from_report import audit_report as audit_one_report  # noqa: E402
+from _eval_halluc_sampler.from_report import audit_report as audit_one_report
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
 logger = logging.getLogger("invest")

@@ -5,7 +5,7 @@
             <!-- 基本信息 -->
             <table class="kv-table">
                 <tr><td>统计时间</td><td style="font-weight: 700;">{{ now }}</td></tr>
-                <tr><td>所属交易日</td><td style="font-weight: 700; font-size: var(--fs-h3); color: var(--primary);">{{ trading_day }}</td></tr>
+                <tr><td>所属交易日</td><td class="text-primary" style="font-weight: 700; font-size: var(--fs-h3);">{{ trading_day }}</td></tr>
             </table>
 
             <br>
@@ -62,7 +62,7 @@
             {% endif %}
 
             <!-- 持仓概况 -->
-            <h3 style="color: var(--primary); font-size: var(--fs-h3); margin-bottom: 8px;">【持仓概况】</h3>
+            <h3 class="text-primary" style="font-size: var(--fs-h3); margin-bottom: 8px;">【持仓概况】</h3>
             <table class="kv-table">
                 {% if categories %}
                 <tr><td>场内股票</td><td>{{ categories.get("场内股票", 0) }}</td></tr>
@@ -91,14 +91,14 @@
             <br>
 
             {% if data_unavailable %}
-            <div class="empty-section" style="background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn-text);">
+            <div class="empty-section t-warn" style="background: var(--warn-bg); border-color: var(--warn-border);">
                 ⚠ 行情数据全部不可用（非交易时段/网络异常/API限速），以下市值/盈亏为占位显示，不影响持仓成本统计
             </div>
             <br>
             {% endif %}
 
             <!-- 盈亏汇总 -->
-            <h3 style="color: var(--primary); font-size: var(--fs-h3); margin-bottom: 8px;">【盈亏汇总】</h3>
+            <h3 class="text-primary" style="font-size: var(--fs-h3); margin-bottom: 8px;">【盈亏汇总】</h3>
             <div class="summary-grid">
                 <div class="summary-card">
                     <h3>总市值 (元)</h3>
@@ -140,7 +140,7 @@
             <br>
 
             <!-- 市场指数 -->
-            <h3 style="color: var(--primary); font-size: var(--fs-h3); margin-bottom: 8px;">【市场指数】</h3>
+            <h3 class="text-primary" style="font-size: var(--fs-h3); margin-bottom: 8px;">【市场指数】</h3>
             <div class="indices-grid">
                 <div class="indices-group">
                     <h4>A 股指数</h4>
@@ -183,7 +183,7 @@
             {# 市场温度（功能开关 market_temperature，features.json；默认开）：不可用时整块静默省略，
                避免在用户未主动要求的功能上出现降级痕迹（与 Excel 同判据） #}
             {% if market_temperature and market_temperature.available %}
-            <h3 style="color: var(--primary); font-size: var(--fs-h3); margin-bottom: 8px;">【市场温度】</h3>
+            <h3 class="text-primary" style="font-size: var(--fs-h3); margin-bottom: 8px;">【市场温度】</h3>
             <table class="kv-table">
                 {% if market_temperature.score is not none %}
                 <tr><td>市场温度</td><td style="font-weight: 700;">{{ market_temperature.score | round(0) | int }} / 100（{{ market_temperature.tier }}）</td></tr>
@@ -201,10 +201,10 @@
                 </tr>
                 {% endif %}
                 {% if market_temperature.methodology %}
-                <tr><td>计算逻辑</td><td style="font-size: var(--fs-table-sm); color: var(--text-muted);">{{ market_temperature.methodology }}</td></tr>
-                <tr><td>分级标准</td><td style="font-size: var(--fs-table-sm); color: var(--text-muted);">{{ market_temperature.tier_scale }}</td></tr>
+                <tr><td>计算逻辑</td><td class="text-muted" style="font-size: var(--fs-table-sm);">{{ market_temperature.methodology }}</td></tr>
+                <tr><td>分级标准</td><td class="text-muted" style="font-size: var(--fs-table-sm);">{{ market_temperature.tier_scale }}</td></tr>
                 {% endif %}
-                <tr><td>注</td><td style="font-size: var(--fs-table-sm); color: var(--text-muted);">{{ market_temperature.disclaimer }}</td></tr>
+                <tr><td>注</td><td class="text-muted" style="font-size: var(--fs-table-sm);">{{ market_temperature.disclaimer }}</td></tr>
             </table>
             {% endif %}
         </div>

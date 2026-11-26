@@ -7,11 +7,11 @@
 
 from __future__ import annotations
 
-import json
 import os
 import re
 import sys
 from pathlib import Path
+from typing import Any
 
 from _release import _gate
 from _release._archive_flow import prerequisite_findings
@@ -23,6 +23,7 @@ from _release._timing import (
     build_record as _build_record,
     format_agent as _format_agent,
     format_tokens as _format_tokens,
+    read_ledger_records as _read_ledger_records,
     release_token_usage as _release_token_usage,
     session_usage as _session_usage,
 )
@@ -144,7 +145,7 @@ def _record_failure(label: str, rc: int, out: str = "", err: str = "", root: Pat
         _FAILURE = _summarize_failure(label, rc, out, err, root=root)
 
 
-def _finish_timing(command: str, rc: int, env) -> None:
+def _finish_timing(command: str, rc: int, env: Any) -> None:
     """尾行打印耗时摘要并追加 `logs/release.jsonl`——埋点是观测面，写失败只提示。"""
     timer = _timer()
     summary = timer.summary()
@@ -180,18 +181,20 @@ def _finish_timing(command: str, rc: int, env) -> None:
     agent_text = _format_agent(agent)
     if agent_text:
         print(f"[..] 执行环境：{agent_text}")
-    # 发布窗口 token 统计：以「上一次 devbump」为界，避免把开发期对话算进发布成本
+    # 发布窗口 token 统计：以「上一次 devbump」为界，避免把开发期对话算进发布成本。
+    # 读取走 `_timing.read_ledger_records`（与 probe 同源口径）：脏行/缺 `command`
+    # 的行跳过而不是让整段统计失效。
     try:
-        rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        rows = _read_ledger_records(path)
         used = _release_token_usage(rows)
         text = _format_tokens(used)
         if text:
             print(f"[..] 本次发布累计 token：{text}")
-    except (OSError, ValueError, TypeError):
+    except (OSError, TypeError):
         print("[!] token 统计读取失败（不影响本次结果）")
 
 
-def archive_paths_for(release_version: str, env) -> tuple[Path, str]:
+def archive_paths_for(release_version: str, env: Any) -> tuple[Path, str]:
     """按小版本推导归档目录与文件名（小版本号 → docs/archive/vX.Y.x/… 目录）。"""
     m = _RELEASE_VERSION_RE.match(release_version)
     if not m:
@@ -201,7 +204,7 @@ def archive_paths_for(release_version: str, env) -> tuple[Path, str]:
     return env.ARCHIVE_DOCS_DIR / f"v{minor}.x" / name, name
 
 
-def ledger_archive_paths(release_version: str, env) -> tuple[Path, Path]:
+def ledger_archive_paths(release_version: str, env: Any) -> tuple[Path, Path]:
     """按小版本推导台账归档文件（review-findings / plan 两份，同版本目录下）。"""
     m = _RELEASE_VERSION_RE.match(release_version)
     if not m:
@@ -214,23 +217,23 @@ def ledger_archive_paths(release_version: str, env) -> tuple[Path, Path]:
     )
 
 
-def _current_branch(root: Path, runner=None) -> str:
+def _current_branch(root: Path, runner: Any = None) -> str:
     rc, out, _ = _exec(["git", "branch", "--show-current"], root, runner)
     return out.strip() if rc == 0 else ""
 
 
-def _worktree_clean(root: Path, runner=None) -> bool:
+def _worktree_clean(root: Path, runner: Any = None) -> bool:
     rc, out, _ = _exec(["git", "status", "--porcelain"], root, runner)
     return rc == 0 and out.strip() == ""
 
 
-def _tag_absent(root: Path, tag: str, runner=None) -> bool:
+def _tag_absent(root: Path, tag: str, runner: Any = None) -> bool:
     rc, _, _ = _exec(["git", "rev-parse", "-q", "--verify", f"refs/tags/{tag}"], root, runner)
     return rc != 0
 
 
 def run_preflight(
-    root: Path, expect_release: bool = False, runner=None, require_clean: bool = True
+    root: Path, expect_release: bool = False, runner: Any = None, require_clean: bool = True
 ) -> list[tuple[str, bool, str]]:
     """前置条件 + 版本一致性；返回 [(检查名, 是否通过, 详情)]。
 
@@ -274,23 +277,23 @@ def _print_results(results: list[tuple[str, bool, str]]) -> bool:
     return all_ok
 
 
-def archive_prerequisites(release_version: str, env) -> list[str]:
+def archive_prerequisites(release_version: str, env: Any) -> list[str]:
     """发布归档前置（两份归档文件 + 目录树该小版本块）：`check` 阶段提前报缺件。"""
     return prerequisite_findings(release_version, env.archive_ctx(release_version))
 
 
-def _git_ok(args: list[str], root: Path, runner=None, capture: bool = True) -> tuple[int, str, str]:
+def _git_ok(args: list[str], root: Path, runner: Any = None, capture: bool = True) -> tuple[int, str, str]:
     return _exec(["git", *args], root, runner, capture=capture)
 
 
-def _last_release_tag(env, runner=None) -> str | None:
+def _last_release_tag(env: Any, runner: Any = None) -> str | None:
     """最近的发布 tag（v*）；无则 None（调用方保守地视为需刷新）。"""
     rc, out, _ = _git_ok(["describe", "--tags", "--abbrev=0", "--match", "v*"], env.REPO_ROOT, runner)
     tag = out.strip() if rc == 0 else ""
     return tag or None
 
 
-def _docs_only_changes_since(tag: str, env, runner=None) -> tuple[bool, list[str]]:
+def _docs_only_changes_since(tag: str, env: Any, runner: Any = None) -> tuple[bool, list[str]]:
     """自 tag 起（含未提交/未跟踪）的变更是否纯文档。
 
     Returns:
@@ -308,7 +311,7 @@ def _docs_only_changes_since(tag: str, env, runner=None) -> tuple[bool, list[str
     return (not non_doc), non_doc
 
 
-def _run_step(label: str, cmd: list[str], root: Path, runner=None) -> int:
+def _run_step(label: str, cmd: list[str], root: Path, runner: Any = None) -> int:
     print(f"[..] {label}")
     rc, out, err = _exec(cmd, root, runner)
     if out.strip():
@@ -328,7 +331,7 @@ def _gate_workers() -> int:
     return max(1, min(4, os.cpu_count() or 4))
 
 
-def _tree_fingerprint(env, runner=None) -> str:
+def _tree_fingerprint(env: Any, runner: Any = None) -> str:
     """工作区全树指纹（保留：供需要「改动过任何文件」语义的调用方；发布戳用代码指纹）。"""
     return _gate.tree_fingerprint(_exec, env.REPO_ROOT, runner)
 
@@ -337,7 +340,7 @@ def _write_gate_stamp(
     version: str,
     fingerprint: str,
     verify_passed: str,
-    env,
+    env: Any,
     source: str = "run",
     code_files: dict[str, str] | None = None,
 ) -> None:
@@ -345,12 +348,12 @@ def _write_gate_stamp(
     _gate.write_gate_stamp(env.GATE_STAMP_FILE, version, fingerprint, verify_passed, source, code_files)
 
 
-def _read_gate_stamp(env) -> dict | None:
+def _read_gate_stamp(env: Any) -> dict | None:
     """读现有 gate 戳（不论是否匹配当前指纹），供 publish 解释「为何重跑 verify」。"""
     return _gate.read_gate_stamp(env.GATE_STAMP_FILE)
 
 
-def _changed_code_files(env, stamp: dict | None, runner=None) -> list[str]:
+def _changed_code_files(env: Any, stamp: dict | None, runner: Any = None) -> list[str]:
     """gate 之后发生改动的代码文件（戳里没存文件清单时返回空）。"""
     if not stamp:
         return []
@@ -361,23 +364,23 @@ def _changed_code_files(env, stamp: dict | None, runner=None) -> list[str]:
     return _gate.diff_code_files(stored, current)
 
 
-def _code_fingerprint(env, runner=None) -> str:
+def _code_fingerprint(env: Any, runner: Any = None) -> str:
     """测试相关代码路径指纹（实现在 `_release/_gate.py`）。"""
     return _gate.code_fingerprint(_exec, env.REPO_ROOT, runner)
 
 
-def _write_bench_stamp(fingerprint: str, modes: list[str], covers_unit: bool, env) -> None:
+def _write_bench_stamp(fingerprint: str, modes: list[str], covers_unit: bool, env: Any) -> None:
     """写 refresh bench 通过戳（实现在 `_release/_gate.py`）。"""
     version = read_app_version(env.CONSTANTS_FILE.read_text(encoding="utf-8"))
     _gate.write_bench_stamp(env.BENCH_STAMP_FILE, version, modes, fingerprint, covers_unit)
 
 
-def _bench_covers_verify(env, runner=None) -> dict | None:
+def _bench_covers_verify(env: Any, runner: Any = None) -> dict | None:
     """bench 戳是否可替代 P1 verify（实现在 `_release/_gate.py`）。"""
     version = read_app_version(env.CONSTANTS_FILE.read_text(encoding="utf-8"))
     return _gate.bench_covers_verify(env.BENCH_STAMP_FILE, version, _code_fingerprint(env, runner))
 
 
-def _gate_stamp_matches(version: str, fingerprint: str, env) -> dict | None:
+def _gate_stamp_matches(version: str, fingerprint: str, env: Any) -> dict | None:
     """读 gate 通过戳并按「版本 + 树指纹」校验（实现在 `_release/_gate.py`）。"""
     return _gate.gate_stamp_matches(env.GATE_STAMP_FILE, version, fingerprint)

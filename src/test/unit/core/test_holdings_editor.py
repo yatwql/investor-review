@@ -374,3 +374,95 @@ def test_resolve_entry_kind_rejects_ambiguous_without_declaration():
     """00 重叠区未声明形态 → 抛错交调用方确认（TUI 问用户 / Web 报 400）。"""
     with pytest.raises(ValueError, match="重叠区"):
         resolve_entry_kind("005827", "易方达蓝筹")
+
+
+def test_save_raises_oserror_when_atomic_write_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """原子写盘失败（False）→ 抛 OSError，草稿保留给用户重试。"""
+    from src.python.core import holdings_editor
+
+    book = load_book(str(make_holdings_file(tmp_path)))
+    book.apply(
+        TradeIntent(
+            account="股票账户",
+            name="长江电力",
+            code="600900",
+            side=SIDE_BUY,
+            shares=100,
+            price=21.0,
+            trade_date="2026-07-01",
+        )
+    )
+    monkeypatch.setattr(holdings_editor, "write_bytes_atomic", lambda *a, **kw: False)
+
+    with pytest.raises(OSError, match="持仓文件写入失败"):
+        book.save()
+
+    assert len(book.drafts) == 1
+
+
+def test_verify_written_reports_extra_and_mismatched_rows(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """回读多出行 / 份额或成本不一致都要点出来（不能只看缺行）。"""
+    from src.python.core import holdings_editor
+    from src.python.core.reader import Holding
+
+    book = load_book(str(make_holdings_file(tmp_path)))
+    actual = read_holdings(book.filepath)
+    first = actual[0]
+    tampered = [
+        Holding(
+            account=first.account,
+            name=first.name,
+            code=first.code,
+            shares=first.shares + 5,
+            cost_price=first.cost_price,
+        ),
+        *actual[1:],
+        Holding(account="多出账户", name="多出品种", code="600000", shares=1, cost_price=1.0),
+    ]
+    monkeypatch.setattr(holdings_editor, "read_holdings", lambda _path: tampered)
+
+    with pytest.raises(ValueError) as err:
+        book._verify_written()
+
+    message = str(err.value)
+    assert "多出" in message
+    assert "份额" in message
+
+
+def test_build_workbook_bytes_on_missing_file_raises(tmp_path: Path):
+    """源文件已被移走 → 生成字节时立刻报 FileNotFoundError（不拿空工作簿覆盖用户文件）。"""
+    from src.python.core.holdings_editor import build_workbook_bytes
+
+    path = make_holdings_file(tmp_path)
+    book = load_book(str(path))
+    path.unlink()
+
+    with pytest.raises(FileNotFoundError, match="持仓文件不存在"):
+        build_workbook_bytes(book)
+
+
+def test_append_flow_rows_fills_fee_column_for_fee_aware_sheet(tmp_path: Path):
+    """既有「交易流水」页签带费用列 → 追加行按 6 列写（费用补 0）。"""
+    import openpyxl
+
+    from src.python.core.holdings_editor import TRADE_HEADER, _append_flow_rows
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "交易流水"
+    ws.append([*TRADE_HEADER, "费用"])
+    intent = TradeIntent(
+        account="股票账户",
+        name="长江电力",
+        code="600900",
+        side=SIDE_BUY,
+        shares=100,
+        price=21.0,
+        trade_date="2026-07-01",
+    )
+
+    _append_flow_rows(wb, [intent])
+
+    appended = [cell.value for cell in wb["交易流水"][2]]
+    assert appended[-1] == 0.0
+    assert len(appended) == len(TRADE_HEADER) + 1

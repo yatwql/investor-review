@@ -1,7 +1,8 @@
 """logger.json — 日志运行配置（写盘/控制台/查看器）的读取、校验与写入。
 
-`core/logger.py` 在进程启动时自行读取本文件（不导入 config 包，避免循环依赖）；
-本模块是面板/校验层的共享入口：同一张范围表既用于加载回落，也用于保存拒绝。
+缺省值事实位在 `core/logging_defaults.py`（core 侧启动读取与本节校验共用同一张表，
+本模块只 re-export）；本模块是面板/校验层的共享入口：同一张范围表既用于加载回落，
+也用于保存拒绝。
 """
 
 from __future__ import annotations
@@ -14,32 +15,13 @@ from typing import Any
 from src.python.core.json_comments import strip_json_comments
 from src.python.core.atomic_write import write_text_atomic
 from src.python.core.constants import PROJECT_ROOT
+from src.python.core.logging_defaults import DEFAULTS, LEVELS, RANGES, VIEWER_LEVELS
 from src.python.core.path_utils import resolve_project_path
 
 logger = logging.getLogger("invest")
 
 LOGGER_SCHEMA_VERSION = 1
 LOGGER_CONFIG_PATH = os.path.join(PROJECT_ROOT, "data/config/logger.json")
-
-LEVELS: tuple[str, ...] = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
-VIEWER_LEVELS: tuple[str, ...] = (*LEVELS, "ALL")
-
-DEFAULTS: dict[str, Any] = {
-    "path": "logs/app.log",
-    "level": "INFO",
-    "max_bytes": 10 * 1024 * 1024,
-    "backup_count": 5,
-    "console_level": "INFO",
-    "console_color": True,
-    "viewer_level": "INFO",
-    "tail_lines": 500,
-}
-
-RANGES: dict[str, tuple[int, int]] = {
-    "max_bytes": (1024, 1024 * 1024 * 1024),
-    "backup_count": (0, 50),
-    "tail_lines": (50, 10000),
-}
 
 _ENUM_KEYS = {"level": LEVELS, "console_level": LEVELS, "viewer_level": VIEWER_LEVELS}
 

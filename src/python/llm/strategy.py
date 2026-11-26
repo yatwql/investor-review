@@ -50,14 +50,13 @@ def resolve_provider_chain(
         strategy = "priority"
 
     # step 1: 策略排序
+    # 上面已把 strategy 归一到 _VALID_STRATEGIES 内，故三个分支即全集
     if strategy in ("priority", "fallback_only"):
         chain = sorted(provider_list, key=lambda p: p.get("priority", DEFAULT_PROVIDER_PRIORITY))
     elif strategy == "weighted":
         chain = _apply_weighted(provider_list)
-    elif strategy == "cost_first":
+    else:  # cost_first
         chain = _apply_cost_first(provider_list)
-    else:
-        chain = list(provider_list)
 
     # step 2: 模块偏好注入
     chain = _apply_module_preferred(chain, module_key, preferred or {})
@@ -135,16 +134,12 @@ def _apply_weighted(provider_list: list[dict]) -> list[dict]:
     for idx_in_group, w in enumerate(weights):
         pool.extend([idx_in_group] * max(w, 1))
     random.shuffle(pool)
-    seen: set[int] = set()
+    # pool 由 enumerate(weights) 展开、每项至少 1 份，故每个原序必在 pool 中出现
+    # （shuffle 只换序不改多重集）——无需「补未出现的原序」兜底
     order: list[int] = []
     for idx_in_group in pool:
-        if idx_in_group not in seen:
-            seen.add(idx_in_group)
+        if idx_in_group not in order:
             order.append(idx_in_group)
-    # 补上未在 pool 中出现的原序（理论上不会发生，但防御性编程）
-    for i in range(len(candidates)):
-        if i not in seen:
-            order.append(i)
 
     result = [candidates[i] for i in order]
     return result

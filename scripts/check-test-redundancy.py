@@ -161,11 +161,11 @@ from _test_redundancy.markers import (  # noqa: F401 — 兼容 load_script 直�
     check_marker_compliance,
 )
 
-from _test_redundancy.runner import (  # noqa: F401 — 兼容 load_script 直调面
+from _test_redundancy.runner import (  # 兼容 load_script 直调面
     run_checks,
 )
 
-from _shared.checklib import add_common_args, report  # noqa: E402
+from _shared.checklib import add_common_args, report
 
 
 def main() -> None:

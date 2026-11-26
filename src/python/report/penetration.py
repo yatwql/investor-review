@@ -291,7 +291,7 @@ def _prefetch_manager_data(code: str) -> None:
         manager = fetch_fund_manager(code)
         if manager is None:
             logger.debug("基金经理预取失败 [%s]（不阻塞穿透计算）", code)
-    except Exception:
+    except Exception:  # noqa: BLE001 — 基金经理预取异常 [%s]（不阻塞穿透计算）
         logger.debug("基金经理预取异常 [%s]（不阻塞穿透计算）", code, exc_info=True)
 
 
@@ -591,7 +591,13 @@ def _compute_penetration_top10_uncached(
             "update_time": "...",
             "summary": {...},
             "top10": [...],
+            "industry_status": "ok" | "empty" | "no_a_share" | "unreachable",
         }
+
+    ``industry_status`` 是行业分类获取结果的**单一**表述：``ok``（取到数据）、
+    ``empty``（有 A 股代码但两段取数全空）、``no_a_share``（穿透资产全为非 A 股，
+    预期行为）、``unreachable``（取数异常，当前产出侧不写此值）。消费方按枚举值
+    分流，不得另立「成功标志 + 失败类型」双字段——同一事实两处表述必然分叉。
     """
     classified, funds, direct_stocks, detail_map = _classify_and_group(holdings, details)
 
@@ -627,8 +633,7 @@ def _compute_penetration_top10_uncached(
     _merge_stock_layer(direct_stocks, detail_map, merged)
 
     # ── Phase 3: 行业分类（合并预取 + 补充剩余） ──
-    industry_success = True
-    industry_failure_type = ""
+    industry_status = "ok"
 
     all_codes: set[str] = set()
     for info in merged.values():
@@ -636,13 +641,14 @@ def _compute_penetration_top10_uncached(
     a_share_codes = {c for c in all_codes if is_a_share_code(c)}
 
     if not a_share_codes:
-        industry_failure_type = "no_a_share"
+        # 无 A 股代码属**预期行为**：以独立枚举值表达，消费方无需另读失败标志
+        industry_status = "no_a_share"
     else:
         prefetched: dict[str, dict] = {}
         if ind_future is not None:
             try:
                 prefetched = ind_future.result() or {}
-            except Exception:
+            except Exception:  # noqa: BLE001 — [penetration] 行业预取异常，回退按需获取
                 logger.debug("[penetration] 行业预取异常，回退按需获取", exc_info=True)
 
         if prefetched:
@@ -650,18 +656,18 @@ def _compute_penetration_top10_uncached(
 
         # 补取基金持仓中出现的、预取未覆盖的新代码
         remaining = a_share_codes - set(prefetched.keys())
+        remaining_data: dict[str, dict] = {}
         if remaining:
             from src.python.fetcher.industry import batch_fetch_industry_data as batch_ind
 
-            remaining_data = batch_ind(list(remaining))
+            remaining_data = batch_ind(list(remaining)) or {}
             if remaining_data:
                 _apply_industry_data(merged, remaining_data)
 
-        # 没有任何行业数据被获取
-        if not prefetched and not remaining and a_share_codes:
+        # 没有任何行业数据被获取（预取与补取均为空：熔断短路或批量全败）
+        if not prefetched and not remaining_data:
             logger.warning("[penetration] 行业分类数据为空（非关键）")
-            industry_success = False
-            industry_failure_type = "empty"
+            industry_status = "empty"
 
     result = _build_penetration_result(
         merged,
@@ -675,7 +681,5 @@ def _compute_penetration_top10_uncached(
         stale_fund_details=fund_merge.stale_details,
         report_periods=fund_merge.period_details,
     )
-    result["industry_success"] = industry_success
-    if not industry_success:
-        result["industry_failure_type"] = industry_failure_type
+    result["industry_status"] = industry_status
     return result

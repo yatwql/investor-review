@@ -27,6 +27,7 @@ from src.python.analysis.whatif_backtest import compute_backtest_days, compute_b
 from src.python.config.features import is_feature_enabled
 from src.python.core.models import Holding
 from src.python.report.portfolio_history import PortfolioHistoryCalculator
+from src.python.report.progress import ProgressReporter
 from src.python.report.whatif_cost_panel import build_whatif_cost_panel
 from src.python.report.whatif_writer import write_whatif_report
 
@@ -164,7 +165,7 @@ def _purchase_restricted_index(candidate_holdings: list[Holding]) -> dict[str, A
     try:
         contract = compute_purchase_status_data()
         index = build_restricted_index(contract, [h.code for h in candidate_holdings])
-    except Exception:  # noqa: BLE001 — 取契约异常不得阻断模拟（仅兜底 Exception，不吞 BaseException）
+    except Exception:  # noqa: BLE001 — 取契约异常不得阻断模拟（仅兜 Exception，不吞 BaseException）
         logger.debug("申购受限索引获取失败，what-if 提示降级缺席", exc_info=True)
         return {}
     logger.debug("what-if 申购受限索引命中 %d 个目标持仓标的", len(index))
@@ -177,7 +178,7 @@ def run_whatif_simulation(
     base_file: str,
     candidate_file: str,
     output_dir: str = "reports",
-    reporter=None,
+    reporter: ProgressReporter | None = None,
     effective_date: str | None = None,
 ) -> WhatifRunResult:
     """调仓模拟业务核心：build_whatif_data → 校验 available → write_whatif_report。
@@ -220,7 +221,7 @@ def run_whatif_simulation(
                 effective_date=effective_date,
                 session_cache=None,
             )
-        except Exception as exc:  # noqa: BLE001 — 回测失败降级，不阻塞主报告
+        except Exception as exc:  # 有意宽捕获：回测失败降级，不阻塞主报告
             logger.exception("时序回测计算异常（生效日 %s）", effective_date)
             backtest = {
                 "available": False,

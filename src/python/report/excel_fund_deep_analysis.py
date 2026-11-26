@@ -147,7 +147,7 @@ def write_fund_deep_analysis_sheets(
                     )
                 else:
                     logger.info("持仓重合度矩阵：无可用的基金持仓数据")
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — 持仓重合度矩阵数据获取/计算失败: %s
                 logger.warning("持仓重合度矩阵数据获取/计算失败: %s", e)
                 prog.add_error("持仓重合度矩阵数据获取失败")
 
@@ -165,7 +165,7 @@ def write_fund_deep_analysis_sheets(
                         logger.info("持仓集中度监控：无持仓数据")
                 else:
                     logger.info("持仓集中度监控：无基金持仓数据")
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — 持仓集中度数据获取/计算失败: %s
                 logger.warning("持仓集中度数据获取/计算失败: %s", e)
                 prog.add_error("持仓集中度数据获取失败")
 
@@ -179,7 +179,7 @@ def write_fund_deep_analysis_sheets(
                 concentration_data=conc_data,
             )
             prog.ok("持仓结构与集中度页签写入完成")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — 持仓结构与集中度页签写入失败: %s
             logger.warning("持仓结构与集中度页签写入失败: %s", e)
             prog.add_error("持仓结构与集中度页签写入失败")
 
@@ -204,7 +204,7 @@ def write_fund_deep_analysis_sheets(
                         logger.info("风格与因子分析：无结果")
                 else:
                     logger.info("风格与因子分析：无基金持仓数据")
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — 风格与因子分析数据获取/计算失败: %s
                 logger.warning("风格与因子分析数据获取/计算失败: %s", e)
                 prog.add_error("风格与因子分析数据获取失败")
 
@@ -214,7 +214,7 @@ def write_fund_deep_analysis_sheets(
                 from src.python.analysis.style_factor_regression import FACTOR_NAMES
 
                 _factor_names = FACTOR_NAMES
-            except Exception:
+            except ImportError:
                 _factor_names = None
         try:
             write_sf(
@@ -226,6 +226,6 @@ def write_fund_deep_analysis_sheets(
                 factor_catalog_data=factor_catalog_data,
             )
             prog.ok("风格与因子分析页签写入完成")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — 风格与因子分析页签写入失败: %s
             logger.warning("风格与因子分析页签写入失败: %s", e)
             prog.add_error("风格与因子分析页签写入失败")

@@ -377,6 +377,29 @@ class TestLiquidityDimension:
         assert any("未计入" in u for u in dim["unverified"])
 
 
+class TestConcentrationZero:
+    def test_equal_weight_far_below_one_decimal_yields_no_score(self):
+        """前十占比四舍五入到 0.0 时该维度不给分（`_pct` 保留两位小数，需 >20 万等权持仓）。"""
+        from src.python.analysis.prosperity_scoring import _score_concentration
+        from src.python.analysis.prosperity_signals import _top10_concentration_pct
+
+        class _D:
+            market_value = 100.0
+
+        details = [_D() for _ in range(250001)]
+        assert _top10_concentration_pct(details) == 0.0
+
+        dim, concentration, turnover = _score_concentration(
+            details, None, {"concentration_target_pct": 50, "turnover_target_pct": 30}
+        )
+
+        assert concentration == 0.0
+        assert turnover is None
+        # 两个子项都不可评分 → 该维度记 unverified、总分 0（不是「给 0 分」而是「不计分」）
+        assert dim["status"] == "unverified"
+        assert dim["score"] == 0
+
+
 class TestConcentrationDimension:
     def test_concentration_and_turnover_scored(self):
         data = build_prosperity_framework_data(_details(), snapshots=_snapshots())
@@ -666,3 +689,103 @@ class TestFundTypeFallback:
         # 固收（超短债）25% 进防御侧；QDII/宽基/主动权益均为中性 → 景气 0%
         assert "命中景气关键词的权重 0.00%" in evidence, evidence
         assert "防御/红利关键词 25.00%" in evidence, evidence
+
+
+class TestDimensionExceptionDegradation:
+    """单维计算抛异常时降级为「未验证」，不把整份框架数据带倒。"""
+
+    def test_roe_dimension_exception_becomes_unverified(self, monkeypatch):
+        monkeypatch.setattr(
+            "src.python.analysis.prosperity_framework._score_roe",
+            lambda *_a, **_kw: (_ for _ in ()).throw(RuntimeError("指标表损坏")),
+        )
+
+        data = build_prosperity_framework_data(_details())
+
+        roe = next(d for d in data["dimensions"] if d["key"] == "roe_elasticity")
+        assert roe["status"] == "unverified"
+        assert any("已跳过" in r for r in roe["unverified"])
+
+    def test_concentration_dimension_exception_becomes_unverified(self, monkeypatch):
+        monkeypatch.setattr(
+            "src.python.analysis.prosperity_framework._score_concentration",
+            lambda *_a, **_kw: (_ for _ in ()).throw(RuntimeError("快照损坏")),
+        )
+
+        data = build_prosperity_framework_data(_details())
+
+        dim = next(d for d in data["dimensions"] if d["key"] == "concentration_cycle")
+        assert dim["status"] == "unverified"
+
+    def test_holdings_view_exception_yields_empty_list(self, monkeypatch):
+        from src.python.analysis import prosperity_framework as pf
+
+        monkeypatch.setattr(
+            pf, "_holdings_view", lambda *_a, **_kw: (_ for _ in ()).throw(RuntimeError("视角构建失败"))
+        )
+
+        assert pf._safe_holdings_view(_details(), {}, DEFAULT_CONFIG) == []
+
+
+# ═══════════════════════════════════════════════════════════
+#  集中度分档 / 输入降级
+# ═══════════════════════════════════════════════════════════
+
+
+def _equal_rows(total: int, mv_each: float, prefix: str = "6000") -> list[DetailRow]:
+    """构造等权持仓（代码递增，避免同名去重干扰）。"""
+    return [_row(f"{prefix}{i:02d}", f"标的{i}", mv_each) for i in range(total)]
+
+
+class TestConcentrationTiers:
+    """集中度分档：≤目标 8 分 / 1.4 倍内 5 分（口径见 evidence 文案）。"""
+
+    def test_within_target_scores_eight(self):
+        """前十大集中度 = 50%（20 只等权）→ 达标档 8 分。"""
+        from src.python.analysis.prosperity_scoring import _cfg, _score_concentration
+
+        dim, conc_pct, _turn = _score_concentration(_equal_rows(20, 50_000.0), None, _cfg(None))
+        assert conc_pct == pytest.approx(50.0)
+        assert dim["status"] == "partial"  # 无快照 → 换手不可算
+        assert dim["score"] == 8
+
+    def test_between_target_and_1_4x_scores_five(self):
+        """前十大集中度 60%（20 只：10×6 万 + 10×4 万）→ 1.4 倍内 5 分。"""
+        from src.python.analysis.prosperity_scoring import _cfg, _score_concentration
+
+        rows = _equal_rows(10, 60_000.0) + _equal_rows(10, 40_000.0, prefix="5103")
+        dim, conc_pct, _turn = _score_concentration(rows, None, _cfg(None))
+        assert conc_pct == pytest.approx(60.0)
+        assert dim["score"] == 5
+
+
+class TestProsperityInputsDegradation:
+    """配置层不可读与穿透项形态异常的降级口径。"""
+
+    def test_config_layer_unavailable_falls_back_to_builtin(self, monkeypatch):
+        """配置层读取失败 → 退回内置最小词表（功能可用，不抛异常）。"""
+        from src.python.analysis import prosperity_inputs
+        from src.python.config import _config_defaults as _cd
+
+        class _UnreadableConfig(dict):
+            def get(self, *args, **kwargs):
+                raise RuntimeError("配置层不可读")
+
+        monkeypatch.setattr(_cd, "_DEFAULT_CONFIG", _UnreadableConfig())
+        result = prosperity_inputs._config_defaults_for_module()
+        assert set(result) <= set(prosperity_inputs._FALLBACK_CONFIG), "不得引入内置词表外的键"
+        assert result, "回退词表不得为空（否则景气匹配全失效）"
+
+    def test_non_dict_penetration_item_skipped(self):
+        """穿透 top10 含非 dict 项 → 跳过该项，其余项照常计入。"""
+        from src.python.analysis.prosperity_inputs import _sector_weight_items
+
+        penetration = {
+            "top10": [
+                "异常项",
+                {"name": "中际旭创", "sector": "科技", "concepts": ["光通信"], "ratio_pct": 20.0},
+            ]
+        }
+        items, _covered, pen_pct, _fb_pct, _fb_n = _sector_weight_items(penetration, _details())
+        assert pen_pct == pytest.approx(20.0), "异常项不得计入穿透权重"
+        assert any("光通信" in text for text, _weight in items)

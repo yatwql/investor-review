@@ -25,7 +25,7 @@ from src.test.unit.cache._cache_fixtures import today_at
 
 from src.python.core.registry import get_cache_ttl_defaults, get_market_ttl_map
 
-from src.test.unit.cache._cache_fixtures import write_cache, write_cache_at  # noqa: E402
+from src.test.unit.cache._cache_fixtures import write_cache, write_cache_at
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_core]
 
@@ -292,12 +292,12 @@ class _FrozenDatetime(datetime):
 
     _fixed: datetime | None = None
 
-    def __new__(cls, fixed: datetime):  # noqa: D102 — 测试替身
+    def __new__(cls, fixed: datetime):  # 说明：测试替身
         instance = super().__new__(cls, fixed.year, fixed.month, fixed.day, fixed.hour, fixed.minute)
         cls._fixed = fixed
         return instance
 
     @classmethod
-    def now(cls, tz=None):  # noqa: D102 — 测试替身
+    def now(cls, tz=None):  # 说明：测试替身
         fixed = cls._fixed or datetime.now(tz)
         return fixed.replace(tzinfo=tz) if tz else fixed

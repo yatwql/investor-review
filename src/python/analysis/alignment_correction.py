@@ -13,10 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.python.analysis._fee_estimation import (
-    _classify_fund_type,
-    portfolio_fee_estimation,
-)
+from src.python.analysis._fee_estimation import portfolio_fee_estimation
 from src.python.analysis._math_utils import TRADING_DAYS_PER_YEAR
 
 # ── TWR 计算常量 ────────────────────────────────
@@ -93,11 +90,6 @@ def cash_stripping(
         mv = h.get("market_value", 0.0) or 0.0
 
         is_cash = any(kw in name for kw in cash_keywords)
-        # 额外按基金类型规则中的货币基金判定
-        if not is_cash:
-            type_label, _ = _classify_fund_type(name, code)
-            if type_label == "money_market":
-                is_cash = True
 
         if is_cash:
             cash_mv += mv

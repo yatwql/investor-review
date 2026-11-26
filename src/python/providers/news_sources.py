@@ -103,7 +103,7 @@ def _fetch_from_sina(num: int) -> list[dict[str, Any]]:
         for fut, lid in futures.items():
             try:
                 per_lid[lid] = fut.result()
-            except Exception:  # 单分类异常不影响其余分类
+            except Exception:  # noqa: BLE001 — 单分类异常不影响其余分类
                 logger.debug("[news] 新浪分类 %s 取数异常", lid, exc_info=True)
                 per_lid[lid] = []
 

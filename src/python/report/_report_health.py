@@ -31,7 +31,7 @@ def _spawn_health_checks() -> object | None:
         fut = pool.submit(run_health_checks)
         # 不让 pool 在函数退出时 shutdown — 让 Future 独立运行
         return fut
-    except Exception:
+    except Exception:  # noqa: BLE001 — [health] 启动健康检查失败（非关键，不影响报告生成）
         logger.info("[health] 启动健康检查失败（非关键，不影响报告生成）", exc_info=True)
         return None
 
@@ -74,5 +74,5 @@ def _collect_health_checks(
                 success=r["ok"],
                 failure_type="unreachable" if not r["ok"] else "",
             )
-    except Exception:
+    except Exception:  # noqa: BLE001 — [health] 收集健康检查结果失败（非关键）
         logger.info("[health] 收集健康检查结果失败（非关键）", exc_info=True)

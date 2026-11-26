@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from openpyxl.styles import Alignment, Font
 from openpyxl.utils import get_column_letter
@@ -34,6 +34,9 @@ from src.python.report.excel_writer import (
 )
 
 from src.python.config import get_llm_setting_default
+
+if TYPE_CHECKING:
+    from src.python.core.perf import PhaseBreakdownRecorder
 
 logger = logging.getLogger("invest")
 
@@ -309,7 +312,7 @@ def _expand_industry_keywords(
                     new_count = len(lightweight_kw)
                     logger.info("行业/概念关键词扩展: 行业/概念 %d 个 → 共 %d 个", new_count, len(all_kw))
                     return all_kw, industry_data, lightweight_kw
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — 行业/概念数据获取失败（非关键错误，继续）: %s
         logger.warning("行业/概念数据获取失败（非关键错误，继续）: %s", e)
     return keywords, industry_data, set()
 
@@ -386,7 +389,7 @@ def _apply_llm_enhancement(
             industry_data=industry_data,
             force=force,
         )
-    except Exception:
+    except Exception:  # noqa: BLE001 — 财经热点关联分析（LLM）失败，降级为传统关键词匹配
         logger.warning("财经热点关联分析（LLM）失败，降级为传统关键词匹配", exc_info=True)
         cached = False
         token_usage = {}
@@ -453,7 +456,7 @@ def build_news_data(
     penetrated_assets: list[dict] | None = None,
     purchase_constraint_block: str = "",
     force_news_llm: bool = False,
-    span_recorder=None,
+    span_recorder: PhaseBreakdownRecorder | None = None,
 ) -> tuple[list[dict[str, Any]], dict]:
     """获取新闻数据并与持仓关联。
 
@@ -515,7 +518,7 @@ def build_news_data(
             from src.python.fetcher.news import get_last_source_status as _glss
 
             meta["source_status"] = _glss()
-        except Exception:
+        except Exception:  # noqa: BLE001 — 新闻源状态取数失败不影响核心新闻数据
             logger.warning("获取新闻源状态失败（news_aggregator.get_last_source_status），不影响核心新闻数据")
         logger.warning("新闻获取失败")
         return news_items, meta
@@ -548,7 +551,7 @@ def build_news_data(
         from src.python.fetcher.news import get_last_source_status as _glss
 
         meta["source_status"] = _glss()
-    except Exception:
+    except Exception:  # noqa: BLE001 — 补充新闻源状态失败（news_aggregator.get_last_source_status），不影响新闻匹配结果
         logger.warning("补充新闻源状态失败（news_aggregator.get_last_source_status），不影响新闻匹配结果")
 
     return news_items, meta

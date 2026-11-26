@@ -12,6 +12,8 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
+from typing import TYPE_CHECKING, TypeVar
 
 from src.python.core.num_utils import format_size
 from src.python.core.logger import setup_logger
@@ -22,6 +24,13 @@ from src.python.tui.tui_keys import input_choice
 from src.python.tui.panel_runtime import NavState, PanelItem, panel_loop
 from src.python.tui.prompt_text import panel_prompt
 from src.python.tui.tui_menu import GREEN, RESET, YELLOW, press_any_key, refresh_config
+
+if TYPE_CHECKING:  # 仅类型标注：结果类型与进度协议属下游细节，运行期惰性导入
+    from src.python.cache.operations import CacheUpdateResult, PositionCacheResult
+    from src.python.core.progress import ProgressReporterProtocol
+
+#: 缓存更新函数的返回类型：两族结果（基础/行情）回调各自配对，用 TypeVar 保两边一致
+_ResultT = TypeVar("_ResultT")
 
 logger = setup_logger()
 
@@ -61,7 +70,7 @@ def _read_holdings_and_clear_cache(group_name: str) -> list | None:
         else:
             print(f"  {GREEN}[OK]{RESET} 无缓存需清除")
         return holdings
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — 读取持仓失败已由提示函数告知用户，返回菜单避免崩溃
         print_error_with_hint(e, "读取持仓失败")
         return None
 
@@ -69,7 +78,7 @@ def _read_holdings_and_clear_cache(group_name: str) -> list | None:
 # ── TUI 结果格式化 ───────────────────────────────────────────
 
 
-def _print_cache_refresh_report(result) -> None:
+def _print_cache_refresh_report(result: CacheUpdateResult) -> None:
     """TUI 格式化输出缓存刷新结果（CacheUpdateResult → 终端颜色）。"""
     from src.python.cache.operations import sector_flow_hint
 
@@ -126,7 +135,7 @@ def _print_cache_refresh_report(result) -> None:
         print(f"  {YELLOW}[!]{RESET} 风格扩展（registry 会话缓存）     获取失败")
 
 
-def _print_position_result(result) -> None:
+def _print_position_result(result: PositionCacheResult) -> None:
     """TUI 格式化输出行情类缓存更新结果（PositionCacheResult → 终端颜色）。"""
     print()
     print(f"  {'=' * 40}")
@@ -157,11 +166,11 @@ def _lag_trading_days(nav_date: str, trading_day: str) -> int | None:
         from src.python.core.trading_calendar import count_trading_days_elapsed
 
         return count_trading_days_elapsed(nav_date, trading_day)
-    except Exception:
+    except Exception:  # noqa: BLE001 — 交易日历不可用时按自然日估算，菜单不因该段失败中断
         return None
 
 
-def _print_freshness_after_refresh(result) -> None:
+def _print_freshness_after_refresh(result: PositionCacheResult) -> None:
     """按市场列出取价口径与「已更新到最新」计数（判据全引用报告侧实现）。
 
     分组与「是否最新」不在这里重写：场内→需已收市且日期为 T；国内场外→官方净值 T；
@@ -204,7 +213,12 @@ def _print_freshness_after_refresh(result) -> None:
                 print(line)
 
 
-def _run_cache_update(group_name: str, update_fn, print_fn, action_name: str) -> None:
+def _run_cache_update(
+    group_name: str,
+    update_fn: Callable[[list, ProgressReporterProtocol], _ResultT],
+    print_fn: Callable[[_ResultT], None],
+    action_name: str,
+) -> None:
     """通用缓存更新命令骨架。
 
     Args:

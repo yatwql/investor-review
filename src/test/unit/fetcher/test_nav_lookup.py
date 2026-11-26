@@ -85,3 +85,34 @@ def test_normalize_trade_date_accepts_separators(raw: str, expected: str):
 def test_normalize_trade_date_rejects_bad_shape(raw: str):
     with pytest.raises(ValueError):
         nav_lookup.normalize_trade_date(raw)
+
+
+class TestNavResolutionGuards:
+    """净值/份额换算的无效值收窄：非正净值、非正金额一律返回 None。"""
+
+    def test_non_positive_nav_returns_none(self, monkeypatch):
+        monkeypatch.setattr(
+            nav_lookup, "fetch_with_incremental_fallback", lambda *_a, **_kw: [{"date": "2025-01-02", "nav": 0.0}]
+        )
+
+        assert nav_lookup.resolve_nav_on_trade_date("040046", "2025-01-02") is None
+
+    def test_non_positive_amount_returns_none(self):
+        assert nav_lookup.resolve_purchase_shares("040046", "2025-01-02", 0.0) is None
+
+    def test_shares_divided_by_resolved_nav(self, monkeypatch):
+        monkeypatch.setattr(
+            nav_lookup,
+            "resolve_nav_on_trade_date",
+            lambda code, day: {"nav": 2.0, "nav_date": day, "exact_date": True},
+        )
+
+        out = nav_lookup.resolve_purchase_shares("040046", "2025-01-02", 1000.0)
+
+        assert out["shares"] == pytest.approx(500.0)
+        assert out["exact_date"] is True
+
+    def test_unresolved_nav_yields_no_shares(self, monkeypatch):
+        monkeypatch.setattr(nav_lookup, "resolve_nav_on_trade_date", lambda *_a, **_kw: None)
+
+        assert nav_lookup.resolve_purchase_shares("040046", "2025-01-02", 1000.0) is None

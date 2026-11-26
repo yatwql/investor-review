@@ -210,3 +210,80 @@ def test_self_review_runs_after_fact_check_with_review_text(llm_enabled_config):
     assert order[-1] == "self_review", f"自检必须在锚定之后: {order}"
     assert set(order[:-1]) == {"fact_check"}, f"锚定应逐模块执行: {order}"
     assert len(order) - 1 == len(_MODULE_KEYS), f"锚定次数应等于模块数: {order}"
+
+
+class TestPostPassBranches:
+    """生成后一遍的三个旁路：跨模块冲突并入复核区块 / 口径桶不可用 / worker 结果形态。"""
+
+    _HOLDINGS = [
+        {"name": "嘉实全球产业升级股票(QDII)A", "code": "017730", "market_value": 23941.69, "profit": -1277.26},
+        {"name": "华安纳斯达克100ETF联接基金A", "code": "040046", "market_value": 22231.0, "profit": 11334.9},
+    ]
+
+    def test_cross_module_conflict_is_prepended_to_review_block(self):
+        """两模块对同一品种报出不同收益率 → 复核区块最前含确定性核对段。"""
+        from src.python.llm._llm_context_blocks import LlmContextBlocks
+        from src.python.llm.self_review import get_self_review_block, reset_self_review
+
+        reset_self_review()
+        try:
+            blocks = LlmContextBlocks("", "", "", "", "", "")
+            with patch("src.python.llm.self_review.run_self_review"):
+                _llm_post_pass_mod.apply_generation_post_pass(
+                    {
+                        "global_macro": "<p>017730 亏损 8.5%</p>",
+                        "expert_review": "<p>017730 持仓收益率 -5.06%</p>",
+                    },
+                    holdings_details=self._HOLDINGS,
+                    penetrated_assets=None,
+                    llm_config=None,
+                    force_self_review=False,
+                    blocks=blocks,
+                    module_labels={},
+                )
+            block = get_self_review_block() or ""
+            assert "跨模块一致性核对" in block
+            assert "017730" in block and "-8.50%" in block
+        finally:
+            reset_self_review()
+
+    def test_contract_recorded_when_market_bucket_unavailable(self):
+        """口径桶取不到 as_of → 契约照常登记，as_of 记空串（不得中断生成后一遍）。"""
+        from src.python.config.features import reset_feature_flags, set_feature_enabled
+        from src.python.llm import research_contract as rc
+
+        set_feature_enabled(rc.FEATURE_FLAG, True)
+        rc.record_evidence_index({"ev:hold:600900": "长江电力"})
+        text = (
+            "正文\n"
+            + rc.STRUCTURED_CLAIMS_MARKER
+            + '{"claims":[{"id":"c1","statement":"s","evidence":["ev:hold:600900"],"invalidations":["i"]}],'
+            + '"verdict":"ready"}'
+        )
+        try:
+            with patch(
+                "src.python.core.market_hours.market_snapshot_bucket",
+                side_effect=RuntimeError("口径桶不可用"),
+            ):
+                _llm_post_pass_mod._record_research_contracts({"expert_review": text})
+            contract = rc.get_module_contracts()["expert_review"]
+            assert contract["as_of"] == ""
+            assert contract["verdict"] == rc.VERDICT_READY
+        finally:
+            rc.reset_contract_state()
+            reset_feature_flags()
+
+    def test_contents_from_results_reads_worker_tuple_entries(self):
+        """worker 结果形态 (content, from_cache) 覆盖预检项，按位取出正文与命中标志。"""
+        contents, cached = _llm_post_pass_mod.contents_from_results(
+            {
+                "global_macro": {"result": "<p>预检</p>", "cached": False},
+                "expert_review": {"result": "<p>预检2</p>", "cached": True},
+            },
+            {"global_macro": ("<p>worker</p>", True)},
+        )
+        assert contents["global_macro"] == "<p>worker</p>"
+        assert cached["global_macro"] is True
+        # 未被 worker 覆盖的键仍读预检结果
+        assert contents["expert_review"] == "<p>预检2</p>"
+        assert cached["expert_review"] is True

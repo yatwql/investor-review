@@ -141,7 +141,7 @@ class TestDevVerifySinglePhaseMerge:
                 (any(env[n] for n in self._UNIT_DOMAIN) and not env["edge"] and not env["data"])
                 or env["scenario_basic"]
             ) and not env["real_repo"]
-            assert eval(marker, {"__builtins__": {}}, env) == expected  # noqa: S307 — 受控注册表表达式，仅布尔标识符
+            assert eval(marker, {"__builtins__": {}}, env) == expected  # 说明：受控注册表表达式，仅布尔标识符
 
     def test_timeout_budget_is_sum_of_legacy_phases(self):
         """超时预算 = 原两阶段 300s×2 之和（合并不缩总预算、不放宽单轮包络）。"""

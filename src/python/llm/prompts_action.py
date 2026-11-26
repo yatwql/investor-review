@@ -210,7 +210,13 @@ def scenario_mandate_cache_suffix() -> str:
     return "" if is_feature_enabled("decision_basis") else "_ms"
 
 
-def _append_research_contract(parts: list[str], *, holdings_details, penetrated_assets, metrics=None) -> None:
+def _append_research_contract(
+    parts: list[str],
+    *,
+    holdings_details: list[dict[str, Any]] | None,
+    penetrated_assets: list[dict[str, Any]] | None,
+    metrics: dict[str, Any] | None = None,
+) -> None:
     """开关开启时追加「主张+证据+判决」契约段与证据索引（关闭时零行为，逐字节不变）。"""
     from src.python.llm.research_contract import build_instruction, is_enabled, record_evidence_index
 
@@ -366,7 +372,7 @@ def _build_expert_review_prompt(
                         )
                     parts.append("\n".join(scenario_lines))
                     _scenario_appended = True
-            except Exception:
+            except Exception:  # noqa: BLE001 — [debate] 条件推理情景追加失败，已跳过
                 logger.warning("[debate] 条件推理情景追加失败，已跳过")
         if not _scenario_appended and not enable_conditional:
             # 标准情景 fallback（从 _SYSTEM_EXPERT_REVIEW 移出，避免双重指令）
@@ -402,7 +408,7 @@ def _build_expert_review_prompt(
             _debate_cfg = (_cfg or {}).get("debate", {})
             _qa_cfg = _debate_cfg.get("concentration_qa") or {}
             _threshold = _qa_cfg.get("threshold", get_llm_setting_default("debate.concentration_qa.threshold"))
-        except Exception:
+        except Exception:  # noqa: BLE001 — 阈值读取失败回落默认 0.2（提示词拼装不因配置缺失中断）
             _threshold = 0.20
         _qa_block = _build_concentration_qa_block(
             holdings_details,
@@ -629,7 +635,7 @@ def _build_debate_synthesis_prompt(
                         f"综合正反观点，给出在 {_desc} 情境下的持仓调整建议。"
                     )
                 prompt += "\n".join(scenario_lines)
-        except Exception:
+        except Exception:  # noqa: BLE001 — [debate] 综合阶段条件推理情景追加失败，已跳过
             logger.warning("[debate] 综合阶段条件推理情景追加失败，已跳过")
 
     # ── 集中度问答（对齐需求 R-LLM-DB-QA-；辩论流程内建段落） ────
@@ -641,7 +647,7 @@ def _build_debate_synthesis_prompt(
             _debate_cfg = (_cfg or {}).get("debate", {})
             _qa_cfg = _debate_cfg.get("concentration_qa") or {}
             _threshold = _qa_cfg.get("threshold", get_llm_setting_default("debate.concentration_qa.threshold"))
-        except Exception:
+        except Exception:  # noqa: BLE001 — 阈值读取失败回落默认 0.2（提示词拼装不因配置缺失中断）
             _threshold = 0.20
         _qa_block = _build_concentration_qa_block(
             holdings_details,

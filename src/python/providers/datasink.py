@@ -106,7 +106,7 @@ def _datasink_config() -> dict[str, Any]:
 
         section = get_config().get("datasink")
         return section if isinstance(section, dict) else {}
-    except Exception:
+    except Exception:  # noqa: BLE001 — [datasink] 读取 datasink 配置失败，使用套餐默认
         logger.debug("[datasink] 读取 datasink 配置失败，使用套餐默认")
         return {}
 
@@ -258,7 +258,12 @@ def _probe_miss_key(path: str, params: dict[str, Any]) -> str:
     return PROBE_MISS.key(hashlib.md5(payload.encode("utf-8")).hexdigest()[:12])
 
 
-def _request(path: str, params: dict[str, Any], *, timeout: float | None = None) -> dict[str, Any] | None:
+def _request(
+    path: str,
+    params: dict[str, Any],
+    *,
+    timeout: float | None = None,  # noqa: ARG001 — 探针按关键字传预算，实际由 make_http_client 默认承载
+) -> dict[str, Any] | None:
     """带凭据 / 限速 / 配额护栏的 GET。
 
     两类失败**分开处理**（降级治理口径）：

@@ -36,6 +36,8 @@ _magic_excludes() / _dash_excludes() / _under_excludes() 行豁免。
     handler、级别与落盘）（LOG）
   - 配置默认值单源：生产代码不得自带与默认值表同值的字面量兜底
     （DEFAULTDUP，改用 get_default() / get_llm_setting_default()）
+  - pragma 豁免清单：`# pragma: no cover` 只能在 test-coverage.md 的
+    「豁免清单」表里按 `文件:行号` 登记后使用，未登记报 PRAGMA（LOW）
 
 本文件为**薄 CLI**：模式表/扫描/守卫实现均在 `scripts/_traces_code/` 包
 （config / patterns / exemptions / extract / scan / layers 六模块），
@@ -76,25 +78,25 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享包（_traces_code / _checklib）
-from _shared.checklib import add_common_args  # noqa: E402
-from _shared.checklib import conclusion_cache_load, conclusion_cache_save  # noqa: E402
-from _shared.checklib import rel as rel_path  # noqa: E402,F401  # 统一相对路径展示（原面 re-export）
-from _traces_code import (  # noqa: E402
+from _shared.checklib import add_common_args
+from _shared.checklib import conclusion_cache_load, conclusion_cache_save
+from _shared.checklib import rel as rel_path  # 统一相对路径展示（原面 re-export）
+from _traces_code import (
     EXCLUDE_LINE,  # noqa: F401
     IDENTIFIER_PATTERNS,  # noqa: F401
     PATTERNS,  # noqa: F401
     REPO_ROOT,  # noqa: F401
-    SCAN_DIRS,  # noqa: F401
+    SCAN_DIRS,
     TEST_META_EXCLUDE,  # noqa: F401
-    _COMPILED_CHAPTER_EXCLUDE,  # noqa: F401
-    _COMPILED_ROUND_EXCLUDE,  # noqa: F401
-    _chapter_excludes,  # noqa: F401
+    _COMPILED_CHAPTER_EXCLUDE,
+    _COMPILED_ROUND_EXCLUDE,
+    _chapter_excludes,
     _html_comment_lines,  # noqa: F401
-    _is_chapter_excluded,  # noqa: F401
+    _is_chapter_excluded,
     _is_dash_excluded,  # noqa: F401
     _is_excluded,  # noqa: F401
     _is_magic_match_excluded,  # noqa: F401
-    _is_round_excluded,  # noqa: F401
+    _is_round_excluded,
     _is_tool_self,  # noqa: F401
     _is_under_excluded,  # noqa: F401
     _iter_comment_lines,  # noqa: F401
@@ -103,12 +105,14 @@ from _traces_code import (  # noqa: E402
     _magic_excludes,  # noqa: F401
     _py_comment_lines,  # noqa: F401
     _py_identifier_names,  # noqa: F401
-    _round_excludes,  # noqa: F401
+    _round_excludes,
     _scan_config_default_fallbacks,  # noqa: F401
     _scan_core_layering,  # noqa: F401
     _scan_identifiers,  # noqa: F401
+    _scan_pragma_no_cover,  # noqa: F401
     _shell_comment_lines,  # noqa: F401
-    scan_file,  # noqa: F401
+    PRAGMA_EXEMPTION_DOC,
+    scan_file,
 )
 
 #: 共享排除模式原面 re-export：测试与调用方仍按原脚本名访问（实现见 _traces_code）
@@ -139,7 +143,7 @@ CODE_CATEGORIES = (
     "LOG",
     "DEFAULTDUP",
 )
-LOW_CATEGORIES = ("TODO", "CHANGE", "DEPR")
+LOW_CATEGORIES = ("TODO", "CHANGE", "DEPR", "PRAGMA")
 
 
 def _collect_scan_files() -> list[Path]:
@@ -261,7 +265,7 @@ def main() -> None:
     # 自身 + _traces_code 实现模块）均未变时逐字回放上次输出（通过与发现
     # 都缓存）——按域提交（只动文档不动源码）时命中，省全仓正则/AST 重扫
     if args.ci:
-        inputs = _collect_scan_files()
+        inputs = [*_collect_scan_files(), PRAGMA_EXEMPTION_DOC]
         logic = [Path(__file__), *sorted((Path(__file__).resolve().parent / "_traces_code").glob("*.py"))]
         cached = conclusion_cache_load("code_traces", logic, inputs)
         if cached is not None:

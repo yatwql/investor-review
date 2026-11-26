@@ -25,7 +25,7 @@ sys.path.insert(
     0, str(__import__("pathlib").Path(__file__).resolve().parent.parent)
 )  # 仓库根：子探针需 import src.python（否则直接跑入口时全部探针 import 失败）
 
-from _probes import available_targets, get  # noqa: E402
+from _probes import available_targets, get
 
 
 def main(argv: list[str] | None = None) -> int:

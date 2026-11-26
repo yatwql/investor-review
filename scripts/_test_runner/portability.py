@@ -26,7 +26,7 @@ _SCRIPTS_DIR = Path(__file__).resolve().parent.parent
 if str(_SCRIPTS_DIR) not in sys.path:  # 测试经文件路径加载本模块时补齐兄弟包导入面
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
-from _test_runner.paths import _PROJECT_ROOT  # noqa: E402
+from _test_runner.paths import _PROJECT_ROOT
 
 #: 需求文件（旧 pip 解码回退的判定对象）
 REQUIREMENTS = Path(_PROJECT_ROOT) / "requirements.txt"

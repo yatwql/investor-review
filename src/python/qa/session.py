@@ -28,7 +28,7 @@ Web 路由（``web/handlers._handle_report_qa_ask``）与 TUI 追问入口共用
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import logging
 import threading
@@ -38,6 +38,9 @@ import uuid
 from src.python.config import get_llm_config
 from src.python.core.text_safety import sanitize_lone_surrogates
 from src.python.llm.api import call_llm
+
+if TYPE_CHECKING:  # 仅类型标注：HTTP 客户端由调用方注入，运行期不引入 httpx 依赖
+    import httpx
 from src.python.llm.fact_checker import run_fact_check
 from src.python.llm.markdown import markdown_to_html
 from src.python.qa.context import (
@@ -172,7 +175,7 @@ def _fact_check(answer_html: str, holdings: list[dict]) -> tuple[bool, bool]:
             module_label="报告追问",
             auto_correct=False,
         )
-    except Exception:  # 核对自身异常：降级返回原文，不阻断追问
+    except Exception:  # noqa: BLE001 — 核对自身异常：降级返回原文，不阻断追问
         logger.warning("[report_qa] 事实核对异常，降级返回原文", exc_info=True)
         return False, True
     warned = bool(summary) and _FACT_WARN_MARK in summary
@@ -186,7 +189,7 @@ def _ask_report_qa_impl(
     *,
     output_dir: str | None = None,
     llm_config: dict | None = None,
-    http_client=None,
+    http_client: httpx.Client | None = None,
 ) -> dict:
     """报告追问实现体（由 :func:`ask_report_qa` 包装并埋点，勿直接调用）。
 
@@ -229,17 +232,15 @@ def _ask_report_qa_impl(
                 f"本轮对话已达 {_QA_MAX_TURNS} 轮上限，请刷新页面开始新会话",
                 session_id=session.session_id,
             )
-        if session.context is None:
+        # 上下文用局部变量承接：属性赋值不参与静态收窄，局部赋值后可直接窄化类型
+        context = session.context
+        if context is None:
             try:
-                session.context = extract_report_qa_context(report, output_dir=output_dir)
+                context = extract_report_qa_context(report, output_dir=output_dir)
             except ReportQaContextError as exc:
                 logger.warning("[report_qa] 上下文不可用 code=%s report=%s", exc.code, report)
                 return _fail(exc.code, str(exc))
-        # 取局部引用：上下文是对象属性，静态分析无法跨赋值收窄；这里再兜一次空值
-        # （理论不可达——上面要么已赋值、要么早返回），避免把 None 当上下文用。
-        context = session.context
-        if context is None:  # pragma: no cover - 防御分支
-            return _fail(QA_LLM_FAILED, "服务暂不可用（报告上下文缺失）", session_id=session.session_id)
+            session.context = context
 
         history_block = _history_block(session)
         input_chars = (
@@ -335,9 +336,9 @@ def ask_report_qa(
     *,
     output_dir: str | None = None,
     llm_config: dict | None = None,
-    http_client=None,
+    http_client: httpx.Client | None = None,
     channel: str = "unknown",
-) -> dict:
+) -> dict[str, Any]:
     """报告追问主入口（Web 路由与 TUI 共用）——成功/失败都记一行埋点。
 
     Args:
@@ -375,6 +376,6 @@ def ask_report_qa(
             fact_warning=bool(result.get("fact_warning")),
             question_chars=len(str(question or "").strip()),
         )
-    except Exception:  # 埋点异常绝不影响追问结果
+    except Exception:  # noqa: BLE001 — 埋点异常绝不影响追问结果
         logger.debug("[report_qa] 埋点记录失败，忽略", exc_info=True)
     return result

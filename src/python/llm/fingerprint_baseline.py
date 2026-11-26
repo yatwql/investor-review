@@ -112,7 +112,7 @@ def save_baseline(components: dict[str, str], keys: dict[str, str]) -> bool:
     }
     try:
         write_json_atomic(_path(), payload, log_tag="fingerprint", noun="指纹基线")
-    except Exception:  # 快照只是诊断输入，写不进去不影响本轮
+    except Exception:  # noqa: BLE001 — 快照只是诊断输入，写不进去不影响本轮
         logger.debug("[fingerprint] 基线快照写入失败（忽略）", exc_info=True)
         return False
     with _lock:

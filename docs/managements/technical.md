@@ -1,5 +1,5 @@
 # 投资复盘助手 — 技术设计
-> 文档版本：0.18.6
+> 文档版本：0.18.7
 
 ## 目录
 
@@ -76,6 +76,7 @@
   - [8.4 LLM 集成层约束](#84-llm-集成层约束)
   - [8.5 基础设施约束](#85-基础设施约束)
   - [8.6 测试约束](#86-测试约束)
+  - [8.7 代码质量口径（宽异常捕获 / 未用参数 / 注解缺失）](#87-代码质量口径宽异常捕获--未用参数--注解缺失)
 - [9. 导入面所有权](#9-导入面所有权)
   - [9.1 模块门面 re-export 面与退出条件](#91-模块门面-re-export-面与退出条件)
   - [9.2 形状容错归属（第三方变体 / 本方输入 / 本方旧结构）](#92-形状容错归属第三方变体--本方输入--本方旧结构)
@@ -3954,6 +3955,76 @@ web/ (Web 服务层，薄入口)
 | **C12** | **边缘测试文件隔离** — `@pytest.mark.edge` 标记的测试用例必须放置在 `*_edge.py` 文件中，不得与普通测试混放在同一文件 | edge 场景测试对运行环境有特殊要求（预期失败、网络不可达等），混放会导致普通测试运行被 edge 场景的 fixture 干扰 | 测试收集失败、`pytest_collection_modifyitems` 校验报错 | src/test/ 边缘测试文件 |
 | **C13** | **测试敏感路径隔离** — 运行测试时不得修改用户的配置文件（`data/config/`）、持仓文件（`data/holdings/`）、机器本地状态（`data/state/`）等敏感数据；`conftest.py` 的 `_isolate_sensitive_paths` autouse fixture 会自动将 `config.json`、`local_state.json`、缓存目录等重定向到临时目录 | 测试污染用户数据导致不可逆的配置丢失或持仓文件损坏 | 用户数据被污染、配置丢失 | src/test/ 所有测试用例 |
 
+### 8.7 代码质量口径（宽异常捕获 / 未用参数 / 注解缺失）
+
+lint 基线为 `E4`/`E7`/`E9`/`F`/`RUF100` + `ARG` + `BLE001` + `ANN001`（`pyproject.toml` 的 `[tool.ruff.lint]`）：`ARG`（未用参数）已在**生产域**（`src/python` + `scripts`）启用且零 finding，测试域（`src/test/**`）经 per-file-ignores 豁免——替身/回调参数天然未用，不属缺陷。`BLE001`（盲 except）已启用且**全树零 finding**：宽捕获按目录分两批清零（第一批 `report` / `core` / `analysis` / `cache` / `config` / `scripts`，第二批 `fetcher` / `llm` / `tui` / `providers` / `qa` / `web` / `cli` / `startup_wizard` + 测试域），共处置 398 处——窄化 9 处，其余 389 处保留宽捕获并逐处写明降级后果（`# noqa: BLE001 — <理由>`）。规则开关与抑制同时落地：`RUF100`（恒开）会把指向未启用规则的 `noqa` 判成空转，故 noqa 不得先于规则出现。`ANN001`（缺注解）已同样启用：生产域 294 处参数注解按「真实类型 + 容器写全」补齐（五个目录分批落地）且零 finding；测试域（`src/test/**`）与 `ARG` 同条豁免——fixture / `monkeypatch` / 替身参数只作占位，注解不提供任何保证。
+
+| 类别 | 允许的形态 | 行内须交代 | 禁止 |
+|:--|:--|:--|:--|
+| 宽异常捕获（`BLE001`，机检） | 降级边界（单源/单图/单项/单批失败不影响主链路）、观测旁路、第三方库边界、不得中断主流程的 `except Exception` | `# noqa: BLE001 — <失败后调用方看到什么、为什么不窄化>` | 在主链路上宽捕获掩盖缺陷；用 per-file-ignores 整目录豁免替代逐处理由；吞 `BaseException`（自检、测试收集、网络守卫兜底除外） |
+| 未用参数（`ARG`，机检） | 签名契约：回调、链层 `getattr` 调用、公开 API、测试桩须与对端签名一致 | `# noqa: ARG00x — <对齐的是哪一方签名>`（签名可控的内部助手则改名 `_x`，不留抑制） | 为消警告改名 `_x` 破坏对端契约；留无契约依据的死参数 |
+| 参数缺注解（`ANN001`，机检） | 生产域一律给出真实类型；容器/泛型写全（`list[str]`、`Callable[[str], None]`、`ProgressReporterProtocol`）；跨层引用走 `TYPE_CHECKING` 块避免运行期导入环；真开放域（框架约定的统一 handler 签名、无共同基类的结构化协议对象）按实际形态取最宽真实类型 | 用 `Any` 时必须写明「为何无法给真实类型」 | 公开函数缺注解；用 `Any` 顶替可推导的真实类型；为消警告改签名破坏对端契约 |
+
+**收敛方向**：宽捕获密集处（如 `core/doctor.py` 的体检分组）优先收成「边界函数 + 显式结果类型」，把宽捕获收到一处；新增代码按上表交代，评审以「行内理由是否说清失败后果」为准。
+
+**跨层注解的导入方向**：注解引入的类型依赖**同样计入分层**（`scripts/check-import-surface.py` 的 `layer-inversion` 覆盖 `TYPE_CHECKING` 块与函数内导入）——下层需要上层的**只读接口**（如进度上报）时，协议定义在 `core`（例：`core/progress.py` 的 `ProgressReporterProtocol`），消费方向一律指向 `core`，上层实现按结构化子类型满足协议即可；**不得**为标注一个参数而反向 import 上层模块（`cache` → `report` 的类型边即是此坑，须走本口径而非例外表）。
+
+#### 8.7.1 日期解析口径（`core/dates.py` 与保留差异）
+
+全仓 `src/python` + `scripts` 日期解析（`strptime` / `fromisoformat`）共 **60 处调用**，其中 **53 处在自写 try/except 内**。审计发现失败语义**六种并存**（返回 `None` / `""` / 原串/入参 / 抛错 / 哨兵值 / `pass` 续算），同一语义被各调用点各写一遍。
+
+**处置原则**：只收拢「同一格式集合 + 同一失败语义 + 同一返回类型」的明确重复组，函数 docstring 即口径；**判不等价或确有差异的一律不动**（下表逐处列出）。`core/dates.py` 三个函数只做解析、不做格式猜测，失败一律给 `None`，**降级动作留在调用点**（原调用点各自的动作逐字保留）。
+
+**已合并的三组**（共 16 处调用点，语义逐字等价）：
+
+| 导出函数 | 格式集合 | 失败语义 | 替换的调用点 |
+|:--|:--|:--|:--|
+| `parse_datetime_ymd` | `%Y-%m-%d` → `datetime` | `(ValueError, TypeError)` → `None` | `core/trading_calendar.py:398,399`（`count_trading_days_elapsed`）、`fetcher/price.py:244`（`_trading_day_close_epoch`）、`analysis/event_window_impact.py:76`（`map_event_to_trading_day`）、`providers/tiantian_ranking.py:104,105`（`_days_between`） |
+| `parse_iso_date` | `date.fromisoformat` → `date` | `(TypeError, ValueError)` → `None` | `analysis/crisis_annotation.py:192`（`_parse_window`）、`:210,211`（`_overlap_interval`）、`:242`（`_compute_interval_stats`）、`:341,342`、`:348`（`_compute_index_stats`） |
+| `parse_datetime_iso` | `datetime.fromisoformat` → `datetime` | `ValueError` → `None`（非字符串仍抛 `TypeError`，与原口径一致） | `core/perf.py:697`、`fetcher/cassette_checks.py:48`、`qa/telemetry.py:245`、`scripts/_perf_history/data.py:155`、`scripts/_perf_history/report.py:495` |
+
+**保留：语义差异（不合并）**：
+
+| 文件:行 | 格式 / 解析 | 失败返回语义 | 差异点（为何不收） |
+|:--|:--|:--|:--|
+| `analysis/_silence.py:99` | `%Y-%m-%d` → `date` | 记入 `expired_codes` + `continue` | 失败即「判定过期」的副作用，非取值语义 |
+| `analysis/event_window_impact.py:59` | `%Y-%m-%d` + `timedelta` 运算 | `False` | 返回类型为 `bool`（「非交易日」），且 try 体内含算术 |
+| `analysis/financial_statement_derive.py:75` | `%Y-%m-%d` → `.month` | `""` | 空串哨兵（非 `None`），返回 `int` 月份 |
+| `analysis/whatif_backtest.py:63` | `%Y-%m-%d` → `.date()` | `None` | 成功路径返回 `date`（非 `datetime`），调用方还要 `effective_date` 原值 |
+| `config/_validation_scalars.py:249` | `date.fromisoformat` | 不返回：`logger.warning` + `issues += 1` | 校验器副作用语义，需带字段名告警 |
+| `core/data_freshness.py:86` | `%Y-%m-%d` | `None` | 成功路径返回**入参原串**（`str`），返回类型不同 |
+| `core/trading_calendar.py:366` | `%Y-%m-%d` | `""` | 空串哨兵；成功路径返回 `str` 日期 |
+| `core/trading_calendar.py:431,432` | `%Y-%m-%d` | `None` | try 体内含交易日回退循环，窄化到解析不属**可证**等价 |
+| `core/trading_calendar.py:461` | `%Y-%m-%d` | `0` | 自然日兜底值 `0`（非 `None`），返回 `int` 天数 |
+| `fetcher/history_diff.py:199` | 多格式循环（`fmt` 变量） | 试下一格式，全败 `continue` | 多格式探测链，单格式函数不适用 |
+| `fetcher/nav_lookup.py:68` | `date.fromisoformat` | **无保护**（异常上抛） | 无 try/except，不在本口径范围 |
+| `providers/news_dedup_anchor_policy.py:134` | 多格式 `text[:len(text)]` | 试下一格式 | 多格式 + 切片预处理；返回 `bool` |
+| `providers/news_dedup_anchor_store.py:170` | 多格式 `text[:len(text)]` | 试下一格式 | 多格式 + 切片预处理 |
+| `report/_snapshot.py:318` | `date.fromisoformat`（生成器） | `_CRISIS_INDEX_DAYS_MAX` | **带默认值**且捕获 `KeyError`（键缺失与格式错同径） |
+| `report/event_impact_panel.py:78` | 多格式（`_CTIME_FORMATS`） | 试下一格式 | 成功路径 `strftime` 成 `str`，多格式链 |
+| `report/event_impact_panel.py:353` | `%Y-%m-%d` → `.date()` | `continue` 跳过该事件 | 循环内跳过单条，无返回值语义 |
+| `report/excel_market_data.py:36` | `date.fromisoformat` | `logger.warning` + `None` | 异常路径**写 warning 日志**，抽走会丢可观测性 |
+| `report/excel_writer.py:98` | `%Y%m%d` | `continue` 跳过该目录 | try 体内含 `rmtree`/日志，非纯解析 |
+| `report/fund_manager_analysis.py:130` | `%Y-%m-%d` | 三个 `changed_*` 置 `True` | 失败语义是**默认态赋值**（保守判「有变化」） |
+| `report/fund_manager_analysis.py:152` | `%Y-%m-%d` | `pass`（保留已算标记） | 失败即静默续算，返回 `None` 无意义 |
+| `report/history_snapshot.py:223` | `%Y%m%dT%H%M%S` | `None` | 格式集合与三组均不同（紧凑时间戳） |
+| `report/holding_change_panel.py:543` | 双前缀（8 位紧凑 / ISO 前 10 位） | `None` | 内部分支双格式，非单一格式集合 |
+| `report/holdings_freshness.py:42` | 多格式（`_DATE_FORMATS`） | 试下一格式 | 多格式链，契约明示「宁可放弃也不误判陈旧」 |
+| `report/market_value.py:275,276` | `%Y-%m-%d` | `pass` 续算 | 失败后继续走后续价格类型判定，非返回值 |
+| `report/purchase_status.py:144` | `datetime.fromisoformat` → `.date()` | `'expired'` | 返回状态字符串（业务枚举），非 `None` |
+| `report/purchase_status.py:151` | `date.fromisoformat` | `'expired'` | 同上 |
+| `report/purchase_status.py:184` | `date.fromisoformat` | 返回**入参原串** | 「原样上屏」语义，非 `None` |
+| `report/whatif_operations.py:84` | `date.fromisoformat` | **抛** `ValueError`（包装中文提示） | 刻意上抛做用户输入校验 |
+| `tui/status_line.py:90` | `datetime.fromisoformat` | `_Segment('上次报告 —')` | 外层 `except Exception` 同时兜 `load_history` 等非解析失败 |
+| `tui/status_line.py:158` | `%Y-%m-%d` → `.date()` | `_Segment('新鲜度 —')` | 同上：宽捕获覆盖多步取数，非纯解析边界 |
+| `scripts/check-import-surface.py:128` | `date.fromisoformat` | **无保护** | 守护脚本读自身例外表，无 try/except |
+| `scripts/_probes/csi.py:67` | `date.fromisoformat` | `-1` | 哨兵整数（探测脚本「未知天数」） |
+| `scripts/probe-report-claims.py:47` | `%Y%m%d` | `None` | 格式集合为紧凑 `%Y%m%d`，与三组均不同 |
+
+**格式宽容度差异（保留，测试已固化）**：`strptime("%Y-%m-%d")` 接受未零填充月日（`2024-3-1`），`date.fromisoformat` 不接受——故 `parse_datetime_ymd` 与 `parse_iso_date` 是两个口径，**不得互相替代**（见 `src/test/unit/core/test_dates.py`）。
+
+**新增调用口径**：需要「失败给 `None`、降级动作在调用点」的 `%Y-%m-%d` / ISO 解析一律走 `core/dates.py`；失败语义确有不同（哨兵值、默认态、上抛、日志副作用、多格式链）时**就地在调用点写 try/except 并在行内交代**，不往 `core/dates.py` 加带默认值参数。
+
 [↑ 回到顶部](#目录)
 
 ---
@@ -3978,7 +4049,7 @@ web/ (Web 服务层，薄入口)
 | LLM 响应解析 | `llm/_api_responses.py` | `llm/api_base.py` 公共 API | llm / report | 公共常量/函数保留；内部 helper 直接导入 owner |
 | Web 生成 / 健康路由 | `web/run_generation.py`、`web/handlers_health.py` | `web/handlers.py` 仅路由聚合 | web / tests | 测试 patch 指向 owner；门面不再转出私有实现 |
 
-**存量分层例外（`analysis`/`fetcher`/`providers` 反向依赖上层，冻结不新增）**：`check-import-surface` 的 `layer-inversion` 规则拦截**新增**越界（规则覆盖 `analysis → report/llm`、`fetcher → report/llm/analysis`、`providers → report/llm/analysis`、`report/llm → tui/web/cli`、`cache → report/llm/tui/web/cli`、`config → report/llm/analysis/tui/web/cli`）；下列存量经例外表登记（`scripts/_import_surface_exceptions.json`，含到期日与收敛方向），到期须下沉或续期并复核理由：
+**存量分层例外（`core`/`analysis`/`fetcher`/`providers` 反向依赖上层，冻结不新增）**：`check-import-surface` 的 `layer-inversion` 规则拦截**新增**越界（规则覆盖 `core → fetcher/providers/analysis/report/llm/tui/web/cli`（`core` 是最底层：仅允许**函数内延迟导入**的探针面，逐处登记）、`analysis → report/llm`、`fetcher → report/llm/analysis`、`providers → report/llm/analysis`、`report/llm → tui/web/cli`、`cache → report/llm/tui/web/cli`、`config → report/llm/analysis/tui/web/cli`）；下列存量经例外表登记（`scripts/_import_surface_exceptions.json`，含到期日与收敛方向），到期须下沉或续期并复核理由：
 
 | 违规文件 | 被依赖的上层模块 | 暂不下沉的理由 | 收敛方向 |
 |:---|:---|:---|:---|
@@ -3993,13 +4064,15 @@ web/ (Web 服务层，薄入口)
 | `cache/_cache_refresh.py` | `report.news_correlation` | 新闻预热复用报告侧行业关键词扩展（同一口径），实现居 report | 把行业关键词扩展下沉 core（如 core/news_keywords.py），预热与报告共同消费 |
 | `cache/_cache_refresh.py` | `report.fund_style_classify` | 基金风格扩展数据预取复用报告侧装配 | 风格扩展取数原语下沉 core/fetcher，报告只做装配 |
 | `cache/operations.py` | `report.market_value` | 刷新后判定交易日与市值构成需复用报告侧市值核算原语 | 市值核算与价格类型判定下沉 core（交易日原语已下沉，剩余为市值派生） |
+| `core/check_sources.py` | `fetcher.report_adapters`<br>`providers.cninfo`<br>`providers.utils`<br>`providers.akshare_extras` | 数据源健康检查须在链外直呼各源实现才测得到真实连通性（链路自带重试/降级），且探针要按源侧口径区分「负缓存跳过」与「本轮真失败」 | 探针面收成 core 侧探针注册表（各取数层追加注册探测函数），失败原因与负缓存判定原语下沉 core |
 | `config/_llm_providers.py` | `llm.pacing` | 线路配置落盘后需即时注册端点节流策略 | LLM 侧提供注册回调，config 只发配置事件（不直接调 llm） |
 | `config/_validation_llm.py` | `llm.depth_profile` | 思考档位枚举与默认值由 llm 侧单一真源提供 | 档位枚举下沉 core/config 注册表（llm 反向引用） |
 | `config/_validation_sections.py` | `analysis.drawdown_events` | 回撤窗口下限绑定分析层最少交易日常量 | 把 MIN_SPAN 常量下沉 core/constants（分析层再导出） |
 | `config/_validation_sections.py` | `analysis.fee_schedule_model` | 费率表校验复用分析层费率阶梯建模（同一口径） | 费率阶梯纯解析下沉 core/fee_schedule，分析与配置共同消费 |
 
 > 另：`core/check_sources.py` 直连 `providers/`/`fetcher/` 属**探针模块职责**（连通性检查必须在链外直呼各源），
-> 不入本规则例外表，理由记在模块 docstring；新增探针源时保持同一形态。
+> 形态上是 `core` 行的函数内反向依赖：**允许但必须逐处登记**例外表（`owner`/`reason`/`expiry`/`replacement`），
+> 判定理由同时记在模块 docstring；新增探针源时保持同一形态并补登记。
 
 **登记例外**（保留理由见代码注释与 `check-import-surface` 的例外登记口径）：
 
@@ -4014,9 +4087,9 @@ web/ (Web 服务层，薄入口)
 - `core.doctor` ↔ `core.doctor_logs`：自检入口与日志/缓存探针分组互引，`doctor` 在模块底部延迟导入以避开导入期环。
 - `llm.api` ↔ `llm._api_claude` / `_api_openai` / `_api_gemini`：API 分派根据 provider 名调用实现，实现共用 `api_base` 原语；新增 provider 时不得让实现反向导入 `llm.api`。
 
-**`noqa: F401` 保留口径**：包级公共聚合面（`analysis/__init__.py`、`core/registry.py`、`llm/__init__.py`、`llm/fact_checker/__init__.py`）的公开 API 再导出；动态调度面（`providers/sina.py` 的 K 线函数供 chain 按 provider 名 `getattr`）；显式副作用/类型导入。新增 `noqa: F401` 须在行内写明理由；测试私有导入只允许指向 owner。
+**再导出面声明口径**：包级公共聚合面与脚本门面（`scripts/` 下测试按脚本名访问的`check-doc-drift.py`/`check-doc-traces.py`/`perf-history.py`/`release.py`/`test-perf-report.py`/`_traces_code/patterns.py`）的再导出一律用 `__all__` 声明（再导出即公开面，增删门面名只改一处）——多行 import 上的语句级 `# noqa: F401` 会被 `RUF100` 判空转；**`noqa: F401` 保留口径**：包级公共聚合面（`core/registry.py`、`llm/__init__.py`、`llm/fact_checker/__init__.py`）的公开 API 再导出；动态调度面（`providers/sina.py` 的 K 线函数供 chain 按 provider 名 `getattr`）；显式副作用/类型导入。新增 `noqa: F401` 须在行内写明理由；测试私有导入只允许指向 owner。**抑制只对启用规则生效**（`select` 含 `RUF100`，未启用规则上的抑制即判死）：已由 `__all__` 显式再导出、ruff 不再报 `F401` 的聚合面（如 `analysis/__init__.py`）不挂 noqa；同理宽捕获/未用参数/缺注解不用 noqa 兜，写说明注释（口径见 §8.7）。
 
-**机检**：`scripts/check-import-surface.py`（守护清单成员，规则 compat-comment / private-all / cross-private / dynamic-target + exception-table）；包 `__all__` 私有名、兼容注释、跨包私有导入当前
+**机检**：`scripts/check-import-surface.py`（守护清单成员，规则 compat-comment / private-all / cross-private / dynamic-target / layer-inversion + exception-table）；包 `__all__` 私有名、兼容注释、跨包私有导入当前
 
 ### 9.1 模块门面 re-export 面与退出条件
 

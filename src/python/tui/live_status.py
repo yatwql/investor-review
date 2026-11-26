@@ -79,7 +79,7 @@ class LiveStatusBar:
         out = stream if stream is not None else sys.stdout
         try:
             return bool(out.isatty())
-        except Exception:
+        except (AttributeError, OSError, ValueError):
             return False
 
     @property

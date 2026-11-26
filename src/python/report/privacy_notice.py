@@ -38,7 +38,7 @@ def is_first_run() -> bool:
     """
     try:
         return not get_local_flag(_FIRST_RUN_KEY)
-    except Exception:
+    except Exception:  # noqa: BLE001 — 首启标记读取失败按「首启」处理（宁可多提示一次）
         return True
 
 
@@ -48,7 +48,7 @@ def mark_privacy_notice_shown() -> None:
         if not get_local_flag(_FIRST_RUN_KEY):
             set_local_flag(_FIRST_RUN_KEY, True)
             logger.info("[privacy] 首次运行隐私提示已标记为已读")
-    except Exception:
+    except Exception:  # noqa: BLE001 — [privacy] 标记隐私提示失败（非关键）
         logger.debug("[privacy] 标记隐私提示失败（非关键）", exc_info=True)
 
 

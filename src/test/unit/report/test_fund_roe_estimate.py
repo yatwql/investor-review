@@ -11,11 +11,17 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.python.report.fund_roe_estimate import ESTIMATE_BASIS_TOP10, estimate_fund_roe_batch, weighted_roe
+from src.python.report.fund_roe_estimate import (
+    ESTIMATE_BASIS_TOP10,
+    _fetch_stock_roe_batch,
+    estimate_fund_roe_batch,
+    weighted_roe,
+)
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
 
@@ -133,6 +139,69 @@ class TestEstimateFundRoeBatch(unittest.TestCase):
 
     def test_empty_fund_items(self):
         self.assertEqual(estimate_fund_roe_batch([]), {})
+
+    def test_all_non_a_share_holdings_fund_absent(self):
+        """重仓股全部非 A 股 → 该基金不进估算集，也不触发股票 ROE 取数。"""
+        holdings = [_stock("hk00700", 40.0), _stock("AAPL", 20.0)]
+        result, mock_fetch = self._run(
+            [{"code": "110022", "name": "易方达消费"}],
+            {"110022": _payload(holdings)},
+            {},
+        )
+        self.assertEqual(result, {})
+        # 无任何基金进入估算集 → 不发起股票 ROE 取数
+        mock_fetch.assert_not_called()
+
+
+class TestFetchStockRoeBatch(unittest.TestCase):
+    """_fetch_stock_roe_batch — 批量取数的映射与降级口径（线程池与取数函数全替身）。"""
+
+    def _run(self, codes, results):
+        dispatcher = MagicMock()
+        dispatcher.execute.return_value = results
+        with (
+            patch("src.python.fetcher.batch.BatchDispatcher", return_value=dispatcher) as mock_cls,
+            patch("src.python.fetcher.batch.get_batch_worker_count", return_value=3),
+        ):
+            out = _fetch_stock_roe_batch(codes)
+        return out, mock_cls, dispatcher
+
+    def test_empty_codes_skips_dispatcher(self):
+        """空清单直接返回空映射，不建线程池。"""
+        with patch("src.python.fetcher.batch.BatchDispatcher") as mock_cls:
+            self.assertEqual(_fetch_stock_roe_batch([]), {})
+        mock_cls.assert_not_called()
+
+    def test_only_numeric_roe_recorded(self):
+        """成功且 roe 为数值才入映射；失败/缺 roe/空记录一律跳过。"""
+        results = [
+            SimpleNamespace(success=True, result={"roe": 12.5}),
+            SimpleNamespace(success=True, result={"roe": 20}),
+            SimpleNamespace(success=False, result={"roe": 99.0}),
+            SimpleNamespace(success=True, result={"roe": None}),
+            SimpleNamespace(success=True, result=None),
+        ]
+        codes = ["600519", "601398", "688981", "000001", "000002"]
+        out, mock_cls, dispatcher = self._run(codes, results)
+
+        self.assertEqual(out, {"600519": 12.5, "601398": 20.0})
+        # 线程池必须释放（含异常前的正常收尾）
+        dispatcher.shutdown.assert_called_once()
+        kwargs = mock_cls.call_args.kwargs
+        self.assertEqual(kwargs["max_workers"], 3)
+        self.assertEqual(kwargs["rate_limit_provider"], "eastmoney")
+
+    def test_shutdown_runs_when_execute_raises(self):
+        """执行抛错也要释放线程池（finally 收尾），异常向上传播。"""
+        dispatcher = MagicMock()
+        dispatcher.execute.side_effect = RuntimeError("pool boom")
+        with (
+            patch("src.python.fetcher.batch.BatchDispatcher", return_value=dispatcher),
+            patch("src.python.fetcher.batch.get_batch_worker_count", return_value=1),
+            pytest.raises(RuntimeError),
+        ):
+            _fetch_stock_roe_batch(["600519"])
+        dispatcher.shutdown.assert_called_once()
 
 
 if __name__ == "__main__":

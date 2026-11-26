@@ -42,6 +42,7 @@ from typing import Any
 
 from src.python.core.cancel import CancelToken, StageCancelled
 from src.python.core.constants import APP_VERSION, PROJECT_ROOT
+from src.python.core.dates import parse_datetime_iso
 from src.python.core.jsonl_store import append_jsonl_atomic
 
 logger = logging.getLogger("invest")
@@ -187,13 +188,13 @@ class _LogCounterHandler(logging.Handler):
         super().__init__(level=logging.WARNING)
         self._collector = collector
 
-    def emit(self, record: logging.LogRecord) -> None:  # pragma: no cover - 异常分支不构造
+    def emit(self, record: logging.LogRecord) -> None:
         try:
             if record.levelno >= logging.ERROR:
                 self._collector.note_error(str(record.getMessage()))
             else:
                 self._collector.count("warnings")
-        except Exception:  # 收集器内部故障不得反噬日志系统
+        except Exception:  # noqa: BLE001 — 收集器内部故障不得反噬日志系统
             # 用 logging 自己的异常出口（不在此处再调 logger，避免 emit → log → emit 自激）
             self.handleError(record)
 
@@ -290,7 +291,7 @@ class PerfCollector:
             from src.python.core.concurrency import GOVERNOR
 
             GOVERNOR.begin_run()
-        except Exception:  # 观测失败绝不影响报告
+        except Exception:  # noqa: BLE001 — 观测失败绝不影响报告
             logger.debug("[perf] 并发预算观测初始化失败", exc_info=True)
         self._log_handler: logging.Handler | None = None
         self._llm_context: dict[str, Any] = {}
@@ -335,7 +336,7 @@ class PerfCollector:
             return
         try:
             self._stage_announcer(self)
-        except Exception:
+        except Exception:  # noqa: BLE001 — [perf] 阶段状态广播失败，已忽略
             logger.debug("[perf] 阶段状态广播失败，已忽略", exc_info=True)
 
     def stop(self) -> float | None:
@@ -491,7 +492,7 @@ class PerfCollector:
             counters["concurrency_peak"] = max(int(counters.get("concurrency_peak", 0)), int(gov["peak"]))
             counters["concurrency_clamps"] = int(gov["clamps"])
             counters["concurrency_profile_pct"] = int(round(100 * GOVERNOR.profile_factor()))
-        except Exception:
+        except Exception:  # noqa: BLE001 — [perf] 读取并发预算快照失败
             logger.debug("[perf] 读取并发预算快照失败", exc_info=True)
         return ReportRunSnapshot(
             version=APP_VERSION,
@@ -693,10 +694,7 @@ def module_cost_summary(days: int = 7, path: str | None = None) -> dict[str, dic
     for rec in records:
         ts = rec.get("timestamp")
         if isinstance(ts, str):
-            try:
-                when = datetime.fromisoformat(ts)
-            except ValueError:
-                when = None
+            when = parse_datetime_iso(ts)
             if when is not None and when < cutoff:
                 continue
         llm = rec.get("llm")
@@ -769,7 +767,7 @@ def estimate_stage_eta(
         if not samples:
             return None
         return max(0.0, round(statistics.median(samples) - float(elapsed_seconds), 1))
-    except Exception:
+    except Exception:  # noqa: BLE001 — [perf] 阶段 ETA 预估失败（%s），静默降级为无 ETA
         logger.debug("[perf] 阶段 ETA 预估失败（%s），静默降级为无 ETA", phase_name, exc_info=True)
         return None
 

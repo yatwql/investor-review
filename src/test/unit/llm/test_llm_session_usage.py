@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import MagicMock
 
 from src.python.llm.session import (
     _session_usage,
@@ -513,3 +514,23 @@ class TestSessionUsageContractMetrics:
         rc.reset_contract_state()
         formatted = format_session_usage({"call_count": 1, "input_tokens": 3, "output_tokens": 2, "costs": {}})
         assert formatted["contract_display"] == ""
+
+
+class TestContractMetricsDegrade:
+    """结构化契约埋点读取失败时按空指标/空串处理，不影响用量统计。"""
+
+    def test_metrics_empty_when_contract_raises(self, monkeypatch):
+        from src.python.llm import research_contract, session
+
+        monkeypatch.setattr(research_contract, "contract_metrics", MagicMock(side_effect=RuntimeError("契约文件损坏")))
+
+        assert session._contract_metrics() == {}
+
+    def test_metrics_line_empty_when_contract_raises(self, monkeypatch):
+        from src.python.llm import research_contract, session
+
+        monkeypatch.setattr(
+            research_contract, "contract_metrics_line", MagicMock(side_effect=RuntimeError("契约文件损坏"))
+        )
+
+        assert session._contract_metrics_line() == ""

@@ -14,6 +14,7 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from _release._common import ReleaseError, exec_command as _exec
 from _release._ledger_archive import (
@@ -77,7 +78,13 @@ def _rewrite_refs_in(target: Path, old_bases: tuple[str, ...], new_ref: str) -> 
 
 
 def run_archive(
-    *, version: str, date: str, ctx: ArchiveContext, runner=None, dry: bool = False, skip_design_docs: bool = False
+    *,
+    version: str,
+    date: str,
+    ctx: ArchiveContext,
+    runner: Any = None,
+    dry: bool = False,
+    skip_design_docs: bool = False,
 ) -> int:
     """台账 + 设计文件归档迁移。调用方负责版本形态校验与路径推导（开发版无归档名）。"""
     rf_archive, plan_archive = ctx.rf_archive, ctx.plan_archive

@@ -367,7 +367,7 @@ def write_fund_performance_sheet(
         )
 
 
-def _write_candidate_unavailable_block(ws, row: int, candidate_data: dict[str, Any]) -> int:
+def _write_candidate_unavailable_block(ws: Worksheet, row: int, candidate_data: dict[str, Any]) -> int:
     """写入候选基金比较「无有效候选」占位区块（开关开启但 comparison_candidates 未配置）。
 
     Args:
@@ -391,7 +391,7 @@ def _write_candidate_unavailable_block(ws, row: int, candidate_data: dict[str, A
     return row
 
 
-def _write_candidate_compare_block(ws, row: int, candidate_data: dict[str, Any]) -> int:
+def _write_candidate_compare_block(ws: Worksheet, row: int, candidate_data: dict[str, Any]) -> int:
     """写入候选基金比较子表（主业绩表下方子区块）。
 
     Args:
@@ -486,7 +486,7 @@ def _candidate_num_formats() -> list[str | None]:
     ]
 
 
-def _write_empty_row(ws, row: int, fund: Holding) -> None:
+def _write_empty_row(ws: Worksheet, row: int, fund: Holding) -> None:
     """写入获取失败的基金占位行。"""
     vals = [
         fund.name,

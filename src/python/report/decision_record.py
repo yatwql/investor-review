@@ -53,10 +53,7 @@ def _holdings_price_map(holdings_details: list[dict[str, Any]] | None) -> dict[s
         code = str(holding.get("code") or "").strip()
         if not code:
             continue
-        try:
-            price = finite_or(holding.get("price"))
-        except (TypeError, ValueError):
-            price = 0.0
+        price = finite_or(holding.get("price"))
         price_map[code] = price
         m = _CODE_RE.search(code)
         if m and m.group(1) != code:

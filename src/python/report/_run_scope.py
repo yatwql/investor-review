@@ -89,14 +89,14 @@ def start_report_run() -> dict[str, Any]:
         from src.python.llm.skeleton import reset_prev_module_cache_keys
 
         reset_prev_module_cache_keys()
-    except Exception:  # 观测隔离失败不阻断主链路
+    except Exception:  # noqa: BLE001 — 观测隔离失败不阻断主链路
         logger.debug("[run_scope] 缓存键归因基线重置失败，已忽略", exc_info=True)
     baseline: dict[str, Any] = {}
     try:
         from src.python.core.degradation import get_tracker
 
         get_tracker().begin_report()
-    except Exception:  # 观测隔离失败不阻断主链路
+    except Exception:  # noqa: BLE001 — 观测隔离失败不阻断主链路
         logger.debug("[run_scope] 降级事件日志重置失败，已忽略", exc_info=True)
     # 缓存命中率是**按轮**口径：运行收尾的 `[cache] 本次命中 …` 汇总与「同前缀未命中
     # ≥N 次」告警都读这份计数，长驻进程（Web/TUI）连跑多份报告时不清零会累计成
@@ -107,43 +107,43 @@ def start_report_run() -> dict[str, Any]:
         from src.python.llm.fingerprint import log_cache_key_salts
 
         log_cache_key_salts("本轮开始")
-    except Exception:  # 观测隔离失败不阻断主链路
+    except Exception:  # noqa: BLE001 — 观测隔离失败不阻断主链路
         logger.debug("[run_scope] 版本盐日志失败，已忽略", exc_info=True)
     try:
         from src.python.cache import reset_cache_stats
 
         reset_cache_stats()
-    except Exception:  # 观测隔离失败不阻断主链路
+    except Exception:  # noqa: BLE001 — 观测隔离失败不阻断主链路
         logger.debug("[run_scope] 缓存命中率计数重置失败，已忽略", exc_info=True)
     try:
         from src.python.core.rate_limit_state import reset_push2_limit_state
 
         reset_push2_limit_state()
-    except Exception:
+    except Exception:  # noqa: BLE001 — [run_scope] push2 限流观测重置失败，已忽略
         logger.debug("[run_scope] push2 限流观测重置失败，已忽略", exc_info=True)
     try:
         from src.python.llm.research_contract import reset_contract_state
 
         reset_contract_state()
-    except Exception:
+    except Exception:  # noqa: BLE001 — [run_scope] 结构化契约作用域重置失败，已忽略
         logger.debug("[run_scope] 结构化契约作用域重置失败，已忽略", exc_info=True)
     try:
         from src.python.llm.self_review import reset_self_review
 
         reset_self_review()
-    except Exception:
+    except Exception:  # noqa: BLE001 — [run_scope] 自检载体重置失败，已忽略
         logger.debug("[run_scope] 自检载体重置失败，已忽略", exc_info=True)
     try:
         from src.python.llm.session import get_session_usage
 
         baseline = copy.deepcopy(get_session_usage())
-    except Exception:
+    except Exception:  # noqa: BLE001 — [run_scope] 会话用量基线读取失败，已忽略
         logger.debug("[run_scope] 会话用量基线读取失败，已忽略", exc_info=True)
     try:
         from src.python.fetcher.chain_incremental import reset_run_history_state
 
         reset_run_history_state()
-    except Exception:
+    except Exception:  # noqa: BLE001 — [run_scope] 历史取数单轮状态重置失败，已忽略
         logger.debug("[run_scope] 历史取数单轮状态重置失败，已忽略", exc_info=True)
     return baseline
 
@@ -164,7 +164,7 @@ def finish_report_run(perf: Any | None = None) -> None:
     if perf is not None:
         try:
             perf.save()
-        except Exception:  # 台账落盘失败不阻断收尾日志
+        except Exception:  # noqa: BLE001 — 台账落盘失败不阻断收尾日志
             logger.debug("[run_scope] 耗时台账落盘失败，已忽略", exc_info=True)
     _salts_note = ""
     try:
@@ -172,11 +172,11 @@ def finish_report_run(perf: Any | None = None) -> None:
 
         _salts = cache_key_salts()
         _salts_note = f"缓存键版本盐：提示词={_salts['prompt_schema']} 校验规则={_salts['fact_rules']}"
-    except Exception:
+    except Exception:  # noqa: BLE001 — [run_scope] 版本盐读取失败，已忽略
         logger.debug("[run_scope] 版本盐读取失败，已忽略", exc_info=True)
     try:
         from src.python.cache import log_cache_summary
 
         log_cache_summary(salts_note=_salts_note)
-    except Exception:
+    except Exception:  # noqa: BLE001 — [run_scope] 缓存命中汇总失败，已忽略
         logger.debug("[run_scope] 缓存命中汇总失败，已忽略", exc_info=True)

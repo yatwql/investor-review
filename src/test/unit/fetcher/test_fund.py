@@ -743,3 +743,54 @@ class TestHoldPayloadShapeAdmission(unittest.TestCase):
         with patch("src.python.fetcher.fund.cache_get", return_value=current):
             fm.fetch_fund_holdings_batch(["016055"])
             self.assertEqual(captured["fn"]("fund_hold_016055"), current)
+
+
+class TestFundBenchmarkAndHoldingsGuards:
+    """内置基准表与同花顺持仓规范化的坏数据降级。"""
+
+    def test_builtin_benchmark_table_missing_file_yields_empty(self, tmp_path, monkeypatch):
+        from src.python.fetcher import fund
+
+        monkeypatch.setattr(fund, "_BENCHMARKS_FILE", str(tmp_path / "absent.json"))
+
+        assert fund._load_builtin_benchmarks() == {}
+
+    def test_builtin_benchmark_table_broken_json_yields_empty(self, tmp_path, monkeypatch):
+        from src.python.fetcher import fund
+
+        broken = tmp_path / "fund_benchmarks.json"
+        broken.write_text("{不是 JSON", encoding="utf-8")
+        monkeypatch.setattr(fund, "_BENCHMARKS_FILE", str(broken))
+
+        assert fund._load_builtin_benchmarks() == {}
+
+    def test_rank_success_marks_tracker_success(self, monkeypatch):
+        from src.python.fetcher import fund
+
+        monkeypatch.setattr(fund, "fetch_with_fallback", lambda *_a, **_kw: {"rows": [{"code": "040046"}]})
+
+        assert fund.fetch_fund_rankings("040046") == {"rows": [{"code": "040046"}]}
+
+    def test_hithink_holdings_skip_rows_without_name_or_code(self):
+        from src.python.fetcher.fund import _normalize_hithink_holdings
+
+        out = _normalize_hithink_holdings(
+            {
+                "code": "040046",
+                "item": [
+                    {"asset_type": "stock", "stock_name": "", "ticker": "600519", "hold_ratio": 5.0},
+                    {"asset_type": "stock", "stock_name": "贵州茅台", "ticker": "", "hold_ratio": 5.0},
+                    {"asset_type": "stock", "stock_name": "贵州茅台", "ticker": "600519", "hold_ratio": 5.0},
+                ],
+            }
+        )
+
+        assert out["holdings"] == [{"name": "贵州茅台", "code": "600519", "ratio": pytest.approx(5.0)}]
+
+    def test_benchmark_table_cache_hit_returns_code_or_dash(self, monkeypatch):
+        from src.python.fetcher import fund
+
+        monkeypatch.setattr(fund, "cache_get", lambda *_a, **_kw: {"040046": "沪深300指数"})
+
+        assert fund.fetch_fund_benchmark("040046") == "沪深300指数"
+        assert fund.fetch_fund_benchmark("110022") == "--"

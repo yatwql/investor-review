@@ -14,6 +14,10 @@ TLS 层 `RemoteDisconnected`（约 0.2s 秒断，非超时），偶发短窗口�
 from __future__ import annotations
 
 import time
+from typing import TYPE_CHECKING, Any, Callable
+
+if TYPE_CHECKING:  # 注解只在静态期求值：参数由 probe.py 的 build_parser 解析
+    import argparse
 
 PROBE_TARGET = "sector-flow"
 
@@ -30,7 +34,7 @@ def build_parser():
     return parser
 
 
-def _probe_channel(name: str, fetch, count: int) -> tuple[int, list[str]]:
+def _probe_channel(_name: str, fetch: Callable[[], list[dict[str, Any]]], count: int) -> tuple[int, list[str]]:
     """连续调用某通道取数函数，返回 (成功次数, 每次结果描述)。"""
     from src.python.providers.akshare_extras import _SectorFlowUnavailable
 
@@ -55,7 +59,7 @@ def _probe_channel(name: str, fetch, count: int) -> tuple[int, list[str]]:
     return ok, detail
 
 
-def run(args) -> int:
+def run(args: argparse.Namespace) -> int:
     """主入口：逐通道探测并给出建议。"""
     from src.python.providers import akshare_extras as ae
 

@@ -228,21 +228,21 @@ def _cache_captured_at(cache_key: str) -> float | None:
         if age is None:
             return None
         return time.time() - age
-    except Exception:
+    except Exception:  # noqa: BLE001 — [price] 读取缓存写入时刻失败: %s
         logger.debug("[price] 读取缓存写入时刻失败: %s", cache_key, exc_info=True)
         return None
 
 
 def _trading_day_close_epoch(trading_day: str) -> float | None:
     """交易日收盘时点（北京时间 15:00）的 epoch 秒；解析失败返回 None。"""
-    from datetime import datetime, timedelta
+    from datetime import timedelta
 
     from src.python.core.constants import BEIJING_TZ
+    from src.python.core.dates import parse_datetime_ymd
     from src.python.core.market_hours import _AFTERNOON_END
 
-    try:
-        day = datetime.strptime(trading_day, "%Y-%m-%d")
-    except (ValueError, TypeError):
+    day = parse_datetime_ymd(trading_day)
+    if day is None:
         return None
     return (day.replace(tzinfo=BEIJING_TZ) + timedelta(minutes=_AFTERNOON_END)).timestamp()
 
@@ -322,7 +322,7 @@ def _price_cache_fresh(
                 logger.debug("[price] 场内价格缓存为 %s 盘中残留（写入早于收盘），强制刷新", td)
                 return False
         return True
-    except Exception:
+    except Exception:  # noqa: BLE001 — [price] _price_cache_fresh 校验异常，保守视作新鲜
         logger.warning("[price] _price_cache_fresh 校验异常，保守视作新鲜", exc_info=True)
         return True
 

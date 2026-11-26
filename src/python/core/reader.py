@@ -8,6 +8,7 @@ from datetime import date, datetime
 
 import openpyxl
 from openpyxl.utils.exceptions import InvalidFileException
+from openpyxl.worksheet.worksheet import Worksheet
 
 from src.python.core import holding_status
 from src.python.core.models import DividendRecord, HoldingsFile, Holding, TradeRecord
@@ -157,7 +158,7 @@ def read_holdings(filepath: str) -> list[Holding]:
     return holdings
 
 
-def _parse_workbook(wb) -> list[Holding]:
+def _parse_workbook(wb: openpyxl.Workbook) -> list[Holding]:
     """解析 workbook 中的所有工作表。"""
     holdings: list[Holding] = []
 
@@ -293,7 +294,7 @@ def read_holdings_with_flows(filepath: str) -> HoldingsFile:
     )
 
 
-def _parse_trade_sheet(ws) -> list[TradeRecord]:
+def _parse_trade_sheet(ws: Worksheet) -> list[TradeRecord]:
     """解析「交易流水」页签。
 
     表头须为 日期/代码/操作/份额/价格（费用列可选）。逐行容错：
@@ -349,7 +350,7 @@ def _parse_trade_sheet(ws) -> list[TradeRecord]:
     return records
 
 
-def _parse_dividend_sheet(ws) -> list[DividendRecord]:
+def _parse_dividend_sheet(ws: Worksheet) -> list[DividendRecord]:
     """解析「分红流水」页签。
 
     表头须为 日期/代码/每份分红。逐行容错：日期格式、数值非法时跳过。
@@ -390,7 +391,7 @@ def _parse_dividend_sheet(ws) -> list[DividendRecord]:
     return records
 
 
-def _coerce_flow_date(value) -> str:
+def _coerce_flow_date(value: object) -> str:
     """把流水页签的日期单元格归一为 ``YYYY-MM-DD`` 字符串（非法形态原样返回，由校验判无效）。
 
     与录入侧 `fetcher/nav_lookup.normalize_trade_date` 分工：那边是**写入口**（严格要求
@@ -446,14 +447,14 @@ def _normalize_action(value: str) -> str | None:
     return None
 
 
-def _safe_str(value) -> str:
+def _safe_str(value: object) -> str:
     """将单元格值转为字符串，None 返回空字符串。"""
     if value is None:
         return ""
     return str(value).strip()
 
 
-def _safe_float(value, field: str, sheet: str, row: int) -> float | None:
+def _safe_float(value: object, field: str, sheet: str, row: int) -> float | None:
     """将单元格值转为 float；None、转换失败或非有限值时记录警告并返回 None。
 
     非有限值（``=NA()`` 公式错误、Excel 错误单元格会返回 NaN）必须在此拦下：
@@ -482,7 +483,7 @@ def match_holdings_header(header: list[str]) -> bool:
     return _match_header(header, HOLDINGS_HEADER)
 
 
-def is_holdings_sheet(ws) -> bool:
+def is_holdings_sheet(ws: Worksheet) -> bool:
     """工作表是否为持仓主表（流水页签与表头不匹配的页签均返回 False）。
 
     解析（`_parse_workbook`）、录入写回（`holdings_editor`）与账户枚举共用本判定，

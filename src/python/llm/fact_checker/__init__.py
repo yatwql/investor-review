@@ -30,7 +30,7 @@
 
 from __future__ import annotations
 
-from src.python.llm.fact_checker._corrections import (  # noqa: F401
+from src.python.llm.fact_checker._corrections import (
     auto_correction_counts,
     reset_auto_correction_counts,
 )
@@ -42,17 +42,17 @@ from src.python.llm.fact_checker._cross_module import (  # noqa: F401
     build_cross_module_block,
     check_cross_module_claims,
 )
-from src.python.llm.fact_checker._numerical import (  # noqa: F401
+from src.python.llm.fact_checker._numerical import (
     check_numerical_consistency,
 )
-from src.python.llm.fact_checker._ranking import (  # noqa: F401
+from src.python.llm.fact_checker._ranking import (
     check_ranking_correctness,
 )
-from src.python.llm.fact_checker._runner import (  # noqa: F401
+from src.python.llm.fact_checker._runner import (
     run_fact_check,
     strip_fact_check_blocks,
 )
-from src.python.llm.fact_checker._symbols import (  # noqa: F401
+from src.python.llm.fact_checker._symbols import (
     check_symbol_existence,
 )
 

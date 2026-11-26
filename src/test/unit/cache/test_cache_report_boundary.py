@@ -253,3 +253,40 @@ def get_ttl_for(data_type: str) -> float:
     from src.python.cache import get_ttl
 
     return get_ttl(data_type)
+
+
+class TestReporterAnnotationLayerBoundary:
+    """进度上报参数的跨层引用面：cache 只引用 core 协议，不得反向依赖 report。
+
+    回归背景：为标注 ``reporter`` 参数，cache 曾把 ``report.progress.ProgressReporter``
+    写进 ``TYPE_CHECKING`` 块——类型边同样是分层依赖（`check-import-surface` 的
+    layer-inversion 覆盖 TYPE_CHECKING 与函数内导入），cache 因此成了 report 的下游消费者。
+    """
+
+    def test_cache_reporter_annotations_resolve_to_core_protocol(self):
+        import inspect
+
+        from src.python.cache._cache_refresh import _refresh_common_caches, _refresh_extended_caches
+        from src.python.cache.operations import update_all_cache
+
+        # 注解虽为字符串（`from __future__ import annotations`），文本即引用面：
+        # 名字须直接指向 core 协议，不得回指 report 层的 ProgressReporter
+        for fn in (update_all_cache, _refresh_common_caches, _refresh_extended_caches):
+            assert inspect.signature(fn).parameters["reporter"].annotation == "ProgressReporterProtocol"
+
+    def test_cache_modules_import_no_report_progress_module(self):
+        """进度上报的类型面不得引用 ``report.progress``（其余 report 引用属已登记的存量越界）。"""
+        import ast
+        from pathlib import Path
+
+        import src.python.cache as cache_pkg
+
+        cache_dir = Path(cache_pkg.__file__).parent
+        offenders: list[str] = []
+        for path in sorted(cache_dir.rglob("*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                module = getattr(node, "module", "") or ""
+                if isinstance(node, ast.ImportFrom) and module.startswith("src.python.report.progress"):
+                    offenders.append(f"{path.name}:{node.lineno} -> {module}")
+        assert offenders == []

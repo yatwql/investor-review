@@ -4,8 +4,8 @@
   - ``backup_holdings_file``：现有正式文件备份为 ``{path}.bak``（单槽轮转）。
   - ``promote_upload_to_holdings``：备份后把临时文件 copy 到正式路径。
 
-原子性（架构约束 缓存原子写入）：一律 mkstemp + ``os.replace``，
-``.bak`` 与正式文件均不会出现半写态。
+原子性（架构约束 缓存原子写入）：委托 `core.atomic_write` 的原子写原语
+（同目录临时文件 + ``os.replace``），``.bak`` 与正式文件均不会出现半写态。
 失败语义：``backup`` 失败不继续 promote（旧文件与 .bak 均完好）；
 ``promote``（copy）失败时旧正式文件未动，``.bak`` 保留原文件可恢复。
 """
@@ -28,7 +28,7 @@ def backup_holdings_file(holdings_path: str) -> str | None:
     """把现有正式持仓文件备份为 ``{holdings_path}.bak``（单槽轮转）。
 
     - 文件不存在 → 返回 None（首次正式更新，无需备份）。
-    - 原子写：copy → mkstemp 到同目录 → os.replace 到 .bak。
+    - 原子写：委托 `core.atomic_write.copy_file_atomic` 写 .bak（同目录临时文件 + os.replace）。
     - 返回 .bak 绝对路径。
 
     Args:

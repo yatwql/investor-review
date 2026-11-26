@@ -400,17 +400,17 @@
         <div class="section-content">
             <div class="empty-note">
                 <p><strong>调仓对比数据暂不可用</strong></p>
-                <p style="margin-top:8px;font-size: var(--fs-table);color:var(--text-muted);">
+                <p class="text-muted" style="margin-top:8px;font-size: var(--fs-table);">
                     {% if whatif_data and whatif_data.get("reason") %}{{ whatif_data["reason"] }}{% else %}基准或目标持仓为空，无法对比{% endif %}。
                 </p>
-                <p style="margin-top:12px;font-size: var(--fs-table-sm);color:var(--text-faint);">请提供基准（调仓前）与目标（调仓后）两份持仓文件后重试。</p>
+                <p class="text-faint" style="margin-top:12px;font-size: var(--fs-table-sm);">请提供基准（调仓前）与目标（调仓后）两份持仓文件后重试。</p>
             </div>
         </div>
     </div>
     {% endif %}
 
     <div class="report-footer">
-        <div style="text-align:center; color: var(--text-faint); font-size: var(--fs-table-sm); padding-bottom:8px;">由 {{ app_name }} v{{ app_version }} 生成 · 调仓 What-if 模拟</div>
+        <div class="text-faint" style="text-align:center; font-size: var(--fs-table-sm); padding-bottom:8px;">由 {{ app_name }} v{{ app_version }} 生成 · 调仓 What-if 模拟</div>
         <div class="back-to-top-link"><a href="#report-top">↑ 回到顶部</a></div>
     </div>
 </div>
@@ -482,8 +482,8 @@
               data: {
                 labels: data.labels,
                 datasets: [
-                  { label: '基准', data: data.base, borderColor: '#2E75B6', backgroundColor: 'rgba(46,117,182,0.08)', borderWidth: 2, pointRadius: 0, fill: true, tension: 0.1 },
-                  { label: '目标', data: data.candidate, borderColor: '#E68A00', backgroundColor: 'rgba(230,138,0,0.08)', borderWidth: 2, pointRadius: 0, fill: true, tension: 0.1 }
+                  { label: '基准', data: data.base, borderColor: window.ChartTheme.primary, backgroundColor: window.ChartTheme.alpha(window.ChartTheme.primary, 0.08), borderWidth: 2, pointRadius: 0, fill: true, tension: 0.1 },
+                  { label: '目标', data: data.candidate, borderColor: window.ChartTheme.warning, backgroundColor: window.ChartTheme.alpha(window.ChartTheme.warning, 0.08), borderWidth: 2, pointRadius: 0, fill: true, tension: 0.1 }
                 ]
               },
               options: window.ChartCommon.lineOptions(yLabel)
@@ -514,15 +514,15 @@
         var costCanvas = document.getElementById('chart_whatif_cost_nav');
         if (costCanvas) {
           var costDatasets = [
-            { label: '基准持仓', data: costData.base, borderColor: '#2E75B6', backgroundColor: 'rgba(46,117,182,0.08)', borderWidth: 2, pointRadius: 0, fill: false, tension: 0.1 }
+            { label: '基准持仓', data: costData.base, borderColor: window.ChartTheme.primary, backgroundColor: window.ChartTheme.alpha(window.ChartTheme.primary, 0.08), borderWidth: 2, pointRadius: 0, fill: false, tension: 0.1 }
           ];
           if (costData.candidate_after && costData.candidate_after.length) {
-            costDatasets.push({ label: '目标（成本后）', data: costData.candidate_after, borderColor: '#E68A00', backgroundColor: 'rgba(230,138,0,0.08)', borderWidth: 2, pointRadius: 0, fill: false, tension: 0.1 });
+            costDatasets.push({ label: '目标（成本后）', data: costData.candidate_after, borderColor: window.ChartTheme.warning, backgroundColor: window.ChartTheme.alpha(window.ChartTheme.warning, 0.08), borderWidth: 2, pointRadius: 0, fill: false, tension: 0.1 });
           } else if (costData.candidate_before && costData.candidate_before.length) {
-            costDatasets.push({ label: '目标（成本未计）', data: costData.candidate_before, borderColor: '#E68A00', backgroundColor: 'rgba(230,138,0,0.08)', borderWidth: 2, pointRadius: 0, fill: false, tension: 0.1 });
+            costDatasets.push({ label: '目标（成本未计）', data: costData.candidate_before, borderColor: window.ChartTheme.warning, backgroundColor: window.ChartTheme.alpha(window.ChartTheme.warning, 0.08), borderWidth: 2, pointRadius: 0, fill: false, tension: 0.1 });
           }
           if (costData.benchmark && costData.benchmark.length) {
-            costDatasets.push({ label: costData.benchmark_name || '业绩基准', data: costData.benchmark, borderColor: '#2E7D32', backgroundColor: 'rgba(46,125,50,0.06)', borderWidth: 2, borderDash: [6, 4], pointRadius: 0, fill: false, tension: 0.1 });
+            costDatasets.push({ label: costData.benchmark_name || '业绩基准', data: costData.benchmark, borderColor: window.ChartTheme.success, backgroundColor: window.ChartTheme.alpha(window.ChartTheme.success, 0.06), borderWidth: 2, borderDash: [6, 4], pointRadius: 0, fill: false, tension: 0.1 });
           }
           try {
             window.ChartCommon.trackChart(new Chart(costCanvas, {

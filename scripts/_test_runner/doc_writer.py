@@ -186,7 +186,7 @@ def _update_test_coverage_doc_file(machine_info: dict, results: list[dict]) -> N
         original = f.read()
     try:
         updated = _update_test_coverage_doc(original, machine_info, results)
-    except Exception as exc:  # 结构异常一律降级 [ERR]，绝不破坏既有文档
+    except Exception as exc:  # noqa: BLE001 — 结构异常一律降级 [ERR]，绝不破坏既有文档
         print(f"  [ERR] 未更新环境耗时对照：{exc}")
         return
     if updated == original:

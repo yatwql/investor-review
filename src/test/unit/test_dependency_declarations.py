@@ -38,6 +38,7 @@ _EXTRAS_ONLY = {
     "pytest-mock": "开发/工具依赖（pyproject extras「test」）",
     "pytest-xdist": "开发/工具依赖（pyproject extras「test」）",
     "pytest-html": "开发/工具依赖（pyproject extras「test」）",
+    "pytest-cov": "开发/工具依赖（test-runner 的 --coverage 档内建 --cov 参数，缺此包即静默跳过覆盖率）",
 }
 
 _REQ_LINE = re.compile(r"^(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)(?P<extras>\[[^\]]*\])?\s*(?P<spec>.*)$")

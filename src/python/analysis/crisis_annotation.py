@@ -31,6 +31,7 @@
 
 from __future__ import annotations
 
+from src.python.core.dates import parse_iso_date
 from src.python.core.trading_calendar import elapsed_trading_days_with_natural_fallback
 from datetime import date
 from typing import Any
@@ -188,10 +189,11 @@ def _unavailable() -> dict[str, Any]:
 
 def _parse_window(data_start: str, data_end: str) -> tuple[date, date] | None:
     """解析报告数据窗口为 (start, end) date 对；格式异常返回 None。"""
-    try:
-        return date.fromisoformat(data_start), date.fromisoformat(data_end)
-    except (TypeError, ValueError):
+    start = parse_iso_date(data_start)
+    end = parse_iso_date(data_end)
+    if start is None or end is None:
         return None
+    return start, end
 
 
 def _overlap_interval(
@@ -206,10 +208,9 @@ def _overlap_interval(
     if window is None:
         return None
     w_start, w_end = window
-    try:
-        i_start = date.fromisoformat(raw["start"])
-        i_end = date.fromisoformat(raw["end"])
-    except (TypeError, ValueError):
+    i_start = parse_iso_date(raw["start"])
+    i_end = parse_iso_date(raw["end"])
+    if i_start is None or i_end is None:
         return None
     overlap_start = max(i_start, w_start)
     overlap_end = min(i_end, w_end)
@@ -238,9 +239,8 @@ def _compute_interval_stats(
     window_bars: list[dict] = []
     for bar in bars:
         d_str = str(bar.get("date") or "")
-        try:
-            d = date.fromisoformat(d_str)
-        except (TypeError, ValueError):
+        d = parse_iso_date(d_str)
+        if d is None:
             continue
         if o_start <= d <= o_end:
             window_bars.append(bar)
@@ -337,16 +337,14 @@ def _compute_index_stats(
     }
     if not index_bars:
         return out
-    try:
-        i_start = date.fromisoformat(raw["start"])
-        i_end = date.fromisoformat(raw["end"])
-    except (TypeError, ValueError):
+    i_start = parse_iso_date(raw["start"])
+    i_end = parse_iso_date(raw["end"])
+    if i_start is None or i_end is None:
         return out
     closes: list[float] = []
     for bar in index_bars:
-        try:
-            d = date.fromisoformat(str(bar.get("date") or ""))
-        except (TypeError, ValueError):
+        d = parse_iso_date(str(bar.get("date") or ""))
+        if d is None:
             continue
         if i_start <= d <= i_end:
             c = float(bar.get("close") or 0.0)

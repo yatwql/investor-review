@@ -28,24 +28,24 @@ if sys.stdout and hasattr(sys.stdout, "reconfigure"):
     try:
         # TextIO 协议不含 reconfigure（仅 TextIOWrapper 有）：按具体实现取用
         cast(Any, sys.stdout).reconfigure(errors="replace")
-    except Exception:
+    except (AttributeError, ValueError):
         pass
 
 # 原面 re-export：既有测试按本模块名访问（_checklib 提供）
-from _shared.checklib import (  # noqa: F401
+from _shared.checklib import (
     extract_table_region as _extract_table_region,
     replace_table_region as _replace_table_region,
 )
 
 # 原面 re-export：测试与调用方按本模块名访问
-from _test_runner.paths import (  # noqa: F401
+from _test_runner.paths import (
     _PROJECT_ROOT,
     _REPORTS_DIR,
     _LATEST_DIR,
     _ARCHIVES_DIR,
     _SRC_DIR,
 )
-from _test_runner.modes import (  # noqa: F401
+from _test_runner.modes import (
     MODES,
     _BENCH_MODES,
     _MODE_TABLE_ORDER,
@@ -54,7 +54,7 @@ from _test_runner.modes import (  # noqa: F401
     default_jobs,
     resolve_jobs,
 )
-from _test_runner.pytest_env import (  # noqa: F401
+from _test_runner.pytest_env import (
     PARALLEL_ENV,
     PER_TEST_TIMEOUT_ENV,
     _PARALLEL_FACTOR,
@@ -69,7 +69,7 @@ from _test_runner.pytest_env import (  # noqa: F401
     _phase_report_path,
     _build_pytest_args,
 )
-from _test_runner.machine_info import (  # noqa: F401
+from _test_runner.machine_info import (
     _ENV_ATTR_LABELS,
     _read_cpu_model_linux,
     _count_physical_cores_linux,
@@ -87,7 +87,7 @@ from _test_runner.machine_info import (  # noqa: F401
     _render_duration_table,
     _print_machine_report,
 )
-from _test_runner.doc_writer import (  # noqa: F401
+from _test_runner.doc_writer import (
     _DOC_ENV_TABLE_MARKERS,
     _DOC_DURATION_TABLE_MARKERS,
     _DOC_MODE_COUNT_MARKERS,
@@ -100,13 +100,13 @@ from _test_runner.doc_writer import (  # noqa: F401
     _display_path,
     _update_test_coverage_doc_file,
 )
-from _test_runner.report_html import (  # noqa: F401
+from _test_runner.report_html import (
     _overall_status,
     _report_links_html,
     _render_index_html,
 )
 from _test_runner.retention import DEFAULT_CAP_MB, DEFAULT_KEEP_RUNS, prune_archives
-from _test_runner.runner import (  # noqa: F401
+from _test_runner.runner import (
     _ensure_dirs,
     _create_latest_structure,
     archive_existing,
@@ -247,7 +247,6 @@ def main() -> None:
         parallel_level=args.parallel,
         timeout_override=args.timeout,
         no_timeout=args.no_timeout,
-        phased=args.phased,
     )
     aborted_modes: list[str] = []
     try:

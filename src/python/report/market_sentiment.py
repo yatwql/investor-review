@@ -29,7 +29,7 @@ logger = logging.getLogger("invest")
 def build_market_sentiment_data(
     holdings: list,
     penetrated_assets: list | None,
-    config: dict | None = None,
+    config: dict | None = None,  # noqa: ARG001 — 报告装配统一签名（config 按位置传）
 ) -> dict[str, Any] | None:
     """装配市场情绪契约（开关关闭返回 ``None``）。"""
     from src.python.config import is_enable_market_sentiment

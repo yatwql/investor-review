@@ -370,3 +370,57 @@ class TestCrisisReplay:
         it = _interval(contract, "2025 关税冲击")
         assert it["in_range"] is True
         assert it["portfolio_return_pct"] == pytest.approx(-3.0)  # 100 → 97
+
+
+class TestCrisisHelperDefensiveBranches:
+    """内部辅助的脏日期/空窗口/指数抬升分支。"""
+
+    def test_overlap_interval_bad_interval_dates_returns_none(self):
+        """区间自身起止日期非法 → 视为不重叠（不抛异常）。"""
+        raw = {"name": "坏区间", "start": "not-a-date", "end": "2018-12-31"}
+        assert _overlap_interval(raw, (date(2018, 1, 1), date(2018, 12, 31))) is None
+
+    def test_interval_stats_skips_bar_with_bad_date(self):
+        """区间内出现非法日期 bar → 跳过该点，统计只取合法点。"""
+        from src.python.analysis.crisis_annotation import _compute_interval_stats
+
+        bars = _bars([("2018-06-20", 100.0), ("坏日期", 50.0), ("2018-08-01", 70.0)])
+        stats = _compute_interval_stats(bars, (date(2018, 1, 1), date(2018, 12, 31)))
+        assert stats["interval_drawdown_pct"] == 30.0
+        assert stats["trough_date"] == "2018-08-01"
+
+    def test_interval_stats_empty_window_in_replay_marks_return_none(self):
+        """回放态下重叠区间内无 bar → 组合收益显式置 None（不用缺键）。"""
+        from src.python.analysis.crisis_annotation import _compute_interval_stats
+
+        stats = _compute_interval_stats([], (date(2018, 1, 1), date(2018, 12, 31)), replay=True)
+        assert stats["portfolio_return_pct"] is None
+        assert stats["interval_drawdown_pct"] is None
+
+    def test_window_return_pct_single_point_returns_none(self):
+        """有效点不足 2 个 → 区间收益 None。"""
+        from src.python.analysis.crisis_annotation import _window_return_pct
+
+        assert _window_return_pct([{"total_value": 88.0}]) is None
+
+    def test_index_stats_bad_interval_dates_unavailable(self):
+        """指数层：区间起止非法 → 指数不可用占位。"""
+        from src.python.analysis.crisis_annotation import _compute_index_stats
+
+        out = _compute_index_stats([{"date": "2018-06-20", "close": 100.0}], {"start": "x", "end": "y"})
+        assert out["index_available"] is False
+        assert out["index_return_pct"] is None
+
+    def test_index_stats_skips_bad_date_and_tracks_rising_peak(self):
+        """指数层：非法日期 bar 跳过；刷新新高的指数回撤归零。"""
+        from src.python.analysis.crisis_annotation import _compute_index_stats
+
+        bars = [
+            {"date": "2018-06-20", "close": 100.0},
+            {"date": "坏日期", "close": 1.0},
+            {"date": "2018-07-31", "close": 110.0},
+        ]
+        out = _compute_index_stats(bars, {"start": "2018-06-19", "end": "2018-12-31"})
+        assert out["index_available"] is True
+        assert out["index_return_pct"] == pytest.approx(10.0)
+        assert out["index_drawdown_pct"] == pytest.approx(0.0)

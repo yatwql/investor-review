@@ -315,6 +315,16 @@ class TestWebShot:
         ]
 
     @pytest.mark.unit_scripts
+    def test_missing_cdp_script_reports_environment_error(self, web, tmp_path, monkeypatch, capsys):
+        """打包缺 CDP 脚本时 run() 应返回 1 并给出可读原因，不抛异常。"""
+        monkeypatch.setattr(web, "CDP_SCRIPT", tmp_path / "absent.mjs")
+        monkeypatch.setattr(web, "resolve_node", lambda: "node")
+        monkeypatch.setattr(web, "resolve_chrome", lambda *_args, **_kwargs: tmp_path / "chrome")
+
+        assert web.run("http://127.0.0.1:8000/workbench", tmp_path / "shot.png") == 1
+        assert "缺少 CDP 脚本" in capsys.readouterr().out
+
+    @pytest.mark.unit_scripts
     def test_cdp_script_reads_chrome_from_environment(self, web):
         source = web.CDP_SCRIPT.read_text(encoding="utf-8")
         assert "CHROME_BIN" in source

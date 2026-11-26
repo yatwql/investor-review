@@ -305,3 +305,22 @@ class TestApplyCliSwitches:
         monkeypatch.setattr(feat, "save_feature_overrides", lambda *a, **k: called.append({"a": a}))
         _apply_cli_switches([("report_qa", False)])
         assert called == []
+
+
+class TestChapterOverrideValidation:
+    """--chapter KEY=on|off 的格式校验（缺 = 或缺键名 → 当场报格式错误）。"""
+
+    @pytest.mark.parametrize("value", ["enable_news", "=off", "=out"])
+    def test_missing_separator_or_key_rejected(self, value):
+        import argparse
+
+        from src.python.cli._parser import _chapter_override
+
+        with pytest.raises(argparse.ArgumentTypeError) as exc:
+            _chapter_override(value)
+        assert "格式应为 KEY=on|off" in str(exc.value)
+
+    def test_valid_override_returns_key_and_switch(self):
+        from src.python.cli._parser import _chapter_override
+
+        assert _chapter_override(" enable_news = off ") == ("enable_news", False)

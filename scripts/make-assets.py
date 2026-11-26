@@ -29,7 +29,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # scripts/ 与内部包导入面
 
-from _assets import social_preview, svg_check  # noqa: E402
+from _assets import social_preview, svg_check
 
 #: 子命令 → svg 体检内部子命令名（入口前缀 `svg-` 仅作分组）
 _SVG_SUBCOMMANDS = {

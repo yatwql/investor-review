@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.python.cache.operations import CacheUpdateResult
+    from src.python.core.models import Holding
+    from src.python.core.progress import ProgressReporterProtocol
 
 import logging
 
@@ -30,7 +32,7 @@ def _get_pool() -> ThreadPoolExecutor:
     return _POOL
 
 
-def _refresh_one_fund_cache(fund) -> tuple:
+def _refresh_one_fund_cache(fund: Holding) -> tuple:
     """刷新单只基金的排名、持仓和基准缓存。"""
     from src.python.fetcher.fund import fetch_fund_benchmark, fetch_fund_holdings, fetch_fund_rankings
 
@@ -101,7 +103,7 @@ def sector_flow_hint() -> str:
 
 def _refresh_common_caches(
     holdings: list | None,
-    reporter,
+    reporter: ProgressReporterProtocol,
 ) -> tuple[int, int, int, int]:
     """刷新不依赖基金持仓的公共缓存，通过 reporter.* 输出进度。
 
@@ -157,7 +159,7 @@ def _refresh_common_caches(
                     reporter.ok(f"分红数据 ({div_ok} 只股票)")
                 else:
                     reporter.warn("分红数据 获取失败")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — %s Future 异常: %s
             logger.debug("%s Future 异常: %s", tag, e)
             reporter.warn(f"{label} 获取失败")
 
@@ -171,7 +173,7 @@ def _get_news_top_count() -> int:
     try:
         value = get_config().get("news_top_count", get_default("news_top_count"))
         return int(value) if value else 300
-    except Exception:
+    except Exception:  # noqa: BLE001 — 配置读取/转换失败回落默认条数 300，缓存刷新不因此中断
         return 300
 
 
@@ -216,7 +218,7 @@ def _refresh_fund_manager_cache(funds: list) -> int:
         try:
             if fetch_fund_manager(f.code):
                 ok += 1
-        except Exception:
+        except Exception:  # noqa: BLE001 — 基金经理刷新异常 [%s]: %s
             logger.debug("基金经理刷新异常 [%s]: %s", getattr(f, "code", "?"), getattr(f, "name", ""))
     return ok
 
@@ -246,7 +248,7 @@ def _refresh_extended_caches(
     holdings: list,
     funds: list,
     result: CacheUpdateResult,
-    reporter,
+    reporter: ProgressReporterProtocol,
 ) -> None:
     """刷新扩展缓存：新闻 / 基金经理 / 风格扩展，并行执行。
 
@@ -286,7 +288,7 @@ def _refresh_extended_caches(
                     reporter.ok(f"风格扩展 ({count} 只证券)")
                 else:
                     reporter.warn("风格扩展 获取失败")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — %s 扩展缓存刷新异常: %s
             logger.debug("%s 扩展缓存刷新异常: %s", tag, e)
             result.errors.append(f"扩展缓存刷新异常: {e}")
             reporter.warn(f"{tag} 刷新异常")

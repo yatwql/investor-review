@@ -37,7 +37,7 @@ def _build_chart_datasets_for_report(
             risk_metrics=risk_metrics,
             all_metrics=all_metrics,
         )
-    except Exception:
+    except Exception:  # noqa: BLE001 — [chart] 数据集构建失败，图表整体跳过（报告仍正常）
         # 预处理器顶层兜底：任何异常 → 返回空 dict（报告仍有表格/占位）
         logger.warning("[chart] 数据集构建失败，图表整体跳过（报告仍正常）", exc_info=True)
         return {}

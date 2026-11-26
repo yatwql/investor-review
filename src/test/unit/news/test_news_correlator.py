@@ -192,3 +192,27 @@ class TestCorrelateNewsWithHoldings(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestLightweightKeywordThreshold(unittest.TestCase):
+    """轻量级关键词（行业/概念）阈值：全命中不足 2 个即判无关联。"""
+
+    def test_single_lightweight_hit_skipped(self):
+        """仅命中 1 个轻量级关键词 → 不计为关联（避免单条泛匹配假阳性）。"""
+        news = [{"title": "白酒板块回调", "intro": "", "url": "http://a.com/l1"}]
+        result = correlate_news_with_holdings(news, ["白酒"], lightweight_keywords={"白酒"})
+        self.assertEqual(result, [])
+
+    def test_two_lightweight_hits_kept(self):
+        """命中 2 个轻量级关键词 → 达阈值，保留并记录命中词。"""
+        news = [{"title": "白酒板块回调，消费承压", "intro": "", "url": "http://a.com/l2"}]
+        result = correlate_news_with_holdings(news, ["白酒", "消费"], lightweight_keywords={"白酒", "消费"})
+        self.assertEqual(len(result), 1)
+        self.assertEqual(sorted(result[0]["matched_keywords"]), ["消费", "白酒"])
+
+    def test_heavy_keyword_hit_bypasses_lightweight_threshold(self):
+        """轻量词 1 个 + 重权词 1 个 → 命中不全为轻量词，不受阈值约束。"""
+        news = [{"title": "长江电力布局白酒业务", "intro": "", "url": "http://a.com/l3"}]
+        result = correlate_news_with_holdings(news, ["长江电力", "白酒"], lightweight_keywords={"白酒"})
+        self.assertEqual(len(result), 1)
+        self.assertEqual(sorted(result[0]["matched_keywords"]), ["白酒", "长江电力"])

@@ -98,12 +98,11 @@ def _parse_nav_date(text: str) -> str:
 
 def _days_between(later: str, earlier: str) -> int | None:
     """两个 ``YYYY-MM-DD`` 的相隔天数（later − earlier）；任一侧不可解析返回 None。"""
-    from datetime import datetime
+    from src.python.core.dates import parse_datetime_ymd
 
-    try:
-        a = datetime.strptime(later, "%Y-%m-%d")
-        b = datetime.strptime(earlier, "%Y-%m-%d")
-    except (TypeError, ValueError):
+    a = parse_datetime_ymd(later)
+    b = parse_datetime_ymd(earlier)
+    if a is None or b is None:
         return None
     return (a - b).days
 

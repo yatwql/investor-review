@@ -12,7 +12,7 @@ import logging
 import threading
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.python.providers.news_correlator import correlate_news_with_holdings
 from src.python.providers.news_dedup import (
@@ -24,6 +24,9 @@ from src.python.providers.news_sources import (
     _SOURCE_LABELS,
     get_source_label,
 )
+
+if TYPE_CHECKING:  # 仅类型标注：计时记录器由调用方传入，运行期本模块不构造它
+    from src.python.core.perf import PhaseBreakdownRecorder
 
 logger = logging.getLogger("invest")
 
@@ -182,7 +185,7 @@ def _fetch_from_all_sources(
                 src_results[src] = (count, "OK")
                 if progress_callback:
                     progress_callback(label, count, "OK")
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — 单新闻源 Future 异常按该源失败计入来源状态，其余源照常汇总
                 err_msg = f"失败({e})"
                 src_results[src] = (0, err_msg)
                 if progress_callback:
@@ -257,7 +260,7 @@ def _finalize_news_results(
     return correlated[:top_n]
 
 
-def _record_span(recorder, name: str, started: float) -> None:
+def _record_span(recorder: PhaseBreakdownRecorder | None, name: str, started: float) -> None:
     """记录新闻子阶段耗时（recorder 为 None 时零行为变化）。"""
     if recorder is not None:
         recorder.record(name, time.perf_counter() - started)
@@ -270,7 +273,7 @@ def aggregate_news(
     per_source: int = 100,
     progress_callback: Callable[[str, int, str], None] | None = None,
     lightweight_keywords: set[str] | None = None,
-    span_recorder=None,
+    span_recorder: PhaseBreakdownRecorder | None = None,
 ) -> list[dict[str, Any]]:
     """从多个新闻源获取新闻，去重后按关键词关联度排序。
 

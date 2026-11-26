@@ -44,11 +44,18 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import patch
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
+
+# 注解只在静态检查期求值（项目类型需 sys.path 注入后的导入路径，不入执行期导入面）
+if TYPE_CHECKING:
+    from flask.testing import FlaskClient
+
+    from src.python.web.runs import RunState
 
 # 产物固定文件名（与 handlers._LATEST_XLSX 一致）
 _LATEST_XLSX = "个人投资分析报告.xlsx"
@@ -73,7 +80,9 @@ def _make_holdings_xlsx() -> bytes:
     return buf.getvalue()
 
 
-def _fake_health(max_timeout: float = 15.0):
+def _fake_health(
+    max_timeout: float = 15.0,  # noqa: ARG001 — 替身须与健康探测入口同签名
+):
     """罐头健康探测结果（避免真实网络）。"""
     return [{"name": "mock_source", "label": "测试行情源", "ok": True, "latency_ms": 1.0, "message": "ok"}]
 
@@ -86,7 +95,10 @@ def _fake_history():
 def _fake_executor(output_dir: str):
     """全链路 fake executor：写产物到 output_dir + 推送事件 + 成功返回。"""
 
-    def _exec(state, params):
+    def _exec(
+        state: RunState,
+        params: dict,  # noqa: ARG001 — 执行器协议签名（params 由真实执行器消费）
+    ):
         state.output_dir = str(output_dir)
         state.push_event("info", "正在获取行情数据...")
         state.push_event("ok", "报告生成完成")
@@ -127,7 +139,7 @@ def _build_client(tmp_root: Path):
     return app.test_client(), output_dir
 
 
-def _check_page_render(client, results):
+def _check_page_render(client: FlaskClient, results: list[dict]):
     resp = client.get("/")
     html = resp.data.decode("utf-8")
     ok = resp.status_code == 200
@@ -149,7 +161,7 @@ def _check_page_render(client, results):
     results.append({_RESULT_NAME: "页面渲染", _RESULT_OK: ok, _RESULT_DETAIL: detail})
 
 
-def _check_health(client, results):
+def _check_health(client: FlaskClient, results: list[dict]):
     with patch("src.python.core.check_sources.run_health_checks", side_effect=_fake_health):
         resp = client.get("/api/health")
     body = resp.get_json() or {}
@@ -157,7 +169,7 @@ def _check_health(client, results):
     results.append({_RESULT_NAME: "健康检查", _RESULT_OK: ok, _RESULT_DETAIL: f"GET /api/health -> {resp.status_code}"})
 
 
-def _check_upload(client, results) -> str | None:
+def _check_upload(client: FlaskClient, results: list[dict]) -> str | None:
 
     xlsx = _make_holdings_xlsx()
     resp = client.post("/api/upload", data={"file": (io.BytesIO(xlsx), "持仓.xlsx")})
@@ -181,7 +193,7 @@ def _check_upload(client, results) -> str | None:
     return file_id if ok else None
 
 
-def _check_run_and_poll(client, results, file_id: str) -> str | None:
+def _check_run_and_poll(client: FlaskClient, results: list[dict], file_id: str) -> str | None:
     import json
 
     resp = client.post(
@@ -196,7 +208,7 @@ def _check_run_and_poll(client, results, file_id: str) -> str | None:
     return run_id if ok else None
 
 
-def _poll_run_finished(client, run_id: str, max_iters: int = 100) -> str | None:
+def _poll_run_finished(client: FlaskClient, run_id: str, max_iters: int = 100) -> str | None:
     """轮询 run 至终态（done/failed），返回最终 status；未到终态返回最后 status。
 
     供各检查复用：fake executor 立即完成，多数情况首轮即 done。此处的关键价值
@@ -216,7 +228,7 @@ def _poll_run_finished(client, run_id: str, max_iters: int = 100) -> str | None:
     return status
 
 
-def _check_progress_events(client, results, run_id: str):
+def _check_progress_events(client: FlaskClient, results: list[dict], run_id: str):
     # fake executor 立即完成，轮询至终态
     status = _poll_run_finished(client, run_id)
 
@@ -233,7 +245,7 @@ def _check_progress_events(client, results, run_id: str):
     )
 
 
-def _check_final_state(client, results, run_id: str):
+def _check_final_state(client: FlaskClient, results: list[dict], run_id: str):
     resp = client.get(f"/api/runs/{run_id}")
     body = resp.get_json() or {}
     detail = body.get("data") or {}
@@ -250,7 +262,7 @@ def _check_final_state(client, results, run_id: str):
     )
 
 
-def _check_report_download(client, results):
+def _check_report_download(client: FlaskClient, results: list[dict]):
     from urllib.parse import quote
 
     resp = client.get("/api/reports/" + quote(_LATEST_XLSX))
@@ -260,7 +272,7 @@ def _check_report_download(client, results):
     )
 
 
-def _check_history(client, results):
+def _check_history(client: FlaskClient, results: list[dict]):
     with patch("src.python.core.perf.load_history", side_effect=_fake_history):
         resp = client.get("/api/runs/history")
     body = resp.get_json() or {}
@@ -274,7 +286,7 @@ def _check_history(client, results):
     )
 
 
-def _check_formal_use_existing(client, results) -> None:
+def _check_formal_use_existing(client: FlaskClient, results: list[dict]) -> None:
     """正式-用存量冒烟：无 file_id 提交 → 202；携带 file_id / 非法 mode → 400。
 
     后端组合校验（handlers._handle_create_run）：formal+use_existing 禁止携带
@@ -328,7 +340,7 @@ def _check_formal_use_existing(client, results) -> None:
     )
 
 
-def _check_output_dir_isolated(client, results, run_id: str, output_dir: Path):
+def _check_output_dir_isolated(client: FlaskClient, results: list[dict], run_id: str, output_dir: Path):
     detail = (client.get(f"/api/runs/{run_id}").get_json() or {}).get("data") or {}
     run_out = detail.get("output_dir") or ""
     real_reports = (_REPO_ROOT / "reports").resolve()
@@ -343,7 +355,7 @@ def _check_output_dir_isolated(client, results, run_id: str, output_dir: Path):
     )
 
 
-def _check_config_edit(client, results) -> None:
+def _check_config_edit(client: FlaskClient, results: list[dict]) -> None:
     """配置编辑冒烟：GET 面板全量面 → 合法保存 200 → 非法键 400。
 
     配置编辑会写共享 config.json，_build_client 已将其重定向到临时目录，

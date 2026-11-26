@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 
 from src.python.core.code_utils import (
@@ -16,6 +17,9 @@ from src.python.core.code_utils import (
 from src.python.core.models import Holding
 from src.python.core.num_utils import finite_or
 from src.python.core.degradation import STATUS_MESSAGES, DataStatus, DataStatusItem
+
+if TYPE_CHECKING:
+    from src.python.report.market_value import DetailRow
 
 logger = logging.getLogger("invest")
 
@@ -104,7 +108,7 @@ def _load_dividend_data(holdings: list) -> tuple[dict, bool]:
             # 「本无分红」（``empty`` 且无故障）不登记，避免正常空结果被误报为源故障。
             _record_dividend_status(False, _dividend_failure_hint(failure))
         return data, True
-    except Exception:
+    except Exception:  # noqa: BLE001 — [category] 分红数据加载失败（非关键），年均股息率列显示 --
         logger.warning("[category] 分红数据加载失败（非关键），年均股息率列显示 --", exc_info=True)
         _record_dividend_status(False, "分红数据加载异常")
         return {}, False
@@ -128,7 +132,7 @@ def _record_dividend_status(success: bool, message: str = "") -> None:
             tracker.record(_DIVIDEND_SOURCE_KEY, "T3", success=True)
         else:
             tracker.record(_DIVIDEND_SOURCE_KEY, "T3", success=False, failure_type="unreachable", message=message)
-    except Exception:  # 观测失败不影响主链路
+    except Exception:  # noqa: BLE001 — 观测失败不影响主链路
         logger.debug("[category] 分红状态登记失败（非关键）", exc_info=True)
 
 
@@ -156,7 +160,7 @@ def build_category_data_status(dividend_success: bool) -> DataStatus:
     return status
 
 
-def calc_yield_text(code: str, d, dividend_data: dict) -> str:
+def calc_yield_text(code: str, d: DetailRow | None, dividend_data: dict) -> str:
     """计算单条持仓的年均股息率文本（非关键，失败返回"--"）。
 
     合并 category 和 html_builders 两处的重复实现，统一此公共函数。
@@ -172,6 +176,6 @@ def calc_yield_text(code: str, d, dividend_data: dict) -> str:
         if price <= 0:
             return "--"
         return f"{avg_div / price * 100:.2f}%"
-    except Exception:
+    except Exception:  # noqa: BLE001 — [category] 股息率计算异常
         logger.warning("[category] 股息率计算异常", exc_info=True)
         return "--"

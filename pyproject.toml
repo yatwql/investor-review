@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "investor-review"
-version = "0.18.6"
+version = "0.18.7"
 description = "投资复盘助手：读取持仓 Excel，生成 Excel/HTML 投资分析报告（含行情、穿透、基金业绩、财经热点关联关联分析与 LLM 深度复盘）"
 requires-python = ">=3.11"
 dependencies = [
@@ -37,6 +37,7 @@ test = [
     "pytest-xdist>=3.6",
     "pytest-html>=4.2",
     "pytest-timeout>=2.3",
+    "pytest-cov>=6.0",
     "ruff==0.15.20",
     "types-colorama",
 ]
@@ -57,15 +58,34 @@ line-length = 120
 extend-exclude = [".venv", "docs"]
 force-exclude = true
 
+# 行内抑制只对**已启用**的规则生效：`# noqa: X` 里的 X 不在 `select` 内（或该文件被
+# per-file-ignores 忽略了 X）时，抑制是空转——由 RUF100（unused-noqa）当硬失败拦住。
+# 宽捕获 / 参数注解已成机检项（BLE001 / ANN001），必留的抑制与难注解处一律就地写理由
+# （「有意宽捕获：…」/「说明：…」）；异常捕获、未用参数、参数注解的评审口径见
+# docs/managements/technical.md §8.7「代码质量口径」。
 [tool.ruff.lint]
-# 显式声明基线选择项（等价于 ruff 默认集），避免默认集随版本升级静默漂移
-select = ["E4", "E7", "E9", "F"]
+# 显式声明基线选择项（等价于 ruff 默认集），避免默认集随版本升级静默漂移；
+# RUF100 恒开（见上段：抑制必须指向真在跑的规则）
+# ARG（未用参数）只约束生产代码——测试域的替身/回调参数天然未用，不属缺陷
+# （豁免见下方 per-file-ignores 的 "src/test/**"）。
+# 宽捕获（盲 except）按 technical.md §8.7 口径逐处交代，三选一：窄化成具体异常类型
+# （覆盖原失败面）、删死捕获（except 体只 pass/return 且该路径不会抛）、或保留宽捕获
+# 并在行内写明「宽捕获理由：<为什么必须兜住>」（降级治理壳 / 观测旁路 / 第三方边界 /
+# 不得中断主流程）。**不得**用 per-file-ignores 整目录豁免来替代逐处理由。
+# 该口径已机检化：`select` 含 `BLE001`，全树零 finding，必留处写 `# noqa: BLE001 — <理由>`
+# （规则与抑制同时落地；提前写 noqa 会被 RUF100 判成空转）。
+# ANN001（参数缺注解）只约束 `src/python` + `scripts` 生产代码，全树零 finding；
+# 测试域已在 per-file-ignores 豁免（fixture/monkeypatch 参数无注解价值，豁免见下方）。
+select = ["E4", "E7", "E9", "F", "RUF100", "ARG", "BLE001", "ANN001"]
 
 [tool.ruff.lint.per-file-ignores]
 # E402 / F401：scripts/ 下入口先注入 sys.path 再导入同目录与项目模块，顺序不可重排；
 # test-runner.py 为「原面 re-export」入口（内部实现已拆到 _test_runner/ 包，为兼容
 # 既有测试与调用方而重新导出内部分符号）
 "scripts/*.py" = ["E402"]
+# ARG：测试域的替身/回调参数天然未用（mock 与被替身函数须同签名），不属缺陷
+# ANN001：测试域 fixture/monkeypatch/替身参数只作占位，注解不提供任何保证
+"src/test/**" = ["ARG", "ANN001"]
 "scripts/test-runner.py" = ["F401"]
 "src/python/tui/tui.py" = ["E402"]
 "src/python/cli/cli.py" = ["E402"]

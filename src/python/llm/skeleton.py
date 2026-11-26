@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     import httpx
 
-from src.python.cache import get as cache_get  # noqa: F401
+from src.python.cache import get as cache_get
 from src.python.cache import set as cache_set
 from src.python.core.retry import STRATEGY_FIXED, RetryPolicy, retry_transient
 from src.python.config import get_llm_config, get_llm_setting_default
@@ -302,7 +302,8 @@ def _build_provider_cache_key(
         return cache_key
     if resolved_first_name:
         name = resolved_first_name
-    elif module_key:
+    else:
+        # 已过上方早退（provider_list 与 module_key 均非空），无需再判 module_key
         strategy = llm_config.get("_strategy", "priority")
         preferred = llm_config.get("_preferred_providers", {})
         try:
@@ -310,11 +311,9 @@ def _build_provider_cache_key(
 
             chain = resolve_provider_chain(provider_list, strategy, module_key, preferred)
             name = chain[0]["name"] if chain else "unknown"
-        except Exception:
+        except Exception:  # noqa: BLE001 — [skeleton] Provider chain 解析异常，使用默认缓存键
             logger.debug("[skeleton] Provider chain 解析异常，使用默认缓存键", exc_info=True)
             name = "unknown"
-    else:
-        name = "unknown"
     return f"{cache_key}_{name}"
 
 
@@ -349,7 +348,7 @@ def _resolve_first_provider(
             first_name = first_entry["name"]
             _, first_model, first_endpoint = _resolve_entry_credentials(first_entry, llm_config)
         return (first_name, first_model, first_endpoint)
-    except Exception:
+    except Exception:  # noqa: BLE001 — [skeleton] Provider 凭据解析异常
         logger.debug("[skeleton] Provider 凭据解析异常", exc_info=True)
         return (None, None, "")
 
@@ -505,6 +504,15 @@ def module_cache_key(module_key: str) -> str:
     return _PREV_MODULE_CACHE_KEY.get(str(module_key or ""), "")
 
 
+def module_cache_keys() -> dict[str, str]:
+    """本进程已记录的各模块缓存键快照（报告收尾落基线用）。
+
+    后置模块（`self_review` / `holding_change` 等）的键只在本模块记录，预检侧拿不到；
+    收尾落基须把它们一并写盘，下一份报告才有真实的「上一轮键」可比对。
+    """
+    return dict(_PREV_MODULE_CACHE_KEY)
+
+
 def write_back_module_cache(
     content: str,
     *,
@@ -535,7 +543,7 @@ def write_back_module_cache(
         return False
     try:
         cache_set(key, content)
-    except Exception:  # 缓存不可写不应影响报告生成
+    except Exception:  # noqa: BLE001 — 缓存不可写不应影响报告生成
         logger.warning("[llm] 事实校验修正回写缓存失败（%s），按原样继续", module_key, exc_info=True)
         return False
     logger.info(
@@ -544,6 +552,54 @@ def write_back_module_cache(
         "缓存命中" if cached else "新生成",
     )
     return True
+
+
+def _attribute_recompute_reason(
+    sink: Any,
+    module_key: str,
+    precheck_key: str,
+    prev_in_process_key: str | None,
+) -> None:
+    """记录本模块的重算原因（纯观测，不改控制流）。
+
+    此路径覆盖预检未覆盖的模块（self_review 等由上游产出内容寻址、在预检之后才确定键）
+    ——否则重算原因统计会漏掉它们，据此判断 TTL 是否放宽会系统性低估。
+
+    判据：与上一轮该模块的缓存键相同 ⇒ 内容没变、只是 TTL 到点；不同 ⇒ 内容变了
+    （内容寻址模块换键）；无上轮记录 ⇒ 保守记 `cache_miss`。预检已归因的基础模块
+    不二次归因：进程重启后本进程无「上一轮键」记忆，再记一次会把 `ttl_expired`
+    覆盖成 `cache_miss`（TTL 判据被污染）。
+
+    「上一轮键」经 :func:`cache_policy.previous_module_key` 取（跨报告基线优先）——
+    报告边界会清空进程内记录，后置模块只靠进程内字典会恒判冷启动。
+
+    Args:
+        sink: 观测汇聚器（None 时跳过）。
+        module_key: 模块键。
+        precheck_key: 本轮实际读写的缓存键。
+        prev_in_process_key: **本轮赋值前**的本进程键（须在写基线前取，否则两个分支恒不可达）。
+    """
+    if sink is None or not hasattr(sink, "note_recompute_reason"):
+        return
+    already_attributed = bool(
+        hasattr(sink, "module_recompute_reasons") and module_key in (sink.module_recompute_reasons() or {})
+    )
+    if already_attributed:
+        return
+    from src.python.llm.cache_policy import previous_module_key
+    from src.python.llm.observation import (
+        RECOMPUTE_CACHE_MISS,
+        RECOMPUTE_FINGERPRINT_CHANGED,
+        RECOMPUTE_TTL_EXPIRED,
+    )
+
+    prev_key = previous_module_key(module_key, prev_in_process_key or "")
+    if not prev_key:
+        sink.note_recompute_reason(module_key, RECOMPUTE_CACHE_MISS)
+    elif prev_key == precheck_key:
+        sink.note_recompute_reason(module_key, RECOMPUTE_TTL_EXPIRED)
+    else:
+        sink.note_recompute_reason(module_key, RECOMPUTE_FINGERPRINT_CHANGED)
 
 
 def generate_llm_content(
@@ -587,6 +643,9 @@ def generate_llm_content(
     _reuse_blocked = cache_enabled and not force and intraday_reuse_blocked(module_key or precheck_key, _hit_sink)
     # 基线记账与是否复用无关：每份报告都要记下本轮键，否则盘中跳过读之后
     # 「上一轮键」停留在更早的收盘档，下次归因会把换键误报成 ttl_expired。
+    # 归因判据必须取**赋值前**的值：先写基线再比对会让「无上轮记录」与「换键」
+    # 两个分支恒不可达（恒判 ttl_expired，把内容变化误标成「放宽 TTL 能省钱」）。
+    _prev_in_process_key = _PREV_MODULE_CACHE_KEY.get(module_key) if module_key else None
     if module_key:
         _PREV_MODULE_CACHE_KEY[module_key] = precheck_key
     if cache_enabled and not force and not _reuse_blocked:
@@ -594,34 +653,7 @@ def generate_llm_content(
         if _hit_sink is not None and hasattr(_hit_sink, "note_cache"):
             _hit_sink.note_cache(bool(cached))
         if not cached and module_key:
-            # 归因（观测，不改控制流）：此路径覆盖预检未覆盖的模块（self_review 等
-            # 由上游产出内容寻址、在预检之后才确定键）——否则重算原因统计会漏掉
-            # 它们，据此判断 TTL 是否放宽会系统性低估。
-            # 原因判定：与上一轮该模块的缓存键相同 ⇒ 内容没变、只是 TTL 到点；
-            # 不同 ⇒ 内容变了（内容寻址模块换键）；无上轮记录 ⇒ 保守记 `cache_miss`。
-            # 预检已归因的四个基础模块不再二次归因：进程重启后本进程无「上一轮键」
-            # 记忆，再记一次会把 `ttl_expired` 覆盖成 `cache_miss`（TTL 判据被污染）。
-            _sink = _hit_sink
-            _already_attributed = bool(
-                _sink is not None
-                and hasattr(_sink, "module_recompute_reasons")
-                and module_key in (_sink.module_recompute_reasons() or {})
-            )
-            if _sink is not None and hasattr(_sink, "note_recompute_reason") and not _already_attributed:
-                from src.python.llm.observation import (
-                    RECOMPUTE_CACHE_MISS,
-                    RECOMPUTE_FINGERPRINT_CHANGED,
-                    RECOMPUTE_TTL_EXPIRED,
-                )
-
-                _prev = _PREV_MODULE_CACHE_KEY.get(module_key)
-                if _prev is None:
-                    _reason = RECOMPUTE_CACHE_MISS
-                elif _prev == precheck_key:
-                    _reason = RECOMPUTE_TTL_EXPIRED
-                else:
-                    _reason = RECOMPUTE_FINGERPRINT_CHANGED
-                _sink.note_recompute_reason(module_key, _reason)
+            _attribute_recompute_reason(_hit_sink, module_key, precheck_key, _prev_in_process_key)
         if cached:
             return (
                 _handle_cache_hit(
@@ -874,4 +906,4 @@ def generate_llm_module(
 
 
 # bridge import — run_batch_mode 批量处理入口
-from src.python.llm._batch_mode import run_batch_mode  # noqa: F811, E402, E501
+from src.python.llm._batch_mode import run_batch_mode  # noqa: E402 — 批量入口须置于模块末尾以规避循环导入

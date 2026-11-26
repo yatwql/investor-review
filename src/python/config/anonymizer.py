@@ -202,9 +202,9 @@ def _replace_names(holdings: list[Holding], prefix: str = "品种") -> None:
 def _blur_shares(holdings: list[Holding]) -> None:
     """将份额四舍五入到百位（隐藏精确仓位）。"""
     for h in holdings:
+        # 四舍五入到百位后取值恒为 100 的整数倍，故「不足 100 且为正」只可能是 0：
+        # 非正份额本就不该被补到 100，这里不再做该兜底。
         h.shares = round(h.shares / 100) * 100
-        if h.shares < 100 and h.shares > 0:
-            h.shares = 100  # 最小显示单位
 
 
 def _mask_codes(holdings: list[Holding]) -> None:

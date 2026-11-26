@@ -181,7 +181,7 @@ class TestSymlink(unittest.TestCase):
             try:
                 entries = os.listdir(tmpdir)
                 self.assertIsInstance(entries, list)
-            except Exception:
+            except Exception:  # noqa: BLE001 — 测试断言口径：任意类型文件共存时 listdir 不得崩溃，抛出即判失败
                 self.fail("listdir should not crash with any file type")
 
     def test_symlink_in_holdings_dir(self):
@@ -322,7 +322,7 @@ class TestTempFileRace(unittest.TestCase):
                         set("concurrent_key", {"value": i})
                         r = get("concurrent_key", max_age_seconds=3600)
                         return r
-                    except Exception:
+                    except Exception:  # noqa: BLE001 — 并发用例：收集线程内异常为结果项，供后续断言
                         return {"__error__": str(sys.exc_info()[1])}
 
                 import sys

@@ -14,7 +14,6 @@
 
 from __future__ import annotations
 
-import logging
 import math
 
 from src.python.analysis._math_utils import (
@@ -27,8 +26,6 @@ from src.python.analysis.metrics_returns import (
     _TRADING_DAYS_PER_YEAR,
     sanitize_metric,
 )
-
-logger = logging.getLogger("invest")
 
 __all__ = [
     "hhi",
@@ -193,11 +190,7 @@ def risk_contribution(
     # 清理数据
     clean_pairs: list[tuple[float, float]] = []
     for w, v in zip(weights, volatilities):
-        cw = sanitize_metric(w, 0.0)
-        cv = sanitize_metric(v, 0.0)
-        if cw is None or cv is None:
-            cw, cv = 0.0, 0.0
-        clean_pairs.append((cw, cv))
+        clean_pairs.append((sanitize_metric(w, 0.0), sanitize_metric(v, 0.0)))
 
     total_risk = sum(w * v for w, v in clean_pairs)
     if total_risk == 0:
@@ -294,9 +287,6 @@ def portfolio_beta(
     pr = portfolio_returns[-n:]
     br = benchmark_returns[-n:]
 
-    if n < _MIN_SAMPLE_DAYS:
-        return None
-
     mean_pr = sum(pr) / n
     mean_br = sum(br) / n
 
@@ -350,24 +340,14 @@ def portfolio_beta_analysis(
 
     se, df = se_result
     if se <= 0:
-        if beta is not None and se == 0.0:
-            # 完美预测：t 统计量无穷大，CI 为零宽度
-            return {
-                "beta": sanitize_metric(beta),
-                "ci_lower": sanitize_metric(beta),
-                "ci_upper": sanitize_metric(beta),
-                "t_stat": None,
-                "p_value": 0.0,
-                "reliable": True,
-                "df": df,
-            }
+        # 完美预测（se == 0，sqrt 下界即 0）：t 统计量无穷大，CI 为零宽度
         return {
-            "beta": beta,
-            "ci_lower": None,
-            "ci_upper": None,
+            "beta": sanitize_metric(beta),
+            "ci_lower": sanitize_metric(beta),
+            "ci_upper": sanitize_metric(beta),
             "t_stat": None,
-            "p_value": None,
-            "reliable": False,
+            "p_value": 0.0,
+            "reliable": True,
             "df": df,
         }
 

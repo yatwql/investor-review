@@ -120,7 +120,7 @@ class TestDateGate:
         """缺 cache_key 即 TypeError——盘后时点校验不可被调用方静默跳过。"""
         data = {"price_date": _YESTERDAY, "_captured_at": _CLOSE_TS + 300}
         with pytest.raises(TypeError):
-            _price_cache_fresh(data, "price_stock", "招商银行")  # type: ignore[call-arg]  # noqa: PLW0108  # 故意缺参
+            _price_cache_fresh(data, "price_stock", "招商银行")  # type: ignore[call-arg]  # 故意缺参
 
 
 class TestOtcDisclosureTier:

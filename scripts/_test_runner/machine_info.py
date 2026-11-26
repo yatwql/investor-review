@@ -136,7 +136,7 @@ def _mem_gib_windows() -> float | None:
         windll = getattr(ctypes, "windll", None)  # 非 Windows 的解释器桩上没有 windll
         if windll is not None and windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat)):
             return stat.ullTotalPhys / (1024**3)
-    except Exception:
+    except (AttributeError, OSError):
         return None
     return None
 

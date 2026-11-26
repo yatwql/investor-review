@@ -447,3 +447,27 @@ class TestFeeIndexAssembly:
         assert fetch_fee_index([]) == {}
         assert fetch_fee_index(["", "   "]) == {}
         fee_spy.assert_not_called()
+
+
+class TestFeeIndexDegradedSources:
+    """费率索引降级：配置兜底读不到、单档表脏行、赎回阶梯缺失、全量表取数异常。"""
+
+    def test_config_fallback_map_empty_when_config_broken(self, monkeypatch):
+        monkeypatch.setattr(fund_fee, "get_config", MagicMock(side_effect=RuntimeError("配置损坏")))
+
+        assert fund_fee._config_fallback_map() == {}
+
+    def test_single_rate_rejects_non_dict_row_and_bool_rate(self):
+        assert fund_fee._purchase_single_rate("040046", {"rows": {"040046": "1.5%"}}) is None, "非 dict 行不解析"
+        assert fund_fee._purchase_single_rate("040046", {"rows": {"040046": {"purchase_fee_rate": True}}}) is None
+
+    def test_redemption_parse_failure_logged_and_full_table_error_absorbed(self, monkeypatch):
+        """两侧阶梯都没解析出来 + 全量申购表取数抛错 → 该代码不入索引，不中断。"""
+        from src.python.fetcher import fund_purchase
+
+        monkeypatch.setattr(fund_fee, "fetch_fund_fee_cached", MagicMock(return_value=_invalid_payload()))
+        monkeypatch.setattr(
+            fund_purchase, "fetch_fund_purchase_status_cached", MagicMock(side_effect=RuntimeError("网��"))
+        )
+
+        assert fetch_fee_index(["040046"]) == {}

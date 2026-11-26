@@ -25,7 +25,7 @@ _CLEAR = "\r\x1b[K"
 class _TtyStream(io.StringIO):
     """伪终端流：`isatty()` 为真，写入内容可断言。"""
 
-    def isatty(self) -> bool:  # noqa: D102 - 覆写标准接口
+    def isatty(self) -> bool:  # 说明：覆写标准接口
         return True
 
 

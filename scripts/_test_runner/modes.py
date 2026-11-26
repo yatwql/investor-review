@@ -157,7 +157,7 @@ def default_jobs() -> int:
     """多档采集自适应并行度：4 核+ 取 2；弱机、缺核信息或核数采集异常一律取 1（保守不超订）。"""
     try:
         cpu = os.cpu_count()
-    except Exception:  # 采集失败按弱机处理（用户口径：异常退 1，不并行）
+    except Exception:  # noqa: BLE001 — 采集失败按弱机处理（用户口径：异常退 1，不并行）
         cpu = None
     return 2 if (cpu or 0) >= 4 else 1
 
@@ -225,7 +225,7 @@ def compile_marker_expr(expr: str) -> Callable[[Collection[str]], bool]:
 
     def matches(markers: Collection[str]) -> bool:
         names = frozenset(markers)
-        return bool(compiled.evaluate(lambda name, /, **kwargs: name in names))
+        return bool(compiled.evaluate(lambda name, /, **_kwargs: name in names))
 
     return matches
 

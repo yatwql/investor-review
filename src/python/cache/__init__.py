@@ -83,6 +83,6 @@ try:
     _cleaned = clean_sensitive(older_than_days=90, dry_run=False)
     if _cleaned > 0:
         _logger.info("[cache] 启动清理: 移除 %d 个过期敏感缓存文件", _cleaned)
-except Exception:
+except Exception:  # noqa: BLE001 — [cache] 启动敏感缓存清理失败（非关键）
     _logger.debug("[cache] 启动敏感缓存清理失败（非关键）", exc_info=True)
 del _logger, _cleaned

@@ -30,7 +30,7 @@ def fixture_mod():
 class _StdoutStub(io.StringIO):
     """可被 `sys.stdout.reconfigure()` 调用的输出桩（真 StringIO 无该方法）。"""
 
-    def reconfigure(self, *args, **kwargs):  # noqa: D102
+    def reconfigure(self, *args, **kwargs):  # 说明：输出桩覆写标准库方法，行为同基类
         return None
 
 

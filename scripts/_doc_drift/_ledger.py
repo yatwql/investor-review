@@ -72,7 +72,7 @@ _ARCHIVE_INDEX_PAIRS: tuple[tuple[Path, str], ...] = (
 )
 
 
-def check_archive_index(docs: dict[Path, str] | None = None) -> list[str]:
+def check_archive_index(docs: dict[Path, str] | None = None) -> list[str]:  # noqa: ARG001 — 检查器统一签名：docs 仅作兼容占位（本项直接读文件）
     """校验管理文档的归档索引与 ``docs/archive/`` 实际文件双向一致。
 
     **不读传入的 docs 映射**：历史记录类（如 changelog）不在 `_scan_docs()` 的扫描面内

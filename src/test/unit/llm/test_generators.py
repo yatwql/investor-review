@@ -381,3 +381,40 @@ class TestSingletonsFacade(unittest.TestCase):
             inspect.getmodule(generators.generate_self_review),
             generators,
         )
+
+
+class TestDebateSessionCacheHelpers:
+    """辩论会话缓存读写：加锁只覆盖 dict 读写，None 表示未启用（静默跳过）。"""
+
+    class _RecordingLock:
+        """记录进入次数的锁替身：断言「确实在锁保护下读写」。"""
+
+        def __init__(self) -> None:
+            self.entries = 0
+
+        def __enter__(self) -> "TestDebateSessionCacheHelpers._RecordingLock":
+            self.entries += 1
+            return self
+
+        def __exit__(self, exc_type: object, exc: object, tb: object) -> bool:
+            return False
+
+    def test_put_then_get_under_lock(self) -> None:
+        from src.python.llm.generators import _session_get, _session_put
+
+        cache: dict[str, str] = {}
+        lock = self._RecordingLock()
+        _session_put(cache, lock, "sk", "三段辩论正文")
+        assert cache == {"sk": "三段辩论正文"}
+        assert _session_get(cache, lock, "sk") == "三段辩论正文"
+        # 一次写 + 一次读，各进锁一次；未命中的读同样在锁内
+        assert _session_get(cache, lock, "missing") is None
+        assert lock.entries == 3
+
+    def test_disabled_session_cache_is_noop(self) -> None:
+        from src.python.llm.generators import _session_get, _session_put
+
+        lock = self._RecordingLock()
+        _session_put(None, lock, "sk", "正文")
+        assert _session_get(None, lock, "sk") is None
+        assert lock.entries == 0

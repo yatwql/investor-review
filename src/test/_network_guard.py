@@ -47,7 +47,7 @@ class OfflineHTTPClient:
     def __enter__(self) -> OfflineHTTPClient:
         return self
 
-    def __exit__(self, *exc_info: Any) -> bool:
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> bool:
         return False
 
     def close(self) -> None:
@@ -106,7 +106,7 @@ class _NoWaitClock:
     def __getattr__(self, name: str) -> Any:
         return getattr(time, name)
 
-    def sleep(self, seconds: float) -> None:  # noqa: ARG002 — 签名对齐 time.sleep
+    def sleep(self, seconds: float) -> None:  # 说明：签名对齐 time.sleep
         """空操作（不等待、不抛错）。"""
         return None
 

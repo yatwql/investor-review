@@ -42,8 +42,8 @@ if _SCRIPTS_DIR not in sys.path:
 
 # 实现按职责拆在 scripts/_perf_history/：data（派生）/ report（渲染）/ cli（入口）；
 # 此处 re-export 既有符号，保持 load_script 的测试直调面不变。
-from _perf_history.cli import main  # noqa: E402
-from _perf_history.data import (  # noqa: E402, F401
+from _perf_history.cli import main
+from _perf_history.data import (
     _bucket_key,
     _compare_versions,
     _cost_period_data,
@@ -56,7 +56,7 @@ from _perf_history.data import (  # noqa: E402, F401
     _version_evolution_data,
     _version_records,
 )
-from _perf_history.report import (  # noqa: E402, F401
+from _perf_history.report import (
     _TREND_REPORT_PATH,
     _TMP_DIR,
     _abnormal_lines,
@@ -71,7 +71,7 @@ from _perf_history.report import (  # noqa: E402, F401
     _version_evolution_lines,
     build_trend_report,
 )
-from _perf_history.stats import (  # noqa: E402, F401
+from _perf_history.stats import (
     _DRIFT_MIN_SAMPLES,
     _LEGACY_BREAKDOWN_ALIASES,
     _OUTLIER_K,
@@ -96,7 +96,59 @@ from _perf_history.stats import (  # noqa: E402, F401
     _total_summary,
     _z_scores,
 )
-from src.python.core.perf import load_history  # noqa: E402, F401
+
+#: 测试与台账脚本按本模块名访问的再导出面（实现见对应子模块）
+__all__ = [
+    "_bucket_key",
+    "_compare_versions",
+    "_cost_period_data",
+    "_drift_data",
+    "_is_abnormal_record",
+    "_llm_cost_data",
+    "_machine_readable",
+    "_machine_summary",
+    "_slowest_phase",
+    "_version_evolution_data",
+    "_version_records",
+    "_TREND_REPORT_PATH",
+    "_TMP_DIR",
+    "_abnormal_lines",
+    "_bucket_lines",
+    "_compare_lines",
+    "_drift_lines",
+    "_freshness_line",
+    "_llm_context_lines",
+    "_outlier_lines",
+    "_overview_lines",
+    "_tail_attribution_lines",
+    "_version_evolution_lines",
+    "build_trend_report",
+    "_DRIFT_MIN_SAMPLES",
+    "_LEGACY_BREAKDOWN_ALIASES",
+    "_OUTLIER_K",
+    "_cv",
+    "_filter_records",
+    "_group_by_version_type",
+    "_group_filtered",
+    "_group_records",
+    "_is_outlier",
+    "_mad",
+    "_mean",
+    "_median",
+    "_merge_breakdown_stats",
+    "_merge_phase_stats",
+    "_min_max",
+    "_outlier_records",
+    "_outlier_threshold",
+    "_per_holding_median",
+    "_percentile",
+    "_robust_mean",
+    "_stdev",
+    "_total_summary",
+    "_z_scores",
+    "load_history",
+]
+from src.python.core.perf import load_history
 
 
 if __name__ == "__main__":

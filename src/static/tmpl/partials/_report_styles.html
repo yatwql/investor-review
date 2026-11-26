@@ -66,6 +66,7 @@
             --success: #2e7d32;             /* 已恢复/正常态绿 */
             /* 相关性/热力分档与状态派生（DESIGN.md Colors 组件派生面；内联色 token 化） */
             --heat-strong: #FF4444;       /* 相关系数分档：强（≥0.50）背景 */
+            --on-strong-bg: #FFFFFF;      /* 强背景（深色块）上的前景文字色 */
             --heat-mid: #FF8C00;          /* 相关系数分档：中（≥0.30）背景 */
             --heat-weak: #FFD700;         /* 相关系数分档：弱（≥0.15）背景 */
             --heat-faint: #CCFFCC;        /* 相关系数分档：微（>0）背景 */
@@ -151,6 +152,7 @@
             /* 相关性/热力分档与状态派生：饱和语义块小面积、字面对比仍达标，刻意保持原值；
                中性面与警示文字按暗色世界调整 */
             --heat-strong: #FF4444;
+            --on-strong-bg: #FFFFFF;
             --heat-mid: #FF8C00;
             --heat-weak: #FFD700;
             --heat-faint: #CCFFCC;
@@ -201,6 +203,9 @@
             --llm-status-thinking: #b39ddb;
             /* Chart.js 深色变量（theme.js refreshChartTheme 重读） */
             --chart-grid: rgba(255, 255, 255, 0.12);
+            --chart-success: #4CAF50;
+            --chart-warning: #FFA733;
+            --chart-danger: #FF6B6B;
             --chart-text: #e0e0e0;
             --chart-bg: #1e1e1e;
             --chart-danger-transparent: rgba(255, 107, 107, 0.15);
@@ -263,7 +268,11 @@
            颜色一律引用既有 token，不在此新增色值；暗色主题随 token 自动跟随。 */
         .text-warn { color: var(--warn-text); }
         .text-muted { color: var(--text-muted); }
+        .text-faint { color: var(--text-faint); }
+        .text-secondary { color: var(--text-secondary); }
+        .text-tertiary { color: var(--text-tertiary); }
         .text-primary { color: var(--primary); }
+        .text-danger { color: var(--danger-text); }
         .corr-pos-strong { color: var(--corr-pos-strong); }
         .corr-pos-mid { color: var(--corr-pos-mid); }
         .corr-neg-strong { color: var(--corr-neg-strong); }
@@ -271,6 +280,12 @@
         .fs-table-sm { font-size: var(--fs-table-sm); }
         .fs-kpi { font-size: var(--fs-kpi); }
         .text-success { color: var(--success); }
+        .llm-status-disabled { color: var(--llm-status-disabled); }
+        .llm-status-failed { color: var(--llm-status-failed); }
+        .llm-status-cached { color: var(--llm-status-cached); }
+        .llm-status-success { color: var(--llm-status-success); }
+        .llm-status-unknown { color: var(--llm-status-unknown); }
+        .llm-status-thinking { color: var(--llm-status-thinking); }
         .rating-deviation { color: var(--rating-deviation); font-weight: 600; }
         .ps-footnote { padding: 4px 8px; font-size: var(--fs-table-sm); }
         /* 配置分布条（SVG）：宽度走属性，颜色走 fill 类 */
@@ -291,6 +306,10 @@
         
         
         .empty-section { padding: 24px 16px; text-align: center; color: var(--text-muted); font-size: var(--fs-body); background: var(--empty-section-bg); border: 1px dashed var(--border); border-radius: 6px; margin: 8px 0; }
+        /* 警告态字幕：`t-warn` 单类会被上面 .empty-section 的 color 压成灰字
+           （同为单类、其后声明），故用复合选择器（2 类）胜出；语义等价于原内联
+           color: var(--warn-text)。 */
+        .empty-section.t-warn { color: var(--warn-text); }
         .heatmap-matrix { border-collapse: collapse; }
         .heatmap-matrix th, .heatmap-matrix td { border: 1px solid var(--border-strong); padding: 4px 8px; text-align: center; font-size: var(--fs-table-sm); }
         .heatmap-matrix th { background: var(--row-first-check-bg); font-weight: 600; }
@@ -335,11 +354,19 @@
         .data-status-ok { border-left: 3px solid var(--ok); padding-left: 8px; margin: 4px 0; color: var(--ok); }
         /* ── 数据源可用性矩阵 ──────────────── */
         .src-matrix-ok { color: var(--ok); font-weight: 600; }
-        .src-matrix-degraded { color: var(--warn); font-weight: 600; }
+                /* 热力档与相关性档：颜色只出现在 token 与 class 里（DESIGN.md Colors） */
+        .heat-strong { background-color: var(--heat-strong); color: var(--on-strong-bg); font-weight: bold; }
+        .heat-mid { background-color: var(--heat-mid); color: var(--on-strong-bg); }
+        .heat-weak { background-color: var(--heat-weak); }
+        .heat-faint { background-color: var(--heat-faint); }
+        .corr-pos-strong { background-color: var(--corr-pos-strong); color: var(--on-strong-bg); font-weight: bold; }
+        .corr-neg-strong { background-color: var(--corr-neg-strong); color: var(--on-strong-bg); font-weight: bold; }
+
+.src-matrix-degraded { color: var(--warn); font-weight: 600; }
         .src-matrix-failed { color: var(--profit); font-weight: 600; }
         .src-matrix-detail { font-size: var(--fs-table-sm); color: var(--text-muted); }
 
-{# 章节底部"回到顶部"链接 — 跳转到报告头部（#report-top 锚点） #}
+/* 章节底部"回到顶部"链接 — 跳转到报告头部（#report-top 锚点） */
 
         .source-tag { display: inline-block; background: var(--source-tag-bg); border-radius: 4px; padding: 0px 4px; font-size: var(--fs-footnote); margin: 0px; white-space: nowrap; }
         .source-tag-holding { display: inline-block; background: var(--source-tag-bg); border-radius: 4px; padding: 0px 4px; font-size: var(--fs-footnote); margin: 0px; white-space: nowrap; color: var(--source-tag-text); }

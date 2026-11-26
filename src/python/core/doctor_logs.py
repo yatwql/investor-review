@@ -18,6 +18,7 @@ from typing import Any
 
 from src.python.core.constants import PROJECT_ROOT
 from src.python.core.doctor_common import GROUP_LOG_CACHE, _item
+from src.python.core.logging_defaults import DEFAULTS
 
 #: 与主模块 logs/ 目录同源（PROJECT_ROOT/logs）
 _LOGS_DIR = os.path.join(PROJECT_ROOT, "logs")
@@ -37,15 +38,18 @@ _LOG_SCAN_MAX_LINES = 200_000
 
 
 def _check_log_level() -> dict[str, Any]:
-    """文件日志级别的生效值（默认 INFO；DEBUG 属排障模式）。"""
-    level = os.environ.get("INVEST_LOG_FILE_LEVEL", "").strip().upper() or "INFO"
+    """文件日志级别的生效值（默认取 logger 配置缺省级别；DEBUG 属排障模式）。"""
+    default_level = str(DEFAULTS["level"])
+    level = os.environ.get("INVEST_LOG_FILE_LEVEL", "").strip().upper() or default_level
     debug_on = level == "DEBUG"
     return _item(
         GROUP_LOG_CACHE,
         "日志级别",
         True,
-        f"文件 {level}（{'DEBUG 排障模式' if debug_on else '默认 INFO'}）",
-        hint="" if not debug_on else "排障结束可 unset INVEST_LOG_FILE_LEVEL 回到默认 INFO（DEBUG 会显著放大日志体积）",
+        f"文件 {level}（{'DEBUG 排障模式' if debug_on else f'默认 {default_level}'}）",
+        hint=""
+        if not debug_on
+        else f"排障结束可 unset INVEST_LOG_FILE_LEVEL 回到默认 {default_level}（DEBUG 会显著放大日志体积）",
     )
 
 

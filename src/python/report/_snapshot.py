@@ -6,9 +6,14 @@
 from __future__ import annotations
 
 
+from typing import TYPE_CHECKING
+
 from src.python.core.detail_view import detail_value
 from src.python.report.progress import ProgressReporter
 from src.python.config import get_default
+
+if TYPE_CHECKING:
+    from src.python.schemas.history import SnapshotData
 
 logger = __import__("logging").getLogger("invest")
 
@@ -30,7 +35,7 @@ def _baseline_labels(ts: str) -> tuple[str, str]:
     return trading_day_as_of(dt), dt.strftime("%Y-%m-%d %H:%M")
 
 
-def _classify_qdii_value_diff(details: list, old) -> tuple[float, bool]:
+def _classify_qdii_value_diff(details: list, old: SnapshotData | None) -> tuple[float, bool]:
     """环比中 QDII 官方净值变动的金额与是否滞后口径（T-1）。
 
     QDII 官方净值天然滞后一个交易日：本次快照用的是 T-1 净值、基线快照用的是
@@ -232,7 +237,7 @@ def capture_snapshot(
                 "data_degradation": _get_degradation_tracker().get_log(),
             }
         reporter.ok("环比对比数据准备完成")
-    except Exception:
+    except Exception:  # noqa: BLE001 — [环比] 数据准备跳过（首次运行或异常）
         logger.info("[环比] 数据准备跳过（首次运行或异常）", exc_info=True)
     return pipeline_data
 
@@ -290,7 +295,7 @@ def fetch_history_data(
         else:
             reporter.warn("组合历史走势数据获取失败（部分持仓可能不支持历史数据）")
         return history_data
-    except Exception:
+    except Exception:  # noqa: BLE001 — [历史走势] 数据获取跳过
         logger.info("[历史走势] 数据获取跳过", exc_info=True)
         return None
 
@@ -402,7 +407,7 @@ def fetch_extended_history(
             return data
         reporter.warn("子块长窗历史获取失败，相关子块将显示数据不足占位")
         return None
-    except Exception:
+    except Exception:  # noqa: BLE001 — [子块长窗] 历史获取跳过
         logger.info("[子块长窗] 历史获取跳过", exc_info=True)
         return None
 
@@ -433,7 +438,7 @@ def fetch_crisis_index_series(config: dict | None) -> dict | None:
         if raw and (raw.get(code) or {}).get("bars"):
             return raw[code]
         return None
-    except Exception:
+    except Exception:  # noqa: BLE001 — [危机回放] 指数长窗获取跳过
         logger.info("[危机回放] 指数长窗获取跳过", exc_info=True)
         return None
 

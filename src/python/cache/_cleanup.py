@@ -11,7 +11,7 @@ import time
 
 from src.python.core.registry import get_exact_ttl_map, get_exact_type_map, get_prefix_type_map
 
-from ._io import _read_cache_data
+from ._io import _read_cache_data, payload_timestamp
 from ._paths import _CACHE_DIR, cache_key_from_file_name
 from ._store import _cache_lock
 from ._ttl import get_cleanup_ttl
@@ -80,11 +80,7 @@ def _process_cache_file(
     if payload is None:
         return 1  # 损坏也算清理
 
-    raw_ts = payload.get("_ts")
-    try:
-        ts = float(raw_ts) if raw_ts is not None else 0.0
-    except (TypeError, ValueError):
-        ts = 0.0
+    ts = payload_timestamp(payload)
     if ts <= 0:
         # 非缓存引擎写入的文件（无 `_ts` 包封）：不能拿 epoch 当写入时间，否则算出
         # 「57 年陈货」每轮当过期删（实测脚本自管的性能缓存就因此白做）。
@@ -179,7 +175,7 @@ def auto_cleanup_expired() -> int:
     """
     try:
         return cleanup_expired(dry_run=False)
-    except Exception:  # noqa: BLE001 —— 自动清理绝不影响调用方
+    except Exception:  # noqa: BLE001 — 自动清理绝不影响调用方
         logger.debug("过期缓存自动清理失败（忽略，不影响主流程）", exc_info=True)
         return 0
 
@@ -235,7 +231,9 @@ def clean_sensitive(older_than_days: int = 90, dry_run: bool = False) -> int:
                 removed += 1
                 continue
 
-            ts = payload.get("_ts", 0)
+            # 时间戳非法（字符串/None）按「无法判定年龄」当 0 = 极旧：敏感缓存宁可多清不可留存，
+            # 也不得因单个畸形文件抛异常打断整轮清理（后面的敏感文件就不再处理）
+            ts = payload_timestamp(payload)
             age = now - ts
             if age <= older_than_secs:
                 continue

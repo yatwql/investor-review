@@ -26,7 +26,7 @@ from pathlib import Path
 def _run(cmd: list[str], root: Path) -> tuple[int, str]:
     """执行子命令，返回 (退出码, 合并输出尾部)。"""
     try:
-        proc = subprocess.run(  # noqa: S603 — 固定脚本路径，无 shell
+        proc = subprocess.run(  # 说明：固定脚本路径且不经 shell，无命令注入面
             cmd,
             cwd=str(root),
             capture_output=True,

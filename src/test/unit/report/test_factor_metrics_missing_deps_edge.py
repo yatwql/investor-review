@@ -16,6 +16,7 @@ import pytest
 from src.python.analysis.unavailable_contracts import factor_unavailable_result, industry_unavailable_result
 from src.python.report import _report_factor_metrics as rfm
 from src.python.report.progress import ProgressReporter
+from src.test._fixtures.reporters import RecordingReporter
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report, pytest.mark.edge]
 
@@ -50,20 +51,6 @@ _INDUSTRY_KEYS = {
 }
 
 
-class _Reporter:
-    def __init__(self) -> None:
-        self.warnings: list[str] = []
-
-    def info(self, msg: str, *a, **k) -> None:  # noqa: ARG002 —— 接口对齐
-        pass
-
-    def ok(self, msg: str, *a, **k) -> None:  # noqa: ARG002 —— 接口对齐
-        pass
-
-    def warn(self, msg: str, *a, **k) -> None:
-        self.warnings.append(msg)
-
-
 def _holding(code: str, name: str = "标的") -> SimpleNamespace:
     return SimpleNamespace(code=code, name=name, shares=100.0)
 
@@ -73,7 +60,7 @@ class TestCalcLayerMissingDependency:
         """计算层模块不可导入 → 因子区块降级（available=False），不抛异常。"""
         monkeypatch.setattr("src.python.config.is_enable_fund_deep_analysis", lambda config: True)
         monkeypatch.setitem(sys.modules, "src.python.analysis.style_factor_regression", None)
-        reporter = _Reporter()
+        reporter = RecordingReporter()
 
         result = rfm.compute_factor_exposure_data(
             [_holding("600900", "长江电力")], {}, cast(ProgressReporter, reporter)
@@ -83,7 +70,7 @@ class TestCalcLayerMissingDependency:
         assert set(result) == _FACTOR_KEYS
         assert result["available"] is False
         assert result["status"] == "source_failed"
-        assert reporter.warnings, "降级必须向用户可见（reporter.warn）"
+        assert reporter.warns, "降级必须向用户可见（reporter.warn）"
         assert result == factor_unavailable_result("source_failed"), "降级契约须与共享工厂逐键一致"
 
     def test_industry_beta_degrades_when_calc_module_unimportable(self, monkeypatch):
@@ -91,7 +78,7 @@ class TestCalcLayerMissingDependency:
         monkeypatch.setattr("src.python.config.is_enable_fund_deep_analysis", lambda config: True)
         monkeypatch.setattr("src.python.config.is_enable_factor_catalog", lambda: True)
         monkeypatch.setitem(sys.modules, "src.python.analysis.industry_beta", None)
-        reporter = _Reporter()
+        reporter = RecordingReporter()
 
         result = rfm.compute_industry_beta_data(
             [_holding("600900", "长江电力")],
@@ -104,5 +91,5 @@ class TestCalcLayerMissingDependency:
         assert set(result) == _INDUSTRY_KEYS
         assert result["available"] is False
         assert result["status"] == "source_failed"
-        assert reporter.warnings, "降级必须向用户可见（reporter.warn）"
+        assert reporter.warns, "降级必须向用户可见（reporter.warn）"
         assert result == industry_unavailable_result("source_failed"), "降级契约须与共享工厂逐键一致"

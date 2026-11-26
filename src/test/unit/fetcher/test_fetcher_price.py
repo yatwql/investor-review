@@ -791,3 +791,23 @@ class TestFetchPriceCacheRefresh(unittest.TestCase):
         self.assertEqual(result["price"], 29.60)
         self.assertEqual(mock_fallback.call_count, 2)
         mock_clear.assert_called_once_with("price_011506")
+
+
+class TestPriceGuards:
+    """行情元信息/类型判定的无效值收窄。"""
+
+    def test_cache_captured_at_degrades_on_error(self):
+        from src.python.fetcher import price
+
+        with patch("src.python.cache.get_cache_age", side_effect=RuntimeError("缓存损坏")):
+            assert price._cache_captured_at("price_600519") is None
+
+    def test_nameless_tencent_quote_rejected(self):
+        from src.python.fetcher.price import _validate_price_data
+
+        assert _validate_price_data({"price": 10.0}, "tencent", "贵州茅台") is False
+
+    def test_quote_without_source_api_has_no_price_kind(self):
+        from src.python.fetcher.price import price_kind_from_quote
+
+        assert price_kind_from_quote({"nav": 1.234}) is None

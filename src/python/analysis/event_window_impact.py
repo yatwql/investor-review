@@ -28,6 +28,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from src.python.analysis.whatif_backtest import _locf
+from src.python.core.dates import parse_datetime_ymd
 from src.python.core.trading_calendar import count_trading_days_elapsed
 
 logger = logging.getLogger("invest")
@@ -72,9 +73,8 @@ def map_event_to_trading_day(event_date: str, max_lookahead: int = 14) -> str | 
     Returns:
         YYYY-MM-DD 交易日；映射失败返回 None。
     """
-    try:
-        base = datetime.strptime(str(event_date).strip(), "%Y-%m-%d")
-    except (ValueError, TypeError):
+    base = parse_datetime_ymd(str(event_date).strip())
+    if base is None:
         return None
     for i in range(max(0, int(max_lookahead)) + 1):
         cand = (base + timedelta(days=i)).strftime("%Y-%m-%d")

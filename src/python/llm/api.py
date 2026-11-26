@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -49,7 +50,12 @@ _CONTENT_FILTER_RECOVERY = (
 追加到 system prompt 尾部重新请求。"""
 
 
-def _calm_retry(system_prompt: str, user_prompt: str, name: str, do_retry) -> tuple[str | None, dict | None]:
+def _calm_retry(
+    system_prompt: str,
+    user_prompt: str,
+    name: str,
+    do_retry: Callable[[str, str], tuple[str | None, dict | None]],
+) -> tuple[str | None, dict | None]:
     """追加安抚指令后重试一次（空白内容兜底）。
 
     Args:
@@ -144,7 +150,7 @@ def _resolve_first_provider_model_endpoint(
         if entry:
             _, model, endpoint = _resolve_entry_credentials(entry, llm_config)
             return (model, endpoint or "")
-    except Exception:
+    except Exception:  # noqa: BLE001 — [llm] _resolve_first_provider_model_endpoint 异常
         logger.debug("[llm] _resolve_first_provider_model_endpoint 异常", exc_info=True)
     return (None, "")
 
@@ -325,7 +331,7 @@ def call_llm(
     max_tokens: int | None = None,
     config_field: str = "max_tokens",
     temperature: float | None = None,
-    model: str | None = None,
+    model: str | None = None,  # noqa: ARG001 — call_llm 公开签名（provider 链按关键字传 provider 模型）
 ) -> tuple[str | None, dict | None, dict | None]:
     """调用 LLM API 生成文本（多 Provider 链式）。
 
@@ -408,7 +414,7 @@ def call_llm(
                 _sink = current_llm_observation()
                 if _sink is not None:
                     _sink.note_fallback()
-        except Exception:
+        except Exception:  # noqa: BLE001 — provider %s 异常，切换下一 provider
             logger.warning("provider %s 异常，切换下一 provider", _entry_desc, exc_info=True)
             attempted.append(f"{name}: EXCEPTION")
 
@@ -439,9 +445,9 @@ def call_llm(
 
 
 # ── Provider 调用实现（从子模块导入） ─────────────────
-from src.python.llm._api_claude import call_claude  # noqa: E402, F401
-from src.python.llm._api_openai import call_openai  # noqa: E402, F401
-from src.python.llm._api_gemini import call_gemini  # noqa: E402, F401
+from src.python.llm._api_claude import call_claude  # noqa: E402 — Provider 实现须排在分派定义之后
+from src.python.llm._api_openai import call_openai  # noqa: E402 — Provider 实现须排在分派定义之后
+from src.python.llm._api_gemini import call_gemini  # noqa: E402 — Provider 实现须排在分派定义之后
 
 __all__ = [
     "call_llm",

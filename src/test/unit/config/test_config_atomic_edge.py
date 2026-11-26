@@ -56,7 +56,7 @@ class TestConfigAtomicWriteConcurrency(unittest.TestCase):
                 set_config(f"thread_{idx}", idx)
                 with lock:
                     results[idx] = "ok"
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — 并发写用例：收集线程内任意异常（含竞态抛出）供断言，不在线程内断言
                 with lock:
                     results[idx] = str(e)
 
@@ -381,7 +381,7 @@ class TestConfigEnvEdge(unittest.TestCase):
         def _init():
             try:
                 cfg.init_config()
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — 用例收集初始化异常供统一断言，不中断其余初始化步骤
                 errors.append(e)
 
         threads = [threading.Thread(target=_init) for _ in range(2)]

@@ -17,6 +17,7 @@ from _test_runner.pytest_env import (
 )
 import time as _time
 from datetime import datetime
+from typing import Callable
 
 #: pytest 非测试失败退出码 → 可执行原因（否则只看到「0 passed, 0 failed（0.0s）」）。
 #: 环境变量名引用 `pytest_env` 常量，不在此重写字面量。
@@ -76,14 +77,12 @@ def run_mode(
     parallel_level: str | None = None,
     timeout_override: int | None = None,
     no_timeout: bool = False,
-    phased: bool = False,
 ) -> dict:
     """运行指定模式的测试。
 
     Args:
         mode_key: 模式名
         coverage: 是否启用覆盖率
-        phased: 启用分阶段运行（模式支持时有效）
 
     Returns:
         包含测试结果统计的字典
@@ -363,7 +362,7 @@ def _run_phased(
 def run_modes_concurrently(
     modes: list[str],
     jobs: int,
-    run_one,
+    run_one: Callable[[str], dict],
     *,
     fail_fast: bool = False,
 ) -> tuple[list[dict], list[str]]:

@@ -403,7 +403,7 @@ class TestNumericalEdge(unittest.TestCase):
         try:
             detail = _compute_detail_row(h, mkt)
             self.assertTrue(math.isnan(detail.market_value) or detail.market_value == 0.0)
-        except Exception:
+        except Exception:  # noqa: BLE001 — 测试断言口径：NaN 价格不得抛异常，抛出即判失败
             self.fail("NaN price should not cause exception")
 
     def test_nan_yclose_does_not_crash(self):
@@ -422,7 +422,7 @@ class TestNumericalEdge(unittest.TestCase):
             detail = _compute_detail_row(h, mkt)
             self.assertIsNotNone(detail)
             self.assertTrue(math.isnan(detail.today_profit) or detail.today_profit == 0.0)
-        except Exception:
+        except Exception:  # noqa: BLE001 — 测试断言口径：NaN 昨收不得抛异常，抛出即判失败
             self.fail("NaN yesterday_close should not cause exception")
 
     # ── int32 溢出 ──────────────────────────────────

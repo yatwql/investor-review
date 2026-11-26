@@ -28,6 +28,7 @@ from src.python.analysis.event_window_impact import (
 from src.python.core.code_utils import is_a_share_code, is_a_share_stock
 from src.python.core.log_dedupe import log_throttled
 from src.python.core.perf import SLOW_SPAN_WARN_SECONDS
+from src.python.report._format import fmt_pct_fraction
 
 logger = logging.getLogger("invest")
 
@@ -246,7 +247,7 @@ def build_event_rows(
                     text_polarity=polarity,
                     asset_code=code,
                 )
-            except Exception as exc:  # 取数/计算异常 → 降级不出行（不阻塞报告）
+            except Exception as exc:  # noqa: BLE001 — 取数/计算异常 → 降级不出行（不阻塞报告）
                 logger.warning("事件窗行降级 [%s %s]: %s", code, event_date, exc)
                 degraded.append({"code": code, "event_date": event_date, "reason": f"取数异常: {type(exc).__name__}"})
                 continue
@@ -309,14 +310,6 @@ LIMITATIONS_NOTE = (
     "超额收益 = 品种收益 − 基准指数收益；文本极性取新闻 LLM 关联判定标记（利好/利空/中性），"
     "中性与未判定不参与方向比对。"
 )
-
-
-def _fmt_pct(value: Any) -> str:
-    """收益 → 带符号百分比字符串（视图与提示词块共用，双端同文）。"""
-    try:
-        return f"{float(value) * 100:+.2f}%"
-    except (TypeError, ValueError):
-        return "—"
 
 
 def _short_title(title: str, limit: int = 32) -> str:
@@ -467,8 +460,8 @@ def build_event_impact_view(contract: dict[str, Any] | None) -> dict[str, Any]:
                 str(event.get("code") or ""),
                 str(event.get("matched_keyword") or ""),
                 str(event.get("polarity") or "—"),
-                _fmt_pct(event.get("asset_return")),
-                _fmt_pct(event.get("excess_return")),
+                fmt_pct_fraction(event.get("asset_return"), signed=True),
+                fmt_pct_fraction(event.get("excess_return"), signed=True),
                 str(event.get("direction") or "—"),
                 str(event.get("match") or "—"),
             ]
@@ -579,7 +572,7 @@ def build_event_impact_panel(
             comparison_indices=comparison_indices,
             benchmark_text_getter=benchmark_text_getter,
         )
-    except Exception:
+    except Exception:  # noqa: BLE001 — [event_impact] 基准指数映射失败，事件按缺基准逐条降级
         logger.warning("[event_impact] 基准指数映射失败，事件按缺基准逐条降级", exc_info=True)
         resolved = None
 

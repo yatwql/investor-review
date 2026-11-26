@@ -118,9 +118,11 @@ def _t_cdf(t: float, df: int) -> float:
 
     x = df / (df + t * t)
     if x <= 0:
-        return 1.0
+        # |t| 溢出为无穷时 x 下溢为 0：CDF 取两侧极限——左侧 0.0，右侧 1.0
+        return 0.0 if t < 0 else 1.0
     if x >= 1:
-        return 0.0
+        # t == 0 时 x 恰为 1（df>0）：中位数处 CDF 必须为 0.5，与 t→0⁺/0⁻ 两侧极限连续
+        return 0.5
 
     p = _incomplete_beta_cf(df / 2, 0.5, x)
     if t >= 0:
@@ -194,14 +196,12 @@ def _t_critical_95(df: int) -> float:
         # 大样本近似标准正态临界值 1.96
         return 1.96
 
-    # 线性插值
-    for i in range(len(keys) - 1):
-        if keys[i] < df < keys[i + 1]:
-            x0, x1 = float(keys[i]), float(keys[i + 1])
-            y0, y1 = _T95_TABLE[keys[i]], _T95_TABLE[keys[i + 1]]
-            return y0 + (y1 - y0) * (df - x0) / (x1 - x0)
-
-    return 1.96
+    # 线性插值（df 不在表中且落在 keys[0] < df < keys[-1] ⇒ 上下键唯一存在）
+    x0_key = max(k for k in keys if k < df)
+    x1_key = min(k for k in keys if k > df)
+    x0, x1 = float(x0_key), float(x1_key)
+    y0, y1 = _T95_TABLE[x0_key], _T95_TABLE[x1_key]
+    return y0 + (y1 - y0) * (df - x0) / (x1 - x0)
 
 
 def _beta_se(

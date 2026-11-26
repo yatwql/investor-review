@@ -21,7 +21,7 @@ import argparse
 import io
 import re
 import sys
-from typing import Any, cast
+from typing import Any, Callable, cast
 from collections import Counter
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -32,24 +32,24 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 _SCRIPTS_DIR = Path(__file__).resolve().parent
-if str(_SCRIPTS_DIR) not in sys.path:  # noqa: E402
+if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))  # 同目录共享模块（_test_runner）
 
-from _test_runner.modes import (  # noqa: E402
+from _test_runner.modes import (
     MODES,
     UNIT_DOMAIN_LABELS,
     compile_marker_expr,
     mode_marker_expr,
 )
-from _shared.checklib import rel  # noqa: E402
-from _doc_drift._format import (  # noqa: E402
+from _shared.checklib import rel
+from _doc_drift._format import (
     _COUNT_CELL,
     _COUNT_NAME_ALIAS,
     _DOMAIN_LABEL_TO_MARKER,
     _TEST_COVERAGE_DOMAIN_ROW,
     _TEST_COVERAGE_ROW,
 )
-from _doc_drift._shared import (  # noqa: E402
+from _doc_drift._shared import (
     _FOLDERS_MD,
     _TEST_COVERAGE_MD,
     _split_table_row,
@@ -65,7 +65,7 @@ _OMITTED_MODES: dict[str, str] = {
 }
 
 # 模式 → 谓词：由 MODES 的 marker 表达式现场编译（表达式无第二份定义）
-_MODE_PREDICATES: dict[str, object] = {
+_MODE_PREDICATES: dict[str, Callable[[set[str]], bool]] = {
     name: compile_marker_expr(mode_marker_expr(name)) for name in MODES if name not in _OMITTED_MODES
 }
 
@@ -112,7 +112,7 @@ collected: list[tuple[str, set[str]]] = []
 
 
 class CollectPlugin:
-    def pytest_collection_finish(self, session):
+    def pytest_collection_finish(self, session: pytest.Session):
         collected.clear()
         for item in session.items:
             markers = {m.name for m in item.iter_markers()}
@@ -174,7 +174,7 @@ def _build_snapshot() -> dict[str, int]:
     后写语义一致（重叠四处谓词与裸标记判定实测同值）。
     """
 
-    def count(sel) -> int:
+    def count(sel: Callable[[set[str]], bool]) -> int:
         return sum(1 for _, m in collected if sel(m))
 
     snap: dict[str, int] = {"_总收集": len(collected)}

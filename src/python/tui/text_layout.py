@@ -154,16 +154,15 @@ def wrap_display(text: str, columns: int) -> list[str]:
                 continue
             candidate = current + token
             if display_width(candidate) <= columns or not current.strip():
-                # 单个 token 本身就超宽时按列硬切，避免整行越界
+                # 单个 token 本身就超宽时按列硬切，避免整行越界。
+                # 能进这里时 current 已无内容（current 非空白则 candidate 必不超宽），
+                # 故无需把已积累的行冲刷出去。
                 while display_width(candidate) > columns and display_width(token) > columns:
                     cut = ""
                     for char in token:
                         if display_width(cut + char) > columns:
                             break
                         cut += char
-                    if current.strip():
-                        lines.append(current.rstrip())
-                        current = ""
                     lines.append(cut)
                     token = token[len(cut) :]
                     candidate = current + token
@@ -253,14 +252,11 @@ def wrap_hanging(text: str, columns: int, indent: str = "    ") -> list[str]:
     first = True
     while remaining:
         budget = columns if first else max(10, columns - indent_width)
-        wrapped = wrap_display(remaining, budget)
-        if not wrapped:
-            break
-        head = wrapped[0]
+        # wrap_display 对非空文本恒至少返回一行（空段落也计入空行）→ 不判空
+        head = wrap_display(remaining, budget)[0]
         lines.append(head if first else indent + head)
+        # wrap_display 只在空白处或按列切分、字符原样保留 → head 必是 remaining 的连续子串
         cut = remaining.find(head)
-        if cut < 0:
-            break
         remaining = remaining[cut + len(head) :].lstrip()
         first = False
     return lines
@@ -324,14 +320,11 @@ def wrap_with_prefix(prefix: str, text: str, columns: int, *, indent: str | None
     prefix_cell = prefix
     budget = max(10, columns - display_width(prefix_cell))
     while remaining:
-        wrapped = wrap_display(remaining, budget)
-        if not wrapped:
-            break
-        chunk = wrapped[0]
+        # wrap_display 对非空文本恒至少返回一行（空段落也计入空行）→ 不判空
+        chunk = wrap_display(remaining, budget)[0]
         lines.append(prefix_cell + chunk)
+        # 同理：chunk 必是 remaining 的连续子串 → find 恒 ≥ 0
         cut = remaining.find(chunk)
-        if cut < 0:
-            break
         remaining = remaining[cut + len(chunk) :].lstrip()
         if not remaining:
             break

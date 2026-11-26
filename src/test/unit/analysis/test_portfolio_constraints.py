@@ -138,3 +138,66 @@ def test_status_of_labels():
     assert pc.status_of(None, None, False)[0] == "未配置"
     assert pc.status_of(30.0, None, False)[0] == "未评估"
     assert pc.status_of(30.0, 10.0, False)[0] == "正常"
+
+
+class TestConfigCoercionBranches:
+    """配置值/市值行的类型收窄分支：非法值按「未配置 / 无有效市值」处理，绝不抛错。"""
+
+    def test_single_weight_skips_invalid_market_value_rows(self):
+        """非数值/布尔/非正市值行不参与最大权重比较（避免 bool 当 1 参与排序）。"""
+        rows = [
+            {"name": "甲", "code": "000001", "market_value": "180"},
+            {"name": "乙", "code": "000002", "market_value": True},
+            {"name": "丙", "code": "000003", "market_value": 0.0},
+            {"name": "丁", "code": "000004", "market_value": 100.0},
+        ]
+
+        best_pct, best_holder, _ = pc.max_single_weight(rows, 1000.0)
+
+        assert best_pct == pytest.approx(10.0)
+        assert best_holder == "丁（000004）"
+
+    def test_non_numeric_threshold_degrades_to_zero_limit(self, monkeypatch):
+        """rebalance.threshold 非数值 → 上限按 0% 处理（不抛 ValueError 带倒三道约束）。"""
+        monkeypatch.setattr(
+            "src.python.analysis.rebalance.resolve_rebalance_config",
+            lambda _cfg: {"threshold": "高"},
+        )
+
+        assert pc._single_limit_pct({}) == 0.0
+
+    def test_to_float_rejects_bool_and_unparsable(self):
+        assert pc._to_float(True) is None, "布尔不是配置数值（True 会被当成 1.0）"
+        assert pc._to_float(object()) is None
+        assert pc._to_float("12.5") == pytest.approx(12.5)
+
+    def test_breached_codes_skip_invalid_rows(self):
+        _enable()
+
+        out = pc.evaluate_constraints(
+            [
+                {"name": "甲", "code": "000001", "market_value": 600.0},
+                {"name": "脏行", "code": "000009", "market_value": "n/a"},
+                {"name": "乙", "code": "000002", "market_value": 300.0},
+            ],
+            1000.0,
+            config={"rebalance": {"threshold": 0.15}},
+        )
+
+        assert out["breached_codes"] == ["000001", "000002"], "脏市值行不列入超限代码"
+
+    def test_correlation_configured_without_value_is_not_evaluated(self):
+        """样本窗口达标但相关性值缺席 → 「未评估」并注明缺计算结果。"""
+        _enable()
+
+        out = pc.evaluate_constraints(
+            _holdings(("000001", 100.0)),
+            1000.0,
+            config={"constraints": {"correlation_max": 0.8, "correlation_min_window_days": 250}},
+            correlation_window_days=300,
+        )
+
+        corr = out["items"][2]
+        assert corr["current_pct"] is None
+        assert corr["breached"] is False
+        assert corr["note"] == "缺相关性计算结果"

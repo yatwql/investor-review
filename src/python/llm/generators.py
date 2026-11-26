@@ -36,7 +36,7 @@ from src.python.llm.skeleton import CACHE_PREFIX_LLM, generate_llm_module
 from src.python.llm.holding_change_review import generate_holding_change_review
 
 # ── 门面再导出（单例域子模块；_llm_dispatch / 测试导入面保持稳定） ──
-from src.python.llm.generators_singletons import (  # noqa: F401
+from src.python.llm.generators_singletons import (
     generate_expert_review,
     generate_global_macro,
     generate_health_check,

@@ -70,7 +70,7 @@ def _inject_optional_section(
         pipeline_data = {}
     try:
         pipeline_data[data_key] = builder(snapshot_namespace)
-    except Exception:
+    except Exception:  # noqa: BLE001 — [%s] %s（非关键）
         logger.warning("[%s] %s（非关键）", log_tag, failure_reason, exc_info=True)
         pipeline_data[data_key] = {"available": False, "reason": failure_reason}
     return pipeline_data

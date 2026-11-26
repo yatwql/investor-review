@@ -205,8 +205,8 @@ def copy_file_atomic(
     dst: str,
     *,
     prefix: str = ".atomic_",
-    log_tag: str = "atomic",
-    noun: str = "文件",
+    log_tag: str = "atomic",  # noqa: ARG001 — 与 write_*_atomic 家族同签名（关键字传参契约）
+    noun: str = "文件",  # noqa: ARG001 — 与 write_*_atomic 家族同签名（关键字传参契约）
 ) -> None:
     """原子复制：``shutil.copy2`` 到 dst 同目录临时文件 → :func:`_replace` 顶替 dst。
 

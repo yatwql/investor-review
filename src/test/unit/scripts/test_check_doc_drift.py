@@ -557,3 +557,20 @@ class TestAuditLogged:
 
         changelog = "## [9.9.9-dev] - 开发中（未发布）\n\n- **新功能**：只加功能\n"
         assert check_audit_logged(changelog, self.FINDINGS_EMPTY) == []
+
+
+class TestFormatDocReadFailure:
+    """文档读不到时降级为「无 finding」：文件缺失不应把守护脚本变成崩溃。"""
+
+    def test_missing_docs_degrade_to_no_findings(self, tmp_path, monkeypatch):
+        from scripts._doc_drift import _format
+
+        absent = tmp_path / "absent"
+        monkeypatch.setattr(_format, "_CLAUDE_MD", absent / "CLAUDE.md")
+        monkeypatch.setattr(_format, "_README", absent / "README.md")
+        monkeypatch.setattr(_format, "_MANUALS", absent)
+
+        assert _format.check_claude_md_derived_counts() == []
+        assert _format.check_readme_doc_index() == []
+        assert _format.check_readme_derived_counts() == []
+        assert _format.check_manuals_index() == []

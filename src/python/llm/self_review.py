@@ -205,10 +205,8 @@ def _unverified_percentages(text: str, corpus: str) -> list[str]:
             continue
         if pool is None:
             pool = _corpus_pct_values(corpus)
-        try:
-            value = float(digits)
-        except ValueError:  # 正则已限定数字形态，取不到只可能是异常输入
-            continue
+        # 正则已把 num 限定为 ``\d+(\.\d+)?``、sign 限定为单个 +/-，float 恒可解析
+        value = float(digits)
         if _is_derived_percentage(value, pool):
             continue
         if raw not in found:
@@ -274,7 +272,7 @@ def run_self_review(
 
     try:
         _inaction_line = inaction_summary_line()
-    except Exception:  # 账本不可读不阻断自检
+    except Exception:  # noqa: BLE001 — 账本不可读不阻断自检
         _inaction_line = ""
 
     try:

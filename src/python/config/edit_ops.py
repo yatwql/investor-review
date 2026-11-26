@@ -272,7 +272,9 @@ def config_backup_file(path: str) -> str | None:
     return bak_path
 
 
-def _dispatch_write(entry: dict, key: str, value) -> None:
+# 原始值类型为 Any：入参是 ``payload.get("value")`` 的 JSON 原始值（str/bool/数值/None），
+# 按 ``entry["kind"]`` 分支校验后归一化，校验失败即 ConfigEditError
+def _dispatch_write(entry: dict, key: str, value: Any) -> None:
     """按白名单写入原语分派（渠道无关的唯一写入路径）。"""
     writer = entry["writer"]
     if writer == "scalar":
@@ -297,7 +299,7 @@ def _dispatch_write(entry: dict, key: str, value) -> None:
         raise ConfigEditError(f"未知写入原语: {writer}")
 
 
-def _write_logging(key: str, value) -> None:
+def _write_logging(key: str, value: str | int | bool) -> None:
     """写 logger.json 的单个扁平键（``logging.<键>`` → ``write_logger_config``）。
 
     校验与写回（文本 patch 保注释、非法值不落盘）全部委托 ``config._logging``，
@@ -323,7 +325,7 @@ def _write_llm_enabled(key: str, value: bool) -> None:
     write_llm_settings(settings, settings_path)
 
 
-def _write_llm_scalar(key: str, value) -> None:
+def _write_llm_scalar(key: str, value: str | int | float | bool) -> None:
     """写 llm_settings.json 的顶层标量（读原始落盘 → 合并 → 保留注释写回）。"""
     from src.python.config._llm_settings import get_llm_settings_path, read_llm_settings_file, write_llm_settings
 
@@ -333,7 +335,9 @@ def _write_llm_scalar(key: str, value) -> None:
     write_llm_settings(settings, path)
 
 
-def _coerce_number(key: str, value, kind: str, entry: dict) -> int | float:
+# 原始值类型为 Any：入参是未经校验的用户输入（bool/数字/数字字符串/None），
+# 内部试强转，非法即 ConfigEditError
+def _coerce_number(key: str, value: Any, kind: str, entry: dict) -> int | float:
     """数值型编辑：接受数字或数字字符串，校验类型与范围（超范围明确报错，不静默裁剪）。"""
     if isinstance(value, bool):  # bool 是 int 子类，必须先拒
         raise ConfigEditError(f"配置项 {key} 应为{'整数' if kind == 'int' else '数值'}")
@@ -349,7 +353,7 @@ def _coerce_number(key: str, value, kind: str, entry: dict) -> int | float:
     return number
 
 
-def _normalize_plain_value(key: str, value, entry: dict):
+def _normalize_plain_value(key: str, value: Any, entry: dict):
     """标量/布尔/枚举/数值编辑的纯校验与归一化（不写盘）。"""
     kind = entry["kind"]
     if kind == "str":

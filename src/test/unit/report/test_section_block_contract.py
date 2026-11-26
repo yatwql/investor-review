@@ -155,5 +155,66 @@ class TestSpecSideHelpers:
 
     def test_specs_are_frozen(self):
         spec = next(iter(SECTION_BLOCK_SPECS.values()))
-        with pytest.raises(Exception):  # noqa: B017 — dataclass frozen 写入即抛，类型不限
+        with pytest.raises(Exception):  # 说明：dataclass frozen 写入即抛，异常类型不限
             spec.html = ()
+
+
+class TestExtractionPrimitiveEdges:
+    """提取原语的兜底与静态约束分支。"""
+
+    def test_normalize_breaks_on_unbalanced_paren(self):
+        """括号未闭合 → 循环收敛后原样保留（不死循环、不吞字）。"""
+        from src.python.report.section_block_extraction import normalize_block_title
+
+        assert normalize_block_title("甲区块（未闭合") == "甲区块（未闭合"
+
+    def test_call_name_returns_none_for_non_name_func(self):
+        """调用目标既非 Name 也非 Attribute（如下标取值）→ 无法判定名字。"""
+        import ast
+
+        from src.python.report.section_block_extraction import _call_name
+
+        node = ast.parse("(funcs[0])()", mode="eval").body
+        assert _call_name(node.func) is None
+
+    def test_resolve_title_keyword_form(self):
+        """标题以 ``title=`` 关键字传入（无第 3 位参）也能静态取到。"""
+        import ast
+
+        from src.python.report.section_block_extraction import _resolve_title
+
+        node = ast.parse('write_block_title(ws, row, title="甲区块")', mode="eval").body
+        assert _resolve_title(node, {}) == "甲区块"
+
+    def test_resolve_at_constant_name_and_keyword(self):
+        """第 index 位为模块常量名 → 查常量表；无位参时回落到文本类关键字。"""
+        import ast
+
+        from src.python.report.section_block_extraction import _resolve_at
+
+        by_const = ast.parse("_write_sub(ws, row, TITLE_X)", mode="eval").body
+        assert _resolve_at(by_const, 2, {"TITLE_X": "乙区块"}) == "乙区块"
+
+        by_kw = ast.parse('_write_sub(ws, row, text="丙区块")', mode="eval").body
+        assert _resolve_at(by_kw, 5, {}) == "丙区块"
+
+        non_text_kw = ast.parse("_write_sub(ws, row, label=42)", mode="eval").body
+        assert _resolve_at(non_text_kw, 5, {}) is None
+
+    def test_forwarder_call_with_dynamic_title_raises(self, tmp_path):
+        """直通包装调用点的位参不是静态文本 → ValueError（区块契约要求静态可提取）。"""
+        mod = tmp_path / "fake_writer.py"
+        mod.write_text(
+            """
+def _write_sub(ws, row, title, ncols):
+    write_block_title(ws, row, title, ncols=ncols)
+
+
+def use(ws, dynamic_title):
+    _write_sub(ws, 1, dynamic_title, 4)
+""",
+            encoding="utf-8",
+        )
+        with pytest.raises(ValueError) as ctx:
+            extract_excel_block_titles([mod])
+        assert "区块包装调用第" in str(ctx.value)

@@ -116,7 +116,7 @@ class TestProcessSuccessResponseEdge(unittest.TestCase):
             )
             self.assertEqual(content, "no usage data")
             self.assertIsNone(usage)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — 测试断言口径：缺失 usage 不得抛异常，抛出即判失败
             self.fail(f"usage 缺失引发异常: {e}")
 
 

@@ -9,10 +9,14 @@ from __future__ import annotations
 import os
 from concurrent.futures import as_completed
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 import src.python.core.logger as _logger_mod
 
 logger = _logger_mod.setup_logger()
+
+if TYPE_CHECKING:
+    from src.python.core.progress import ProgressReporterProtocol
 
 
 # ── 数据结构 ───────────────────────────────────────────────
@@ -157,7 +161,7 @@ class CacheStats:
 # ═══════════════════════════════════════════════════════════════
 
 
-def update_basic_cache(holdings: list, reporter) -> CacheUpdateResult:
+def update_basic_cache(holdings: list, reporter: ProgressReporterProtocol) -> CacheUpdateResult:
     """更新基础类缓存（基金业绩+持仓+基准 + 公共缓存 + 扩展缓存）。
 
     内部管理线程池，operations 池唯一存在。
@@ -246,7 +250,7 @@ def update_basic_cache(holdings: list, reporter) -> CacheUpdateResult:
                     reporter.ok(f"分红数据 ({result.div_ok} 只股票)")
                 else:
                     reporter.warn("分红数据 获取失败")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — 缓存刷新 Future 异常: %s
             logger.debug("缓存刷新 Future 异常: %s", e)
             result.errors.append(f"缓存刷新异常: {e}")
             reporter.warn("基金刷新异常" if tag == "fund" else "其他缓存刷新异常")
@@ -261,7 +265,9 @@ def update_basic_cache(holdings: list, reporter) -> CacheUpdateResult:
 # ═══════════════════════════════════════════════════════════════
 
 
-def _fetch_prices_and_indices(holdings: list, reporter) -> tuple[PositionCacheResult, list[dict]]:
+def _fetch_prices_and_indices(
+    holdings: list, reporter: ProgressReporterProtocol
+) -> tuple[PositionCacheResult, list[dict]]:
     """并行获取持仓价格 + 市场指数，通过 reporter.* 输出进度。
 
     内部管理线程池，operations 池唯一存在。
@@ -305,7 +311,7 @@ def _fetch_prices_and_indices(holdings: list, reporter) -> tuple[PositionCacheRe
                     reporter.ok(f"{h.name} ({h.code}) → {price_res['price']:.4f}")
                 else:
                     reporter.warn(f"{h.name} ({h.code}) → 失败")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — 单标的价格取数异常按失败计入预热结果，不中断整批预热
             if h_or_none is not None:
                 _msg = str(e)
                 if any(kw in _msg.lower() for kw in ("connect", "timeout", "network", "reset")):
@@ -320,7 +326,7 @@ def _fetch_prices_and_indices(holdings: list, reporter) -> tuple[PositionCacheRe
     return result, details
 
 
-def update_position_cache(holdings: list, reporter) -> PositionCacheResult:
+def update_position_cache(holdings: list, reporter: ProgressReporterProtocol) -> PositionCacheResult:
     """更新行情类缓存（价格+指数），并给出「刷新后仍有不规范数据」的判定。
 
     内部管理线程池，使用 reporter.* 输出进度。
@@ -451,7 +457,7 @@ def _judge_after_refresh(holdings: list, details: list[dict]) -> tuple[str, list
         from src.python.core.trading_calendar import get_last_trading_day
 
         trading_day = get_last_trading_day()
-    except Exception as e:  # 交易日历不可得：只丢判定，不影响已刷新的缓存
+    except Exception as e:  # noqa: BLE001 — 交易日历不可得：只丢判定，不影响已刷新的缓存
         logger.debug("刷新后取价口径判定跳过: %s", e)
         return "", None
     return trading_day, _market_breakdown(holdings, normalized, trading_day)
@@ -462,7 +468,7 @@ def _judge_after_refresh(holdings: list, details: list[dict]) -> tuple[str, list
 # ═══════════════════════════════════════════════════════════════
 
 
-def cleanup_cache(reporter) -> int:
+def cleanup_cache(reporter: ProgressReporterProtocol) -> int:
     """清理过期缓存文件。
 
     Returns:
@@ -480,7 +486,7 @@ def cleanup_cache(reporter) -> int:
     return removed
 
 
-def get_cache_stats(reporter) -> CacheStats:
+def get_cache_stats(reporter: ProgressReporterProtocol) -> CacheStats:
     """返回缓存统计信息，无 print 格式化。
 
     扫描 data/cache、data/history/snapshots、data/state 三个目录。
@@ -546,7 +552,7 @@ def _dir_file_stats(directory: str, suffix: str = "") -> tuple[int, int]:
     return files, size
 
 
-def update_all_cache(holdings: list, reporter) -> int:
+def update_all_cache(holdings: list, reporter: ProgressReporterProtocol) -> int:
     """基础 + 持仓全量缓存更新（最大努力模式，渠道无关）。
 
     basic 失败仍继续 position；退出码取两者最大值（单调：失败等级越高越严重）。
@@ -563,7 +569,7 @@ def update_all_cache(holdings: list, reporter) -> int:
     return max(basic_result.exit_code, pos_result.exit_code)
 
 
-def warm_new_asset_caches(holdings: list, reporter) -> list[str]:
+def warm_new_asset_caches(holdings: list, reporter: ProgressReporterProtocol) -> list[str]:
     """持仓变更预热：检测新增资产并预取行情 / 基金业绩与持仓 / 行业分类。
 
     变更检测委托 ``cache.check_and_refresh_caches``；预取编排属缓存域业务，
@@ -618,7 +624,7 @@ def warm_new_asset_caches(holdings: list, reporter) -> list[str]:
             else:
                 reporter.warn(f"行业 {name} 无数据")
         reporter.ok("新增资产缓存预热完成")
-    except Exception:
+    except Exception:  # noqa: BLE001 — 新资产预热过程异常，跳过（不影响后续生成）
         logger.warning("新资产预热过程异常，跳过（不影响后续生成）", exc_info=True)
     return new_codes
 

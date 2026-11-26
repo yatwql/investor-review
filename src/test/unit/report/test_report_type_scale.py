@@ -273,7 +273,26 @@ class TestReportCssRulesetBaseline:
     """
 
     #: 归一化「选择器→声明」多重集 sha256（删 3 条未使用的 bg-* 工具类后重标定）
-    _RULESET_HASH = "69337d3170f246683070204bd8c19f04cf1b4245dd1f8db8c9687140d261fe25"
+    # 基线复核（2026-11-26，热力/相关性档改 class 批次）：新增 6 条工具类规则
+    # （.heat-strong/.heat-mid/.heat-weak/.heat-faint/.corr-pos-strong/.corr-neg-strong），
+    # 声明与原先写在 style 属性里的完全相同（background/color/font-weight），
+    # 只是从内联属性搬到类；同时新增 --on-strong-bg / --chart-* 暗色 token。
+    # 视觉等价（同属性同值，元素上无其他规则竞争），业务字节面零变化。
+    # 基线复核（2026-11-26，灰色内联色归位语义类批次）：语义色工具类块新增
+    # `.text-faint` / `.text-secondary` 两条规则（`.text-muted` 沿用既有规则），
+    # 声明即 `color: var(--text-<同名 token>)`，与原内联 style 声明等值；规则集仅此 +2。
+    # 基线复核（2026-11-26，彩色内联色归位语义类批次）：语义色工具类块新增
+    # `.text-tertiary` / `.text-danger` 与 `.llm-status-{disabled,failed,cached,success,unknown,thinking}`
+    # 共 8 条规则，声明即 `color: var(--<同名 token>)`，与原内联 style 声明等值；
+    # 规则集仅此 +8（186 → 194 条），无删无改，业务字节面零变化。
+    # 基线复核（2026-11-26，空态警报字幕层叠收口批次）：新增 `.empty-section.t-warn`
+    # 共 1 条规则（194 → 195 条），声明即内联 `color: var(--warn-text)`。归因可辨识：
+    # 从本次渲染规则集里移除该条后重算哈希，恰等于基准 06f31870…，故规则集变化
+    # 严格为 +1 条（彩色内联色批次之后无其他漂移）。层叠等价证明：
+    # `.t-warn` 单类（0,1,0）会被其后 `.empty-section` 的 `color: var(--text-muted)` 压住，
+    # 故取 2 类复合选择器 `.empty-section.t-warn`（0,2,0）胜出；声明值与内联值逐字相同，
+    # 模板侧仅去该条内联 color、增 `t-warn` 类，其余两声明（background / border-color）不动。
+    _RULESET_HASH = "fc68f16a1052d6b814cf3b5fe663bfff8693ba260197f129dd9ca88c3f43a9d8"
 
     def _ruleset_hash(self) -> tuple[str, int, int]:
         import hashlib

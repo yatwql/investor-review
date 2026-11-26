@@ -93,7 +93,7 @@
                             {% if item.used %}
                             <span class="src-matrix-ok">&#10003; 已使用</span>
                             {% else %}
-                            <span style="color: var(--text-muted);">&#9675; 未使用</span>
+                            <span class="text-muted">&#9675; 未使用</span>
                             {% endif %}
                         </td>
                     </tr>
@@ -161,7 +161,7 @@
                         </td>
                         <td style="text-align:left;">
                             {% if item.jump_label %}<span class="src-matrix-failed">{{ item.jump_label }}</span>
-                            {% else %}{{ "%.2f"|format(item.change_pct) }}%{% endif %}
+                            {% else %}{{ '%.2f'|format(item.change_pct) }}%{% endif %}
                         </td>
                     </tr>
                     {% endfor %}

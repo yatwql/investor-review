@@ -13,7 +13,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from typing import TYPE_CHECKING
+
 from src.python.tui.text_layout import terminal_columns, wrap_hanging
+
+if TYPE_CHECKING:  # 仅类型标注：panel_runtime 反向导入本模块，运行期不可互相 import
+    from src.python.tui.panel_runtime import PanelItem
 
 __all__ = ["panel_prompt", "keys_help_lines", "item_detail_lines"]
 
@@ -53,7 +59,7 @@ def panel_prompt(
     return " · ".join(parts) + ": "
 
 
-def keys_help_lines(items, *, columns: int | None = None) -> list[str]:  # noqa: ANN001 - PanelItem 协议
+def keys_help_lines(items: Sequence[PanelItem], *, columns: int | None = None) -> list[str]:
     """``?`` 无参帮助：本面板可用键与作用（含导航与返回口径）。
 
     Args:
@@ -73,7 +79,7 @@ def keys_help_lines(items, *, columns: int | None = None) -> list[str]:  # noqa:
     return lines
 
 
-def item_detail_lines(item, *, hint: str | None = None, columns: int | None = None) -> list[str]:  # noqa: ANN001
+def item_detail_lines(item: PanelItem, *, hint: str | None = None, columns: int | None = None) -> list[str]:
     """``?N`` 单项详情：键、名称与可选说明。
 
     Args:

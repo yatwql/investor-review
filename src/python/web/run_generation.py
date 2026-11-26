@@ -19,9 +19,13 @@ from __future__ import annotations
 
 import logging
 import os
+from typing import TYPE_CHECKING
 
 from src.python.config import resolve_output_dir, get_default
 from src.python.core.constants import EXIT_PARTIAL, EXIT_SEVERE, EXIT_SUCCESS
+
+if TYPE_CHECKING:  # 仅类型标注：runs 经 app 工厂注入，运行期本模块不依赖它
+    from src.python.web.runs import RunState
 
 logger = logging.getLogger("invest")
 
@@ -44,7 +48,7 @@ def _web_input_mode_snapshot_domain(mode: str) -> str | None:
     return "web" if mode == "trial" else None
 
 
-def _run_generation(state, params: dict) -> int:
+def _run_generation(state: RunState, params: dict) -> int:
     """RunManager 执行体入口：委托 ``_run_generation_impl``，收尾派发完成通知。
 
     通知契约与 CLI ``_handle_report`` 同构：门控前置（未配置不碰跟踪器）、
@@ -57,7 +61,7 @@ def _run_generation(state, params: dict) -> int:
     return exit_code
 
 
-def _run_generation_impl(state, params: dict, result_box: dict | None = None) -> int:
+def _run_generation_impl(state: RunState, params: dict, result_box: dict | None = None) -> int:
     """单个 run 的执行体：读持仓 → 建 reporter → generate_report → 映射退出码。
 
     ``result_box``（可选出参）回传 ``ReportResult``，供收尾通知载荷读取
@@ -180,7 +184,7 @@ def _run_generation_impl(state, params: dict, result_box: dict | None = None) ->
             discard_file(file_id)
 
 
-def _notify_web_completion(state, params: dict, exit_code: int, result: object) -> None:
+def _notify_web_completion(state: RunState, params: dict, exit_code: int, result: object) -> None:
     """Web 生成收尾完成/失败通知（门控前置 + 尽力而为，与 CLI ``_notify_report_completion`` 同构）。
 
     Web 手动生成与内置定时调度共用 ``_run_generation`` 执行体——两条链路的
@@ -212,11 +216,11 @@ def _notify_web_completion(state, params: dict, exit_code: int, result: object) 
             degradations=degradation_summary(),
         )
         dispatch_completion_notification(event, notify_cfg)
-    except Exception:
+    except Exception:  # noqa: BLE001 — 完成通知发送流程异常（非关键，不影响任务）
         logger.debug("完成通知发送流程异常（非关键，不影响任务）", exc_info=True)
 
 
-def _build_artifacts(params: dict, state) -> list[dict]:
+def _build_artifacts(params: dict, state: RunState) -> list[dict]:
     """按 report_type 计算产物清单（路径相对 output_dir，供前端渲染按钮）。
 
     类型 → kind 规则委托 `orchestrator.artifacts_for_report_type` 单源（禁止渠道

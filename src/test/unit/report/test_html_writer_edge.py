@@ -213,11 +213,11 @@ class TestWriteHtmlReportDataStatus(unittest.TestCase):
             stack.enter_context(
                 patch("src.python.report.html_renderers.price_update_status", return_value=(0, 0, True))
             )
-            # 穿透子函数 mock — 返回空穿透结果（industry_success=False）
+            # 穿透子函数 mock — 返回空穿透结果
             stack.enter_context(
                 patch(
                     "src.python.report.html_writer._render_penetration_section",
-                    return_value=({"top10": [], "summary": {}, "industry_success": False}, False, True),
+                    return_value=({"top10": [], "summary": {}}, False, True),
                 )
             )
             # 基金业绩子函数 mock（第二项为候选比较数据，开关关闭时为 None）
@@ -277,7 +277,7 @@ class TestWriteHtmlReportDataStatus(unittest.TestCase):
             stack.enter_context(
                 patch(
                     "src.python.report.html_writer._render_penetration_section",
-                    return_value=({"top10": [], "summary": {}, "industry_success": True}, True, True),
+                    return_value=({"top10": [], "summary": {}}, True, True),
                 )
             )
             # 基金业绩子函数 — profit_success=False（第二项为候选比较数据，开关关闭时为 None）
@@ -431,7 +431,7 @@ class TestWriteHtmlReportFundDeepAnalysisEmpty(unittest.TestCase):
         stack.enter_context(
             patch(
                 "src.python.report.html_writer._render_penetration_section",
-                return_value=({"top10": [], "summary": {}, "industry_success": False}, False, True),
+                return_value=({"top10": [], "summary": {}}, False, True),
             )
         )
         stack.enter_context(

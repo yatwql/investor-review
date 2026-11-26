@@ -194,7 +194,7 @@ def _apply_edit(payload: dict) -> bool:
             from src.python.config.edit_ops import read_config_value
 
             before = read_config_value(key)
-        except Exception:
+        except Exception:  # noqa: BLE001 — [config] 读取变更前值失败（撤销将跳过该键）: %s
             logger.debug("[config] 读取变更前值失败（撤销将跳过该键）: %s", key, exc_info=True)
     try:
         apply_config_edit(payload)
@@ -229,7 +229,7 @@ def _read_llm_settings() -> tuple[dict, str] | None:
     return snapshot
 
 
-def _edit_single_config(key: str, label: str, default: str = "", *, pre_hook=None) -> None:
+def _edit_single_config(key: str, label: str, default: str = "", *, pre_hook: Callable[[], None] | None = None) -> None:
     """通用单配置项编辑命令。
 
     封装 刷新 → 显示当前值 → 输入新值 → 保存 的重复模式。

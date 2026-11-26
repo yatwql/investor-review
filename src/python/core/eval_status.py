@@ -107,7 +107,7 @@ def run_post_eval(
         return {"ok": False, "returncode": None, "error": f"脚本不存在: {path}", "tail": ""}
     cmd = [python or sys.executable, str(path), *stages]
     try:
-        proc = subprocess.run(  # noqa: S603 - 固定脚本路径 + 固定阶段白名单，无用户输入拼接
+        proc = subprocess.run(  # 说明：固定脚本路径 + 固定阶段白名单，无用户输入拼接
             cmd,
             capture_output=True,
             text=True,
