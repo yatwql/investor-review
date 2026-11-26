@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.18.7-dev
-> **编号源**：`rf-next = 1204`（新增问题提出后更新为 +1；已用最大 rf-1203，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1205`（新增问题提出后更新为 +1；已用最大 rf-1204，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -80,6 +80,7 @@
 | **rf-1201** | `src/test/unit/ui/test_tui_main_loop_branches.py` 用 `runpy.run_path(tui_mod.__file__, run_name="__main__")` 在进程内重跑整套 TUI 验「Ctrl+C → 告别语 + 退出码 0」，模块级代码（logger 装配、退出钩子注册、启动边界日志）逐条用例重复执行，且改写本进程的 `sys.modules` / `sys.path` | 包入口用例改 `importlib` 断言 `src.python.tui.__main__` 绑定 `tui.main`；`__main__` 收尾用例移入子进程（`sys.executable -c`，子进程内摘掉项目根后经 runpy 执行入口，断言 `returncode == 0` 与 stdout 告别语），本进程 `sys.path` / `sys.modules` 不被改动 |
 | **rf-1202** | `logs/release.jsonl` 的解析同域实现在三处各写一遍——`scripts/probe-release-ledger.py` 的读取（跳过损坏行/非 dict/无 `command`）、`scripts/_release/_commands_base._finish_timing` 的内联逐行 `json.loads`、`scripts/_release/_timing.release_token_usage` 的会话快照差量；台账行口径（必填字段、损坏行容忍）改一次要同步三处 | `_release/_timing.read_ledger_records(path)` 作为唯一台账读取入口（含损坏行/非 dict/缺 `command` 跳过口径），probe 与 `_finish_timing` 改调它；probe 的输出格式与 `--last`/`--version`/`--json` CLI 面不变 |
 | **rf-1203** | 死码删除安全评审把 `analysis/rebalance.py:200` 的 ETF 名称维度判为「被误删的可达分支」（反例 `classify_holding("天弘沪深300ETF联接A", "000961")` 声称应为 `equity`），并要求据此回滚；同时 `analysis/rebalance.py` / `analysis/metrics_risk.py` 残留零调用的 `import logging` 与 `logger` 对象 | 以 `git worktree` 拉出删除前版本对 20 名称 × 19 代码共 380 组逐一比对 `classify_holding`，差异 0 组：被删的 `is_etf_by_name_or_code` 内层判断原本嵌在 `if is_exchange_fund_code(code):` 内（代码必 5/1 前缀 ⇒ 内层恒真），`return "alternative"` 从未可达 ⇒ 分支保持删除态（评审误报），补 `test_etf_name_with_otc_code_is_fund_equity` 与 `test_exchange_fund_code_prefix_is_equity` 钉住真实口径（前者在「名称维度独立」的错误实现下变红）；两处死 `import logging`／`logger` 一并清掉 |
+| **rf-1204** | 两处「依赖运行期断言/字典直取」的隐性契约：① `report/decision_llm_capture.py` 用 `assert code is not None` 收紧「该行必含 6 位代码」，而 `python -O` 会剥离 assert ⇒ 优化模式下 None 会被当代码继续往下走；② `cli/cli.py` 用 `handlers[args.command]` 直取需 config 的命令分发表，subparsers 与表不同域时抛 `KeyError` 而不是按用法错误收口 | ① 改为在 `elif` 条件里用 walrus 取值（`elif (line_code := extract_code(line)) is not None`），体内直接用该值，删除断言与二次取值；② 新增 `_config_required_handlers()` 单点定义分发表，`main` 用 `.get()` 判定并把漏挂情形收口为 `[ERR] 未知命令` + `_EXIT_SEVERE`；补 2 条回归（未知命令收口、决策抽取在两模式下行为一致） |
 
 ### 归档档案
 - [`archived_review-findings.0.18.x.md`](../archive/v0.18.x/archived_review-findings.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-19）

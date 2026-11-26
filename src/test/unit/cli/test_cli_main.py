@@ -370,3 +370,20 @@ class TestMainDispatchBranches:
             code = main()
         mock_report.assert_called_once()
         assert code == 0
+
+
+class TestUnknownConfigCommand:
+    def test_missing_handler_reports_usage_error_instead_of_keyerror(self):
+        """分发表漏挂命令（subparsers 与表不同域）→ [ERR] + 用法错误退出码。"""
+        with (
+            patch("src.python.cli.cli._config_required_handlers", return_value={}),
+            patch("src.python.config.init_config"),
+            patch("src.python.config.get_config", return_value={}),
+            patch("src.python.core.logger.setup_logger"),
+            patch.object(__import__("sys"), "argv", ["cli.py", "report"]),
+            patch("builtins.print") as mock_print,
+        ):
+            code = main()
+
+        assert code == _EXIT_SEVERE
+        assert any("[ERR] 未知命令" in str(c.args[0]) for c in mock_print.call_args_list if c.args)

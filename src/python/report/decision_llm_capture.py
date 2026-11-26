@@ -194,15 +194,16 @@ def extract_llm_decisions(
             row = _parse_table_row(line)
             if row:
                 _note(_collect_decision(best, row, holdings))
-            elif extract_code(line) is not None:
+            elif (line_code := extract_code(line)) is not None:
                 # 有品种代码却没解析出方向：区分「不操作/观望」与真正的异常行。
                 # 「不操作」本身是可评估的建议（事后看「不动」对不对），登记为不动作类
                 # （direction=0，强度 low），由结算写 `flat_hit`、折叠进 `inaction` 统计。
+                # 代码在分支条件里取值一次（walrus），不在体内重取也不靠 assert 收紧——
+                # assert 会被 `python -O` 剥离，届时 None 会当代码继续往下走。
                 cells = _split_cells(line)
                 op_cell = cells[2] if len(cells) >= 4 else ""
                 if _is_no_action(op_cell):
-                    code = extract_code(line)
-                    assert code is not None  # 上方 elif 已判定该行含 6 位代码，此处必然成立
+                    code = line_code
                     _note(
                         _collect_decision(
                             best,

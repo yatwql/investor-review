@@ -210,6 +210,22 @@ def _prepare_early_exit_switches(groups: list[tuple[str, ...]] | None, pairs: li
     _apply_cli_switches(pairs)
 
 
+def _config_required_handlers() -> dict:
+    """需 config 的命令 → 处理器（与 subparsers 同域）。
+
+    五个免 config 命令（cassettes / check-sources / health-history / view-logs / doctor）
+    在 ``main`` 里各自提前返回，故本表只登记其余命令；单独成函数便于用例直接校验
+    「subparsers 与该表不漏挂」。
+    """
+    return {
+        "report": _handle_report,
+        "cache": _handle_cache,
+        "whatif": _handle_whatif,
+        "settle-decisions": _handle_settle_decisions,
+        "config": _handle_config,
+    }
+
+
 def main() -> int:
     """CLI 主入口。
 
@@ -272,16 +288,11 @@ def main() -> int:
 
         logging.getLogger("invest").debug("首次运行引导显示失败（非关键）", exc_info=True)
 
-    # 五个免 config 命令（cassettes / check-sources / health-history / view-logs / doctor）
-    # 已在上方各自返回，此处只剩需 config 的五个命令——分发表与 subparsers 同域。
-    handlers = {
-        "report": _handle_report,
-        "cache": _handle_cache,
-        "whatif": _handle_whatif,
-        "settle-decisions": _handle_settle_decisions,
-        "config": _handle_config,
-    }
-    return handlers[args.command](args, config)
+    handler = _config_required_handlers().get(args.command)
+    if handler is None:  # subparsers 与分发表须同域；漏挂时按用法错误收口而非 KeyError
+        print(f"[ERR] 未知命令: {args.command}")
+        return _EXIT_SEVERE
+    return handler(args, config)
 
 
 def run_cli() -> NoReturn:

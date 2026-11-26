@@ -10,6 +10,8 @@
 
 ### 修复
 
+- **两处运行期断言/字典直取的隐性契约（rf-1204）**：`report/decision_llm_capture.py` 原用 `assert code is not None` 收紧「该行必含 6 位代码」——`python -O` 会剥离 assert，优化模式下 None 会被当代码继续往下走；改为在 `elif` 条件里用 walrus 取值、体内直接用，断言与二次取值一并去掉。`cli/cli.py` 原用 `handlers[args.command]` 直取需 config 的命令分发表，subparsers 与表不同域时抛 `KeyError`；改为 `_config_required_handlers()` 单点定义 + `.get()` 判定，漏挂时收口为 `[ERR] 未知命令` 与 `_EXIT_SEVERE`。补 2 条回归（未知命令按用法错误收口、决策抽取在两种模式下取值一致）。
+
 - **再平衡分类的 ETF 名称维度与两处死 logger（rf-1203）**：`analysis.rebalance.classify_holding` 只在场内区间（`is_exchange_fund_code(code)` 为真，即代码 5/1 前缀）内消费 ETF 判定的名称半区——场外 ETF 联接基金（`天弘沪深300ETF联接A`/`000961`）按场外基金口径归 `fund_equity`，代码 5/1 前缀的场内品种归 `equity`，`test_rebalance.py::TestClassifyHolding` 的两条用例分别钉住这两种口径（名称维度独立化的实现会让前者变红）；`analysis/rebalance.py` 与 `analysis/metrics_risk.py` 的 `import logging` 与 `logger` 对象无调用点，一并删除
 
 - **数据源 HTTP 替身单源（rf-1200）**：`src/test/_fixtures/http.py` 提供 `FakeResponse` / `FakeClient`——`FakeResponse(text, status_code, *, json_body, raise_status, encoding, content, json_error)` 覆盖 `.text` / `.content` / `.status_code` / `.encoding` / `.json()` / `.raise_for_status()`，`FakeClient(response, *, by_url, error)` 覆盖上下文管理器、`get` / `post`、按 URL 后缀或包含匹配分派、传输级异常注入与逐次请求记录（`calls` / `posts` / `gets`）。`test_cninfo` / `test_hithink` / `test_datasink` / `test_tiantian_fund_fee` / `test_tiantian_purchase` / `test_tiantian_base_faults` 六个用例文件共用这一份替身，本地 12 类替身定义删除，各文件断言与被 patch 目标保持一致；巨潮用例的「慢 post」时序桩由 3 行 `FakeClient` 子类表达。
