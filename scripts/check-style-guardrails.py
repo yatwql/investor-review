@@ -321,12 +321,28 @@ def check_emphasis_color(path: Path, brand: set[str]) -> list[str]:
 
 
 def check_dark_sync(path: Path) -> list[str]:
-    """E2 明暗同步（护栏 5）：dark 覆盖变量必须在 ``:root`` 有定义（亮色为源）。"""
+    """E2 明暗同步（护栏 5）：双向校验。
+
+    - 反向：dark 覆盖变量必须在 ``:root`` 有定义（亮色为源，避免暗色定义悬空）；
+    - 正向：``:root`` 里的语义色 token 必须有 dark 覆盖（缺覆盖的主题色/前景色在暗色下
+      会沿用亮值，出现「暗底亮字失对比」）。品牌色与图示墨色是跨主题常量，登记在
+      ``_DARK_SYNC_LIGHT_ONLY`` 里豁免。
+    """
     text = path.read_text(encoding="utf-8")
     root = set(_root_vars(text))
-    return [
-        f"{rel(path)}: dark 覆盖变量 {name} 在 :root 缺定义（明暗不同步）" for name in sorted(_dark_vars(text) - root)
-    ]
+    dark = set(_dark_vars(text))
+    findings = [f"{rel(path)}: dark 覆盖变量 {name} 在 :root 缺定义（明暗不同步）" for name in sorted(dark - root)]
+    # 正向只查**颜色类** token（值以颜色字面量定义）：字号/行高/圆角/间距等与主题无关，
+    # 要求它们也有 dark 覆盖只会制造噪声。
+    # 只有「确为双主题样式表」才做正向校验：文件里连一个 dark 块都没有时无从判断它是否
+    # 需要暗色面（片段样式、测试夹具属此类），报到那里只会是噪声。
+    if dark:
+        color_tokens = {name for name, value in _root_vars(text).items() if _COLOR_VALUE.search(value)}
+        findings.extend(
+            f"{rel(path)}: :root 颜色变量 {name} 缺 dark 覆盖（暗色下会沿用亮值）"
+            for name in sorted(color_tokens - dark - _DARK_SYNC_LIGHT_ONLY)
+        )
+    return findings
 
 
 def check_token_alignment(report_css: str, web_css: str, design_text: str) -> list[str]:
@@ -390,6 +406,32 @@ def observe_radius(path: Path) -> list[str]:
     return details
 
 
+#: 裸 CSS 关键字色（必须走 token 的关键字；`transparent`/`inherit`/`currentColor` 不在此列）
+_CSS_KEYWORD_COLOR = re.compile(r"(?<![\w-])color\s*:\s*(white|black)(?![\w-])", re.IGNORECASE)
+
+#: 颜色类变量判定：值以 #hex / rgb()/hsl() 字面量定义
+_COLOR_VALUE = re.compile(r"^\s*(?:#[0-9a-fA-F]{3,8}\b|(?:rgba?|hsla?)\()")
+
+#: 明暗同步豁免：跨主题常量（品牌色/图示墨色），不随主题切换
+_DARK_SYNC_LIGHT_ONLY: frozenset[str] = frozenset(
+    {
+        # 品牌蓝与上图墨色：暗色下刻意不调（web/style.css dark 段有同口径说明）
+        "--primary",
+        "--primary-dark",
+        "--primary-hover",
+        "--focus",
+        "--accent",
+        "--brand-mark-ink",
+        # 图表主/次/柱色：与 --primary 同口径沿用亮值（暗底上对比仍达标，报告样式里有说明）
+        "--chart-primary",
+        "--chart-secondary",
+        "--chart-bar-2",
+        # 深色块上的前景字色：两种主题下都是白
+        "--on-strong-bg",
+    }
+)
+
+
 def observe_inline_colors(path: Path) -> list[str]:
     """W3 内联/属性色值（护栏 1，观察）：W1 的引号整行豁免为 JS 图表配置设计，
     HTML 内联 ``style=``/旧式色值属性被同域连带豁免形成盲区——本项按 (行,列) 位置
@@ -412,6 +454,13 @@ def observe_inline_colors(path: Path) -> list[str]:
                 if (i, m.start()) in quoted:
                     details.append(f"{rel(path)}:{i}: {line.strip()[:96]}")
                     break
+            else:
+                # 裸 CSS 关键字色（white/black）不在 _HEX/_RGB 口径内，曾整体漏检：
+                # 深色块上的字色必须走 token，否则暗色主题切换时前景字会失去对比。
+                for m in _CSS_KEYWORD_COLOR.finditer(line):
+                    if (i, m.start()) in quoted:
+                        details.append(f"{rel(path)}:{i}: {line.strip()[:96]}")
+                        break
     return details
 
 

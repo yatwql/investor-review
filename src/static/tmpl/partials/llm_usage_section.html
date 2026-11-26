@@ -107,7 +107,7 @@
                     <tr><td>总请求</td><td>{{ cache_stats["total"] }} 次</td></tr>
                     <tr><td>命中率</td><td>
                         {%- if cache_stats["rate"] > 0 -%}
-                        {{ "%.1f"|format(cache_stats["rate"] * 100) }}%
+                        {{ '%.1f'|format(cache_stats["rate"] * 100) }}%
                         {%- else -%}
                         —
                         {%- endif -%}

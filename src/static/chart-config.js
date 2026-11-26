@@ -57,6 +57,21 @@
     barColors: ['#2E75B6', '#E68A00']
   };
 
+  /**
+   * 由主题色派生半透明填充色（模板禁止写 rgba 字面量，填充也必须走 token）。
+   * 支持 #RGB / #RRGGBB；已是 rgb()/rgba()/变量值时按色值兜底直接返回。
+   */
+  window.ChartTheme.alpha = function (color, a) {
+    var m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(color || '').trim());
+    if (!m) return color;
+    var hex = m[1];
+    if (hex.length === 3) hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+    var r = parseInt(hex.slice(0, 2), 16);
+    var g = parseInt(hex.slice(2, 4), 16);
+    var b = parseInt(hex.slice(4, 6), 16);
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
+  };
+
   /* ── 通用交互选项（渐进增强，桌面端友好）────────────── */
   window.ChartTheme.commonOptions = {
     responsive: true,

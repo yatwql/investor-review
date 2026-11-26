@@ -156,7 +156,7 @@
                         <td>{{ e.peak_date }}</td>
                         <td>{{ e.trough_date }}</td>
                         <td>{{ e.recovery_date or "—" }}</td>
-                        <td style="color:var(--profit); font-weight:600;">{{ "%.2f"|format(e.drawdown_pct) }}%</td>
+                        <td style="color:var(--profit); font-weight:600;">{{ '%.2f'|format(e.drawdown_pct) }}%</td>
                         <td>{{ e.duration_days }} 天</td>
                         <td>{% if e.recovery_days is not none %}{{ e.recovery_days }} 天{% else %}—{% endif %}</td>
                         <td>{% if e.recovered %}✅ 已恢复{% else %}⏳ 未恢复{% endif %}</td>
@@ -184,12 +184,12 @@
                     <tr>
                         <td>{{ it.name }}</td>
                         <td>{{ it.start }} ~ {{ it.end }}</td>
-                        <td style="color:var(--profit); font-weight:600;">{% if it.in_range and it.portfolio_return_pct is not none %}{{ "%.2f"|format(it.portfolio_return_pct) }}%{% else %}—{% endif %}</td>
-                        <td style="color:var(--profit); font-weight:600;">{% if it.in_range and it.interval_drawdown_pct is not none %}{{ "%.2f"|format(it.interval_drawdown_pct) }}%{% else %}—{% endif %}</td>
+                        <td style="color:var(--profit); font-weight:600;">{% if it.in_range and it.portfolio_return_pct is not none %}{{ '%.2f'|format(it.portfolio_return_pct) }}%{% else %}—{% endif %}</td>
+                        <td style="color:var(--profit); font-weight:600;">{% if it.in_range and it.interval_drawdown_pct is not none %}{{ '%.2f'|format(it.interval_drawdown_pct) }}%{% else %}—{% endif %}</td>
                         <td>{{ it.trough_date or "—" if it.in_range else "—" }}</td>
                         <td>{% if it.in_range and it.recovery_days is not none %}{{ it.recovery_days }} 天{% elif it.in_range and it.recovered is false %}未恢复{% else %}—{% endif %}</td>
-                        <td>{% if it.index_available and it.index_return_pct is not none %}{{ "%.2f"|format(it.index_return_pct) }}%{% else %}—{% endif %}</td>
-                        <td>{% if it.index_available and it.index_drawdown_pct is not none %}{{ "%.2f"|format(it.index_drawdown_pct) }}%{% else %}—{% endif %}</td>
+                        <td>{% if it.index_available and it.index_return_pct is not none %}{{ '%.2f'|format(it.index_return_pct) }}%{% else %}—{% endif %}</td>
+                        <td>{% if it.index_available and it.index_drawdown_pct is not none %}{{ '%.2f'|format(it.index_drawdown_pct) }}%{% else %}—{% endif %}</td>
                         <td>{% if it.in_range %}{% if it.recovered %}✅ 已恢复{% elif it.recovered is false %}⏳ 未恢复{% else %}—{% endif %}{% else %}组合窗口外{% endif %}</td>
                     </tr>
                     {% endfor %}
@@ -210,7 +210,7 @@
                     <tr>
                         <td>{{ it.name }}</td>
                         <td>{{ it.start }} ~ {{ it.end }}</td>
-                        <td style="color:var(--profit); font-weight:600;">{% if it.interval_drawdown_pct is not none %}{{ "%.2f"|format(it.interval_drawdown_pct) }}%{% else %}—{% endif %}</td>
+                        <td style="color:var(--profit); font-weight:600;">{% if it.interval_drawdown_pct is not none %}{{ '%.2f'|format(it.interval_drawdown_pct) }}%{% else %}—{% endif %}</td>
                         <td>{{ it.trough_date or "—" }}</td>
                         <td>{% if it.recovery_days is not none %}{{ it.recovery_days }} 天{% else %}—{% endif %}</td>
                         <td>{% if it.recovered %}✅ 已恢复{% elif it.recovered is false %}⏳ 未恢复{% else %}—{% endif %}</td>
@@ -267,11 +267,11 @@
                     {% for bm in risk_adjusted_excess_data.benchmarks %}
                     <tr>
                         <td>{{ bm.name }}</td>
-                        <td class="text-right">{% if bm.ir_annual is not none %}{{ "%.2f"|format(bm.ir_annual) }}{% else %}—{% endif %}</td>
-                        <td class="text-right">{% if bm.te_annual is not none %}{{ "%.2f"|format(bm.te_annual) }}{% else %}—{% endif %}</td>
-                        <td class="text-right{% if bm.excess_annual_pct is not none %} fw-600 {{ bm.excess_annual_pct | profit_class }}{% endif %}">{% if bm.excess_annual_pct is not none %}{{ "%.2f"|format(bm.excess_annual_pct) }}%{% else %}—{% endif %}</td>
-                        <td class="text-right">{% if bm.win_rate_12m is not none %}{{ "%.1f"|format(bm.win_rate_12m) }}%{% else %}数据不足{% endif %}</td>
-                        <td class="text-right">{% if bm.win_rate_24m is not none %}{{ "%.1f"|format(bm.win_rate_24m) }}%{% else %}数据不足{% endif %}</td>
+                        <td class="text-right">{% if bm.ir_annual is not none %}{{ '%.2f'|format(bm.ir_annual) }}{% else %}—{% endif %}</td>
+                        <td class="text-right">{% if bm.te_annual is not none %}{{ '%.2f'|format(bm.te_annual) }}{% else %}—{% endif %}</td>
+                        <td class="text-right{% if bm.excess_annual_pct is not none %} fw-600 {{ bm.excess_annual_pct | profit_class }}{% endif %}">{% if bm.excess_annual_pct is not none %}{{ '%.2f'|format(bm.excess_annual_pct) }}%{% else %}—{% endif %}</td>
+                        <td class="text-right">{% if bm.win_rate_12m is not none %}{{ '%.1f'|format(bm.win_rate_12m) }}%{% else %}数据不足{% endif %}</td>
+                        <td class="text-right">{% if bm.win_rate_24m is not none %}{{ '%.1f'|format(bm.win_rate_24m) }}%{% else %}数据不足{% endif %}</td>
                         <td class="text-right">{{ bm.complete_months }}</td>
                     </tr>
                     {% endfor %}

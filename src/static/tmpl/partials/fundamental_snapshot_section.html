@@ -16,8 +16,8 @@
    数据来源：财务指标 = akshare 结构化主源（DataSinking 章节解析为备用支路）；
    财报摘要 = DataSinking 全文本财报（仅 A 股，需用户自备 key，再分发须保留披露平台归属）。
    ============================================================== #}
-{% macro yi(v) %}{% if v is not none %}{{ "%.2f"|format(v / 1e8) }}{% else %}—{% endif %}{% endmacro %}
-{% macro pct(v) %}{% if v is not none %}{{ "%.2f"|format(v * 100) }}%{% else %}—{% endif %}{% endmacro %}
+{% macro yi(v) %}{% if v is not none %}{{ '%.2f'|format(v / 1e8) }}{% else %}—{% endif %}{% endmacro %}
+{% macro pct(v) %}{% if v is not none %}{{ '%.2f'|format(v * 100) }}%{% else %}—{% endif %}{% endmacro %}
 {% macro num(v, d) %}{% if v is not none %}{{ ("%." ~ d ~ "f")|format(v) }}{% else %}—{% endif %}{% endmacro %}
 {% if section_visible("fundamental_snapshot") %}
 <!-- ═══════════════════════════════════════════════════════ -->

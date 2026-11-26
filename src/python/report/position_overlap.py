@@ -36,6 +36,30 @@ def _overlap_ratio(set_a: set, set_b: set) -> float:
     return round(len(set_a & set_b) / denominator, 4)
 
 
+#: 重合度热力档阈值 → class（颜色只出现在 token 与 class 里，DESIGN.md Colors）
+_HEAT_TIERS: tuple[tuple[float, str], ...] = (
+    (0.50, "heat-strong"),
+    (0.30, "heat-mid"),
+    (0.15, "heat-weak"),
+)
+
+
+def heat_class(value: float) -> str:
+    """重合度 → 热力档 class（阈值 0.50 / 0.30 / 0.15；0 与负值不着色）。
+
+    档位判定放在 Python 而非模板：模板里比较运算会把 Jinja 表达式塞进 HTML 文本与
+    属性位置，既触发 HTML/CSS 解析器的告警，也让档位阈值散落在模板中无法被单测覆盖。
+    """
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return ""
+    for limit, cls in _HEAT_TIERS:
+        if v >= limit:
+            return cls
+    return "heat-faint" if v > 0 else ""
+
+
 def compute_overlap_matrix(
     fund_holdings: dict[str, list[dict[str, Any]]],
     fund_mv_map: dict[str, float] | None = None,
@@ -186,10 +210,13 @@ def compute_overlap_matrix(
     # 按重合度（max Jaccard/overlap_ratio）降序排列
     pairs.sort(key=lambda p: overlap_map.get((p["fund_a"], p["fund_b"]), 0.0), reverse=True)
 
+    heat_classes = [[heat_class(matrix[i][j]) for j in range(len(funds))] for i in range(len(funds))]
+
     return {
         "funds": funds,
         "fund_names": fund_names,
         "matrix": matrix,
+        "heat_classes": heat_classes,
         "pairs": pairs,
         "has_mv_data": has_mv_data,
     }

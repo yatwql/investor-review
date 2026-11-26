@@ -148,6 +148,7 @@
     {% set _fund_names = overlap_matrix.get("fund_names", {}) %}
     {% set _funds = overlap_matrix.get("funds", []) %}
     {% set _matrix = overlap_matrix.get("matrix", []) %}
+    {% set _heat_classes = overlap_matrix.get("heat_classes", []) %}
     {% set _pairs = overlap_matrix.get("pairs", []) %}
     {% set _corr_data = position_relationship_data or {} %}
     {% set _corr_codes = _corr_data.get("codes", []) %}

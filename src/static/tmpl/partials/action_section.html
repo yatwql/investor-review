@@ -68,7 +68,7 @@
                     <td class="text-left">{{ s.get("direction_label", "") }}</td>
                     <td style="text-align:right;font-variant-numeric: tabular-nums;">{{ s.get("basis_sample_label", "") }}</td>
                     <td style="text-align:right;font-variant-numeric: tabular-nums;">{{ s.get("n_backtest") if s.get("n_backtest") is not none else "—" }}</td>
-                    <td style="text-align:right;font-variant-numeric: tabular-nums;">{{ "%.4f"|format(s.get("ic")) if s.get("ic") is not none else "—" }}</td>
+                    <td style="text-align:right;font-variant-numeric: tabular-nums;">{{ '%.4f'|format(s.get("ic")) if s.get("ic") is not none else "—" }}</td>
                     <td style="text-align:right;font-variant-numeric: tabular-nums;">{{ "是" if s.get("monotonic") else ("否" if s.get("monotonic") is not none else "—") }}</td>
                     <td class="text-left">{{ s.get("discrimination_label", "") }}{% if s.get("note") %}；{{ s.get("note") }}{% endif %}</td>
                 </tr>
@@ -257,8 +257,8 @@
                 <tr>
                     <td>{{ s.get("code", "") | anon_code }}</td>
                     <td class="text-left">{{ s.get("name", "") }}</td>
-                    <td style="text-align:right;">{{ "%.1f"|format((s.get("weight", 0) or 0) * 100) }}%</td>
-                    <td style="text-align:right;">{{ "%.0f"|format((s.get("threshold", 0) or 0) * 100) }}%</td>
+                    <td style="text-align:right;">{{ '%.1f'|format((s.get("weight", 0) or 0) * 100) }}%</td>
+                    <td style="text-align:right;">{{ '%.0f'|format((s.get("threshold", 0) or 0) * 100) }}%</td>
                     <td class="text-left">{{ s.get("action", "") }}</td>
                 </tr>
                 {% endfor %}
@@ -311,9 +311,9 @@
                     <td class="text-left">{{ s.get("name", "") }}</td>
                     <td class="text-left">{{ s.get("operation", "") }}</td>
                     <td style="text-align:right;">{{ s.get("shares", "") }}</td>
-                    <td style="text-align:right;">{{ "%.2f"|format(s.get("amount", 0) or 0) }}</td>
-                    <td style="text-align:right;">{{ "%.2f"|format(s.get("fee", 0) or 0) }}</td>
-                    <td style="text-align:right;">{{ "%.2f"|format(s.get("cash_after", 0) or 0) }}</td>
+                    <td style="text-align:right;">{{ '%.2f'|format(s.get("amount", 0) or 0) }}</td>
+                    <td style="text-align:right;">{{ '%.2f'|format(s.get("fee", 0) or 0) }}</td>
+                    <td style="text-align:right;">{{ '%.2f'|format(s.get("cash_after", 0) or 0) }}</td>
                 </tr>
                 {% endfor %}
             </tbody>

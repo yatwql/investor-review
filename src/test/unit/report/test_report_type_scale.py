@@ -273,7 +273,12 @@ class TestReportCssRulesetBaseline:
     """
 
     #: 归一化「选择器→声明」多重集 sha256（删 3 条未使用的 bg-* 工具类后重标定）
-    _RULESET_HASH = "69337d3170f246683070204bd8c19f04cf1b4245dd1f8db8c9687140d261fe25"
+    # 基线复核（2026-11-26，热力/相关性档改 class 批次）：新增 6 条工具类规则
+    # （.heat-strong/.heat-mid/.heat-weak/.heat-faint/.corr-pos-strong/.corr-neg-strong），
+    # 声明与原先写在 style 属性里的完全相同（background/color/font-weight），
+    # 只是从内联属性搬到类；同时新增 --on-strong-bg / --chart-* 暗色 token。
+    # 视觉等价（同属性同值，元素上无其他规则竞争），业务字节面零变化。
+    _RULESET_HASH = "d2e803743f529fd55a1a38b5bb7d625de09ffda2f4fa0ba09683578f60205510"
 
     def _ruleset_hash(self) -> tuple[str, int, int]:
         import hashlib

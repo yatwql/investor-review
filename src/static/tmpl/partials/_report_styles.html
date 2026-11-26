@@ -66,6 +66,7 @@
             --success: #2e7d32;             /* 已恢复/正常态绿 */
             /* 相关性/热力分档与状态派生（DESIGN.md Colors 组件派生面；内联色 token 化） */
             --heat-strong: #FF4444;       /* 相关系数分档：强（≥0.50）背景 */
+            --on-strong-bg: #FFFFFF;      /* 强背景（深色块）上的前景文字色 */
             --heat-mid: #FF8C00;          /* 相关系数分档：中（≥0.30）背景 */
             --heat-weak: #FFD700;         /* 相关系数分档：弱（≥0.15）背景 */
             --heat-faint: #CCFFCC;        /* 相关系数分档：微（>0）背景 */
@@ -151,6 +152,7 @@
             /* 相关性/热力分档与状态派生：饱和语义块小面积、字面对比仍达标，刻意保持原值；
                中性面与警示文字按暗色世界调整 */
             --heat-strong: #FF4444;
+            --on-strong-bg: #FFFFFF;
             --heat-mid: #FF8C00;
             --heat-weak: #FFD700;
             --heat-faint: #CCFFCC;
@@ -201,6 +203,9 @@
             --llm-status-thinking: #b39ddb;
             /* Chart.js 深色变量（theme.js refreshChartTheme 重读） */
             --chart-grid: rgba(255, 255, 255, 0.12);
+            --chart-success: #4CAF50;
+            --chart-warning: #FFA733;
+            --chart-danger: #FF6B6B;
             --chart-text: #e0e0e0;
             --chart-bg: #1e1e1e;
             --chart-danger-transparent: rgba(255, 107, 107, 0.15);
@@ -335,11 +340,19 @@
         .data-status-ok { border-left: 3px solid var(--ok); padding-left: 8px; margin: 4px 0; color: var(--ok); }
         /* ── 数据源可用性矩阵 ──────────────── */
         .src-matrix-ok { color: var(--ok); font-weight: 600; }
-        .src-matrix-degraded { color: var(--warn); font-weight: 600; }
+                /* 热力档与相关性档：颜色只出现在 token 与 class 里（DESIGN.md Colors） */
+        .heat-strong { background-color: var(--heat-strong); color: var(--on-strong-bg); font-weight: bold; }
+        .heat-mid { background-color: var(--heat-mid); color: var(--on-strong-bg); }
+        .heat-weak { background-color: var(--heat-weak); }
+        .heat-faint { background-color: var(--heat-faint); }
+        .corr-pos-strong { background-color: var(--corr-pos-strong); color: var(--on-strong-bg); font-weight: bold; }
+        .corr-neg-strong { background-color: var(--corr-neg-strong); color: var(--on-strong-bg); font-weight: bold; }
+
+.src-matrix-degraded { color: var(--warn); font-weight: 600; }
         .src-matrix-failed { color: var(--profit); font-weight: 600; }
         .src-matrix-detail { font-size: var(--fs-table-sm); color: var(--text-muted); }
 
-{# 章节底部"回到顶部"链接 — 跳转到报告头部（#report-top 锚点） #}
+/* 章节底部"回到顶部"链接 — 跳转到报告头部（#report-top 锚点） */
 
         .source-tag { display: inline-block; background: var(--source-tag-bg); border-radius: 4px; padding: 0px 4px; font-size: var(--fs-footnote); margin: 0px; white-space: nowrap; }
         .source-tag-holding { display: inline-block; background: var(--source-tag-bg); border-radius: 4px; padding: 0px 4px; font-size: var(--fs-footnote); margin: 0px; white-space: nowrap; color: var(--source-tag-text); }

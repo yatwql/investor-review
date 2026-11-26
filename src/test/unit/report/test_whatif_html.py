@@ -351,8 +351,12 @@ class TestSwitchOffGoldenBaseline(unittest.TestCase):
     # @media 块数、以及去样式后的正文逐字符哈希三者与改动前完全一致（正文哈希
     # 822813842e30f32465d7cfdd12363c639c13b8d924c661dc3c0ca2aafe2197ed，样式规则集哈希
     # 505214c481ef2963a9c17517d681fdaaf843b8db1316e0a327a2df54f497e28a）。
-    _GOLDEN_BASE_SHA256 = "d29d82feb070e8e6485eb13f8ecf6b1355f618a558268b185776d57f9167d050"
-    _GOLDEN_FULL_SHA256 = "bec364bcdbb3547421062e69f088740dbc945340814de6e72e0d4306d07ceb55"
+    # 基线复核记录（2026-11-26，图表配色 token 化批次）：字节差异仅来自三个图表数据集的
+    # 描边/填充取色处使用 window.ChartTheme 引用（基准蓝/目标橙/业绩基准绿 +
+    # ChartTheme.alpha 派生半透明填充）；label/data/options 一字未动，
+    # 关态业务字节面（数据、文案、结构、章节顺序）零变化。
+    _GOLDEN_BASE_SHA256 = "3ecbc3e5da7f86718415edb7fdf1f40a790c3c0896bee8984436f07ec7828cda"
+    _GOLDEN_FULL_SHA256 = "8625d3e72b8e1835f143c0b2f794ac57cac13485ad987da433d53af246d537a7"
 
     def _render(self, **extra) -> str:
         from unittest.mock import patch
