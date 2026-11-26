@@ -84,8 +84,6 @@ def _turnover_proxy_pct(snapshots: list[Any] | None) -> float | None:
     if not prev or not cur:
         return None
     union = prev | cur
-    if not union:
-        return None
     return round((1 - len(prev & cur) / len(union)) * 100, 2)
 
 

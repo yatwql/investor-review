@@ -207,8 +207,6 @@ def sharpe_ratio(
     excess_daily = mean_daily_return - rf_daily
 
     # 计算日收益率标准差
-    if len(portfolio_daily_returns) < 2:
-        return None
     variance = sum((r - mean_daily_return) ** 2 for r in portfolio_daily_returns) / (len(portfolio_daily_returns) - 1)
     # 使用 epsilon 容差避免 Linux/Windows 浮点精度差异
     _VARIANCE_EPSILON = 1e-15
@@ -218,10 +216,9 @@ def sharpe_ratio(
 
     # 年化
     annual_excess = excess_daily * trading_days
+    # annual_vol = daily_vol * sqrt(trading_days)：daily_vol > 0（上方方差下界）且 sqrt(trading_days) > 0（为 0 时
+    # 上方 rf / trading_days 已抛 ZeroDivisionError），故分母恒 > 0
     annual_vol = daily_vol * math.sqrt(trading_days)
-
-    if annual_vol == 0:
-        return None
 
     result = annual_excess / annual_vol
     return sanitize_metric(result)

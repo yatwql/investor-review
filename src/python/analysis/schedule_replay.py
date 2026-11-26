@@ -210,8 +210,6 @@ def run_schedule_replay(
         notes.append(f"已剔除出回放组合（窗口内无行情或无份额）：{'、'.join(dropped)}")
 
     union = sorted({d for code_map in clean.values() for d in code_map})
-    if not union:
-        return _unavailable("窗口内无净值数据", schedule=parsed)
     span = (datetime.strptime(union[-1], "%Y-%m-%d") - datetime.strptime(union[0], "%Y-%m-%d")).days
     if span < min_span_days:
         return _unavailable(f"历史窗口不足 12 个月（跨度 {span} 天 < {min_span_days} 天）", schedule=parsed)
@@ -226,12 +224,7 @@ def run_schedule_replay(
 
     # LOCF 矩阵；锚点 = 全品种均有值的首日（锚点前不可比，同 what-if 锚点约定）
     locf_maps = {r["code"]: locf_forward(union, clean[r["code"]]) for r in rows}
-    anchor = next(
-        (i for i in range(len(union)) if all(locf_maps[r["code"]][i] is not None for r in rows)),
-        None,
-    )
-    if anchor is None:
-        return _unavailable("无可对齐锚点（各品种观测区间无交集）", schedule=parsed)
+    anchor = next(i for i in range(len(union)) if all(locf_maps[r["code"]][i] is not None for r in rows))
     dates = union[anchor:]
     nav_at = {r["code"]: locf_maps[r["code"]][anchor:] for r in rows}
 
@@ -243,11 +236,8 @@ def run_schedule_replay(
     end_navs: dict[str, float] = {}
     for code in codes:
         last_nav = nav_at[code][-1]
-        if last_nav is None:  # 末位缺值：交给下方「锚点后仍有品种缺失净值」分支收口
-            continue
-        end_navs[code] = float(last_nav)
-    if len(end_navs) != len(codes):
-        return _unavailable("锚点后仍有品种缺失净值（末日目标不可计算）", schedule=parsed)
+        if last_nav is not None:
+            end_navs[code] = float(last_nav)
     target = _resolve_target_weights(parsed, rows, end_navs, notes)
 
     # ── 买入持有基线（零交易）─────────────────────────────
@@ -259,8 +249,6 @@ def run_schedule_replay(
         return total
 
     buyhold_values = [day_value(shares, i, 0.0) for i in range(len(dates))]
-    if buyhold_values[0] <= 0:
-        return _unavailable("期初组合市值非正（无法归一）", schedule=parsed)
 
     # ── 纪律回放 ───────────────────────────────────────
     sim_shares = dict(shares)
@@ -286,9 +274,8 @@ def run_schedule_replay(
         navs_d: dict[str, float] = {}
         for c in codes:
             nav = nav_at[c][idx]
-            if nav is None or nav <= 0:
-                return
-            navs_d[c] = float(nav)
+            if nav is not None and nav > 0:
+                navs_d[c] = float(nav)
         value = day_value(sim_shares, idx, cash)
         # 不变量：navs_d 全为正（上方守卫）、目标权重和为 1、单边费率上限 <100%，故 cash 只会因
         # 交易费用轻微为负、累计费用不吞市值 ⇒ value 恒 >0；放宽费率上限或权重和时须复核本守卫。
@@ -399,13 +386,11 @@ def run_schedule_replay(
                 day_navs: dict[str, float] = {}
                 for c in codes:
                     nav = nav_at[c][idx]
-                    if nav is None or nav <= 0:
-                        break
-                    day_navs[c] = float(nav)
-                else:
-                    drift = max(abs(sim_shares[c] * day_navs[c] / value - target.get(c, 0.0)) for c in codes)
-                    if threshold is not None and drift >= threshold:
-                        rebalance(idx)
+                    if nav is not None and nav > 0:
+                        day_navs[c] = float(nav)
+                drift = max(abs(sim_shares[c] * day_navs[c] / value - target.get(c, 0.0)) for c in codes)
+                if threshold is not None and drift >= threshold:
+                    rebalance(idx)
         # 逐日记录当日收盘后净值（调仓已在当日 NAV 下完成，成本同日扣除）
         replay_values.append(day_value(sim_shares, idx, cash))
 

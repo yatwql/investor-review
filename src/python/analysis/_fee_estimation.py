@@ -31,9 +31,6 @@ _FUND_TYPE_RULES: list[tuple[tuple[str, ...], str, float]] = [
 # 未知类型默认费率
 _DEFAULT_FEE_RATE = 0.010  # 默认 1.0%
 
-# 费率估算数据充分性阈值（持仓品种数低于此值视为"品种过少"）
-_MIN_HOLDINGS_FOR_FEE_ESTIMATION = 1
-
 
 def _classify_fund_type(name: str, code: str) -> tuple[str, float]:
     """根据品种名称和代码判断基金类型，返回 (类型标签, 估算费率)。
@@ -108,15 +105,6 @@ def portfolio_fee_estimation(
             "annual_fee": None,
             "fee_breakdown": [],
             "warning": "持仓数据不足，无法估算组合综合费率",
-        }
-
-    if len(holdings_details) < _MIN_HOLDINGS_FOR_FEE_ESTIMATION:
-        return {
-            "has_data": False,
-            "fee_rate": None,
-            "annual_fee": None,
-            "fee_breakdown": [],
-            "warning": f"持仓品种数过少（{len(holdings_details)} 个），费率估算参考价值有限",
         }
 
     fee_breakdown: list[dict[str, Any]] = []

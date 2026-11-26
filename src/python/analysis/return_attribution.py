@@ -149,14 +149,13 @@ def build_return_attribution(
     pos_total = data["pos_total"]
     neg_total = data["neg_total"]
     net = pos_total + neg_total
+    summary = ""
     if pos_total > 0 and neg_total < 0:
         summary = f"盈利品种合计 +{pos_total:,.2f}，亏损品种合计 {neg_total:,.2f}（净{net:+,.2f}）"
     elif pos_total > 0:
         summary = f"全部品种盈利，合计 +{pos_total:,.2f}"
     elif neg_total < 0:
         summary = f"全部品种亏损，合计 {neg_total:,.2f}"
-    else:
-        summary = ""
     return {
         "available": True,
         "盈利来源": data["盈利来源"],

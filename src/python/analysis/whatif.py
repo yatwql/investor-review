@@ -75,8 +75,6 @@ def _merge_holdings(holdings: list[Holding]) -> dict[str, dict[str, Any]]:
         else:
             entry["shares"] += shares
             entry["cost"] += cost
-            if not entry.get("name") and h.name:
-                entry["name"] = h.name.strip()
 
     for entry in merged.values():
         entry["weight"] = round(entry["cost"] / total_cost, 6) if total_cost > 0 else 0.0

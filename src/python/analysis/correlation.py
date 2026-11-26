@@ -346,8 +346,6 @@ def compute_rolling_correlations(
         c: {r["date"]: float(r["return"]) for r in seq} for c, seq in active.items()
     }
     all_dates = sorted(set().union(*(v.keys() for v in value_by_code.values())))
-    if not all_dates:
-        return _rolling_unavailable("insufficient")
 
     codes = list(active.keys())
 

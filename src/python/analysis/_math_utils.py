@@ -196,14 +196,12 @@ def _t_critical_95(df: int) -> float:
         # 大样本近似标准正态临界值 1.96
         return 1.96
 
-    # 线性插值
-    for i in range(len(keys) - 1):
-        if keys[i] < df < keys[i + 1]:
-            x0, x1 = float(keys[i]), float(keys[i + 1])
-            y0, y1 = _T95_TABLE[keys[i]], _T95_TABLE[keys[i + 1]]
-            return y0 + (y1 - y0) * (df - x0) / (x1 - x0)
-
-    return 1.96
+    # 线性插值（df 不在表中且落在 keys[0] < df < keys[-1] ⇒ 上下键唯一存在）
+    x0_key = max(k for k in keys if k < df)
+    x1_key = min(k for k in keys if k > df)
+    x0, x1 = float(x0_key), float(x1_key)
+    y0, y1 = _T95_TABLE[x0_key], _T95_TABLE[x1_key]
+    return y0 + (y1 - y0) * (df - x0) / (x1 - x0)
 
 
 def _beta_se(

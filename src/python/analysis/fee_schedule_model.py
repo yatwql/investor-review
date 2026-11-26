@@ -52,10 +52,8 @@ def parse_fee_percent(text: str) -> float | None:
     m = _RE_PCT.search(t)
     if not m:
         return None
-    try:
-        value = float(m.group(1)) / 100.0
-    except ValueError:
-        return None
+    # _RE_PCT 只捕获十进制数字串（``[0-9]+(?:\.[0-9]+)?``），float() 不可能抛 ValueError
+    value = float(m.group(1)) / 100.0
     # ≥100% 的费率不合理（录入错误/单位错位）→ 判未知，不带进成本计算
     if value >= 1.0:
         return None

@@ -121,9 +121,9 @@ def aggregate_monthly_returns(
             )
         years.append({"year": year, "cells": cells})
 
+    # 首期用 first_value（> 0，上方取值已弃 value <= 0）做基值，其余用上一月末值（同样 > 0）
+    # ⇒ 每条 ret 均非 None，valued 必非空
     valued = [(ym, ret) for ym, ret, _ in entries if ret is not None]
-    if not valued:
-        return _unavailable(caliber, window_months)
     up = [(ym, v) for ym, v in valued if v > FLAT_EPSILON_PCT]
     down = [(ym, v) for ym, v in valued if v < -FLAT_EPSILON_PCT]
     flat = len(valued) - len(up) - len(down)

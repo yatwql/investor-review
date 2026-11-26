@@ -94,8 +94,6 @@ def price_percentile(closes: list[float], current: float | None = None) -> float
     if len(closes) < MIN_SAMPLES:
         return None
     if current is None:
-        if not closes:
-            return None
         current = closes[-1]
     if not math.isfinite(float(current)):
         return None
