@@ -229,7 +229,7 @@ def _read_llm_settings() -> tuple[dict, str] | None:
     return snapshot
 
 
-def _edit_single_config(key: str, label: str, default: str = "", *, pre_hook=None) -> None:
+def _edit_single_config(key: str, label: str, default: str = "", *, pre_hook: Callable[[], None] | None = None) -> None:
     """通用单配置项编辑命令。
 
     封装 刷新 → 显示当前值 → 输入新值 → 保存 的重复模式。

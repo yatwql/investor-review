@@ -3957,13 +3957,13 @@ web/ (Web 服务层，薄入口)
 
 ### 8.7 代码质量口径（宽异常捕获 / 未用参数 / 注解缺失）
 
-lint 基线为 `E4`/`E7`/`E9`/`F`/`RUF100` + `ARG`（`pyproject.toml` 的 `[tool.ruff.lint]`）：`ARG`（未用参数）已在**生产域**（`src/python` + `scripts`）启用且零 finding，测试域（`src/test/**`）经 per-file-ignores 豁免——替身/回调参数天然未用，不属缺陷。`BLE001`（盲 except）已启用且**全树零 finding**：宽捕获按目录分两批清零（第一批 `report` / `core` / `analysis` / `cache` / `config` / `scripts`，第二批 `fetcher` / `llm` / `tui` / `providers` / `qa` / `web` / `cli` / `startup_wizard` + 测试域），共处置 398 处——窄化 9 处，其余 389 处保留宽捕获并逐处写明降级后果（`# noqa: BLE001 — <理由>`）。规则开关与抑制同时落地：`RUF100`（恒开）会把指向未启用规则的 `noqa` 判成空转，故 noqa 不得先于规则出现。`ANN001`（缺注解）**不在** `select` 内，只能是**评审口径**——靠行内一行理由交代清楚（落在未启用规则上的抑制由 `RUF100` 判死）。
+lint 基线为 `E4`/`E7`/`E9`/`F`/`RUF100` + `ARG` + `BLE001` + `ANN001`（`pyproject.toml` 的 `[tool.ruff.lint]`）：`ARG`（未用参数）已在**生产域**（`src/python` + `scripts`）启用且零 finding，测试域（`src/test/**`）经 per-file-ignores 豁免——替身/回调参数天然未用，不属缺陷。`BLE001`（盲 except）已启用且**全树零 finding**：宽捕获按目录分两批清零（第一批 `report` / `core` / `analysis` / `cache` / `config` / `scripts`，第二批 `fetcher` / `llm` / `tui` / `providers` / `qa` / `web` / `cli` / `startup_wizard` + 测试域），共处置 398 处——窄化 9 处，其余 389 处保留宽捕获并逐处写明降级后果（`# noqa: BLE001 — <理由>`）。规则开关与抑制同时落地：`RUF100`（恒开）会把指向未启用规则的 `noqa` 判成空转，故 noqa 不得先于规则出现。`ANN001`（缺注解）已同样启用：生产域 294 处参数注解按「真实类型 + 容器写全」补齐（五个目录分批落地）且零 finding；测试域（`src/test/**`）与 `ARG` 同条豁免——fixture / `monkeypatch` / 替身参数只作占位，注解不提供任何保证。
 
 | 类别 | 允许的形态 | 行内须交代 | 禁止 |
 |:--|:--|:--|:--|
 | 宽异常捕获（`BLE001`，机检） | 降级边界（单源/单图/单项/单批失败不影响主链路）、观测旁路、第三方库边界、不得中断主流程的 `except Exception` | `# noqa: BLE001 — <失败后调用方看到什么、为什么不窄化>` | 在主链路上宽捕获掩盖缺陷；用 per-file-ignores 整目录豁免替代逐处理由；吞 `BaseException`（自检、测试收集、网络守卫兜底除外） |
 | 未用参数（`ARG`，机检） | 签名契约：回调、链层 `getattr` 调用、公开 API、测试桩须与对端签名一致 | `# noqa: ARG00x — <对齐的是哪一方签名>`（签名可控的内部助手则改名 `_x`，不留抑制） | 为消警告改名 `_x` 破坏对端契约；留无契约依据的死参数 |
-| 注解缺失 | 内部助手入参为运行时取值对象（结构化协议、无共同基类，或注解会引入导入环） | 「说明：<入参是什么对象、为何暂不注解>」 | 公开函数缺注解；用 `Any` 顶替真实类型 |
+| 参数缺注解（`ANN001`，机检） | 生产域一律给出真实类型；容器/泛型写全（`list[str]`、`Callable[[str], None]`、`ProgressReporterProtocol`）；跨层引用走 `TYPE_CHECKING` 块避免运行期导入环；真开放域（框架约定的统一 handler 签名、无共同基类的结构化协议对象）按实际形态取最宽真实类型 | 用 `Any` 时必须写明「为何无法给真实类型」 | 公开函数缺注解；用 `Any` 顶替可推导的真实类型；为消警告改签名破坏对端契约 |
 
 **收敛方向**：宽捕获密集处（如 `core/doctor.py` 的体检分组）优先收成「边界函数 + 显式结果类型」，把宽捕获收到一处；新增代码按上表交代，评审以「行内理由是否说清失败后果」为准。
 

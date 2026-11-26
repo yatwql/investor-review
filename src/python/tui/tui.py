@@ -8,6 +8,7 @@ import os
 import sys
 import time
 from collections.abc import Callable
+from typing import TextIO
 
 # 确保项目根目录在 sys.path 中（支持直接执行 python src/python/tui/tui.py）
 _src_dir = os.path.dirname(os.path.abspath(__file__))
@@ -127,7 +128,7 @@ def _bind_callbacks() -> None:
 class _FrameLineCounter:
     """透明代理：累计 write 的换行数并透传到底层流（原地重绘需知道上一帧占用行数）。"""
 
-    def __init__(self, stream):
+    def __init__(self, stream: TextIO):
         self._stream = stream
         self.lines = 0
 

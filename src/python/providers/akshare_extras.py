@@ -15,7 +15,7 @@ import json
 import logging
 import threading as _threading
 import time as _time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.python.cache import clear as cache_clear
 from src.python.cache import get as cache_get
@@ -29,6 +29,9 @@ from src.python.core.data_registry import (
 from src.python.core.num_utils import safe_num
 from src.python.core.akshare_compat import resolve
 from src.python.providers.utils import run_with_timeout
+
+if TYPE_CHECKING:  # 仅类型标注：pandas 只在 DataFrame 参数上出现，不引入运行期依赖
+    import pandas as pd
 
 logger = logging.getLogger("invest")
 
@@ -554,7 +557,7 @@ def _compute_dividend_fingerprint(codes: list[str]) -> str:
         return "nofp"
 
 
-def _calc_dividend_summary(df_data) -> dict | None:
+def _calc_dividend_summary(df_data: pd.DataFrame) -> dict | None:
     """从股票分红汇总 DataFrame 提取年度平均分红。
 
     akshare 的 stock_history_dividend() 返回聚合数据（每只股票一行），
@@ -623,7 +626,7 @@ def _fetch_all_dividends(a_codes: list[str]) -> dict[str, dict]:
         return result
 
     for code in a_codes:
-        sub = full_df[full_df[code_col] == code]
+        sub = full_df.loc[full_df[code_col] == code]
         summary = _calc_dividend_summary(sub)
         if summary and name_col is not None:
             summary["name"] = str(sub.iloc[0].get(name_col, "")) if not sub.empty else ""

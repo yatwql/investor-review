@@ -12,10 +12,14 @@ import json
 import logging
 import os
 import sys
+from typing import TYPE_CHECKING
 
 from src.python.config import resolve_output_dir
 from src.python.core.constants import EXIT_PARTIAL, EXIT_SEVERE, EXIT_SUCCESS
 from src.python.core.num_utils import format_size
+
+if TYPE_CHECKING:  # 仅类型标注：进度协议取自 core，运行期本模块只传实现
+    from src.python.core.progress import ProgressReporterProtocol
 
 logger = logging.getLogger("invest")
 
@@ -444,7 +448,7 @@ def _handle_cache(args: argparse.Namespace, config: dict) -> int:
     return _EXIT_SEVERE
 
 
-def _handle_cache_update(update_type: str, config: dict, reporter) -> int:
+def _handle_cache_update(update_type: str, config: dict, reporter: ProgressReporterProtocol) -> int:
     """处理 cache --update 子分支。
 
     --update basic / position / all 均先读取持仓，然后委托 operations。
@@ -784,7 +788,7 @@ def _handle_config_list(as_json: bool) -> int:
     return _EXIT_SUCCESS
 
 
-def _handle_config_set(args) -> int:
+def _handle_config_set(args: argparse.Namespace) -> int:
     """``config set``：校验后持久化单键（或仅 --dry-run 校验）。"""
     from src.python.config.edit_ops import (
         ConfigEditError,
@@ -833,7 +837,7 @@ def _handle_config_set(args) -> int:
     return _EXIT_SUCCESS
 
 
-def _handle_config(args, config) -> int:  # noqa: ARG001 — 子命令 handler 统一签名 (args, config)
+def _handle_config(args: argparse.Namespace, config: dict) -> int:  # noqa: ARG001 — 子命令 handler 统一签名 (args, config)
     """config 子命令：list / get / set（持久化写入走共享编辑层）。"""
     from src.python.config.edit_ops import ConfigEditError
 

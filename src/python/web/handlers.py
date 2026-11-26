@@ -16,9 +16,10 @@ import logging
 import os
 import threading
 import time
+from typing import TYPE_CHECKING, cast
 from urllib.parse import urlparse
 
-from flask import request, send_from_directory
+from flask import Flask, request, send_from_directory
 
 from src.python.config import resolve_output_dir, get_default
 from src.python.qa.error_codes import (
@@ -46,6 +47,9 @@ from src.python.web.handlers_health import (  # noqa: E402
     _handle_logs,
 )
 
+if TYPE_CHECKING:  # 仅类型标注：runs 由 app 工厂惰性导入，此处不引入运行期依赖
+    from src.python.web.runs import RunManager
+
 
 # 预览/下载扩展名白名单（.lower() 归一化后校验，防 .HTML/.XLSX 绕过）
 _ALLOWED_REPORT_EXT = {"html", "js", "map", "css", "png", "svg", "json", "xlsx"}
@@ -62,11 +66,11 @@ _render_cache_lock = threading.Lock()
 # ── 响应信封辅助 ─────────────────────────────────────
 
 
-def _ok(data):
+def _ok(data: object) -> dict:
     return {"ok": True, "data": data}
 
 
-def _err(error_code, message):
+def _err(error_code: str, message: str) -> dict:
     return {"ok": False, "error_code": error_code, "error": message}
 
 
@@ -155,7 +159,7 @@ def _handle_upload():
     file = request.files.get("file")
     if file is None or not file.filename:
         return _err("UPLOAD_BAD_FILE", "未选择文件"), 400
-    from typing import BinaryIO, cast
+    from typing import BinaryIO
 
     try:
         data = save_upload(cast(BinaryIO, file.stream), file.filename)
@@ -164,7 +168,7 @@ def _handle_upload():
     return _ok(data)
 
 
-def _handle_create_run(run_manager):
+def _handle_create_run(run_manager: RunManager):
     from src.python.web.upload import resolve_file
 
     payload = request.get_json(silent=True) or {}
@@ -270,12 +274,12 @@ def _handle_cost_preflight():
     return _ok(payload)
 
 
-def _handle_list_runs(run_manager):
+def _handle_list_runs(run_manager: RunManager):
     states = run_manager.list_runs(limit=10)
     return _ok([s.snapshot() for s in states])
 
 
-def _handle_run_detail(run_manager, run_id):
+def _handle_run_detail(run_manager: RunManager, run_id: str):
     state = run_manager.get(run_id)
     if state is None:
         return _err("NOT_FOUND", "任务不存在"), 404
@@ -285,7 +289,7 @@ def _handle_run_detail(run_manager, run_id):
     return _ok(data)
 
 
-def _handle_run_events(run_manager, run_id):
+def _handle_run_events(run_manager: RunManager, run_id: str):
     state = run_manager.get(run_id)
     if state is None:
         return _err("NOT_FOUND", "任务不存在"), 404
@@ -577,7 +581,7 @@ def _handle_report_qa_ask():
     )
     if not result.get("ok"):
         code = str(result.get("error_code") or "QA_FAILED")
-        return _err(code, result.get("error")), _QA_STATUS_BY_CODE.get(code, 400)
+        return _err(code, cast(str, result.get("error"))), _QA_STATUS_BY_CODE.get(code, 400)
     return _ok(result)
 
 
@@ -634,7 +638,7 @@ def _handle_scheduler_post():
     return _ok(status_payload())
 
 
-def create_handlers(app, run_manager) -> None:
+def create_handlers(app: Flask, run_manager: RunManager) -> None:
     """注册全部 HTTP 路由。
 
     注意：``/api/runs/history`` 必须先于 ``/api/runs/<run_id>`` 注册

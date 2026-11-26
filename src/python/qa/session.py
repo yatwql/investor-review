@@ -28,7 +28,7 @@ Web 路由（``web/handlers._handle_report_qa_ask``）与 TUI 追问入口共用
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import logging
 import threading
@@ -38,6 +38,9 @@ import uuid
 from src.python.config import get_llm_config
 from src.python.core.text_safety import sanitize_lone_surrogates
 from src.python.llm.api import call_llm
+
+if TYPE_CHECKING:  # 仅类型标注：HTTP 客户端由调用方注入，运行期不引入 httpx 依赖
+    import httpx
 from src.python.llm.fact_checker import run_fact_check
 from src.python.llm.markdown import markdown_to_html
 from src.python.qa.context import (
@@ -186,7 +189,7 @@ def _ask_report_qa_impl(
     *,
     output_dir: str | None = None,
     llm_config: dict | None = None,
-    http_client=None,
+    http_client: httpx.Client | None = None,
 ) -> dict:
     """报告追问实现体（由 :func:`ask_report_qa` 包装并埋点，勿直接调用）。
 
@@ -333,9 +336,9 @@ def ask_report_qa(
     *,
     output_dir: str | None = None,
     llm_config: dict | None = None,
-    http_client=None,
+    http_client: httpx.Client | None = None,
     channel: str = "unknown",
-) -> dict:
+) -> dict[str, Any]:
     """报告追问主入口（Web 路由与 TUI 共用）——成功/失败都记一行埋点。
 
     Args:

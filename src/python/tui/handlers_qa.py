@@ -47,7 +47,7 @@ class _TextExtractor(HTMLParser):
         self._parts: list[str] = []
         self._skip = 0
 
-    def handle_starttag(self, tag: str, attrs) -> None:  # noqa: ARG002 — HTMLParser 回调签名
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:  # noqa: ARG002 — HTMLParser 回调签名
         if tag in self._SKIP_TAGS:
             self._skip += 1
         elif tag in self._BLOCK_TAGS and self._parts and self._parts[-1] != "\n":

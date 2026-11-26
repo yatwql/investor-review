@@ -34,6 +34,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 
 from src.python.core.ansi_colors import DIM, GREEN, RED, RESET
 from src.python.tui.text_layout import (
@@ -74,9 +75,7 @@ def narrow_rule(columns: int | None = None) -> str:
     return "  " + "=" * max(10, min(40, inner_width(cols) - 2))
 
 
-def render_titled_panel(
-    title: str, rows, *, columns: int | None = None
-) -> list[str]:  # 说明：入参为面板行对象序列（结构化协议，无共同基类）
+def render_titled_panel(title: str, rows: Sequence[str | None], *, columns: int | None = None) -> list[str]:
     """按档位渲染「标题 + 行」面板：宽/中档画盒线，窄档退化为无边框 + 行内截断。
 
     为什么需要：``text_layout.render_panel`` 的宽度是**内容驱动**的（下限 41 列内容 +
