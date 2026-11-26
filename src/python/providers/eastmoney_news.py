@@ -123,15 +123,13 @@ def fetch_news(num: int = 50) -> list[dict[str, Any]]:
                 all_items.append(parsed)
 
         # 尝试从响应获取下一页游标，或从最后一条取 showTime 兜底
+        # （空页已在上方提前 break，故 raw_list 此处非空）
         resp_data = data.get("data") or {}
         new_sort_end = resp_data.get("sortEnd", "")
         if new_sort_end:
             sort_end = new_sort_end
-        elif raw_list:
-            # 兜底：用最后一条的 showTime 作为游标
-            sort_end = raw_list[-1].get("showTime", "")
         else:
-            break
+            sort_end = raw_list[-1].get("showTime", "")
 
         if not sort_end or len(raw_list) < page_size:
             break

@@ -513,7 +513,6 @@ def _flush_anchors() -> None:
             continue
         seen.add(key)
         new_records.append(record)
-    if not new_records:
-        return
+    # new_records 必非空：records 在入口处已判非空，而循环里第一条记录必然不在 seen 中
     if _append_anchor_lines([json.dumps(r, ensure_ascii=False) + "\n" for r in new_records]):
         _maybe_maintain_anchor_file()

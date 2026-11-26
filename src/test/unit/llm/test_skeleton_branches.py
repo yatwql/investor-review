@@ -201,6 +201,9 @@ class TestRecomputeAttribution:
                 patch.object(sk, "call_llm", return_value=("正文", {}, {})),
                 patch.object(sk, "cache_set"),
                 patch.object(sk, "record_per_module"),
+                # 盘中「不复用缓存」会让缓存读整段跳过、归因不发生（跨时段变红）：
+                # 本用例拉的是「读缓存且未命中→归因」路径，故显式关掉时段闸门
+                patch("src.python.llm.cache_policy.intraday_reuse_blocked", return_value=False),
             ):
                 sk.generate_llm_content(
                     {},

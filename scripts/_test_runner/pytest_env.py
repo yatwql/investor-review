@@ -7,6 +7,7 @@ import re
 import sys
 
 from _test_runner.paths import _LATEST_DIR, _PROJECT_ROOT, _SRC_DIR
+from src.python.core.constants import SOURCE_PACKAGE_REL
 
 
 def _has_plugin(module_name: str) -> bool:
@@ -199,7 +200,7 @@ def _build_pytest_args(
             cov_report_dir = os.path.join(_LATEST_DIR, "coverage")
             args.extend(
                 [
-                    "--cov=" + os.path.join(_PROJECT_ROOT, "src", "python"),
+                    "--cov=" + os.path.join(_PROJECT_ROOT, SOURCE_PACKAGE_REL),
                     "--cov-report=html:" + cov_report_dir,
                     "--cov-report=term-missing:skip-covered",
                 ]

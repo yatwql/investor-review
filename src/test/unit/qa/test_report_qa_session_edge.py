@@ -76,3 +76,32 @@ class TestPathDefenseInDepth:
         assert result["ok"] is False
         assert result["error_code"] == "QA_BAD_REPORT"
         assert report_qa_session_count() == 0  # 路径校验在会话创建之前
+
+
+class TestEmptyAnswerAndTelemetryFault:
+    """模型只回了空白（渲染后为空）与埋点链路故障两条兜底。"""
+
+    def test_whitespace_only_answer_reports_llm_failed(self, qa_report, monkeypatch):
+        report, _report2, output_dir = qa_report
+        monkeypatch.setattr(qa_session, "call_llm", _AlwaysOk())
+        monkeypatch.setattr(qa_session, "markdown_to_html", lambda _content: "   \n")
+
+        result = _ask(output_dir, report, "问题")
+
+        assert result["ok"] is False
+        assert result["error_code"] == "QA_LLM_FAILED"
+
+    def test_telemetry_failure_does_not_change_answer(self, qa_report, monkeypatch):
+        report, _report2, output_dir = qa_report
+        monkeypatch.setattr(qa_session, "call_llm", _AlwaysOk())
+        monkeypatch.setattr(qa_session, "run_fact_check", lambda html, h, **kw: (html, ""))
+
+        def _boom(**_kwargs):
+            raise RuntimeError("埋点存储故障")
+
+        monkeypatch.setattr("src.python.qa.telemetry.record_attempt", _boom)
+
+        result = _ask(output_dir, report, "问题")
+
+        assert result["ok"] is True
+        assert "answer_html" in result

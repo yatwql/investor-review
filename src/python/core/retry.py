@@ -191,4 +191,3 @@ def retry_transient(
             _sleep(delay)
     if last_exc is not None:  # pragma: no cover - 上面的分支已穷尽策略
         raise last_exc
-    return None
