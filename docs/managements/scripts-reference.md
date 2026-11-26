@@ -581,6 +581,8 @@ sym |= set(re.findall(r'^\s{0,8}["\']([a-z][a-z0-9_]{2,})["\']\s*:', src, re.M))
 
 **`make-screenshots.py` — 演示截图生成（隔离演示工作区 + TUI/CLI 帧渲染 + Web/Excel 截图）**
 
+> 测试落点：`src/test/unit/scripts/test_make_screenshots.py`（工作区隔离与命令编排）+ `test_make_screenshots_commands.py`（TUI 帧取帧与还原、PTY/浏览器/Node 回退链），域标记 `unit_scripts`。
+
 README / 手册配图的可复现来源。六个子命令（demo / report / tui / cli / web / xlsx）串成一条流水线，产物全部落 `docs/tmp/screenshots/`
 （git 忽略域），真实 `data/`（持仓 / 配置 / 密钥）零接触：
 

@@ -187,9 +187,13 @@ class TestCaptureFrame:
         assert stubs["menu_selection"] == 0
 
     def test_restores_stdout_when_capture_fails(self, tui, config_file, monkeypatch):
+        import src.python.config._config_defaults as cfg_defaults
+        import src.python.core.perf as perf_mod
         import src.python.tui.tui_menu as tui_menu
 
         saved_stdout = sys.stdout
+        saved_perf = perf_mod._PERF_HISTORY_FILE
+        saved_health = perf_mod._HEALTH_CHECK_FILE
 
         def _boom():
             raise RuntimeError("取帧失败")
@@ -198,6 +202,10 @@ class TestCaptureFrame:
         with pytest.raises(RuntimeError, match="取帧失败"):
             tui.capture_frame(config_file)
         assert sys.stdout is saved_stdout
+        # 失败路径同样须还原全局状态（否则把还原从 finally 挪进 try 仍会全绿）
+        assert cfg_defaults._CONFIG_PATH_OVERRIDE is None
+        assert perf_mod._PERF_HISTORY_FILE == saved_perf
+        assert perf_mod._HEALTH_CHECK_FILE == saved_health
 
 
 class TestTuiMain:
