@@ -823,7 +823,7 @@ class TestTradingCalendarConcurrency(unittest.TestCase):
         def worker():
             try:
                 results.append(tc._get_trading_calendar())
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 — 并发用例：收集线程内异常供统一断言，不在线程内断言
                 errors.append(exc)
 
         with (

@@ -229,7 +229,7 @@ class SourceAdapter(ABC):
 
         try:
             probe = self.transform_data(self._sample_raw(), self.display_name)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — 契约自检探针：被检实现抛任意异常即一条问题项，探针自身不得中断
             problems.append(f"transform_data 对合成样本抛异常：{type(e).__name__}: {e}")
             return problems
         if not isinstance(probe, dict):
@@ -286,7 +286,7 @@ def _ensure_adapters_loaded() -> None:
     for module_name in ADAPTER_MODULES:
         try:
             importlib.import_module(module_name)
-        except Exception as e:  # 单个适配器模块异常不得拖垮链路与体检
+        except Exception as e:  # noqa: BLE001 — 单个适配器模块异常不得拖垮链路与体检
             logger.warning("[adapter] 适配器模块 %s 导入失败：%s", module_name, e, exc_info=True)
     _ADAPTERS_LOADED = True
 
@@ -333,7 +333,7 @@ def survey_adapters() -> list[dict[str, Any]]:
         for source_id, adapter in ADAPTER_REGISTRY[domain].items():
             try:
                 problems = adapter.self_test()
-            except Exception as e:  # 自检本身异常不得中断体检
+            except Exception as e:  # noqa: BLE001 — 自检本身异常不得中断体检
                 problems = [f"自检异常：{type(e).__name__}: {e}"]
             reports.append(
                 {

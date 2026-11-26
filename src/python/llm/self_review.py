@@ -272,7 +272,7 @@ def run_self_review(
 
     try:
         _inaction_line = inaction_summary_line()
-    except Exception:  # 账本不可读不阻断自检
+    except Exception:  # noqa: BLE001 — 账本不可读不阻断自检
         _inaction_line = ""
 
     try:
@@ -288,7 +288,7 @@ def run_self_review(
             schedule_replay_block=schedule_replay_block,
             inaction_line=_inaction_line,
         )
-    except Exception as e:  # 有意宽捕获：自检失败不得影响主内容（报告照常产出）
+    except Exception as e:  # noqa: BLE001 — 自检失败不得影响主内容（报告照常产出）
         logger.warning("生成后自检调用异常（不影响主内容）: %s", e)
         _register_skip_reason(f"自检调用异常：{e}")
         return False
@@ -326,7 +326,7 @@ def _register_skip_reason(reason: str) -> None:
         from src.python.llm.prompts import LLM_MODULE_FAILURE
 
         LLM_MODULE_FAILURE[SELF_REVIEW_MODULE_KEY] = reason
-    except Exception:  # 有意宽捕获：登记失败不影响主流程
+    except Exception:  # noqa: BLE001 — 登记失败不影响主流程
         logger.debug("[self_review] 失败原因登记失败", exc_info=True)
 
 

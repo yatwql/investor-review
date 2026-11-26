@@ -40,7 +40,7 @@ def _run_self_review_sample(
             force=True,
             llm_config=get_llm_config(),
         )
-    except Exception as exc:  # 宽捕获理由：抽样失败只影响该段，不中断评测
+    except Exception as exc:  # noqa: BLE001 — 抽样失败只影响该段，不中断评测
         logger.warning("自检抽样失败（不影响幻觉率统计）: %s", exc)
         return None
     if not content:

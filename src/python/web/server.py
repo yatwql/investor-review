@@ -82,7 +82,7 @@ def _pid_alive(pid: int) -> bool | None:
                 return False
             kernel32.CloseHandle(handle)
             return True
-        except Exception:  # 有意宽捕获：探测失败不得让启动防护报错
+        except Exception:  # noqa: BLE001 — 探测失败不得让启动防护报错
             return None
     try:
         os.kill(pid, 0)

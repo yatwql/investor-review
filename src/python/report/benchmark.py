@@ -200,7 +200,7 @@ def fetch_benchmarks(
             name = benchmark_indices[code]
             try:
                 bars = fut.result()
-            except Exception:  # 宽捕获理由：[benchmark] %s(%s) 获取异常
+            except Exception:  # noqa: BLE001 — [benchmark] %s(%s) 获取异常
                 logger.warning("[benchmark] %s(%s) 获取异常", name, code, exc_info=True)
                 bars = None
 

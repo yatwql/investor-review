@@ -531,7 +531,7 @@ class TestGenerateExcelReport(unittest.TestCase):
 
         try:
             generate_excel_report(self.holdings)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — 测试断言口径：progress=None 不得抛异常，抛出即判失败
             self.fail(f"progress=None 时抛出异常: {e}")
 
     def test_timer_records(self) -> None:

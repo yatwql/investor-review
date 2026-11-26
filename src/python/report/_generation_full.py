@@ -81,7 +81,7 @@ def _fetch_sector_flow(reporter: ProgressReporter, perf: PerfCollector) -> list[
                 message=f"akshare（{sector_flow_hint()}）",
             )
             reporter.warn(f"行业资金流向{sector_flow_hint()}，将继续生成报告")
-    except Exception:  # 宽捕获理由：行业资金流向属可选数据，取数失败仅标记数据不可用并继续生成
+    except Exception:  # noqa: BLE001 — 行业资金流向属可选数据，取数失败仅标记数据不可用并继续生成
         sector_flow = None
         from src.python.core.degradation import mark_data_unavailable
 

@@ -159,7 +159,7 @@ def record_llm_decisions_and_review_block(
                 from src.python.llm.research_contract import get_module_contracts
 
                 _verdict = str((get_module_contracts().get("expert_review") or {}).get("verdict") or "")
-            except Exception:  # 宽捕获理由：契约载体不可用不阻断登记
+            except Exception:  # noqa: BLE001 — 契约载体不可用不阻断登记
                 _verdict = ""
             _llm_reg = decision_llm_capture.register_llm_decisions(
                 llm_content[1],

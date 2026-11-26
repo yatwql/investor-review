@@ -73,7 +73,7 @@ def begin_run(report_type: str, output_dir: str) -> RunContext:
         stale = _sweep_product_tmps(output_dir)
         if stale:
             logger.info("[run_integrity] 预清扫遗留产物临时文件 %d 个", stale)
-    except Exception:  # 宽捕获理由：[run_integrity] 预清扫遗留临时文件失败（非关键）
+    except Exception:  # noqa: BLE001 — [run_integrity] 预清扫遗留临时文件失败（非关键）
         logger.warning("[run_integrity] 预清扫遗留临时文件失败（非关键）", exc_info=True)
     return ctx
 
@@ -214,7 +214,7 @@ def _emit(reporter: Any, msg: str) -> None:
         warn = getattr(reporter, "warn", None)
         if callable(warn):
             warn(msg)
-    except Exception:  # 宽捕获理由：[run_integrity] 中断提示输出失败
+    except Exception:  # noqa: BLE001 — [run_integrity] 中断提示输出失败
         logger.debug("[run_integrity] 中断提示输出失败", exc_info=True)
 
 
@@ -237,14 +237,14 @@ def handle_interruption(reporter: Any = None) -> None:
         if ctx.perf is not None:
             status = ctx.perf.stage_status()
             stage = status["phase"] if status else "阶段间隙"
-    except Exception:  # 宽捕获理由：[run_integrity] 读取中断阶段失败
+    except Exception:  # noqa: BLE001 — [run_integrity] 读取中断阶段失败
         logger.debug("[run_integrity] 读取中断阶段失败", exc_info=True)
 
     # 2) 清理本次未完成临时文件（登记路径 + 产物前缀兜底）
     cleaned: list[str] = []
     try:
         cleaned = _cleanup_context_temps(ctx)
-    except Exception:  # 宽捕获理由：[run_integrity] 清理临时文件失败
+    except Exception:  # noqa: BLE001 — [run_integrity] 清理临时文件失败
         logger.warning("[run_integrity] 清理临时文件失败", exc_info=True)
 
     # 3) 落 status=interrupted 运行记录（perf_history 单源；已落盘则 save 幂等跳过）
@@ -254,7 +254,7 @@ def handle_interruption(reporter: Any = None) -> None:
             from src.python.report._run_scope import finish_report_run
 
             finish_report_run(ctx.perf)
-    except Exception:  # 宽捕获理由：[run_integrity] 中断运行记录落盘失败
+    except Exception:  # noqa: BLE001 — [run_integrity] 中断运行记录落盘失败
         logger.warning("[run_integrity] 中断运行记录落盘失败", exc_info=True)
 
     # 4) 明确提示：已写盘 / 未完成已丢弃 / 已清理临时文件
@@ -270,7 +270,7 @@ def handle_interruption(reporter: Any = None) -> None:
         )
         logger.warning("[run_integrity] %s", msg)
         _emit(reporter, msg)
-    except Exception:  # 宽捕获理由：[run_integrity] 组装中断提示失败
+    except Exception:  # noqa: BLE001 — [run_integrity] 组装中断提示失败
         logger.warning("[run_integrity] 组装中断提示失败", exc_info=True)
 
     # 5) 收敛后台健康检查（best-effort，防线程残留）
@@ -280,5 +280,5 @@ def handle_interruption(reporter: Any = None) -> None:
 
             future, rtype, holdings = ctx.health
             _collect_health_checks(future, rtype, holdings)
-    except Exception:  # 宽捕获理由：[run_integrity] 健康检查收敛失败（非关键）
+    except Exception:  # noqa: BLE001 — [run_integrity] 健康检查收敛失败（非关键）
         logger.debug("[run_integrity] 健康检查收敛失败（非关键）", exc_info=True)

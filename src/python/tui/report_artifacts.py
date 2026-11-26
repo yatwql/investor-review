@@ -47,7 +47,7 @@ def _stdin_isatty() -> bool:
     """stdin 是否交互终端（管道/脚本/测试替身一律按非 TTY 处理）。"""
     try:
         return bool(sys.stdin.isatty())
-    except Exception:
+    except (AttributeError, OSError, ValueError):
         return False
 
 

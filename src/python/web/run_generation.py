@@ -212,7 +212,7 @@ def _notify_web_completion(state, params: dict, exit_code: int, result: object) 
             degradations=degradation_summary(),
         )
         dispatch_completion_notification(event, notify_cfg)
-    except Exception:
+    except Exception:  # noqa: BLE001 — 完成通知发送流程异常（非关键，不影响任务）
         logger.debug("完成通知发送流程异常（非关键，不影响任务）", exc_info=True)
 
 

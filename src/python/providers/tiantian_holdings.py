@@ -421,7 +421,7 @@ def _quarter_channel_payloads(code: str, year: int | None, month: int | None):
     def _call(api_type: str) -> str | None:
         try:
             return _request_quarterly_api(code, api_type, year=year, month=month)
-        except Exception:  # 单通道异常按空结果处理（调用方继续递补/记负缓存）
+        except Exception:  # noqa: BLE001 — 单通道异常按空结果处理（调用方继续递补/记负缓存）
             logger.debug("[fund_hold] %s %s 请求异常", code, api_type, exc_info=True)
             return None
 

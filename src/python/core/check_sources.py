@@ -58,7 +58,7 @@ def _check_http(
                 return _OK, elapsed, f"{elapsed:.0f}ms 正常"
             return _OK, elapsed, f"{elapsed:.0f}ms 重定向可达（HTTP {resp.status_code}）"
         return _WARN, elapsed, f"{elapsed:.0f}ms HTTP {resp.status_code}"
-    except Exception as e:  # 宽捕获理由：体检探针：任何异常都要转成 [ERR] 行，探针自身异常不得中断整体体检
+    except Exception as e:  # noqa: BLE001 — 体检探针：任何异常都要转成 [ERR] 行，探针自身异常不得中断整体体检
         elapsed = (time.perf_counter() - start) * 1000
         err_msg = str(e).split("\n")[0][:60]
         return _ERR, elapsed, "超时" if "timeout" in str(e).lower() else err_msg
@@ -108,7 +108,7 @@ def _check_datasink() -> tuple[str, float, str]:
         from src.python.fetcher.report_adapters import probe_datasink_documents
 
         items = probe_datasink_documents(_CRED_PROBE_FMP_SYMBOL, size=1)
-    except Exception as e:  # 宽捕获理由：探针自身异常不得中断体检
+    except Exception as e:  # noqa: BLE001 — 探针自身异常不得中断体检
         return _ERR, (time.perf_counter() - start) * 1000, str(e).split("\n")[0][:60]
     elapsed = (time.perf_counter() - start) * 1000
     if items:
@@ -131,7 +131,7 @@ def _check_cninfo() -> tuple[str, float, str]:
         from src.python.fetcher.report_adapters import probe_cninfo_orgid
 
         org_id = probe_cninfo_orgid(_CRED_PROBE_SYMBOL)
-    except Exception as e:  # 宽捕获理由：体检探针：凭据探测任何异常都要转成 [ERR] 行，不得中断整体体检
+    except Exception as e:  # noqa: BLE001 — 体检探针：凭据探测任何异常都要转成 [ERR] 行，不得中断整体体检
         return _ERR, (time.perf_counter() - start) * 1000, str(e).split("\n")[0][:60]
     elapsed = (time.perf_counter() - start) * 1000
     if org_id:
@@ -157,7 +157,7 @@ def _check_sector_flow() -> tuple[str, float, str]:
         from src.python.providers.akshare_extras import probe_sector_flow_channels
 
         channels = probe_sector_flow_channels()
-    except Exception as e:  # 宽捕获理由：探针自身异常不得中断体检
+    except Exception as e:  # noqa: BLE001 — 探针自身异常不得中断体检
         return _ERR, (time.perf_counter() - start) * 1000, str(e).split("\n")[0][:60]
     elapsed = (time.perf_counter() - start) * 1000
     if not channels:
@@ -381,7 +381,7 @@ def run_health_checks(max_timeout: float = 15.0) -> list[dict]:
                 "latency_ms": round(elapsed, 1),
                 "message": msg,
             }
-        except Exception as e:  # 宽捕获理由：体检探针：单项检查异常按失败项落表，不得中断整体体检
+        except Exception as e:  # noqa: BLE001 — 体检探针：单项检查异常按失败项落表，不得中断整体体检
             item = {
                 "name": name,
                 "label": label,

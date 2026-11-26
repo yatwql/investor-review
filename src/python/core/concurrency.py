@@ -76,7 +76,7 @@ class ConcurrencyGovernor:
 
             raw = ((get_config() or {}).get("batch") or {}).get("profile", DEFAULT_PROFILE)
             profile = str(raw or "").strip().lower()
-        except Exception:  # 宽捕获理由：配置不可读不应阻断并发层，但必须留痕（否则档位静默变 high）
+        except Exception:  # noqa: BLE001 — 配置不可读不应阻断并发层，但必须留痕（否则档位静默变 high）
             logger.warning("[并发] 读取 batch.profile 失败，回落默认档位 %s", DEFAULT_PROFILE, exc_info=True)
             return DEFAULT_PROFILE
         return profile if profile in PROFILE_FACTORS else DEFAULT_PROFILE
@@ -97,7 +97,7 @@ class ConcurrencyGovernor:
             raw = batch_cfg.get("max_total_workers", DEFAULT_BUDGET)
             if isinstance(raw, (int, float)) and raw >= 1:
                 requested = int(raw)
-        except Exception:  # 宽捕获理由：配置损坏不应让并发层抛错（降级为默认预算）
+        except Exception:  # noqa: BLE001 — 配置损坏不应让并发层抛错（降级为默认预算）
             logger.debug("[并发] 读取 batch.max_total_workers 失败，回落默认预算 %d", DEFAULT_BUDGET)
         cpu = os.cpu_count() or 1
         return max(1, min(requested, cpu))

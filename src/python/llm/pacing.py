@@ -139,7 +139,7 @@ def _ensure_loaded() -> None:
         from src.python.config import get_llm_config
 
         register_policies((get_llm_config() or {}).get("_provider_list"))
-    except Exception as e:  # 配置层不可用不应影响调用主链路
+    except Exception as e:  # noqa: BLE001 — 配置层不可用不应影响调用主链路
         logger.debug("[llm/pacing] 策略惰性装载失败，按无约束处理: %s", e)
 
 
@@ -287,7 +287,7 @@ def _concurrency_hint(endpoint_key: str = "") -> str:
         global_limit = int(
             (get_llm_config() or {}).get("llm_max_concurrency", get_llm_setting_default("llm_max_concurrency"))
         )
-    except Exception:  # 配置层不可用不应阻断诊断日志
+    except Exception:  # noqa: BLE001 — 配置层不可用不应阻断诊断日志
         global_limit = 3
 
     endpoint_limit = 0
@@ -299,7 +299,7 @@ def _concurrency_hint(endpoint_key: str = "") -> str:
             if policy is not None:
                 endpoint_limit = policy.max_concurrency
                 min_interval = policy.min_interval
-        except Exception:  # 策略装载失败按「无约束」提示，不影响重试链路
+        except Exception:  # noqa: BLE001 — 策略装载失败按「无约束」提示，不影响重试链路
             endpoint_limit = 0
 
     if endpoint_limit > 0:

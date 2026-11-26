@@ -153,7 +153,7 @@ def get_machine_ip() -> str:
             candidates.append(probe.getsockname()[0])
     except (KeyboardInterrupt, SystemExit):
         raise
-    except BaseException:  # 宽捕获理由：展示兜底：测试网络守卫以 BaseException 子类阻断建连，此处置失败不得冒成启动失败
+    except BaseException:  # noqa: BLE001 — 展示兜底：测试网络守卫以 BaseException 子类阻断建连，此处置失败不得冒成启动失败
         pass
 
     # 2) 主机名解析出的全部地址
@@ -163,7 +163,7 @@ def get_machine_ip() -> str:
         candidates.extend(socket.gethostbyname_ex(hostname)[2])
     except (KeyboardInterrupt, SystemExit):
         raise
-    except BaseException:  # 宽捕获理由：展示兜底：主机名解析失败原因不止 OSError，此处置失败不得冒成启动失败
+    except BaseException:  # noqa: BLE001 — 展示兜底：主机名解析失败原因不止 OSError，此处置失败不得冒成启动失败
         pass
 
     for ip in candidates:
@@ -200,7 +200,7 @@ def build_system_info() -> dict:
     config_readable = True
     try:
         config = get_config()
-    except Exception:  # 宽捕获理由：读取配置失败，系统信息按默认值展示
+    except Exception:  # noqa: BLE001 — 读取配置失败，系统信息按默认值展示
         logger.warning("读取配置失败，系统信息按默认值展示", exc_info=True)
         config = {}
         # 配置读取失败时无法信任路径解析：摘要按默认展示，就绪按未就绪保守呈现
@@ -220,7 +220,7 @@ def build_system_info() -> dict:
     if config_readable:
         try:
             holdings_path = resolve_holdings_path(config)
-        except Exception:  # 宽捕获理由：持仓路径解析失败按「未就绪」展示，系统信息不因此中断
+        except Exception:  # noqa: BLE001 — 持仓路径解析失败按「未就绪」展示，系统信息不因此中断
             holdings_path = ""
     holdings_ready = bool(holdings_path and os.path.exists(holdings_path))
     info["holdings_ready"] = holdings_ready
@@ -228,7 +228,7 @@ def build_system_info() -> dict:
     info["holdings_mtime"] = os.path.getmtime(holdings_path) if holdings_ready else None
     try:
         anon_mode = get_anonymization_mode()
-    except Exception:  # 宽捕获理由：读取匿名化模式失败，按关闭展示
+    except Exception:  # noqa: BLE001 — 读取匿名化模式失败，按关闭展示
         logger.warning("读取匿名化模式失败，按关闭展示", exc_info=True)
         anon_mode = "off"
     info["anonymization"] = anon_mode_label(anon_mode)
@@ -277,7 +277,7 @@ def llm_status() -> dict:
 
     try:
         llm_config = get_llm_config()
-    except Exception:  # 宽捕获理由：读取 LLM 配置失败，按未配置展示
+    except Exception:  # noqa: BLE001 — 读取 LLM 配置失败，按未配置展示
         logger.warning("读取 LLM 配置失败，按未配置展示", exc_info=True)
         llm_config = None
     if llm_config is None:

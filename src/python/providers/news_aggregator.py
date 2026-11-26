@@ -182,7 +182,7 @@ def _fetch_from_all_sources(
                 src_results[src] = (count, "OK")
                 if progress_callback:
                     progress_callback(label, count, "OK")
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — 单新闻源 Future 异常按该源失败计入来源状态，其余源照常汇总
                 err_msg = f"失败({e})"
                 src_results[src] = (0, err_msg)
                 if progress_callback:

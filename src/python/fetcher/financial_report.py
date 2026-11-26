@@ -262,7 +262,7 @@ def _record_index_failure(_symbol: str, reason: str) -> None:
             failure_type="unreachable",
             message=f"索引主源异常且备源无命中：{reason}",
         )
-    except Exception:  # 观测失败不影响主链路
+    except Exception:  # noqa: BLE001 — 观测失败不影响主链路
         logger.debug("[financial_report] 索引降级登记失败（非关键）", exc_info=True)
 
 
@@ -287,7 +287,7 @@ def _fetch_index(symbol: str, doc_types: tuple[str, ...] = ()) -> list[dict[str,
     primary_error = ""
     try:
         items = datasink.fetch_report_documents(symbol, order="desc", size=_INDEX_SCAN_SIZE)
-    except Exception as e:  # 传输级失败（连接级重试已耗尽）→ 走巨潮备源接管
+    except Exception as e:  # noqa: BLE001 — 传输级失败（连接级重试已耗尽）→ 走巨潮备源接管
         primary_error = f"{type(e).__name__}: {e}"
         logger.warning("[financial_report] %s 主源索引取数失败（%s），转巨潮备源", symbol, e)
         items = None
@@ -354,7 +354,7 @@ def _fetch_sections(doc_id: int | str, source: str | None = None) -> list[str] |
         return None
     try:
         sections = datasink.fetch_report_sections(doc_id)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — [financial_report] 章节清单取数失败（doc=%s）：%s，回退偏好名直取
         # 传输级失败（挂起/断连）：只影响「清单优选路径」，回退偏好名直取即可；
         # 同时记短退避，避免每份报告都为同一篇文档再白等一次超时预算
         SECTIONS_BACKOFF.mark(backoff_key, "章节清单探测传输级失败")

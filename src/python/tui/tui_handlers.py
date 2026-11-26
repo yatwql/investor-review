@@ -112,7 +112,7 @@ def prepare_holdings() -> "tuple[list, list, list] | None":
 
         warm_new_asset_caches(holdings, TuiProgressReporter())
         return holdings, parsed.transactions, parsed.dividends
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — 读取持仓失败已由提示函数告知用户，返回菜单避免崩溃
         print_error_with_hint(e, "读取持仓失败")
         return None
 

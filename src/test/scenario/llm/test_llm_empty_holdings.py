@@ -81,7 +81,7 @@ class TestEmptyHoldingsWithLlm(unittest.TestCase):
                 holdings_details=[],
                 penetrated_assets=[],
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — 测试断言口径：空持仓下不得崩溃，抛出即判失败
             self.fail(f"generate_all_llm 在空持仓下不应崩溃: {e}")
 
         # 依次取各模块输出，不依赖是否含辩论模式末位元素
@@ -104,6 +104,6 @@ class TestEmptyHoldingsWithLlm(unittest.TestCase):
             mock_gen.return_value = ("<p>宏观</p>", False)
             try:
                 result, cached = generate_global_macro({}, {}, 0, 0, 0, {}, force=True)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — 测试断言口径：空持仓下不得崩溃，抛出即判失败
                 self.fail(f"空持仓下 generate_global_macro 不应崩溃: {e}")
             self.assertEqual(result, "<p>宏观</p>")

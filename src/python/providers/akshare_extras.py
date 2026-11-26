@@ -248,7 +248,7 @@ def probe_sector_flow_channels() -> list[tuple[str, bool, str]]:
         except _SectorFlowUnavailable as exc:
             results.append((label, False, exc.kind))
             continue
-        except Exception as exc:  # 有意宽捕获：探针不得因单通道异常中断整表
+        except Exception as exc:  # noqa: BLE001 — 探针不得因单通道异常中断整表
             results.append((label, False, f"{type(exc).__name__}: {exc}"[:60]))
             continue
         elapsed = (_time.perf_counter() - start) * 1000
@@ -607,7 +607,7 @@ def _fetch_all_dividends(a_codes: list[str]) -> dict[str, dict]:
 
     try:
         full_df = _ak.stock_history_dividend()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — 分红全量数据拉取失败: %s
         logger.warning("分红全量数据拉取失败: %s", e)
         return result
 

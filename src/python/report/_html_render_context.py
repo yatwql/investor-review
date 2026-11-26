@@ -214,7 +214,7 @@ def _prepare_render_context(
             from src.python.analysis.style_factor_regression import FACTOR_NAMES
 
             _factor_names = FACTOR_NAMES
-        except Exception:  # 宽捕获理由：因子名映射缺失只影响因子名回显，不阻断渲染
+        except Exception:  # noqa: BLE001 — 因子名映射缺失只影响因子名回显，不阻断渲染
             logger.debug("[html_context] 因子中文名映射不可用，按原样回显因子键", exc_info=True)
             _factor_names = {}
 

@@ -220,7 +220,7 @@ class BatchDispatcher:
                 from src.python.core.provider_registry import get_registry
 
                 self._registry = get_registry()
-            except Exception:
+            except Exception:  # noqa: BLE001 — [batch] registry 加载失败，跳过熔断预检
                 logger.debug("[batch] registry 加载失败，跳过熔断预检")
                 return self.execute([task for _, task in items])
 
@@ -356,7 +356,7 @@ class BatchDispatcher:
                                     result=cached,
                                 )
                             )
-                        except Exception as e:
+                        except Exception as e:  # noqa: BLE001 — 单任务缓存异常按该任务失败落 BatchResult，不中断整批
                             cache_results.append(
                                 BatchResult(
                                     index=i,
@@ -365,7 +365,7 @@ class BatchDispatcher:
                                 )
                             )
                     return cache_results
-            except Exception:
+            except Exception:  # noqa: BLE001 — [batch] 策略预检异常，回退正常执行
                 logger.warning("[batch] 策略预检异常，回退正常执行", exc_info=True)
 
         # ── 缓存预检 ──
@@ -380,7 +380,7 @@ class BatchDispatcher:
                     results[i] = BatchResult(index=i, success=True, result=cached_value)
                     logger.debug("[batch] 缓存命中: %s", cache_id)
                     continue
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — [batch] 缓存检查异常(%s), 降级执行: %s
                 # cache_check_fn 抛异常 → fail-open，降级为执行
                 logger.debug("[batch] 缓存检查异常(%s), 降级执行: %s", cache_id, e)
             pending_indices.append(i)
@@ -448,7 +448,7 @@ def get_batch_worker_count(config_key: str, default: int = 3) -> int:
                 clamped,
             )
         return clamped
-    except Exception:
+    except Exception:  # noqa: BLE001 — [batch] 读取 %s 配置失败，回退默认 %d
         logger.debug("[batch] 读取 %s 配置失败，回退默认 %d", config_key, default)
         return default
 
@@ -480,7 +480,7 @@ def get_strategy_hook(
             return strategy.value  # "cache" 或 "live"
 
         return _hook
-    except Exception:
+    except Exception:  # noqa: BLE001 — [batch] 策略钩子构造失败，返回 None
         logger.debug("[batch] 策略钩子构造失败，返回 None", exc_info=True)
         return None
 
@@ -532,6 +532,6 @@ def _build_rate_limiter_from_config() -> RateLimiter:
         rate_cfg = cfg.get("batch_rate_limit", {})
         if isinstance(rate_cfg, dict):
             return RateLimiter(rate_cfg)
-    except Exception:
+    except Exception:  # noqa: BLE001 — [batch] 读取 batch_rate_limit 配置失败，使用空配置
         logger.debug("[batch] 读取 batch_rate_limit 配置失败，使用空配置")
     return RateLimiter({})

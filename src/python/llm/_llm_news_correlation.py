@@ -87,7 +87,7 @@ def run_news_correlation_safe(
             LLM_MODULE_FAILURE["news_correlation"] = FAIL_REASON_API_ERROR
             logger.warning("%s本次无产出（逐条调用均失败），已标记失败原因", _MN("news_correlation"))
         return result, cached, token_usage
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — %s出错: %s
         LLM_MODULE_FAILURE["news_correlation"] = FAIL_REASON_API_ERROR
         logger.warning("%s出错: %s", _MN("news_correlation"), e)
         return news_items, False, {}

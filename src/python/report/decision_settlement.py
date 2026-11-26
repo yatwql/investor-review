@@ -82,7 +82,7 @@ def fetch_price_series(
             shares=1.0,
             days=days,
         )
-    except Exception:  # 宽捕获理由：[decision_settlement] 行情序列获取异常: %s %s
+    except Exception:  # noqa: BLE001 — [decision_settlement] 行情序列获取异常: %s %s
         logger.warning("[decision_settlement] 行情序列获取异常: %s %s", holding_code, holding_name, exc_info=True)
         return None
 
@@ -93,7 +93,7 @@ def fetch_index_series(index_code: str, days: int) -> list[dict[str, Any]] | Non
 
     try:
         return fetch_index_history(index_code, days=days) or None
-    except Exception:  # 宽捕获理由：[decision_settlement] 基准指数获取异常: %s
+    except Exception:  # noqa: BLE001 — [decision_settlement] 基准指数获取异常: %s
         logger.warning("[decision_settlement] 基准指数获取异常: %s", index_code, exc_info=True)
         return None
 

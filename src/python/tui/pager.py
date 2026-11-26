@@ -50,7 +50,7 @@ def _stdout_is_tty() -> bool:
 
     try:
         return bool(sys.stdout.isatty())
-    except Exception:
+    except (AttributeError, OSError, ValueError):
         return False
 
 

@@ -116,7 +116,7 @@ def _get_limiter() -> Any:
                     raw = (get_config().get("hithink") or {}).get("qps")
                     if isinstance(raw, (int, float)) and raw > 0:
                         qps = float(raw)
-                except Exception:  # 配置不可用（如测试环境）→ 用默认值
+                except Exception:  # noqa: BLE001 — 配置不可用（如测试环境）→ 用默认值
                     logger.debug("hithink qps 配置不可读，按默认值 %.1f 处理", DEFAULT_QPS, exc_info=True)
                 _limiter = RateLimiter({SOURCE_ID: 1.0 / qps})
     return _limiter

@@ -258,7 +258,7 @@ def run_batch_mode(
                         ok_batches += 1
                     else:
                         failed_batches += 1
-                except Exception as e:  # 说明：逐批容错，单批异常计入失败数后继续跑其余批次
+                except Exception as e:  # noqa: BLE001 — 说明：逐批容错，单批异常计入失败数后继续跑其余批次
                     failed_batches += 1
                     logger.warning("批处理异常: %s", e)
 

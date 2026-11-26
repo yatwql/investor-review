@@ -268,7 +268,7 @@ def _render_penetration_section(
         if not profit_forecast:
             profit_success = False
             logger.warning("[penetration] 盈利预测数据为空（API 返回空结果），EPS 列将显示 --")
-    except Exception:  # 宽捕获理由：[penetration] 盈利预测加载异常（非关键），EPS 列显示 --
+    except Exception:  # noqa: BLE001 — [penetration] 盈利预测加载异常（非关键），EPS 列显示 --
         profit_success = False
         logger.warning("[penetration] 盈利预测加载异常（非关键），EPS 列显示 --", exc_info=True)
 
@@ -282,7 +282,7 @@ def _render_penetration_section(
         if not dividend_data and a_codes:
             dividend_success = False
             logger.warning("[penetration] 股息率数据为空（API 返回空结果）")
-    except Exception:  # 宽捕获理由：[penetration] 股息率加载异常（非关键），股息率列显示 --
+    except Exception:  # noqa: BLE001 — [penetration] 股息率加载异常（非关键），股息率列显示 --
         dividend_success = False
         logger.warning("[penetration] 股息率加载异常（非关键），股息率列显示 --", exc_info=True)
 
@@ -351,7 +351,7 @@ def _render_manager_analysis(
         summary = build_first_check_summary(results) if any(r.get("is_first_check") for r in results) else None
         prog.ok("基金经理变更分析完成")
         return {"results": results, "first_check_summary": summary}
-    except Exception as e:  # 宽捕获理由：基金经理变更分析失败: %s
+    except Exception as e:  # noqa: BLE001 — 基金经理变更分析失败: %s
         logger.warning("基金经理变更分析失败: %s", e)
         return {"results": [], "first_check_summary": None}
 
@@ -455,7 +455,7 @@ def _render_overlap_matrix(
         result["stale_fund_notes"] = stale_fund_notes
         prog.ok("持仓重合度矩阵计算完成")
         return result
-    except Exception as e:  # 宽捕获理由：持仓重合度矩阵计算失败: %s
+    except Exception as e:  # noqa: BLE001 — 持仓重合度矩阵计算失败: %s
         logger.warning("持仓重合度矩阵计算失败: %s", e)
         return dict(empty)
 
@@ -481,7 +481,7 @@ def _render_concentration(
         results = compute_concentration(fund_holdings)
         prog.ok("持仓集中度计算完成")
         return {"results": results}
-    except Exception as e:  # 宽捕获理由：持仓集中度计算失败: %s
+    except Exception as e:  # noqa: BLE001 — 持仓集中度计算失败: %s
         logger.warning("持仓集中度计算失败: %s", e)
         return {"results": []}
 
@@ -507,7 +507,7 @@ def _render_style_analysis(
         result = analyze_style_for_all_funds(fund_holdings)
         prog.ok("风格与因子分析完成")
         return result
-    except Exception as e:  # 宽捕获理由：风格与因子分析失败: %s
+    except Exception as e:  # noqa: BLE001 — 风格与因子分析失败: %s
         logger.warning("风格与因子分析失败: %s", e)
         return {"results": []}
 
@@ -557,7 +557,7 @@ def _render_news_section(
                 len(news_data),
             )
         return news_data, _news_llm_meta
-    except Exception as e:  # 宽捕获理由：新闻获取失败: %s
+    except Exception as e:  # noqa: BLE001 — 新闻获取失败: %s
         logger.warning("新闻获取失败: %s", e)
         return [], _default_meta
 

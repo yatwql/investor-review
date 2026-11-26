@@ -189,7 +189,7 @@ def _ensure_prosperity_framework(
                 financial_indicator_data=financial_indicator_data,
                 history_data=history_data,
             )
-        except Exception:  # 宽捕获理由：双保险：实验性诊断异常不得中断报告生成
+        except Exception:  # noqa: BLE001 — 双保险：实验性诊断异常不得中断报告生成
             logger.warning("[prosperity_framework] 诊断装配异常，本次跳过（主报告不受影响）", exc_info=True)
             _pf = None
         if _pf is not None:
@@ -223,7 +223,7 @@ def _write_optional_detail_sheets(
                     (pipeline_data or {}).get("tail_risk_data"),
                     (pipeline_data or {}).get("risk_adjusted_excess_data"),
                 )
-            except Exception:  # 宽捕获理由：[excel] 组合历史走势与回撤页签写入失败（非关键）
+            except Exception:  # noqa: BLE001 — [excel] 组合历史走势与回撤页签写入失败（非关键）
                 logger.debug("[excel] 组合历史走势与回撤页签写入失败（非关键）", exc_info=True)
 
     # ── 组合演进页签（多快照趋势，evolution_data） ──
@@ -238,7 +238,7 @@ def _write_optional_detail_sheets(
                 (pipeline_data or {}).get("evolution_data"),
                 snapshot_diff_data=(pipeline_data or {}).get("snapshot_diff_data"),
             )
-        except Exception:  # 宽捕获理由：[excel] 组合演进页签写入失败（非关键）
+        except Exception:  # noqa: BLE001 — [excel] 组合演进页签写入失败（非关键）
             logger.debug("[excel] 组合演进页签写入失败（非关键）", exc_info=True)
 
     # ── 持仓变动复盘页签（快照事件级，holding_change_data；报告章节与增强开关默认关，
@@ -250,7 +250,7 @@ def _write_optional_detail_sheets(
             from src.python.report.holding_change_panel import write_holding_change_sheet
 
             write_holding_change_sheet(ws_hc, (pipeline_data or {}).get("holding_change_data"))
-        except Exception:  # 宽捕获理由：[excel] 持仓变动复盘页签写入失败（非关键）
+        except Exception:  # noqa: BLE001 — [excel] 持仓变动复盘页签写入失败（非关键）
             logger.debug("[excel] 持仓变动复盘页签写入失败（非关键）", exc_info=True)
 
     # ── 事件窗对照区块（并入财经新闻页签尾部；报告章节与增强开关 event_window_impact
@@ -263,7 +263,7 @@ def _write_optional_detail_sheets(
             from src.python.report.event_impact_panel import write_event_impact_footer
 
             write_event_impact_footer(ws_news, event_data, start_row=ws_news.max_row + 2)
-        except Exception:  # 宽捕获理由：[excel] 事件窗对照区块写入失败（非关键）
+        except Exception:  # noqa: BLE001 — [excel] 事件窗对照区块写入失败（非关键）
             logger.debug("[excel] 事件窗对照区块写入失败（非关键）", exc_info=True)
 
     # ── 调仓纪律回放页签（多期规则回放 vs 买入持有；实验开关
@@ -275,7 +275,7 @@ def _write_optional_detail_sheets(
             from src.python.report.schedule_replay_panel import write_schedule_replay_sheet
 
             write_schedule_replay_sheet(ws_sr, (pipeline_data or {}).get("schedule_replay_data"))
-        except Exception:  # 宽捕获理由：[excel] 调仓纪律回放页签写入失败（非关键）
+        except Exception:  # noqa: BLE001 — [excel] 调仓纪律回放页签写入失败（非关键）
             logger.debug("[excel] 调仓纪律回放页签写入失败（非关键）", exc_info=True)
 
     # ── 持仓基本面页签（财务指标 + 财报摘要，一章两区块） ──
@@ -290,7 +290,7 @@ def _write_optional_detail_sheets(
                 indicator_data=financial_indicator_data,
                 digest_data=financial_report_digest_data,
             )
-        except Exception:  # 宽捕获理由：[excel] 持仓基本面页签写入失败（非关键）
+        except Exception:  # noqa: BLE001 — [excel] 持仓基本面页签写入失败（非关键）
             logger.debug("[excel] 持仓基本面页签写入失败（非关键）", exc_info=True)
 
     # ── 行动建议页签（行动板块，action_data） ──
@@ -308,7 +308,7 @@ def _write_optional_detail_sheets(
                 market_sentiment_data=(pipeline_data or {}).get("market_sentiment_data"),
                 decision_basis_data=(pipeline_data or {}).get("decision_basis_data"),
             )
-        except Exception:  # 宽捕获理由：[excel] 行动建议页签写入失败（非关键）
+        except Exception:  # noqa: BLE001 — [excel] 行动建议页签写入失败（非关键）
             logger.debug("[excel] 行动建议页签写入失败（非关键）", exc_info=True)
 
     # ── 数据质量仪表盘 / 数据源可用性矩阵页签 ──
@@ -329,7 +329,7 @@ def _write_optional_detail_sheets(
                 # 逐品种标出滞后交易日数）
                 (history_data or {}).get("terminal_staleness"),
             )
-        except Exception:  # 宽捕获理由：[excel] 数据质量仪表盘页签写入失败（非关键）
+        except Exception:  # noqa: BLE001 — [excel] 数据质量仪表盘页签写入失败（非关键）
             logger.debug("[excel] 数据质量仪表盘页签写入失败（非关键）", exc_info=True)
 
 
@@ -399,7 +399,7 @@ def _write_diff_summary_block(
                     _ws_sum.cell(row=_last_row, column=2, value=_names)
                     _last_row += 1
             logger.info("环比对比摘要已写入 summary 页签")
-        except Exception:  # 宽捕获理由：[F delta] Excel 环比对比摘要写入失败（非关键）
+        except Exception:  # noqa: BLE001 — [F delta] Excel 环比对比摘要写入失败（非关键）
             logger.debug("[F delta] Excel 环比对比摘要写入失败（非关键）", exc_info=True)
 
 
@@ -417,7 +417,7 @@ def _finalize_and_save(
         # 实验功能清单的兜底落点：LLM 用量页签未承载时落到汇总页脚
         try:
             _write_summary_experimental_notice(sheets)
-        except Exception:  # 宽捕获理由：[excel] 汇总页脚实验功能清单写入失败（非关键）
+        except Exception:  # noqa: BLE001 — [excel] 汇总页脚实验功能清单写入失败（非关键）
             logger.debug("[excel] 汇总页脚实验功能清单写入失败（非关键）", exc_info=True)
 
         # 在每个页签底部写入隐私声明脚注
@@ -427,14 +427,14 @@ def _finalize_and_save(
                     from src.python.report.excel_writer import write_privacy_footer
 
                     write_privacy_footer(_ws, ncols=5)
-                except Exception:  # 宽捕获理由：[privacy] 页签 %s 写入隐私脚注失败（非关键）
+                except Exception:  # noqa: BLE001 — [privacy] 页签 %s 写入隐私脚注失败（非关键）
                     logger.debug("[privacy] 页签 %s 写入隐私脚注失败（非关键）", _ws_name, exc_info=True)
         # 各页签标题行尾「↩ 返回汇总」内部超链接（内容写完后定位行尾，不移位）
         try:
             from src.python.report.excel_sheet_factory import stamp_back_to_summary
 
             stamp_back_to_summary(sheets)
-        except Exception:  # 宽捕获理由：[excel] 返回汇总链接写入失败（非关键）
+        except Exception:  # noqa: BLE001 — [excel] 返回汇总链接写入失败（非关键）
             logger.debug("[excel] 返回汇总链接写入失败（非关键）", exc_info=True)
         # 产物单元格清扫（匿名化）：字符串单元格统一真名→代号（full 另掩真码），
         # 兑底字段层未覆盖的派生页签；数值单元格不动（无数字子串误伤）。

@@ -64,7 +64,7 @@ def _push2_interval() -> float:
         value = rate.get(_PUSH2_LIMIT_KEY)
         if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
             return float(value)
-    except Exception:  # 配置读取失败不阻断取数：回落到兜底间隔
+    except Exception:  # noqa: BLE001 — 配置读取失败不阻断取数：回落到兜底间隔
         logger.debug("[industry] 读取 push2 限速配置失败，使用兜底间隔", exc_info=True)
     return _PUSH2_MIN_INTERVAL
 
@@ -190,7 +190,7 @@ def make_push2_request(code: str, retries: int = _MAX_RETRIES) -> dict | None:
             from src.python.core.rate_limit_state import note_failure
 
             note_failure(f"push2 行情服务器断连（{type(e).__name__}）: {code}")
-        except Exception:  # 观测失败不影响取数
+        except Exception:  # noqa: BLE001 — 观测失败不影响取数
             logger.debug("push2 断连观测登记失败 [%s]，已忽略", code, exc_info=True)
         return None
 

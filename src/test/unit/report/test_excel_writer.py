@@ -191,7 +191,7 @@ class TestAutoWidth(unittest.TestCase):
         """空工作表 → 不崩溃。"""
         try:
             ew.auto_width(self.ws)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — 测试断言口径：空表自动列宽不得抛异常，抛出即判失败
             self.fail(f"auto_width on empty sheet raised: {e}")
 
 
@@ -211,7 +211,7 @@ class TestFreezeHeader(unittest.TestCase):
         """空 sheet 冻结 → 不崩溃。"""
         try:
             ew.freeze_header(self.ws, 2)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — 测试断言口径：空表冻结表头不得抛异常，抛出即判失败
             self.fail(f"freeze_header raised: {e}")
 
 

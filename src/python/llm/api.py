@@ -144,7 +144,7 @@ def _resolve_first_provider_model_endpoint(
         if entry:
             _, model, endpoint = _resolve_entry_credentials(entry, llm_config)
             return (model, endpoint or "")
-    except Exception:
+    except Exception:  # noqa: BLE001 — [llm] _resolve_first_provider_model_endpoint 异常
         logger.debug("[llm] _resolve_first_provider_model_endpoint 异常", exc_info=True)
     return (None, "")
 
@@ -408,7 +408,7 @@ def call_llm(
                 _sink = current_llm_observation()
                 if _sink is not None:
                     _sink.note_fallback()
-        except Exception:
+        except Exception:  # noqa: BLE001 — provider %s 异常，切换下一 provider
             logger.warning("provider %s 异常，切换下一 provider", _entry_desc, exc_info=True)
             attempted.append(f"{name}: EXCEPTION")
 

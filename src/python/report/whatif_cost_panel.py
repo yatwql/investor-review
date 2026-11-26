@@ -55,7 +55,7 @@ def _load_snapshots() -> list[Any]:
         from src.python.report.history_snapshot import load_all
 
         return load_all()
-    except Exception:  # 宽捕获理由：快照缺失/损坏不得阻断面板（仅兜 Exception）
+    except Exception:  # noqa: BLE001 — 快照缺失/损坏不得阻断面板（仅兜 Exception）
         logger.warning("[交易成本] 持仓快照加载失败，卖出腿按持有期未知降级", exc_info=True)
         return []
 
@@ -153,7 +153,7 @@ def build_whatif_cost_panel(
             from src.python.fetcher.fund_fee import fetch_fee_index
 
             fee_index = fetch_fee_index(fund_codes)
-        except Exception:  # 宽捕获理由：费率取数失败按未知降级，不阻断（BaseException 不吞）
+        except Exception:  # noqa: BLE001 — 费率取数失败按未知降级，不阻断（BaseException 不吞）
             logger.warning("[交易成本] 费率索引装配失败，按费率未知降级", exc_info=True)
             fee_index = {}
     if fee_index is None:
@@ -279,7 +279,7 @@ def _resolve_benchmark(
             comparison_indices=comparison_indices,
             benchmark_text_getter=benchmark_text_getter,
         )
-    except Exception:  # 宽捕获理由：映射/配置异常 → 三线缺席（不阻断成本块）
+    except Exception:  # noqa: BLE001 — 映射/配置异常 → 三线缺席（不阻断成本块）
         logger.warning("[交易成本] 基准指数映射失败，三线缺席", exc_info=True)
         return None
 
@@ -289,7 +289,7 @@ def _resolve_benchmark(
     days = (compute_backtest_days(effective_date) if effective_date else None) or max(120, len(labels) * 2)
     try:
         bars = index_history_getter(resolved["code"], days)
-    except Exception:  # 宽捕获理由：行情取数失败 → status=unavailable（只出成本后对比）
+    except Exception:  # noqa: BLE001 — 行情取数失败 → status=unavailable（只出成本后对比）
         logger.warning("[交易成本] 基准指数行情获取失败: %s", resolved["code"], exc_info=True)
         bars = None
     values = _align_benchmark_values(labels, bars if isinstance(bars, list) else None)

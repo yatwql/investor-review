@@ -63,7 +63,7 @@ class TestGlobalNetworkGuard:
         def _degrade_like_provider() -> str:
             try:
                 socket.getaddrinfo("example.com", 80)
-            except Exception:  # 有意宽捕获：刻意模拟 provider 的宽泛降级写法
+            except Exception:  # noqa: BLE001 — 刻意模拟 provider 的宽泛降级写法
                 return "degraded"
             return "no-network-attempt"
 

@@ -311,7 +311,7 @@ def _build_provider_cache_key(
 
             chain = resolve_provider_chain(provider_list, strategy, module_key, preferred)
             name = chain[0]["name"] if chain else "unknown"
-        except Exception:
+        except Exception:  # noqa: BLE001 — [skeleton] Provider chain 解析异常，使用默认缓存键
             logger.debug("[skeleton] Provider chain 解析异常，使用默认缓存键", exc_info=True)
             name = "unknown"
     return f"{cache_key}_{name}"
@@ -348,7 +348,7 @@ def _resolve_first_provider(
             first_name = first_entry["name"]
             _, first_model, first_endpoint = _resolve_entry_credentials(first_entry, llm_config)
         return (first_name, first_model, first_endpoint)
-    except Exception:
+    except Exception:  # noqa: BLE001 — [skeleton] Provider 凭据解析异常
         logger.debug("[skeleton] Provider 凭据解析异常", exc_info=True)
         return (None, None, "")
 
@@ -543,7 +543,7 @@ def write_back_module_cache(
         return False
     try:
         cache_set(key, content)
-    except Exception:  # 缓存不可写不应影响报告生成
+    except Exception:  # noqa: BLE001 — 缓存不可写不应影响报告生成
         logger.warning("[llm] 事实校验修正回写缓存失败（%s），按原样继续", module_key, exc_info=True)
         return False
     logger.info(

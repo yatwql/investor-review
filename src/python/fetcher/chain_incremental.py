@@ -157,7 +157,7 @@ def _try_providers(
             registry.record_success(provider_name)
             _mark_provider_used(chain_name, provider_name, _history_provider_label(provider_name))
             return data
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — provider 边界：取数异常按失败记录熔断并回落链下一源
             reason = _brief_reason(f"{type(e).__name__}: {e}")
             registry.record_failure(provider_name, f"{chain_name}: {reason}")
             if diagnostics is not None:
@@ -230,7 +230,7 @@ def fetch_with_incremental_fallback(
         needs_refresh = False
         try:
             needs_refresh = _validate_continuity(cached, new_data, cache_key)
-        except Exception:
+        except Exception:  # noqa: BLE001 — [%s] 连续性校验异常（不影响合并）
             logger.warning("[%s] 连续性校验异常（不影响合并）", cache_key)
 
         if needs_refresh and cached:
@@ -300,7 +300,7 @@ def _history_provider_label(provider_name: str) -> str:
             declared = getattr(importlib.import_module(module_path), "DISPLAY_NAME", "")
             if declared:
                 return str(declared)
-        except Exception:  # 展示名解析失败不影响取数
+        except Exception:  # noqa: BLE001 — 展示名解析失败不影响取数
             logger.debug("[history] provider 展示名解析失败: %s", provider_name, exc_info=True)
     return _HISTORY_PROVIDER_LABELS.get(provider_name, provider_name)
 

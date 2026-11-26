@@ -283,7 +283,7 @@ def main() -> int:
         from src.python.startup_wizard import show_startup_wizard_if_needed
 
         show_startup_wizard_if_needed(non_interactive=args.non_interactive)
-    except Exception:
+    except Exception:  # noqa: BLE001 — 首次运行引导显示失败（非关键）
         import logging
 
         logging.getLogger("invest").debug("首次运行引导显示失败（非关键）", exc_info=True)

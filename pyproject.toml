@@ -72,9 +72,9 @@ force-exclude = true
 # （覆盖原失败面）、删死捕获（except 体只 pass/return 且该路径不会抛）、或保留宽捕获
 # 并在行内写明「宽捕获理由：<为什么必须兜住>」（降级治理壳 / 观测旁路 / 第三方边界 /
 # 不得中断主流程）。**不得**用 per-file-ignores 整目录豁免来替代逐处理由。
-# 该口径的机检（BLE001）与行内理由的 noqa 形态随「非本域目录清零」一并启用——
-# 规则与抑制须同时落地，否则 RUF100 会把提前写的 noqa 判成空转。
-select = ["E4", "E7", "E9", "F", "RUF100", "ARG"]
+# 该口径已机检化：`select` 含 `BLE001`，全树零 finding，必留处写 `# noqa: BLE001 — <理由>`
+# （规则与抑制同时落地；提前写 noqa 会被 RUF100 判成空转）。
+select = ["E4", "E7", "E9", "F", "RUF100", "ARG", "BLE001"]
 
 [tool.ruff.lint.per-file-ignores]
 # E402 / F401：scripts/ 下入口先注入 sys.path 再导入同目录与项目模块，顺序不可重排；

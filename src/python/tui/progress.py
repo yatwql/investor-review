@@ -57,7 +57,7 @@ class TuiProgressReporter(AnnouncingProgressReporter):
             if not status:
                 return
             self._bar.update(status_bar_text(str(status["phase"]), hint=self._bar.cancel_hint))
-        except Exception:
+        except Exception:  # noqa: BLE001 — [tui] 状态条绘制失败，已忽略
             logger.debug("[tui] 状态条绘制失败，已忽略", exc_info=True)
 
     def close(self) -> None:

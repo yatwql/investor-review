@@ -228,7 +228,7 @@ def _cache_captured_at(cache_key: str) -> float | None:
         if age is None:
             return None
         return time.time() - age
-    except Exception:
+    except Exception:  # noqa: BLE001 — [price] 读取缓存写入时刻失败: %s
         logger.debug("[price] 读取缓存写入时刻失败: %s", cache_key, exc_info=True)
         return None
 
@@ -322,7 +322,7 @@ def _price_cache_fresh(
                 logger.debug("[price] 场内价格缓存为 %s 盘中残留（写入早于收盘），强制刷新", td)
                 return False
         return True
-    except Exception:
+    except Exception:  # noqa: BLE001 — [price] _price_cache_fresh 校验异常，保守视作新鲜
         logger.warning("[price] _price_cache_fresh 校验异常，保守视作新鲜", exc_info=True)
         return True
 

@@ -43,7 +43,7 @@ def is_first_run() -> bool:
     """
     try:
         return not get_local_flag(_FIRST_RUN_KEY)
-    except Exception:
+    except Exception:  # noqa: BLE001 — 首启标记读取失败按「首启」处理（宁可多引导一次）
         return True
 
 
@@ -53,7 +53,7 @@ def mark_wizard_shown() -> None:
         if not get_local_flag(_FIRST_RUN_KEY):
             set_local_flag(_FIRST_RUN_KEY, True)
             logger.info("[startup-wizard] 首次运行引导已标记为已读")
-    except Exception:
+    except Exception:  # noqa: BLE001 — [startup-wizard] 标记引导失败（非关键）
         logger.debug("[startup-wizard] 标记引导失败（非关键）", exc_info=True)
 
 
@@ -110,7 +110,7 @@ def _is_non_interactive(force: bool = False) -> bool:
         return True
     try:
         return not sys.stdin.isatty()
-    except Exception:
+    except (AttributeError, OSError, ValueError):
         return True
 
 

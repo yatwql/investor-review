@@ -291,7 +291,7 @@ def _prefetch_manager_data(code: str) -> None:
         manager = fetch_fund_manager(code)
         if manager is None:
             logger.debug("基金经理预取失败 [%s]（不阻塞穿透计算）", code)
-    except Exception:  # 宽捕获理由：基金经理预取异常 [%s]（不阻塞穿透计算）
+    except Exception:  # noqa: BLE001 — 基金经理预取异常 [%s]（不阻塞穿透计算）
         logger.debug("基金经理预取异常 [%s]（不阻塞穿透计算）", code, exc_info=True)
 
 
@@ -648,7 +648,7 @@ def _compute_penetration_top10_uncached(
         if ind_future is not None:
             try:
                 prefetched = ind_future.result() or {}
-            except Exception:  # 宽捕获理由：[penetration] 行业预取异常，回退按需获取
+            except Exception:  # noqa: BLE001 — [penetration] 行业预取异常，回退按需获取
                 logger.debug("[penetration] 行业预取异常，回退按需获取", exc_info=True)
 
         if prefetched:

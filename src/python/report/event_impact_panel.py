@@ -247,7 +247,7 @@ def build_event_rows(
                     text_polarity=polarity,
                     asset_code=code,
                 )
-            except Exception as exc:  # 宽捕获理由：取数/计算异常 → 降级不出行（不阻塞报告）
+            except Exception as exc:  # noqa: BLE001 — 取数/计算异常 → 降级不出行（不阻塞报告）
                 logger.warning("事件窗行降级 [%s %s]: %s", code, event_date, exc)
                 degraded.append({"code": code, "event_date": event_date, "reason": f"取数异常: {type(exc).__name__}"})
                 continue
@@ -572,7 +572,7 @@ def build_event_impact_panel(
             comparison_indices=comparison_indices,
             benchmark_text_getter=benchmark_text_getter,
         )
-    except Exception:  # 宽捕获理由：[event_impact] 基准指数映射失败，事件按缺基准逐条降级
+    except Exception:  # noqa: BLE001 — [event_impact] 基准指数映射失败，事件按缺基准逐条降级
         logger.warning("[event_impact] 基准指数映射失败，事件按缺基准逐条降级", exc_info=True)
         resolved = None
 

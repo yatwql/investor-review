@@ -106,7 +106,7 @@ def _datasink_config() -> dict[str, Any]:
 
         section = get_config().get("datasink")
         return section if isinstance(section, dict) else {}
-    except Exception:
+    except Exception:  # noqa: BLE001 — [datasink] 读取 datasink 配置失败，使用套餐默认
         logger.debug("[datasink] 读取 datasink 配置失败，使用套餐默认")
         return {}
 

@@ -122,7 +122,7 @@ def fetch_indicator_series(code: str, limit: int = DEFAULT_PERIODS) -> list[dict
             retry_on=lambda e: not is_parse_failure_exception(e) and not is_deterministic_failure(e),
             on_retry=_on_series_retry,
         )
-    except Exception as e:  # 重试耗尽 → 不中断，走后续同花顺/链路兜底
+    except Exception as e:  # noqa: BLE001 — 重试耗尽 → 不中断，走后续同花顺/链路兜底
         logger.warning("[financial_indicator] 主源多期指标取数失败（%s），转同花顺/链路兜底", e)
     if records:
         mark_data_used(f"fin_indicator_{akshare_financial.SOURCE_ID}")
@@ -163,7 +163,7 @@ def fetch_hithink_indicator_series(code: str, limit: int = DEFAULT_PERIODS) -> l
             symbol=symbol,
             limit=limit,
         )
-    except Exception as e:  # 传输级失败（连接级重试已耗尽而上抛）→ 返回空列表，由调用方继续降级
+    except Exception as e:  # noqa: BLE001 — 传输级失败（连接级重试已耗尽而上抛）→ 返回空列表，由调用方继续降级
         logger.warning("[financial_indicator] 同花顺多期报表取数失败（%s），返回空序列", e)
         return []
 

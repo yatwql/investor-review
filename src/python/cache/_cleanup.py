@@ -175,7 +175,7 @@ def auto_cleanup_expired() -> int:
     """
     try:
         return cleanup_expired(dry_run=False)
-    except Exception:  # 宽捕获理由：自动清理绝不影响调用方
+    except Exception:  # noqa: BLE001 — 自动清理绝不影响调用方
         logger.debug("过期缓存自动清理失败（忽略，不影响主流程）", exc_info=True)
         return 0
 

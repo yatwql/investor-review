@@ -172,7 +172,7 @@ def _fact_check(answer_html: str, holdings: list[dict]) -> tuple[bool, bool]:
             module_label="报告追问",
             auto_correct=False,
         )
-    except Exception:  # 核对自身异常：降级返回原文，不阻断追问
+    except Exception:  # noqa: BLE001 — 核对自身异常：降级返回原文，不阻断追问
         logger.warning("[report_qa] 事实核对异常，降级返回原文", exc_info=True)
         return False, True
     warned = bool(summary) and _FACT_WARN_MARK in summary
@@ -373,6 +373,6 @@ def ask_report_qa(
             fact_warning=bool(result.get("fact_warning")),
             question_chars=len(str(question or "").strip()),
         )
-    except Exception:  # 埋点异常绝不影响追问结果
+    except Exception:  # noqa: BLE001 — 埋点异常绝不影响追问结果
         logger.debug("[report_qa] 埋点记录失败，忽略", exc_info=True)
     return result

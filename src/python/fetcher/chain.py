@@ -93,7 +93,7 @@ def _try_provider_fetch(
     _clear_reason()
     try:
         raw = fetch_fn(**kwargs)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — [%s]%s %s API 限速(429): %s
         err_str = str(e)
         if "429" in err_str or "Too Many Requests" in err_str or "rate" in err_str.lower():
             logger.warning("[%s]%s %s API 限速(429): %s", data_type, _code_tag, provider_name, err_str)
@@ -120,7 +120,7 @@ def _try_provider_fetch(
             if not validate(raw, provider_name):
                 logger.info("[%s]%s %s 数据验证未通过，尝试下一链路", data_type, _code_tag, provider_name)
                 return None, "数据校验未通过"
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — [%s]%s %s 数据验证异常: %s
             logger.warning("[%s]%s %s 数据验证异常: %s", data_type, _code_tag, provider_name, e)
             return None, _brief_reason(f"数据校验异常: {e}")
 
@@ -133,7 +133,7 @@ def _try_provider_fetch(
             result = transform(raw, source_label)
         else:
             result = raw
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — [%s] %s 数据转换失败: %s
         logger.warning("[%s] %s 数据转换失败: %s", data_type, provider_name, e)
         return None, _brief_reason(f"数据转换失败: {e}")
 

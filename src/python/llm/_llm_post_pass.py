@@ -193,7 +193,7 @@ def _record_research_contracts(contents: dict[str, str | None]) -> None:
         from src.python.core.market_hours import market_snapshot_bucket
 
         as_of = market_snapshot_bucket().as_of
-    except Exception:  # 口径桶不可用不阻断：as_of 仅记录用途
+    except Exception:  # noqa: BLE001 — 口径桶不可用不阻断：as_of 仅记录用途
         as_of = ""
     for module_key in BASE_MODULES:
         payload = parse_contract(contents.get(module_key))

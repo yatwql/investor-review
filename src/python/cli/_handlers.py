@@ -412,7 +412,7 @@ def _notify_report_completion(args: argparse.Namespace, config: dict, exit_code:
             degradations=_collect_degradation_summary(),
         )
         dispatch_completion_notification(event, notify_cfg)
-    except Exception:
+    except Exception:  # noqa: BLE001 — 完成通知发送流程异常（非关键，不影响退出码）
         logger.debug("完成通知发送流程异常（非关键，不影响退出码）", exc_info=True)
 
 

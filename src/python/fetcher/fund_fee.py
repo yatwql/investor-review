@@ -198,7 +198,7 @@ def fetch_fee_index(codes: list[str] | tuple[str, ...] | set[str]) -> dict[str, 
 
                 try:
                     purchase_table = fetch_fund_purchase_status_cached()
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 — [基金费率] 全量申购状态表取数异常，申购单档兜底跳过: %s
                     logger.warning("[基金费率] 全量申购状态表取数异常，申购单档兜底跳过: %s", exc)
                     purchase_table = None
                 if purchase_table is None:

@@ -120,7 +120,7 @@ def _fetch_lg_frame(symbol: str, api_name: str, value_col: str) -> list[dict]:
     try:
         fn = getattr(ak, api_name)
         df = fn(symbol=symbol)
-    except Exception:
+    except Exception:  # noqa: BLE001 — 指数估值历史: akshare %s(%s) 异常
         logger.warning("指数估值历史: akshare %s(%s) 异常", api_name, symbol, exc_info=True)
         return []
     if df is None or getattr(df, "empty", True):

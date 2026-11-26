@@ -241,7 +241,7 @@ def run_with_timeout(
             from src.python.core.rate_limit_state import note_failure
 
             note_failure(str(exc) if exc is not None else "")
-        except Exception:  # 观测失败不影响取数
+        except Exception:  # noqa: BLE001 — 观测失败不影响取数
             logger.debug("push2 限流观测登记失败，已忽略", exc_info=True)
         if isinstance(exc, TimeoutError):
             logger.warning("akshare 调用超时 (%.1fs, 第 %d/%d 次)", timeout, failed_attempt, policy.attempts)

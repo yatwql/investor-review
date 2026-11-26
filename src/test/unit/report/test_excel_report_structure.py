@@ -526,7 +526,7 @@ class TestExcelModuleSheets(unittest.TestCase):
                 files = os.listdir(tmpdir)
                 xlsx_files = [f for f in files if f.endswith(".xlsx")]
                 self.assertGreater(len(xlsx_files), 0, "应生成至少一个 xlsx 文件")
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — 测试断言口径：空持仓不得崩溃，抛出即判失败
                 self.fail(f"generate_excel_report 不应崩溃: {e}")
 
     def test_write_module_data_rows_has_border_fix(self):

@@ -100,7 +100,7 @@ def _web(args: argparse.Namespace) -> int:
             server.terminate()
             try:
                 server.wait(timeout=10)
-            except Exception:  # 宽捕获理由：收尾失败不影响截图结果
+            except Exception:  # noqa: BLE001 — 收尾失败不影响截图结果
                 server.kill()
 
 

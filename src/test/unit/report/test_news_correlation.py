@@ -306,7 +306,7 @@ class TestWriteNewsSheet(unittest.TestCase):
         ]
         try:
             nc.write_news_sheet(self.ws, data)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — 测试断言口径：部分数据写入不得抛异常，抛出即判失败
             self.fail(f"write_news_sheet with partial data raised: {e}")
 
     def test_with_llm_analysis_column(self) -> None:
@@ -688,7 +688,7 @@ class TestWriteNewsSheetFormatting(unittest.TestCase):
         ws2 = Workbook().active
         try:
             nc.write_news_sheet(ws2, [])
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — 测试断言口径：空数据写入不得抛异常，抛出即判失败
             self.fail(f"空数据写入 failed: {e}")
 
     def test_enriched_keywords_in_excel(self):

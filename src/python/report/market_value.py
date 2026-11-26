@@ -489,7 +489,7 @@ def _generate_details(holdings: list[Holding], today_str: str = "") -> list[Deta
                 h = future_map[future]
                 try:
                     mkt = future.result()
-                except Exception:  # 宽捕获理由：获取行情异常: %s (%s)
+                except Exception:  # noqa: BLE001 — 获取行情异常: %s (%s)
                     logger.warning("获取行情异常: %s (%s)", h.name, h.code, exc_info=True)
                     mkt = None
                 result_map[(h.account.strip(), h.code.strip())] = mkt

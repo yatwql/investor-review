@@ -595,7 +595,7 @@ class TestMemoCache(unittest.TestCase):
                 for _ in range(100):
                     ae._memo_set(f"k{n}", n)
                     ae._memo_get(f"k{n}")
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — 并发用例：收集线程内异常供统一断言，不在线程内断言
                 errors.append(e)
 
         threads = [threading.Thread(target=_worker, args=(i,)) for i in range(10)]

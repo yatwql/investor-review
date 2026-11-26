@@ -109,7 +109,7 @@ def _push2_extended(code: str) -> dict[str, Any] | None:
         if result:
             _cache_set(_key, result)
         return result if result else None
-    except Exception:  # 宽捕获理由：扩展数据获取失败 [%s]
+    except Exception:  # noqa: BLE001 — 扩展数据获取失败 [%s]
         logger.warning("扩展数据获取失败 [%s]", code, exc_info=True)
         return None
 
@@ -161,7 +161,7 @@ def _tencent_extended(code: str, name: str = "") -> dict[str, Any] | None:
             _cache_set(_key, result)
             return result
         return None
-    except Exception:  # 宽捕获理由：Tencent 扩展数据获取失败 [%s]
+    except Exception:  # noqa: BLE001 — Tencent 扩展数据获取失败 [%s]
         logger.warning("Tencent 扩展数据获取失败 [%s]", code, exc_info=True)
         reg.record_failure("tencent_style", f"extended:{code}")
         return None
@@ -243,7 +243,7 @@ def _get_industry_avg_pe(codes: list[str], names_by_code: dict[str, str] | None 
 
         # ── 第三遍：代码 → 行业平均 PE 映射 ─────────────────────
         return {code: industry_avg[ind] for code, ind in code_industry.items() if ind in industry_avg}
-    except Exception:  # 宽捕获理由：行业平均 PE 获取异常
+    except Exception:  # noqa: BLE001 — 行业平均 PE 获取异常
         logger.warning("行业平均 PE 获取异常", exc_info=True)
         return {}
 
@@ -277,7 +277,7 @@ def _batch_tencent_extended(codes: list[str], names: dict[str, str] | None = Non
             c = fut_map[fut]
             try:
                 data = fut.result()
-            except Exception:  # 宽捕获理由：Tencent 批量并发获取失败 [%s]
+            except Exception:  # noqa: BLE001 — Tencent 批量并发获取失败 [%s]
                 logger.warning("Tencent 批量并发获取失败 [%s]", c, exc_info=True)
                 data = None
             if data is not None:

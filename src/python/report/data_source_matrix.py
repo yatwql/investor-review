@@ -176,7 +176,7 @@ def build_data_source_matrix() -> list[dict[str, Any]]:
         from src.python.core.rate_limit_state import push2_limited
 
         _push2_count = int(push2_limited().get("count") or 0)
-    except Exception:  # 宽捕获理由：观测读取失败按无命中处理
+    except Exception:  # noqa: BLE001 — 观测读取失败按无命中处理
         _push2_count = 0
     if not events and not provider_usage and _push2_count == 0:
         return []
@@ -289,7 +289,7 @@ def build_data_source_matrix() -> list[dict[str, Any]]:
                     "degraded_list": [{"source_key": "eastmoney_push2", "reason": str(_limited.get("first") or "")}],
                 }
             )
-    except Exception:  # 宽捕获理由：观测行失败不影响矩阵
+    except Exception:  # noqa: BLE001 — 观测行失败不影响矩阵
         logger.debug("[data_source_matrix] push2 限流行装配失败，已忽略", exc_info=True)
 
     # 5) 追加未归类项（如有）
@@ -453,7 +453,7 @@ def _datasink_plan() -> str:
 
         plan = (get_config().get("datasink") or {}).get("plan")
         return str(plan).strip().lower() if plan else "free"
-    except Exception:  # 宽捕获理由：默认成本档读取失败按免费档展示
+    except Exception:  # noqa: BLE001 — 默认成本档读取失败按免费档展示
         return "free"
 
 
@@ -495,7 +495,7 @@ def build_data_source_catalog() -> list[dict[str, Any]]:
     readiness: dict[str, dict[str, Any]] = {}
     try:
         readiness = {row["source_id"]: row for row in credential_readiness()}
-    except Exception:  # 宽捕获理由：[matrix] 凭据就绪矩阵读取失败，说明表不附就绪态
+    except Exception:  # noqa: BLE001 — [matrix] 凭据就绪矩阵读取失败，说明表不附就绪态
         logger.debug("[matrix] 凭据就绪矩阵读取失败，说明表不附就绪态")
     plan = _datasink_plan()
 

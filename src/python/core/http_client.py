@@ -143,7 +143,7 @@ def post_with_deadline(
     def _run() -> None:
         try:
             box["resp"] = _send()
-        except BaseException as exc:  # 宽捕获理由：异常须跨线程原样上抛，由调用方按类型分流
+        except BaseException as exc:  # noqa: BLE001 — 异常须跨线程原样上抛，由调用方按类型分流
             box["exc"] = exc
 
     worker = threading.Thread(target=_run, name="http-post-deadline", daemon=True)

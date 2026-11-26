@@ -44,7 +44,7 @@ def _fetch_from_caixin(num: int = 100) -> list[dict[str, Any]]:
 
     try:
         df = ak.stock_news_main_cx()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — 财新新闻 (akshare) 获取失败: %s
         logger.warning("财新新闻 (akshare) 获取失败: %s", e)
         return []
 
@@ -124,7 +124,7 @@ def _fetch_cctv_news(date_str: str | None = None) -> list[dict[str, Any]]:
         # 显式 Any：akshare 的部分接口在类型存根里被标注成不可达返回（NoReturn），
         # 直接推断会让下游 `df.iterrows()` 报 "NoReturn is not iterable"
         df: Any = resolve(ak, "news_cctv")(date=date_str)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — CCTV 新闻 (akshare) 获取失败: %s
         logger.warning("CCTV 新闻 (akshare) 获取失败: %s", e)
         return []
 
@@ -185,7 +185,7 @@ def fetch_news(num: int = 100) -> list[dict[str, Any]]:
     # 1) 财新网（主接口）
     try:
         caixin_items = _fetch_from_caixin(num)
-    except Exception as e:  # 有意宽捕获：源内降级契约——主接口异常时降级到补充接口
+    except Exception as e:  # noqa: BLE001 — 源内降级契约——主接口异常时降级到补充接口
         logger.warning("财新接口异常，源内降级为仅 CCTV 渠道: %s", e)
         caixin_items = []
     for item in caixin_items:
@@ -198,7 +198,7 @@ def fetch_news(num: int = 100) -> list[dict[str, Any]]:
     # 2) CCTV 新闻（补充接口）
     try:
         cctv_items = _fetch_cctv_news()
-    except Exception as e:  # 有意宽捕获：源内降级契约——补充接口异常不影响主接口结果
+    except Exception as e:  # noqa: BLE001 — 源内降级契约——补充接口异常不影响主接口结果
         logger.warning("CCTV 接口异常，源内降级为仅财新渠道: %s", e)
         cctv_items = []
     for item in cctv_items:

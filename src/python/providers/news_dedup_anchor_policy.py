@@ -405,7 +405,7 @@ def _compact_anchor_file(size: int) -> bool:
         return False
     try:
         result = compact_anchor_file(_anchor_store._ANCHOR_PATH)
-    except Exception:  # 压缩失败绝不阻断报告
+    except Exception:  # noqa: BLE001 — 压缩失败绝不阻断报告
         logger.warning("[dedup] 锚点文件维护压缩失败（继续使用原文件）", exc_info=True)
         return False
     if result["aborted"]:

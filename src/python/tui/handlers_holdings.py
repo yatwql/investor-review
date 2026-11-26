@@ -68,7 +68,7 @@ def run_holdings_entry_panel() -> None:
         return
     try:
         session = _Session(book=load_book(filepath), mtime=os.path.getmtime(filepath))
-    except Exception as e:  # 读取失败统一走提示通道，不进面板
+    except Exception as e:  # noqa: BLE001 — 读取失败统一走提示通道，不进面板
         print_error_with_hint(e, "读取持仓文件失败")
         return
 
@@ -358,7 +358,7 @@ def _market_data(code: str) -> dict | None:
         from src.python.fetcher.price import fetch_market_data
 
         return fetch_market_data(code)
-    except Exception:  # 取数失败不阻断录入
+    except Exception:  # noqa: BLE001 — 取数失败不阻断录入
         logger.warning("[持仓录入] 行情取数异常: %s", code, exc_info=True)
         return None
 

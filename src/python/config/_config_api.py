@@ -96,7 +96,7 @@ def is_formal_holdings_source(config: dict | None = None) -> bool:
         # 上传暂存区虽在正式目录下，但内容为外部上传的试算/覆盖文件，非正式存量
         uploads_dir = os.path.abspath(os.path.join(formal_dir, "uploads"))
         return source != uploads_dir and not source.startswith(uploads_dir + os.sep)
-    except Exception:  # 宽捕获理由：路径解析失败按非暂存区处理（保守视为正式存量）
+    except Exception:  # noqa: BLE001 — 路径解析失败按非暂存区处理（保守视为正式存量）
         return False
 
 

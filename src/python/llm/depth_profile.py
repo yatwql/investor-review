@@ -123,7 +123,7 @@ def resolve_depth_profile(config: dict | None = None) -> DepthProfile:
             from src.python.config import get_config
 
             config = get_config()
-        except Exception:  # 有意宽捕获：配置不可读属非致命降级，按默认档继续
+        except Exception:  # noqa: BLE001 — 配置不可读属非致命降级，按默认档继续
             logger.debug("[depth_profile] 配置读取失败，按 %s 档处理", REPORT_DEPTH_DEFAULT)
             config = {}
     return DEPTH_PROFILES[normalize_depth((config or {}).get("llm_report_depth", REPORT_DEPTH_DEFAULT))]

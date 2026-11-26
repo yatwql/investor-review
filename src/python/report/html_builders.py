@@ -43,7 +43,7 @@ def _build_category_data(
         dividend_data = get_dividend_data(stock_codes) if stock_codes else {}
         if not dividend_data and stock_codes:
             dividend_success = False
-    except Exception:  # 宽捕获理由：分红数据加载失败（非关键），年均股息率列显示 --
+    except Exception:  # noqa: BLE001 — 分红数据加载失败（非关键），年均股息率列显示 --
         dividend_success = False
         logger.warning("分红数据加载失败（非关键），年均股息率列显示 --", exc_info=True)
     cat_groups: dict[tuple[str, str], list[Holding]] = {}

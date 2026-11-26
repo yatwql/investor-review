@@ -74,7 +74,7 @@ def resolve_benchmark_index(
                 continue
             try:
                 text = benchmark_text_getter(code)
-            except Exception:  # 宽捕获理由：文本查询失败只回落，不中断映射（仅兜 Exception）
+            except Exception:  # noqa: BLE001 — 文本查询失败只回落，不中断映射（仅兜 Exception）
                 logger.debug("[基准映射] %s 基准文本查询失败，跳过", code, exc_info=True)
                 continue
             if not isinstance(text, str) or not text.strip():

@@ -428,7 +428,7 @@ class TestWriteAccountGroupings(unittest.TestCase):
         ws = MagicMock()
         try:
             hdb._write_account_groupings(ws, [detail_special], 3)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — 测试断言口径：特殊字符账户名不得崩溃，抛出即判失败
             self.fail(f"特殊字符账户名崩溃: {e}")
 
     @patch("src.python.report._holdings_detail_blocks.write_data_row")

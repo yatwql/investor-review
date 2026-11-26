@@ -161,7 +161,7 @@ class _ChaptersPanel:
             from src.python.core.perf import module_cost_summary
 
             return module_cost_summary(COST_HISTORY_DAYS)
-        except Exception:
+        except Exception:  # noqa: BLE001 — [C] LLM 章节费用摘要读取失败，静默省略
             self._hc.logger.debug("[C] LLM 章节费用摘要读取失败，静默省略", exc_info=True)
             return {}
 

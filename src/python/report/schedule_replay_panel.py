@@ -66,7 +66,7 @@ def _fetch_nav_series(rows: list[dict[str, Any]], window_days: int) -> tuple[dic
     for row in rows:
         try:
             bars = calc.calculate_for_holding(row["code"], row["name"], row["shares"], window_days)
-        except Exception:  # 宽捕获理由：[纪律回放] %s 历史净值获取异常
+        except Exception:  # noqa: BLE001 — [纪律回放] %s 历史净值获取异常
             logger.info("[纪律回放] %s 历史净值获取异常", row["code"], exc_info=True)
             bars = None
         if not bars:
@@ -129,7 +129,7 @@ def build_schedule_replay_panel(
     if fund_codes:
         try:
             fee_index = fetch_fee_index(fund_codes) or None
-        except Exception:  # 宽捕获理由：[纪律回放] 费率索引获取失败，按未计成本回显
+        except Exception:  # noqa: BLE001 — [纪律回放] 费率索引获取失败，按未计成本回显
             logger.warning("[纪律回放] 费率索引获取失败，按未计成本回显", exc_info=True)
             fee_index = None
 

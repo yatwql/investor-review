@@ -39,7 +39,7 @@ class SynchronousExecutor:
         try:
             result = fn(*args, **kwargs)
             fut.set_result(result)
-        except BaseException as e:
+        except BaseException as e:  # noqa: BLE001 — 测试替身：被测函数异常需原样转交 Future（否则断言处只见超时）
             fut.set_exception(e)
         return fut
 

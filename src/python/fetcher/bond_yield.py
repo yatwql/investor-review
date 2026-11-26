@@ -187,7 +187,7 @@ def _fetch_from_akshare() -> float | None:
         logger.info("无风险利率: akshare 获取成功 = %.4f (%s)", rf, latest_row.iloc[0])
         return rf
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — 无风险利率: akshare bond_zh_us_rate 异常: %s
         from src.python.core.provider_registry import get_registry
 
         get_registry().record_failure("akshare", "bond_yield:transport")
@@ -260,7 +260,7 @@ def _fetch_history_from_akshare() -> list[dict]:
 
     try:
         df = _bond_yield_frame()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — 无风险利率历史: akshare bond_zh_us_rate 异常: %s
         # 调用异常（超时/断连/接口失效）：计入共享 akshare 熔断（与
         # get_risk_free_rate 同键同故障域——同一端点）
         from src.python.core.provider_registry import get_registry
@@ -295,7 +295,7 @@ def _fetch_history_from_akshare() -> list[dict]:
             rows.append({"date": str(raw_date).strip()[:10], "rate": rate})
         return rows
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — 无风险利率历史: akshare bond_zh_us_rate 异常: %s
         logger.warning("无风险利率历史: akshare bond_zh_us_rate 异常: %s", e)
         return []
 

@@ -51,7 +51,7 @@ class TestWriteCategorySheet(unittest.TestCase):
         """空持仓 → 不崩溃。"""
         try:
             hds._write_category_block(self.ws, [], [], None, 1)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — 测试断言口径：空持仓分类区块不得抛异常，抛出即判失败
             self.fail(f"空持仓分类区块写入不应抛异常: {e}")
 
 

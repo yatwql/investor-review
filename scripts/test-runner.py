@@ -231,7 +231,7 @@ def main() -> None:
                 f"  [..] 归档清理: 删除 {pruned['removed']} 次运行，释放 {pruned['freed_mb']} MiB"
                 f"（保留 {pruned['kept']} 次 / {pruned['total_mb']} MiB）"
             )
-    except Exception:  # 宽捕获理由：清理属旁路，任何异常都不得阻断测试
+    except Exception:  # noqa: BLE001 — 清理属旁路，任何异常都不得阻断测试
         print("  [!] 归档清理失败（非关键，继续执行）")
 
     # 归档现有报告

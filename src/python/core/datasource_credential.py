@@ -131,7 +131,7 @@ def _key_file_path(spec: CredentialSpec) -> str:
             override = get_config().get(spec.key_file_setting)
             if isinstance(override, str) and override.strip():
                 path = override
-        except Exception:  # 宽捕获理由：配置不可用时回退声明路径，就绪判定不应因配置层异常而崩溃
+        except Exception:  # noqa: BLE001 — 配置不可用时回退声明路径，就绪判定不应因配置层异常而崩溃
             logger.debug("[credential] 读取 %s 配置失败，回退声明路径", spec.key_file_setting)
     if not path:
         return ""

@@ -61,7 +61,7 @@ def _read_holdings_and_clear_cache(group_name: str) -> list | None:
         else:
             print(f"  {GREEN}[OK]{RESET} 无缓存需清除")
         return holdings
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — 读取持仓失败已由提示函数告知用户，返回菜单避免崩溃
         print_error_with_hint(e, "读取持仓失败")
         return None
 
@@ -157,7 +157,7 @@ def _lag_trading_days(nav_date: str, trading_day: str) -> int | None:
         from src.python.core.trading_calendar import count_trading_days_elapsed
 
         return count_trading_days_elapsed(nav_date, trading_day)
-    except Exception:
+    except Exception:  # noqa: BLE001 — 交易日历不可用时按自然日估算，菜单不因该段失败中断
         return None
 
 

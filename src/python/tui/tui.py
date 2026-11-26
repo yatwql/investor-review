@@ -174,7 +174,7 @@ def _can_repaint_inplace() -> bool:
         return False
     try:
         return os.name == "posix" and sys.stdout.isatty()
-    except Exception:
+    except (AttributeError, OSError, ValueError):
         return False
 
 
@@ -284,7 +284,7 @@ def main() -> None:
         from src.python.report.privacy_notice import show_privacy_notice_if_needed
 
         show_privacy_notice_if_needed()
-    except Exception:
+    except Exception:  # noqa: BLE001 — 隐私提示显示失败（非关键）
         logger.debug("隐私提示显示失败（非关键）", exc_info=True)
 
     # 首次运行引导（检测缺失资源并交互式提示）
@@ -292,7 +292,7 @@ def main() -> None:
         from src.python.startup_wizard import show_startup_wizard_if_needed
 
         show_startup_wizard_if_needed()
-    except Exception:
+    except Exception:  # noqa: BLE001 — 首次运行引导显示失败（非关键）
         logger.debug("首次运行引导显示失败（非关键）", exc_info=True)
 
     # 读取缺省菜单选项（config.json → default_menu_key），仅支持 E/B/L/W/Q/D/1/2/3/P/I/A/S/R/V/H/T/X

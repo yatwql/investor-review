@@ -47,7 +47,7 @@ def build_stock_pool(holdings_path: str) -> dict[str, Any]:
     try:
         result = compute_penetration_top10(holdings, details)
         penetration = _extract_share_codes(result.get("top10") or [])
-    except Exception as exc:  # 宽捕获理由：穿透失败回退直接持仓（池缩小会在判定书如实记录）
+    except Exception as exc:  # noqa: BLE001 — 穿透失败回退直接持仓（池缩小会在判定书如实记录）
         note = f"穿透失败回退直接持仓: {type(exc).__name__}: {exc}"
     codes = sorted(set(direct) | set(penetration))
     return {
@@ -88,7 +88,7 @@ def probe_bars(code: str) -> list[dict]:
 
     try:
         return fetch_with_incremental_fallback("history_stock", code, LOOKBACK_DAYS) or []
-    except Exception as exc:  # 宽捕获理由：因子评测跨标的批量：单标的日K取数失败不得中断整批
+    except Exception as exc:  # noqa: BLE001 — 因子评测跨标的批量：单标的日K取数失败不得中断整批
         print(f"    [!] {code} 日K失败: {type(exc).__name__}: {exc}")
         return []
 
@@ -99,7 +99,7 @@ def probe_index() -> list[dict]:
 
     try:
         return fetch_index_history(BENCHMARK_INDEX, LOOKBACK_DAYS) or []
-    except Exception as exc:  # 宽捕获理由：因子评测：基准指数取数失败仅记该探针失败，批量继续
+    except Exception as exc:  # noqa: BLE001 — 因子评测：基准指数取数失败仅记该探针失败，批量继续
         print(f"    [!] 指数历史失败: {type(exc).__name__}: {exc}")
         return []
 
@@ -110,7 +110,7 @@ def probe_valuation(code: str) -> dict | None:
 
     try:
         return fetch_valuation_fields(code)
-    except Exception as exc:  # 宽捕获理由：因子评测跨标的批量：单标的估值取数失败不得中断整批
+    except Exception as exc:  # noqa: BLE001 — 因子评测跨标的批量：单标的估值取数失败不得中断整批
         print(f"    [!] {code} 估值失败: {type(exc).__name__}: {exc}")
         return None
 
@@ -121,7 +121,7 @@ def probe_fin_indicator(code: str) -> dict | None:
 
     try:
         return fetch_latest_indicator(code)
-    except Exception as exc:  # 宽捕获理由：因子评测跨标的批量：单标的财务指标取数失败不得中断整批
+    except Exception as exc:  # noqa: BLE001 — 因子评测跨标的批量：单标的财务指标取数失败不得中断整批
         print(f"    [!] {code} 财务指标失败: {type(exc).__name__}: {exc}")
         return None
 

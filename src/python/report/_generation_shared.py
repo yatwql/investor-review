@@ -154,5 +154,5 @@ def _record_llm_context(perf, sink=None, baseline: dict | None = None) -> None:
                 )
 
         perf.set_llm_context(context)
-    except Exception:  # 宽捕获理由：[perf] LLM 上下文登记失败，已忽略
+    except Exception:  # noqa: BLE001 — [perf] LLM 上下文登记失败，已忽略
         logger.debug("[perf] LLM 上下文登记失败，已忽略", exc_info=True)
