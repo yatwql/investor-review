@@ -90,3 +90,21 @@ class TestConfigPathOverride:
         _config_defaults.set_config_path_override(str(target))
 
         assert _config_defaults.get_config_path() == str(target)
+
+    def test_seed_isolation_clears_leaked_override(self, monkeypatch, tmp_path):
+        """路径覆写优先于 _CONFIG_FILE：上一条用例遗留的覆写必须被隔离 seed 清掉，
+        否则本轮读写落到别的用例的目录（跨用例配置串读）。"""
+        from src.python.config import get_config_path
+        from src.test._path_isolation import seed_sensitive_path_isolation
+
+        monkeypatch.setattr(_config_defaults, "_CONFIG_PATH_OVERRIDE", "/leaked/config.json")
+        probe_targets = [
+            ("输出目录", str(tmp_path / "reports")),
+            ("缓存目录", str(tmp_path / "data/cache")),
+            ("日志目录", str(tmp_path / "logs")),
+        ]
+
+        seed_sensitive_path_isolation(monkeypatch, tmp_path, probe_targets)
+
+        assert _config_defaults._CONFIG_PATH_OVERRIDE is None
+        assert get_config_path().startswith(str(tmp_path)), "有效路径须回到本轮隔离目录"

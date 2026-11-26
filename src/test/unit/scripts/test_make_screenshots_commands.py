@@ -94,16 +94,25 @@ class TestCaptureFrame:
     @pytest.fixture(name="stubs")
     def _stubs(self, monkeypatch, tmp_path):
         import src.python.config as config_pkg
-        import src.python.config._core as config_core
         import src.python.core.perf as perf_mod
         import src.python.tui.tui_menu as tui_menu
 
-        recorded: dict[str, object] = {"menu_calls": [], "menu_selection": None}
+        recorded: dict[str, object] = {
+            "menu_calls": [],
+            "menu_selection": None,
+            "config_calls": [],
+            "invalidations": [],
+        }
         original_perf = perf_mod._PERF_HISTORY_FILE
         original_health = perf_mod._HEALTH_CHECK_FILE
 
-        monkeypatch.setattr(config_pkg, "set_config_path_override", lambda path: recorded.setdefault("config", path))
-        monkeypatch.setattr(config_core, "_clear_config_cache", lambda: recorded.setdefault("cleared", True))
+        # 记录调用**序列**（而非最后一次入参）：覆写只应在进入时设一次，还原必须走原值回写
+        monkeypatch.setattr(
+            config_pkg,
+            "set_config_path_override",
+            lambda path: recorded["config_calls"].append(path),
+        )
+        monkeypatch.setattr(config_pkg, "invalidate_config_cache", lambda: recorded["invalidations"].append(True))
 
         def _print_header():
             recorded["perf_during"] = perf_mod._PERF_HISTORY_FILE
@@ -141,8 +150,8 @@ class TestCaptureFrame:
         text = tui.capture_frame(config_file)
         assert "页头状态行" in text and "菜单面板" in text
         assert stubs["menu_calls"][0] == "refresh"
-        assert stubs["config"] == str(config_file)
-        assert stubs["cleared"] is True
+        assert stubs["config_calls"] == [str(config_file)]
+        assert len(stubs["invalidations"]) == 2, "进入时清一次 + 还原后再清一次"
         # 状态行读的 perf/健康历史指向演示目录（演示目录无文件 → 显示占位）
         state_dir = str(config_file.parents[2] / "data" / "state")
         assert str(stubs["perf_during"]).startswith(state_dir)
@@ -157,6 +166,17 @@ class TestCaptureFrame:
         perf_mod = stubs["perf_mod"]
         assert perf_mod._PERF_HISTORY_FILE == stubs["original_perf"]
         assert perf_mod._HEALTH_CHECK_FILE == stubs["original_health"]
+
+    def test_leaves_config_path_override_untouched_when_none_before_capture(self, tui, config_file):
+        """无前置覆写时取帧（配置面不打桩）：结束后仍是「无覆写」，配置路径没被钉在演示工作区。"""
+        import src.python.config as config_pkg
+
+        assert config_pkg._config_defaults._CONFIG_PATH_OVERRIDE is None
+        tui.capture_frame(config_file)
+        assert config_pkg._config_defaults._CONFIG_PATH_OVERRIDE is None, "原无覆写不得被还原成覆写"
+        effective = config_pkg.get_config_path()
+        assert "demo" not in effective
+        assert effective == config_pkg._config_defaults._CONFIG_FILE, "应回到隔离的默认配置路径"
 
     def test_unknown_default_key_falls_back_to_first_entry(self, tui, stubs, config_file, monkeypatch):
         import src.python.tui.tui_menu as tui_menu

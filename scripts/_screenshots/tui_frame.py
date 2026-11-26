@@ -202,14 +202,17 @@ def capture_frame(config_path: Path) -> str:
     _perf = None
     _orig_perf = ""
     _orig_health = ""
-    _prev_config_path: str | None = None
+    _cfg_defaults = None
+    _prev_override: str | None = None
     try:
-        from src.python.config import get_config_path, set_config_path_override
-        from src.python.config._core import _clear_config_cache
+        from src.python.config import invalidate_config_cache, set_config_path_override
+        from src.python.config import _config_defaults as _cfg_defaults
 
-        _prev_config_path = get_config_path()  # 同进程复用时须还原演示覆写
+        # 还原须记**原覆写值**而不是 get_config_path() 的有效路径：后者在「无覆写」时返回
+        # _CONFIG_FILE，据此回写 set_config_path_override 会把原本无覆写的进程永久钉上覆写。
+        _prev_override = _cfg_defaults._CONFIG_PATH_OVERRIDE
         set_config_path_override(str(config_path))
-        _clear_config_cache()
+        invalidate_config_cache()
 
         # 页头状态行会显示「上次报告 / 新鲜度 / 数据源失败」——这些读的是本机真实运行状态。
         # 演示帧必须只用演示工作区的状态：把 perf/健康历史路径指向演示目录（演示目录里没有
@@ -242,10 +245,11 @@ def capture_frame(config_path: Path) -> str:
         if _perf is not None:  # 取帧失败在赋值前也要安全退出
             _perf._PERF_HISTORY_FILE = _orig_perf
             _perf._HEALTH_CHECK_FILE = _orig_health
-        if _prev_config_path is not None:  # 还原配置路径覆写（演示目录不留在进程全局）
-            from src.python.config import set_config_path_override
+        if _cfg_defaults is not None:  # 还原配置路径覆写（演示目录不留在进程全局）
+            _cfg_defaults._CONFIG_PATH_OVERRIDE = _prev_override
+            from src.python.config import invalidate_config_cache
 
-            set_config_path_override(_prev_config_path)
+            invalidate_config_cache()
 
 
 def main(argv: list[str] | None = None) -> int:
