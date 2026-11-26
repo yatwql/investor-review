@@ -126,16 +126,20 @@ class TestSummaryDateTimeValueStyles(unittest.TestCase):
             _build_minimal_render_data(cls.order, cls.numbers, cls.sv_dict),
         )
 
-    def _value_td_style(self, label: str) -> str:
-        """在投资分析汇总中按标签名找对应行的值单元格（第2列）内联 style。"""
+    def _value_td(self, label: str):
+        """在投资分析汇总中按标签名找对应行的值单元格（第2列）。"""
         summary = self.soup.find(id="sec-summary")
         self.assertIsNotNone(summary, "未找到 #sec-summary")
         assert summary is not None
         for tr in summary.select("table.kv-table tr"):
             tds = tr.find_all("td")
             if len(tds) == 2 and tds[0].get_text(strip=True) == label:
-                return str(tds[1].get("style") or "")
+                return tds[1]
         self.fail(f"未找到「{label}」行")
+
+    def _value_td_style(self, label: str) -> str:
+        """值单元格的内联 style 文本。"""
+        return str(self._value_td(label).get("style") or "")
 
     def test_stat_time_value_bold(self):
         """统计时间值加粗。"""
@@ -159,10 +163,10 @@ class TestSummaryDateTimeValueStyles(unittest.TestCase):
             r"font-size:\s*(?:1[5-9]px|var\(--fs-(?:h1|h2|h3|kpi)\))",
             f"所属交易日字号应在章节/数值大字档，style={style!r}",
         )
-        self.assertRegex(
-            style,
-            r"color:\s*var\(--primary\)",
-            f"所属交易日值应使用品牌色 token，style={style!r}",
+        self.assertIn(
+            "text-primary",
+            self._value_td("所属交易日").get("class", []),
+            "所属交易日值应使用品牌色语义类（.text-primary → var(--primary)）",
         )
 
     def test_kv_label_style_unaffected(self):

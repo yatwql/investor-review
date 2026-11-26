@@ -150,15 +150,15 @@
                         {% elif _corr_r >= 0.5 %}
                         <td class="corr-pos-strong" title="r={{ '%.2f'|format(_corr_r) }}，p={{ '%.4f'|format(_corr_p) }}">强正</td>
                         {% elif _corr_r >= 0.3 %}
-                        <td style="background-color: var(--corr-pos); color: var(--text);" title="r={{ '%.2f'|format(_corr_r) }}，p={{ '%.4f'|format(_corr_p) }}">{{ '%.2f'|format(_corr_r) }}</td>
+                        <td style="background-color: var(--corr-pos);" title="r={{ '%.2f'|format(_corr_r) }}，p={{ '%.4f'|format(_corr_p) }}">{{ '%.2f'|format(_corr_r) }}</td>
                         {% elif _corr_r > 0 %}
-                        <td style="background-color: var(--corr-pos-weak); color: var(--text);" title="r={{ '%.2f'|format(_corr_r) }}，p={{ '%.4f'|format(_corr_p) }}">{{ '%.2f'|format(_corr_r) }}</td>
+                        <td style="background-color: var(--corr-pos-weak);" title="r={{ '%.2f'|format(_corr_r) }}，p={{ '%.4f'|format(_corr_p) }}">{{ '%.2f'|format(_corr_r) }}</td>
                         {% elif _corr_r <= -0.5 %}
                         <td class="corr-neg-strong" title="r={{ '%.2f'|format(_corr_r) }}，p={{ '%.4f'|format(_corr_p) }}">强负</td>
                         {% elif _corr_r <= -0.3 %}
-                        <td style="background-color: var(--corr-neg); color: var(--text);" title="r={{ '%.2f'|format(_corr_r) }}，p={{ '%.4f'|format(_corr_p) }}">{{ '%.2f'|format(_corr_r) }}</td>
+                        <td style="background-color: var(--corr-neg);" title="r={{ '%.2f'|format(_corr_r) }}，p={{ '%.4f'|format(_corr_p) }}">{{ '%.2f'|format(_corr_r) }}</td>
                         {% else %}
-                        <td style="background-color: var(--corr-neg-weak); color: var(--text);" title="r={{ '%.2f'|format(_corr_r) }}，p={{ '%.4f'|format(_corr_p) }}">{{ '%.2f'|format(_corr_r) }}</td>
+                        <td style="background-color: var(--corr-neg-weak);" title="r={{ '%.2f'|format(_corr_r) }}，p={{ '%.4f'|format(_corr_p) }}">{{ '%.2f'|format(_corr_r) }}</td>
                         {% endif %}
                         {% endif %}
                         {% else %}
@@ -262,7 +262,7 @@
 
             {% if position_relationship_data.get("insufficient_codes") %}
             <div class="penetration-notes">
-                <div style="color:var(--warn-text);">* 下列品种重叠样本不足 {{ position_relationship_data["window"] }} 期，相关性格标为 N/A（灰色）：{{ position_relationship_data["insufficient_codes"] | map("anon_code") | join("、") }}</div>
+                <div class="text-warn">* 下列品种重叠样本不足 {{ position_relationship_data["window"] }} 期，相关性格标为 N/A（灰色）：{{ position_relationship_data["insufficient_codes"] | map("anon_code") | join("、") }}</div>
             </div>
             {% endif %}
             <div class="penetration-notes">

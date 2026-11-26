@@ -362,6 +362,11 @@ class TestSwitchOffGoldenBaseline(unittest.TestCase):
     # 类的声明与旧内联值一字不差，其余 style 声明（字号/间距）原样保留。
     # 已按「结构与文案不变」验证：剥除全部 class/style 属性后的 HTML 与改动前逐字符
     # 一致（唯一文本差异即上述两条 CSS 规则），CSS 规则集多重集仅增 2 条、无删无改。
+    #
+    # 基线复核记录（2026-11-26，彩色内联色归位语义类批次）：本批只改报告侧
+    # `partials/_report_styles.html` 的语义色工具类块，whatif 页样式链
+    # （`partials/_base_styles.html` + `partials/_whatif_styles.html`）不在改动域；
+    # 两个基线常量与渲染字节逐字节对上，不需重标定。
     _GOLDEN_BASE_SHA256 = "5aa6d8fc46b07dd1e69ee808791e595c840aa5e026c61e146b45298cf57a56db"
     _GOLDEN_FULL_SHA256 = "ce4718d4385d9f3bda4ea03319279f3ef9a139a0e9d13a9da6e010707f53ca22"
 

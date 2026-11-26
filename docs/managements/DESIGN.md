@@ -25,6 +25,8 @@
 | 亏 / 跌 | `.loss` | `--loss` |
 | 评级（优秀 / 偏差 / 较差 / 稳定） | `.rating-excellent` / `.rating-deviation` / `.rating-poor` / `.rating-stable` | 同名 token |
 | 告警文字 / 次级文字 / 弱化文字 / 主色文字 | `.text-warn` / `.text-muted` / `.text-faint` / `.text-secondary` / `.text-primary` | `--warn-text` / `--text-muted` / `--text-faint` / `--text-secondary` / `--primary` |
+| 三级文字 / 危险文字 | `.text-tertiary` / `.text-danger` | `--text-tertiary` / `--danger-text` |
+| LLM 调用状态文字（停用 / 失败 / 缓存命中 / 成功 / 未知 / 思考中） | `.llm-status-disabled` / `.llm-status-failed` / `.llm-status-cached` / `.llm-status-success` / `.llm-status-unknown` / `.llm-status-thinking` | 同名 token |
 | 相关性热力（强正 / 正 / 强负） | `.corr-pos-strong` / `.corr-pos-mid` / `.corr-neg-strong` | 同名 token |
 | 配置分布条填充 | `.fill-primary` / `.fill-alloc-mid` / `.fill-alloc-low` | `--primary` / `--alloc-mid` / `--alloc-low` |
 | 字重 / 字号 | `.fw-600` / `.fs-table-sm` / `.fs-kpi` | `--fs-table-sm` / `--fs-kpi` |

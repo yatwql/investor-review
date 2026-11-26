@@ -43,15 +43,15 @@
                         <td style="padding: 4px 8px; font-weight: bold;">{{ _mi.name }}</td>
                         <td style="padding: 4px 8px;">
                             {% if _mi.status == "disabled" %}
-                            <span style="color: var(--llm-status-disabled);">{{ _mi.status_label }}</span>
+                            <span class="llm-status-disabled">{{ _mi.status_label }}</span>
                             {% elif _mi.status == "failed" %}
-                            <span style="color: var(--llm-status-failed);" title="{{ _mi.status_label }}">{{ _mi.status_label }}</span>
+                            <span class="llm-status-failed" title="{{ _mi.status_label }}">{{ _mi.status_label }}</span>
                             {% elif _mi.status == "cached" %}
-                            <span style="color: var(--llm-status-cached);">{{ _mi.status_label }}</span>
+                            <span class="llm-status-cached">{{ _mi.status_label }}</span>
                             {% elif _mi.status == "success" %}
-                            <span style="color: var(--llm-status-success);">{{ _mi.status_label }}</span>
+                            <span class="llm-status-success">{{ _mi.status_label }}</span>
                             {% elif _mi.status_label %}
-                            <span style="color: var(--llm-status-unknown);">{{ _mi.status_label }}</span>
+                            <span class="llm-status-unknown">{{ _mi.status_label }}</span>
                             {% endif %}
                         </td>
                         <td style="padding: 4px 8px;">{{ _mi.model or "—" }}</td>
@@ -70,7 +70,7 @@
                         </td>
                         <td style="padding: 4px 8px; text-align: center;">
                             {% if _mi.cached %}
-                            <span style="color: var(--llm-status-cached);">✓</span>
+                            <span class="llm-status-cached">✓</span>
                             {% elif _mi.status == "success" %}
                             <span class="text-faint">—</span>
                             {% else %}
@@ -79,7 +79,7 @@
                         </td>
                         <td style="padding: 4px 8px; text-align: center;">
                             {% if _mi.thinking %}
-                            <span style="color: var(--llm-status-thinking);">✓</span>
+                            <span class="llm-status-thinking">✓</span>
                             {% elif _mi.status == "success" or _mi.status == "cached" %}
                             <span class="text-faint">—</span>
                             {% else %}
