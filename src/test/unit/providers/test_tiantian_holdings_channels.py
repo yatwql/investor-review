@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from datetime import datetime
 
 import pytest
@@ -79,13 +80,18 @@ class TestChannelPayloadsFullConsumption:
         assert list(th._quarter_channel_payloads("011506", 2026, 9)) == [("jjcc", "jj"), ("zqcc", "zq")]
 
     def test_hedge_merges_both_sides_when_zqcc_arrives_first(self, monkeypatch):
-        """对冲后 zqcc 先到且 jjcc 稍后带回内容：两侧内容都产出（zqcc 在前）。"""
+        """对冲后 zqcc 先到且 jjcc 稍后带回内容：两侧内容都产出（zqcc 在前）。
+
+        顺序判据靠「zqcc 先返回」而不是线程调度：jjcc 侧在 zqcc 已启动后再固定让出
+        100ms，使两侧完成顺序与调度无关（本用例验「先到先得」的收益，不验调度竞态；
+        4 档并行门禁下线程可能被饿死，事件互等式的顺序断言会因此翻红）。
+        """
         monkeypatch.setattr(th, "_HEDGE_AFTER_SECONDS", 0.0)
-        release_jjcc = threading.Event()
         zqcc_started = threading.Event()
 
         def _jj():
-            release_jjcc.wait(timeout=10)
+            zqcc_started.wait(timeout=60)
+            time.sleep(0.1)
             return "jj"
 
         def _zq():
@@ -93,21 +99,10 @@ class TestChannelPayloadsFullConsumption:
             return "zq"
 
         self._stub(monkeypatch, _jj, _zq)
-        released: list[bool] = []
 
-        def _release_after_hedge() -> None:
-            released.append(zqcc_started.wait(timeout=10))
-            release_jjcc.set()
+        payloads = list(th._quarter_channel_payloads("012325", 2026, 9))
 
-        helper = threading.Thread(target=_release_after_hedge, name="fund-hold-hedge", daemon=True)
-        helper.start()
-        try:
-            payloads = list(th._quarter_channel_payloads("012325", 2026, 9))
-        finally:
-            release_jjcc.set()
-            helper.join(timeout=10)
-
-        assert released == [True], "对冲须在 jjcc 未返回时发出 zqcc"
+        assert zqcc_started.is_set(), "对冲须在 jjcc 未返回时发出 zqcc"
         assert payloads == [("zqcc", "zq"), ("jjcc", "jj")]
 
     def test_hedge_yields_none_pair_when_both_channels_empty(self, monkeypatch):
@@ -117,7 +112,7 @@ class TestChannelPayloadsFullConsumption:
         zqcc_started = threading.Event()
 
         def _jj():
-            release_jjcc.wait(timeout=10)
+            release_jjcc.wait(timeout=60)
             return None
 
         def _zq():
@@ -127,7 +122,7 @@ class TestChannelPayloadsFullConsumption:
         self._stub(monkeypatch, _jj, _zq)
 
         def _release_after_hedge() -> None:
-            zqcc_started.wait(timeout=10)
+            zqcc_started.wait(timeout=60)
             release_jjcc.set()
 
         helper = threading.Thread(target=_release_after_hedge, name="fund-hold-empty", daemon=True)
@@ -136,7 +131,7 @@ class TestChannelPayloadsFullConsumption:
             payloads = list(th._quarter_channel_payloads("012325", 2026, 9))
         finally:
             release_jjcc.set()
-            helper.join(timeout=10)
+            helper.join(timeout=60)
 
         assert payloads == [("jjcc", None), ("zqcc", None)]
 

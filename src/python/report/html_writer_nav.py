@@ -43,7 +43,8 @@ _LLM_SUPPORTED_SECTIONS: frozenset[str] = frozenset(
 
 def _compute_section_visibility(
     order: list[dict],
-    _manager_analysis: dict | None,
+    manager_analysis: dict | None,  # noqa: ARG001 — 调用方按关键字传参（html_sections），签名即契约
+
     overlap_matrix: dict | None,
     concentration_analysis: dict | None,
     style_analysis: dict | None,
