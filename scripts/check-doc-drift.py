@@ -72,6 +72,7 @@ import io
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any, Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享模块（_checklib）
 from _shared.checklib import REPO_ROOT, add_common_args, rel, report  # rel：单测直接访问 drift.rel
@@ -318,7 +319,7 @@ def _instrument_checks(namespace: dict, tally: dict[str, int]) -> None:
         if getattr(target, "_tally_wrapped", False):
             continue
 
-        def _wrapped(*args, _fn=target, _name=name, **kwargs):
+        def _wrapped(*args, _fn: Callable[..., Any] = target, _name: str = name, **kwargs):
             found = _fn(*args, **kwargs)
             tally[_name] = tally.get(_name, 0) + len(found)
             return found

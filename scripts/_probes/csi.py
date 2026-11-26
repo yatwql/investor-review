@@ -155,7 +155,7 @@ def build_parser():
     return parser
 
 
-def run(args) -> int:
+def run(args: argparse.Namespace) -> int:
     """主入口（参数已由 probe.py 经 build_parser 解析）。"""
 
     days = min(max(args.days, 5), 2000)  # Tencent K 线实际上限约 2000 天（3650 返回空/崩溃，见 probe 说明）

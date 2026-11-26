@@ -3967,6 +3967,8 @@ lint 基线为 `E4`/`E7`/`E9`/`F`/`RUF100` + `ARG`（`pyproject.toml` 的 `[tool
 
 **收敛方向**：宽捕获密集处（如 `core/doctor.py` 的体检分组）优先收成「边界函数 + 显式结果类型」，把宽捕获收到一处；新增代码按上表交代，评审以「行内理由是否说清失败后果」为准。
 
+**跨层注解的导入方向**：注解引入的类型依赖**同样计入分层**（`scripts/check-import-surface.py` 的 `layer-inversion` 覆盖 `TYPE_CHECKING` 块与函数内导入）——下层需要上层的**只读接口**（如进度上报）时，协议定义在 `core`（例：`core/progress.py` 的 `ProgressReporterProtocol`），消费方向一律指向 `core`，上层实现按结构化子类型满足协议即可；**不得**为标注一个参数而反向 import 上层模块（`cache` → `report` 的类型边即是此坑，须走本口径而非例外表）。
+
 #### 8.7.1 日期解析口径（`core/dates.py` 与保留差异）
 
 全仓 `src/python` + `scripts` 日期解析（`strptime` / `fromisoformat`）共 **60 处调用**，其中 **53 处在自写 try/except 内**。审计发现失败语义**六种并存**（返回 `None` / `""` / 原串/入参 / 抛错 / 哨兵值 / `pass` 续算），同一语义被各调用点各写一遍。

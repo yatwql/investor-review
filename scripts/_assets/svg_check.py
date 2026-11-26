@@ -136,7 +136,10 @@ def _parse_svg(path: Path):
     return texts, rects
 
 
-def _parent_rect(box, rects):
+def _parent_rect(
+    box: tuple[float, float, float, float, str, float],
+    rects: list[tuple[str, tuple[float, float, float, float], str | None]],
+):
     """按 y 范围完全包含取面积最小的矩形（背景/装饰性除外），返回 ``(面积, box, fill)``。"""
     best = None
     x0, y0, x1, y1 = box[0], box[1], box[2], box[3]

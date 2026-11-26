@@ -15,6 +15,11 @@ from __future__ import annotations
 import html
 import re
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # 注解只在静态期求值：openpyxl 仍在函数内延迟导入
+    from openpyxl.cell.cell import Cell, MergedCell
+    from openpyxl.worksheet.worksheet import Worksheet
 
 #: 单元格字体栈（与报告 HTML 同源的中文可用字体）
 _FONT_STACK = '"Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei", "Source Han Sans SC", sans-serif'
@@ -106,7 +111,7 @@ def _argb_rgb(color: object) -> str | None:
     return f"#{rgb}"
 
 
-def _span_map(sheet) -> dict[tuple[int, int], tuple[int, int]]:
+def _span_map(sheet: Worksheet) -> dict[tuple[int, int], tuple[int, int]]:
     """合并区左上角 → (跨列数, 跨行数)。"""
     spans: dict[tuple[int, int], tuple[int, int]] = {}
     for merged in sheet.merged_cells.ranges:
@@ -117,7 +122,7 @@ def _span_map(sheet) -> dict[tuple[int, int], tuple[int, int]]:
     return spans
 
 
-def _covered_cells(sheet) -> set[tuple[int, int]]:
+def _covered_cells(sheet: Worksheet) -> set[tuple[int, int]]:
     """被合并区覆盖的非左上角坐标（不单独出格）。"""
     covered: set[tuple[int, int]] = set()
     for merged in sheet.merged_cells.ranges:
@@ -142,7 +147,7 @@ def _display_width(text: str) -> int:
     return sum(2 if ord(ch) > 0x2E80 else 1 for ch in text)
 
 
-def _cell_style(cell) -> str:
+def _cell_style(cell: Cell | MergedCell) -> str:
     """单元格内联样式（填充 / 字色 / 加粗 / 字号 / 对齐）。"""
     rules: list[str] = []
     fill = getattr(cell.fill, "fgColor", None) if cell.fill is not None and cell.fill.patternType else None
@@ -161,7 +166,7 @@ def _cell_style(cell) -> str:
     return ";".join(rules)
 
 
-def _column_widths(sheet, max_col: int, max_rows: int, available: int) -> list[int]:
+def _column_widths(sheet: Worksheet, max_col: int, max_rows: int, available: int) -> list[int]:
     """各列像素宽：先按内容撑开，超宽时整表等比收缩（不低于 48px）。"""
     widths: list[float] = []
     for col in range(1, max_col + 1):

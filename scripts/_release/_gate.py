@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import argparse
 import datetime as _dt
 import hashlib
 import os
@@ -15,9 +16,11 @@ import re
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any, Callable
 
 
-def tree_fingerprint(exec_fn, root, runner=None) -> str:
+def tree_fingerprint(exec_fn: Callable[..., tuple[int, str, str]], root: Path, runner: Any = None) -> str:
     """工作区树指纹：`git diff HEAD` + `git status --porcelain` 的 sha256。
 
     gate 与 publish 之间只允许出现「文档统计同步」这类幂等写入；指纹不同即说明
@@ -34,7 +37,9 @@ def tree_fingerprint(exec_fn, root, runner=None) -> str:
 CODE_PATHS: tuple[str, ...] = ("src", "scripts", "pyproject.toml", "pytest.ini", "requirements.txt")
 
 
-def code_file_hashes(exec_fn, root, runner=None) -> dict[str, str] | None:
+def code_file_hashes(
+    exec_fn: Callable[..., tuple[int, str, str]], root: Path, runner: Any = None
+) -> dict[str, str] | None:
     """测试相关代码路径的逐文件内容哈希（工作区口径：tracked + 未忽略的未跟踪文件）。
 
     必须取**内容**而非「相对 HEAD 的差异」：publish 会先把 prepare 的改动提交再算
@@ -72,7 +77,7 @@ def fingerprint_of(hashes: dict[str, str]) -> str:
     return digest.hexdigest()
 
 
-def code_fingerprint(exec_fn, root, runner=None) -> str:
+def code_fingerprint(exec_fn: Callable[..., tuple[int, str, str]], root: Path, runner: Any = None) -> str:
     """测试相关代码路径的**内容**指纹（sha256，与提交状态无关）。
 
     与 `tree_fingerprint` 的分工：本指纹只关心「会不会改变测试结论」的文件，
@@ -90,7 +95,7 @@ def diff_code_files(recorded: dict[str, str], current: dict[str, str]) -> list[s
     return sorted(changed)
 
 
-def read_gate_stamp(path) -> dict | None:
+def read_gate_stamp(path: Path) -> dict | None:
     """读 gate 戳原文（不校验匹配；缺文件/坏 JSON 返回 None）。"""
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -98,7 +103,7 @@ def read_gate_stamp(path) -> dict | None:
         return None
 
 
-def write_bench_stamp(path, version: str, modes: list[str], fingerprint: str, covers_unit: bool) -> None:
+def write_bench_stamp(path: Path, version: str, modes: list[str], fingerprint: str, covers_unit: bool) -> None:
     """refresh 的 bench 通过戳：记录实际跑过的模式与代码指纹。"""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
@@ -116,7 +121,7 @@ def write_bench_stamp(path, version: str, modes: list[str], fingerprint: str, co
     )
 
 
-def bench_covers_verify(path, version: str, fingerprint: str) -> dict | None:
+def bench_covers_verify(path: Path, version: str, fingerprint: str) -> dict | None:
     """bench 戳是否可用于替代 P1 verify。
 
     三个条件缺一不可：版本一致、实际跑过 `unit`（verify 的严格超集）、
@@ -136,7 +141,7 @@ def bench_covers_verify(path, version: str, fingerprint: str) -> dict | None:
 
 
 def write_gate_stamp(
-    path,
+    path: Path,
     version: str,
     fingerprint: str,
     verify_passed: str,
@@ -161,7 +166,7 @@ def write_gate_stamp(
     path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
 
-def gate_stamp_matches(path, version: str, fingerprint: str):
+def gate_stamp_matches(path: Path, version: str, fingerprint: str):
     """指纹与版本都一致时返回戳数据，否则 None（缺文件/坏 JSON/指纹空均视为不匹配）。"""
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -172,7 +177,7 @@ def gate_stamp_matches(path, version: str, fingerprint: str):
     return data
 
 
-def run_gate(args, ctx, runner=None) -> int:
+def run_gate(args: argparse.Namespace, ctx: SimpleNamespace, runner: Any = None) -> int:
     print("[..] P2 门禁：演进对照新鲜度（当前开发版列头须今日刷新）")
     findings = ctx.check_evolution_freshness(ctx.folders_file.read_text(encoding="utf-8"), _dt.date.today().isoformat())
     if findings:

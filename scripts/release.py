@@ -33,6 +33,7 @@ import os  # noqa: F401 — 测试以 `rel.os.cpu_count` 重定向并行度探�
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONSTANTS_FILE = REPO_ROOT / "src" / "python" / "core" / "constants.py"
@@ -278,15 +279,15 @@ def archive_prerequisites(release_version: str) -> list[str]:
     return _cmd_base.archive_prerequisites(release_version, _env())
 
 
-def _tree_fingerprint(runner=None) -> str:
+def _tree_fingerprint(runner: Any = None) -> str:
     return _cmd_base._tree_fingerprint(_env(), runner)
 
 
-def _code_fingerprint(runner=None) -> str:
+def _code_fingerprint(runner: Any = None) -> str:
     return _cmd_base._code_fingerprint(_env(), runner)
 
 
-def _bench_covers_verify(runner=None) -> dict | None:
+def _bench_covers_verify(runner: Any = None) -> dict | None:
     return _cmd_base._bench_covers_verify(_env(), runner)
 
 
@@ -311,42 +312,42 @@ def _gate_stamp_matches(version: str, fingerprint: str) -> dict | None:
 # ─────────────────────────── 命令薄包装（保持既有调用面） ───────────────────────────
 
 
-def cmd_check(args: argparse.Namespace, runner=None) -> int:
+def cmd_check(args: argparse.Namespace, runner: Any = None) -> int:
     return _cmd_prep.cmd_check(args, _env(), runner)
 
 
-def cmd_archive_init(args: argparse.Namespace, runner=None) -> int:
+def cmd_archive_init(args: argparse.Namespace, runner: Any = None) -> int:
     return _cmd_prep.cmd_archive_init(args, _env(), runner)
 
 
-def cmd_prepare(args: argparse.Namespace, runner=None) -> int:
+def cmd_prepare(args: argparse.Namespace, runner: Any = None) -> int:
     return _cmd_prep.cmd_prepare(args, _env(), runner)
 
 
-def cmd_archive(args: argparse.Namespace, runner=None) -> int:
+def cmd_archive(args: argparse.Namespace, runner: Any = None) -> int:
     return _cmd_prep.cmd_archive(args, _env(), runner)
 
 
-def cmd_refresh(args: argparse.Namespace, runner=None) -> int:
+def cmd_refresh(args: argparse.Namespace, runner: Any = None) -> int:
     return _cmd_ship.cmd_refresh(args, _env(), runner)
 
 
-def cmd_evolution(args: argparse.Namespace, runner=None) -> int:
+def cmd_evolution(args: argparse.Namespace, runner: Any = None) -> int:
     return _cmd_ship.cmd_evolution(args, _env(), runner)
 
 
-def cmd_publish(args: argparse.Namespace, runner=None) -> int:
+def cmd_publish(args: argparse.Namespace, runner: Any = None) -> int:
     return _cmd_ship.cmd_publish(args, _env(), runner)
 
 
-def cmd_devbump(args: argparse.Namespace, runner=None) -> int:
+def cmd_devbump(args: argparse.Namespace, runner: Any = None) -> int:
     return _cmd_ship.cmd_devbump(args, _env(), runner)
 
 
 # ─────────────────────────── gate ───────────────────────────
 
 
-def cmd_gate(args: argparse.Namespace, runner=None) -> int:
+def cmd_gate(args: argparse.Namespace, runner: Any = None) -> int:
     """P2 门禁编排（实现在 `_release/_gate.py`；依赖按当前模块状态注入）。"""
     ctx = SimpleNamespace(
         check_evolution_freshness=check_evolution_freshness,

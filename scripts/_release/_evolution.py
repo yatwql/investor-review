@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Any
 
 from _release._common import ReleaseError, exec_command
 
@@ -17,7 +18,7 @@ def line_count(data: bytes) -> int:
     return data.count(b"\n") + (0 if data.endswith(b"\n") else 1)
 
 
-def build_evolution_stats(root: Path, runner=None) -> dict[str, int]:
+def build_evolution_stats(root: Path, runner: Any = None) -> dict[str, int]:
     """按 folders.md「复现方法」口径统计：git 清单 + 逐文件精确行数（工作区直读）。"""
     rc, out, err = exec_command(["git", "ls-files"], root, runner)
     if rc != 0:

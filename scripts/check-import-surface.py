@@ -132,7 +132,7 @@ def audit_exceptions(exceptions: _ExceptionTable) -> list[str]:
     return findings
 
 
-def scan_compat(root: Path = PY_ROOT, exceptions=None) -> list[str]:
+def scan_compat(root: Path = PY_ROOT, exceptions: dict[str, set[tuple[str, str]]] | None = None) -> list[str]:
     """compat-comment：兼容历史导入路径的注释关键词。"""
     exceptions = exceptions or {}
     findings: list[str] = []
@@ -144,7 +144,7 @@ def scan_compat(root: Path = PY_ROOT, exceptions=None) -> list[str]:
     return findings
 
 
-def scan_private_all(root: Path = PY_ROOT, exceptions=None) -> list[str]:
+def scan_private_all(root: Path = PY_ROOT, exceptions: dict[str, set[tuple[str, str]]] | None = None) -> list[str]:
     """private-all：包门面 `__all__` 不得导出 `_` 私有名。"""
     exceptions = exceptions or {}
     findings: list[str] = []
@@ -170,7 +170,7 @@ def scan_private_all(root: Path = PY_ROOT, exceptions=None) -> list[str]:
     return findings
 
 
-def scan_cross_private(root: Path = PY_ROOT, exceptions=None) -> list[str]:
+def scan_cross_private(root: Path = PY_ROOT, exceptions: dict[str, set[tuple[str, str]]] | None = None) -> list[str]:
     """cross-private：跨包导入私有模块（同包私有导入是允许的）。"""
     exceptions = exceptions or {}
     modules = _module_files(root)
@@ -191,7 +191,7 @@ def scan_cross_private(root: Path = PY_ROOT, exceptions=None) -> list[str]:
     return findings
 
 
-def scan_dynamic(root: Path = PY_ROOT, exceptions=None) -> list[str]:
+def scan_dynamic(root: Path = PY_ROOT, exceptions: dict[str, set[tuple[str, str]]] | None = None) -> list[str]:
     """dynamic-target：`import_module("字面量")` 的直接目标必须可解析（变量目标由 smoke 用例兜底）。"""
     exceptions = exceptions or {}
     findings: list[str] = []
@@ -233,7 +233,7 @@ _LAYER_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 
 
-def scan_layer_inversion(root: Path = PY_ROOT, exceptions=None) -> list[str]:
+def scan_layer_inversion(root: Path = PY_ROOT, exceptions: dict[str, set[tuple[str, str]]] | None = None) -> list[str]:
     """layer-inversion：下层不得 import 上层模块（规则见 :data:`_LAYER_RULES`）。
 
     分层纪律：`core` → `fetcher`/`providers` → `analysis` → `report`/`llm` → `tui`/`web`/`cli`，

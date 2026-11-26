@@ -4,8 +4,10 @@
 访问（实现见 _traces_doc.dedup）；独立成包保证单文件行数守红线与内聚。
 """
 
+from pathlib import Path
 
-def _read_doc_impl(fpath):
+
+def _read_doc_impl(fpath: Path):
     """文档正文（进程内缓存由调用方/入口自行决定）：解码失败返回 None。"""
     try:
         return fpath.read_text(encoding="utf-8")

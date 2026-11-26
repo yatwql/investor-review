@@ -16,8 +16,12 @@ sending a response"（服务器接受 TCP 连接但未返回响应即断开）�
 from __future__ import annotations
 
 import time
+from typing import TYPE_CHECKING
 
 import httpx
+
+if TYPE_CHECKING:  # 注解只在静态期求值：参数由 probe.py 的 build_parser 解析
+    import argparse
 
 PROBE_TARGET = "push2"
 
@@ -63,7 +67,7 @@ def _probe_once(index: int) -> tuple[bool, str]:
         return False, f"[{index}] 异常  {dt:.0f}ms  {type(e).__name__}: {e}"
 
 
-def run(args) -> int:  # noqa: ARG001 — 探测协议统一入口签名（probe.py 按 run(args) 调用）
+def run(args: argparse.Namespace) -> int:  # noqa: ARG001 — 探测协议统一入口签名（probe.py 按 run(args) 调用）
     """主入口：连续探测并汇总结果。"""
     print(f"探测 {_URL}")
     print(f"参数: {_PARAMS}")

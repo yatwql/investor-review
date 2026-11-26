@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from src.python.cache.operations import CacheUpdateResult
     from src.python.core.models import Holding
-    from src.python.report.progress import ProgressReporter
+    from src.python.core.progress import ProgressReporterProtocol
 
 import logging
 
@@ -103,7 +103,7 @@ def sector_flow_hint() -> str:
 
 def _refresh_common_caches(
     holdings: list | None,
-    reporter: ProgressReporter,
+    reporter: ProgressReporterProtocol,
 ) -> tuple[int, int, int, int]:
     """刷新不依赖基金持仓的公共缓存，通过 reporter.* 输出进度。
 
@@ -248,7 +248,7 @@ def _refresh_extended_caches(
     holdings: list,
     funds: list,
     result: CacheUpdateResult,
-    reporter: ProgressReporter,
+    reporter: ProgressReporterProtocol,
 ) -> None:
     """刷新扩展缓存：新闻 / 基金经理 / 风格扩展，并行执行。
 

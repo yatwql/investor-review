@@ -17,6 +17,7 @@ from _test_runner.pytest_env import (
 )
 import time as _time
 from datetime import datetime
+from typing import Callable
 
 #: pytest 非测试失败退出码 → 可执行原因（否则只看到「0 passed, 0 failed（0.0s）」）。
 #: 环境变量名引用 `pytest_env` 常量，不在此重写字面量。
@@ -361,7 +362,7 @@ def _run_phased(
 def run_modes_concurrently(
     modes: list[str],
     jobs: int,
-    run_one,
+    run_one: Callable[[str], dict],
     *,
     fail_fast: bool = False,
 ) -> tuple[list[dict], list[str]]:

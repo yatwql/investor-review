@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
+from typing import Any
 
 
 class ReleaseError(RuntimeError):
@@ -13,7 +14,7 @@ class ReleaseError(RuntimeError):
 def exec_command(
     cmd: list[str],
     root: Path,
-    runner=None,
+    runner: Any = None,
     capture: bool = True,
     timeout: int = 600,
 ) -> tuple[int, str, str]:
