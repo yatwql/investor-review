@@ -11,12 +11,12 @@
 from __future__ import annotations
 
 import importlib
-import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 
+from src.test._subprocess_coverage import run_entry_child
 from src.python.tui import tui as tui_mod
 from src.python.tui.panel_runtime import NavState
 from src.python.tui.tui_keys import KEY_CTRL_C, KEY_DOWN, KEY_ENTER
@@ -241,15 +241,9 @@ class TestMainGuard:
 
         子进程执行：入口分支不在本进程重跑整套 TUI 导入（不改写 ``sys.path``/
         ``sys.modules``）；子进程内同样先摘掉项目根，覆盖入口的自动补路径。
+        子进程经 ``run_entry_child`` 拉起（覆盖数据回灌，入口行才计得进去）。
         """
-        completed = subprocess.run(
-            [sys.executable, "-c", _ENTRY_CHILD_CODE],
-            cwd=str(Path(tui_mod.__file__).resolve().parents[3]),
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            timeout=180,
-        )
+        completed = run_entry_child(_ENTRY_CHILD_CODE, cwd=Path(tui_mod.__file__).resolve().parents[3])
 
         assert completed.returncode == 0, completed.stderr
         assert "感谢使用，再见！" in completed.stdout
