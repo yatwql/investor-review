@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.18.7-dev
-> **编号源**：`rf-next = 1215`（新增问题提出后更新为 +1；已用最大 rf-1214，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1217`（新增问题提出后更新为 +1；已用最大 rf-1216，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -39,7 +39,7 @@
 
 | 文件 | 现状与拆分方向 |
 |------|----------------|
-| `src/python/core/perf.py` 799 行 | 采集器与台账落盘可拆（`perf` 采集 / `perf_history` 读写两文件） |
+| `src/python/core/perf.py` 797 行 | 采集器与台账落盘可拆（`perf` 采集 / `perf_history` 读写两文件） |
 | `src/python/core/doctor.py` 789 行 | 检查项按域分文件（环境 / 配置 / 数据源 / 报告产物），入口只留编排 |
 | `src/python/llm/fact_checker/_numerical.py` 764 行 | 数值校验按规则族拆（金额 / 比率 / 计数），共享解析原语上提包内 `_common` |
 | `src/python/tui/handlers_config.py` 743 行 | 配置面板按域拆（内容选项 / 全局设置 / 目录与文件名） |
@@ -93,6 +93,7 @@
 | **rf-1212** | 模板余下 34 处文字颜色声明仍写在元素 `style` 属性上（`--profit` 9、`--primary` 7、`--llm-status-*` 7、`--warn-text` 4、`color: var(--text)` 4、`--text-tertiary` 2、`--danger-text` 1），与 rf-1211 之后的「颜色一律经语义 class 施加、色值只进 token 与工具类」口径形状不一致 | 归位到既有语义类：`--profit` 9 处（回撤/VaR/跌幅等风险红字档）用 `.profit`、`--primary` 7 处用 `.text-primary`、`--warn-text` 3 处用 `.text-warn`、`--text` 4 处直接删声明（正文默认色）；新增 `.text-tertiary` / `.text-danger` / `.llm-status-{disabled,failed,cached,success,unknown,thinking}` 共 8 条工具类（各一行、值只引用同名 token）承载 `--text-tertiary` 2、`--danger-text` 1、`--llm-status-*` 7 处。等价证明：8 个章节模板剥除 class/style 后逐字符一致、报告页样式规则多重集仅 +8 条无删无改，`test_report_type_scale` 规则集哈希重标定（186→194），whatif 样式链不在改动域、逐字节基线复核不变。 |
 | **rf-1213** | 两个巨型函数偏离「函数做一件事」：`providers/news_dedup_anchor_policy.compact_anchor_file` 194 行把快照校验/行筛选/体积裁剪/落盘四段挤在一处；`tui/handlers_switch.run_content_options_panel` 235 行内嵌 `_render` / `_on_text` 两个大闭包 | `compact_anchor_file` 拆出同模块私有函数 `_anchor_snapshot`（读前快照）/ `_validate_snapshot`（读后并发校验）/ `_select_kept_lines`（每 key 最新 + 保留期 + 指纹归因）/ `_trim_to_target`（分支配额体积裁剪）/ `_persist_compact`（分组原子重写 + 备份 + 清理裁空分片），入口只剩编排与早退；`run_content_options_panel` 把两个闭包正文外提为模块级 `_render_switch_panel` / `_dispatch_switch_text`，闭包捕获的静态版面量收进冻结 dataclass `_SwitchPanelLayout`（分组/编号块/实验项集/三列宽），`state` 与 `session` 显式传参，入口只留布局装配、写路径小闭包与循环装配。**只搬不改**：两模块既有用例全绿，闭包体与模块级函数体的可执行语句逐行一致（差异仅新增 docstring 与函数内局部 import），键位/提示文案/上屏顺序未动（`test_prompt_contract` 绿）。 |
 | **rf-1214** | 审计点名「余 10 处内联颜色声明」实际是**子串匹配**结果：仅 1 处是文字色声明（`summary_section.html:94` 的 `color: var(--warn-text)`），其余 9 处为 `background-color`（`position_structure_section.html:141/145/149` 用 `--row-first-check-bg`/`--cell-na-bg`/`--surface`，`:153/155/159/161` 用 `--corr-pos`/`--corr-pos-weak`/`--corr-neg`/`--corr-neg-weak`）与 `border-left-color`（`data_source_status_section.html:69` `--success`、`portfolio_history_drawdown_section.html:305` `--border-strong`） | 按 DESIGN.md 语义色表逐处判定后**全部不改、只登记**：①`position_structure` 的 7 处是相关性热力/空态**底色**，属契约登记的组件派生面 token（`--corr-*`/`--cell-na-bg`），改 `.text-*` 会把底色变字色（视觉反演）；其中 `:141/145/149` 元素已带 `.text-faint`，不存在「背景 token 误作字色」的错值。②两处 `border-left-color` 是状态条边框色，`.text-*` 工具体只设 `color`，替换即丢边框语义。③`summary_section.html:94` 可换 `.text-warn`，但 `.empty-section` 规则（`_report_styles.html:308`）在其后声明且同为单类选择器、内含 `color: var(--text-muted)`，纯 class 替换会被层叠压成灰字——需复合选择器或调整工具类顺序（触及层叠契约），留待单独决策。故本轮模板零改动、报告页规则集与 whatif 基线不变（`_RULESET_HASH` 未变），`check-style-guardrails` 内联色值 0（该口径只判裸 hex/rgb/关键字色，`var()` 引用已登记 token 不计 finding）。 |
+| **rf-1215** | 日期解析失败语义分散：全仓 `strptime`/`fromisoformat` 共 60 处调用、53 处各自包 try/except，失败口径**六种并存**（返回 `None` / `""` / 原串 / 抛错 / 哨兵值 / `pass` 续算），同一格式同一语义被重复实现，新增调用点无从判定该抄哪一处；口径事实位也缺（文档无处可查「这类解析失败该返回什么」） | 新建 `src/python/core/dates.py`，只收拢「同一格式集合 + 同一失败语义 + 同一返回类型」的明确重复组：`parse_datetime_ymd`（`%Y-%m-%d`→datetime，ValueError/TypeError→None，4 处）、`parse_iso_date`（`date.fromisoformat`→date，TypeError/ValueError→None，7 处）、`parse_datetime_iso`（`datetime.fromisoformat`→datetime，ValueError→None，5 处）共 **16 处**替换，**逐处保留原降级动作**（调用点各自 `return None` / `continue` / `return out`）；语义确有差异的 **33 处一律不动**并在 `technical.md` §8.7.1「日期解析口径」逐处列出差异点（哨兵值/默认态/上抛/日志副作用/多格式链/宽捕获）；补 `test_dates.py` 30 条（正常/边界/非法/空值/非字符串/时区，断言即原调用点语义） |
 
 
 ### 归档档案

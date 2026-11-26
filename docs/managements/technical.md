@@ -3967,6 +3967,62 @@ lint 基线只有 `E4`/`E7`/`E9`/`F` + `RUF100`（`pyproject.toml` 的 `[tool.ru
 
 **收敛方向**：宽捕获密集处（如 `core/doctor.py` 的体检分组）优先收成「边界函数 + 显式结果类型」，把宽捕获收到一处；新增代码按上表交代，评审以「行内理由是否说清失败后果」为准。
 
+#### 8.7.1 日期解析口径（`core/dates.py` 与保留差异）
+
+全仓 `src/python` + `scripts` 日期解析（`strptime` / `fromisoformat`）共 **60 处调用**，其中 **53 处在自写 try/except 内**。审计发现失败语义**六种并存**（返回 `None` / `""` / 原串/入参 / 抛错 / 哨兵值 / `pass` 续算），同一语义被各调用点各写一遍。
+
+**处置原则**：只收拢「同一格式集合 + 同一失败语义 + 同一返回类型」的明确重复组，函数 docstring 即口径；**判不等价或确有差异的一律不动**（下表逐处列出）。`core/dates.py` 三个函数只做解析、不做格式猜测，失败一律给 `None`，**降级动作留在调用点**（原调用点各自的动作逐字保留）。
+
+**已合并的三组**（共 16 处调用点，语义逐字等价）：
+
+| 导出函数 | 格式集合 | 失败语义 | 替换的调用点 |
+|:--|:--|:--|:--|
+| `parse_datetime_ymd` | `%Y-%m-%d` → `datetime` | `(ValueError, TypeError)` → `None` | `core/trading_calendar.py:398,399`（`count_trading_days_elapsed`）、`fetcher/price.py:244`（`_trading_day_close_epoch`）、`analysis/event_window_impact.py:76`（`map_event_to_trading_day`）、`providers/tiantian_ranking.py:104,105`（`_days_between`） |
+| `parse_iso_date` | `date.fromisoformat` → `date` | `(TypeError, ValueError)` → `None` | `analysis/crisis_annotation.py:192`（`_parse_window`）、`:210,211`（`_overlap_interval`）、`:242`（`_compute_interval_stats`）、`:341,342`、`:348`（`_compute_index_stats`） |
+| `parse_datetime_iso` | `datetime.fromisoformat` → `datetime` | `ValueError` → `None`（非字符串仍抛 `TypeError`，与原口径一致） | `core/perf.py:697`、`fetcher/cassette_checks.py:48`、`qa/telemetry.py:245`、`scripts/_perf_history/data.py:155`、`scripts/_perf_history/report.py:495` |
+
+**保留：语义差异（不合并）**：
+
+| 文件:行 | 格式 / 解析 | 失败返回语义 | 差异点（为何不收） |
+|:--|:--|:--|:--|
+| `analysis/_silence.py:99` | `%Y-%m-%d` → `date` | 记入 `expired_codes` + `continue` | 失败即「判定过期」的副作用，非取值语义 |
+| `analysis/event_window_impact.py:59` | `%Y-%m-%d` + `timedelta` 运算 | `False` | 返回类型为 `bool`（「非交易日」），且 try 体内含算术 |
+| `analysis/financial_statement_derive.py:75` | `%Y-%m-%d` → `.month` | `""` | 空串哨兵（非 `None`），返回 `int` 月份 |
+| `analysis/whatif_backtest.py:63` | `%Y-%m-%d` → `.date()` | `None` | 成功路径返回 `date`（非 `datetime`），调用方还要 `effective_date` 原值 |
+| `config/_validation_scalars.py:249` | `date.fromisoformat` | 不返回：`logger.warning` + `issues += 1` | 校验器副作用语义，需带字段名告警 |
+| `core/data_freshness.py:86` | `%Y-%m-%d` | `None` | 成功路径返回**入参原串**（`str`），返回类型不同 |
+| `core/trading_calendar.py:366` | `%Y-%m-%d` | `""` | 空串哨兵；成功路径返回 `str` 日期 |
+| `core/trading_calendar.py:431,432` | `%Y-%m-%d` | `None` | try 体内含交易日回退循环，窄化到解析不属**可证**等价 |
+| `core/trading_calendar.py:461` | `%Y-%m-%d` | `0` | 自然日兜底值 `0`（非 `None`），返回 `int` 天数 |
+| `fetcher/history_diff.py:199` | 多格式循环（`fmt` 变量） | 试下一格式，全败 `continue` | 多格式探测链，单格式函数不适用 |
+| `fetcher/nav_lookup.py:68` | `date.fromisoformat` | **无保护**（异常上抛） | 无 try/except，不在本口径范围 |
+| `providers/news_dedup_anchor_policy.py:134` | 多格式 `text[:len(text)]` | 试下一格式 | 多格式 + 切片预处理；返回 `bool` |
+| `providers/news_dedup_anchor_store.py:170` | 多格式 `text[:len(text)]` | 试下一格式 | 多格式 + 切片预处理 |
+| `report/_snapshot.py:318` | `date.fromisoformat`（生成器） | `_CRISIS_INDEX_DAYS_MAX` | **带默认值**且捕获 `KeyError`（键缺失与格式错同径） |
+| `report/event_impact_panel.py:78` | 多格式（`_CTIME_FORMATS`） | 试下一格式 | 成功路径 `strftime` 成 `str`，多格式链 |
+| `report/event_impact_panel.py:353` | `%Y-%m-%d` → `.date()` | `continue` 跳过该事件 | 循环内跳过单条，无返回值语义 |
+| `report/excel_market_data.py:36` | `date.fromisoformat` | `logger.warning` + `None` | 异常路径**写 warning 日志**，抽走会丢可观测性 |
+| `report/excel_writer.py:98` | `%Y%m%d` | `continue` 跳过该目录 | try 体内含 `rmtree`/日志，非纯解析 |
+| `report/fund_manager_analysis.py:130` | `%Y-%m-%d` | 三个 `changed_*` 置 `True` | 失败语义是**默认态赋值**（保守判「有变化」） |
+| `report/fund_manager_analysis.py:152` | `%Y-%m-%d` | `pass`（保留已算标记） | 失败即静默续算，返回 `None` 无意义 |
+| `report/history_snapshot.py:223` | `%Y%m%dT%H%M%S` | `None` | 格式集合与三组均不同（紧凑时间戳） |
+| `report/holding_change_panel.py:543` | 双前缀（8 位紧凑 / ISO 前 10 位） | `None` | 内部分支双格式，非单一格式集合 |
+| `report/holdings_freshness.py:42` | 多格式（`_DATE_FORMATS`） | 试下一格式 | 多格式链，契约明示「宁可放弃也不误判陈旧」 |
+| `report/market_value.py:275,276` | `%Y-%m-%d` | `pass` 续算 | 失败后继续走后续价格类型判定，非返回值 |
+| `report/purchase_status.py:144` | `datetime.fromisoformat` → `.date()` | `'expired'` | 返回状态字符串（业务枚举），非 `None` |
+| `report/purchase_status.py:151` | `date.fromisoformat` | `'expired'` | 同上 |
+| `report/purchase_status.py:184` | `date.fromisoformat` | 返回**入参原串** | 「原样上屏」语义，非 `None` |
+| `report/whatif_operations.py:84` | `date.fromisoformat` | **抛** `ValueError`（包装中文提示） | 刻意上抛做用户输入校验 |
+| `tui/status_line.py:90` | `datetime.fromisoformat` | `_Segment('上次报告 —')` | 外层 `except Exception` 同时兜 `load_history` 等非解析失败 |
+| `tui/status_line.py:158` | `%Y-%m-%d` → `.date()` | `_Segment('新鲜度 —')` | 同上：宽捕获覆盖多步取数，非纯解析边界 |
+| `scripts/check-import-surface.py:128` | `date.fromisoformat` | **无保护** | 守护脚本读自身例外表，无 try/except |
+| `scripts/_probes/csi.py:67` | `date.fromisoformat` | `-1` | 哨兵整数（探测脚本「未知天数」） |
+| `scripts/probe-report-claims.py:47` | `%Y%m%d` | `None` | 格式集合为紧凑 `%Y%m%d`，与三组均不同 |
+
+**格式宽容度差异（保留，测试已固化）**：`strptime("%Y-%m-%d")` 接受未零填充月日（`2024-3-1`），`date.fromisoformat` 不接受——故 `parse_datetime_ymd` 与 `parse_iso_date` 是两个口径，**不得互相替代**（见 `src/test/unit/core/test_dates.py`）。
+
+**新增调用口径**：需要「失败给 `None`、降级动作在调用点」的 `%Y-%m-%d` / ISO 解析一律走 `core/dates.py`；失败语义确有不同（哨兵值、默认态、上抛、日志副作用、多格式链）时**就地在调用点写 try/except 并在行内交代**，不往 `core/dates.py` 加带默认值参数。
+
 [↑ 回到顶部](#目录)
 
 ---

@@ -20,6 +20,7 @@ from datetime import datetime
 from typing import Any
 
 from src.python.core.cassette import list_cassettes
+from src.python.core.dates import parse_datetime_iso
 from src.python.providers import eastmoney, tencent
 from src.python.providers import sina as sina_provider
 from src.python.providers import tiantian_holdings
@@ -44,10 +45,7 @@ def _recording_anchor(name: str) -> datetime | None:
         if entry.get("name") != name:
             continue
         raw = entry.get("recorded_at") or ""
-        try:
-            return datetime.fromisoformat(raw)
-        except ValueError:
-            return None
+        return parse_datetime_iso(raw)
     return None
 
 

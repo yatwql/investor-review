@@ -10,7 +10,6 @@ import json
 import os
 import sys
 from collections import defaultdict
-from datetime import datetime
 from typing import Any
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -26,6 +25,7 @@ if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
 from src.python.core.costs import add_cost_bucket, costs_of
+from src.python.core.dates import parse_datetime_iso
 from src.python.llm.pricing import PRICING_CURRENCY
 
 from _perf_history.stats import (
@@ -151,11 +151,11 @@ def _bucket_key(timestamp: str, by: str) -> str:
     if by == "hour":
         return ts[11:13] or "?"
     if by == "week":
-        try:
-            year, week, _ = datetime.fromisoformat(ts).isocalendar()
-            return f"{year}-W{week:02d}"
-        except ValueError:
+        dt = parse_datetime_iso(ts)
+        if dt is None:
             return "?"
+        year, week, _ = dt.isocalendar()
+        return f"{year}-W{week:02d}"
     return ts[:10] or "?"
 
 

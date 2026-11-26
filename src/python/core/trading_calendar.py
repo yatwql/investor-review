@@ -22,6 +22,7 @@ from collections.abc import Callable
 from datetime import datetime, timedelta
 
 from src.python.core.constants import BEIJING_TZ
+from src.python.core.dates import parse_datetime_ymd
 
 import threading
 
@@ -394,10 +395,9 @@ def count_trading_days_elapsed(start: str, end: str) -> int | None:
     Returns:
         经过的交易日数；start >= end 时返回 0；日期格式非法返回 None
     """
-    try:
-        start_dt = datetime.strptime(start, "%Y-%m-%d")
-        end_dt = datetime.strptime(end, "%Y-%m-%d")
-    except (ValueError, TypeError):
+    start_dt = parse_datetime_ymd(start)
+    end_dt = parse_datetime_ymd(end)
+    if start_dt is None or end_dt is None:
         return None
     if start_dt >= end_dt:
         return 0

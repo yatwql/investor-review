@@ -19,6 +19,7 @@ if _PROJECT_ROOT not in sys.path:
 from src.python.llm.pricing import PRICING_CURRENCY, currency_symbol, format_costs
 
 from src.python.core.costs import add_cost_bucket
+from src.python.core.dates import parse_datetime_iso
 
 from _perf_history.data import (
     _record_costs,
@@ -491,12 +492,11 @@ def _freshness_line(records: list[dict[str, Any]]) -> str | None:
     if not stamps:
         return None
     latest = stamps[-1]
-    try:
-        dt = datetime.fromisoformat(latest.replace("Z", "+00:00"))
-        now = datetime.now(dt.tzinfo) if dt.tzinfo else datetime.now()
-        secs = max((now - dt).total_seconds(), 0.0)
-    except ValueError:
+    dt = parse_datetime_iso(latest.replace("Z", "+00:00"))
+    if dt is None:
         return f"**数据新鲜度**：最新记录 {latest[:19]}（时间解析失败，显示原值）"
+    now = datetime.now(dt.tzinfo) if dt.tzinfo else datetime.now()
+    secs = max((now - dt).total_seconds(), 0.0)
     when = latest[:16]
     if secs < 60:
         return f"**数据新鲜度**：最新记录 {when}（刚刚）"

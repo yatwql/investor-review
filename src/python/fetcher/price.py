@@ -235,14 +235,14 @@ def _cache_captured_at(cache_key: str) -> float | None:
 
 def _trading_day_close_epoch(trading_day: str) -> float | None:
     """交易日收盘时点（北京时间 15:00）的 epoch 秒；解析失败返回 None。"""
-    from datetime import datetime, timedelta
+    from datetime import timedelta
 
     from src.python.core.constants import BEIJING_TZ
+    from src.python.core.dates import parse_datetime_ymd
     from src.python.core.market_hours import _AFTERNOON_END
 
-    try:
-        day = datetime.strptime(trading_day, "%Y-%m-%d")
-    except (ValueError, TypeError):
+    day = parse_datetime_ymd(trading_day)
+    if day is None:
         return None
     return (day.replace(tzinfo=BEIJING_TZ) + timedelta(minutes=_AFTERNOON_END)).timestamp()
 

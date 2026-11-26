@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from src.python.core.constants import PROJECT_ROOT
+from src.python.core.dates import parse_datetime_iso
 from src.python.core.jsonl_store import append_jsonl_atomic
 
 logger = logging.getLogger("invest")
@@ -241,11 +242,9 @@ def _load_records(days: int, path: Path | None = None) -> list[dict[str, Any]]:
             continue
         ts = row.get("ts")
         if isinstance(ts, str):
-            try:
-                if datetime.fromisoformat(ts) < cutoff:
-                    continue
-            except ValueError:
-                pass
+            ts_dt = parse_datetime_iso(ts)
+            if ts_dt is not None and ts_dt < cutoff:
+                continue
         rows.append(row)
     return rows
 

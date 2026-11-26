@@ -42,6 +42,7 @@ from typing import Any
 
 from src.python.core.cancel import CancelToken, StageCancelled
 from src.python.core.constants import APP_VERSION, PROJECT_ROOT
+from src.python.core.dates import parse_datetime_iso
 from src.python.core.jsonl_store import append_jsonl_atomic
 
 logger = logging.getLogger("invest")
@@ -693,10 +694,7 @@ def module_cost_summary(days: int = 7, path: str | None = None) -> dict[str, dic
     for rec in records:
         ts = rec.get("timestamp")
         if isinstance(ts, str):
-            try:
-                when = datetime.fromisoformat(ts)
-            except ValueError:
-                when = None
+            when = parse_datetime_iso(ts)
             if when is not None and when < cutoff:
                 continue
         llm = rec.get("llm")
