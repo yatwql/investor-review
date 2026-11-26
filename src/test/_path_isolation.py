@@ -20,6 +20,9 @@ def seed_sensitive_path_isolation(monkeypatch, tmp_path, _doctor_probe_targets) 
         "src.python.config._config_defaults._CONFIG_FILE",
         str(tmp_path / "data/config/config.json"),
     )
+    # 路径覆写优先于 _CONFIG_FILE：不清空则上一条用例遗留的覆写（如演示截图取帧设置的
+    # 演示工作区路径）会盖掉本轮隔离路径，读写落到别的用例的 tmp 目录。
+    monkeypatch.setattr("src.python.config._config_defaults._CONFIG_PATH_OVERRIDE", None)
     # 去重锚点采集语料（data/calibration/）：采集默认开启，用例一旦触发 _flush_anchors()
     # 就会追加进真实分片（实测曾混入 200 条测试标题，污染阈值校准语料）。分片路径由本常量派生。
     monkeypatch.setattr(

@@ -202,10 +202,12 @@ def capture_frame(config_path: Path) -> str:
     _perf = None
     _orig_perf = ""
     _orig_health = ""
+    _prev_config_path: str | None = None
     try:
-        from src.python.config import set_config_path_override
+        from src.python.config import get_config_path, set_config_path_override
         from src.python.config._core import _clear_config_cache
 
+        _prev_config_path = get_config_path()  # 同进程复用时须还原演示覆写
         set_config_path_override(str(config_path))
         _clear_config_cache()
 
@@ -240,6 +242,10 @@ def capture_frame(config_path: Path) -> str:
         if _perf is not None:  # 取帧失败在赋值前也要安全退出
             _perf._PERF_HISTORY_FILE = _orig_perf
             _perf._HEALTH_CHECK_FILE = _orig_health
+        if _prev_config_path is not None:  # 还原配置路径覆写（演示目录不留在进程全局）
+            from src.python.config import set_config_path_override
+
+            set_config_path_override(_prev_config_path)
 
 
 def main(argv: list[str] | None = None) -> int:
