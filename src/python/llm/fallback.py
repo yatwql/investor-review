@@ -156,9 +156,7 @@ def build_fallback_llm_content(
                 result[i] = get_placeholder_text(module_key)
         return tuple(result)
 
-    if force or is_all_llm_failed(llm_content):
-        # 全部失败 → 非禁用槽位使用占位文本（全部禁用时全部保持 None，整章隐藏）
-        ts = datetime.now().strftime("%Y-%m-%d %H:%M")
-        return tuple(None if key in disabled else get_placeholder_text(key, timestamp=ts) for key in _MODULE_KEYS)
-
-    return llm_content
+    # 到这里必为「force 或全失败」（上一分支已覆盖其余情形）
+    # 全部失败 → 非禁用槽位使用占位文本（全部禁用时全部保持 None，整章隐藏）
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+    return tuple(None if key in disabled else get_placeholder_text(key, timestamp=ts) for key in _MODULE_KEYS)

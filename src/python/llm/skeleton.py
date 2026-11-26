@@ -302,7 +302,8 @@ def _build_provider_cache_key(
         return cache_key
     if resolved_first_name:
         name = resolved_first_name
-    elif module_key:
+    else:
+        # 已过上方早退（provider_list 与 module_key 均非空），无需再判 module_key
         strategy = llm_config.get("_strategy", "priority")
         preferred = llm_config.get("_preferred_providers", {})
         try:
@@ -313,8 +314,6 @@ def _build_provider_cache_key(
         except Exception:
             logger.debug("[skeleton] Provider chain 解析异常，使用默认缓存键", exc_info=True)
             name = "unknown"
-    else:
-        name = "unknown"
     return f"{cache_key}_{name}"
 
 
