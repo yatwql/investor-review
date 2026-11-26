@@ -14,12 +14,12 @@
 | 架构图示 | SVG | 4 | 396 | `src/static/` README 架构图（architecture 三渠道→引擎→双报告、llm-chain Provider 链式分发、capabilities 九大功能域总览、owl-mascot 吉祥物猫头鹰「守望」）+ 截图 7 张 PNG（报告实景 `report-overview`/`report-toc`/`report-charts` + 界面实景 `tui-menu`/`web-workbench`/`web-config`/`cli-report`，不计入本行） |
 | 辅助脚本 | Python | 151 | 31,902 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评测与因子目录评测、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、视觉资产（社交预览图/架构图体检）、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
 | 源代码合计 | — | 635 | 161,699 | 主程序 + 模板 + 脚本 + SVG |
-| 测试代码 | Python | 963 | 240,595 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
-| 测试用例 | — | — | 16,723 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
+| 测试代码 | Python | 966 | 241,285 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
+| 测试用例 | — | — | 16,767 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 15 | 7,088 | 含 README.md；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 14 | 6,851 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 223 | 75,688 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 14,804 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 223 | 75,691 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 14,807 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 200 | 59,172 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 9 | ~1616 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + TUI 交互改进（议题 + 第一/二批实施方案） + PanWatch 借鉴分析（含评估政策单源化与 LLM 复盘契约两份设计） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -1470,6 +1470,8 @@ investor-review/
 │       │   │   ├── test_eval_decision_quality.py #   决策质量回测脚本测试（账本过滤/固定视界前向收盘/秩相关与三分位单调/判定三态/两口径同窗聚合/命中率聚合，离线注入不触网）
 │       │   │   ├── test_eval_factor_zoo.py  #   因子目录评测脚本测试（目录冻结/A/B/C 阈值恰等边界/判定三态/基线读取/相关性口径/注入探针离线）
 │       │   │   ├── test_eval_factor_zoo_edge.py # 因子目录评测脚本边缘场景（空输入/退化数据/极端值 fail-closed）
+│       │   │   ├── test_eval_factor_zoo_verdict.py  # 判定书阶段（报告齐备闸门、A/B/C 表渲染、温度与尾部风险族分支）
+│       │   │   ├── test_eval_factor_zoo_series.py  # 日频序列/阶段产物/注入探针纯函数（族序列与差分口径、阶段 JSON 与对数市值、穿透代码抽取）
 │       │   │   ├── test_perf_report.py #   性能基准报告脚本测试（样本规模与池上限/账户口径分类/_verdict 边界/动态测试时间/规模文案同源/LLM mock 目标与收集契约）
 │       │   │   ├── test_perf_history.py    #   性能趋势查看脚本测试（均值极值降级/阶段跨记录合并/分组过滤·截尾·排序/趋势报告结构/时间列完整日期）
 │       │   │   ├── test_perf_history_sections.py # 趋势报告段落渲染（时间桶/LLM 段落/版本对比/机器可读/异常与漂移段）
@@ -1480,6 +1482,7 @@ investor-review/
 │       │   │   ├── test_eval_from_report.py #   既有报告重放（章节/持仓表解析 + 覆盖率报告，零 LLM）
 │       │   │   ├── test_marker_compliance.py  #   标记合规支路测试（AST 三来源提取/目录期望键/未注册·已移除·edge·目录期望四类违规/干净路径）
 │       │   │   ├── test_probe_entry.py      #   探测统一入口 registry 分发测试 + sampler 拆包契约测试
+│       │   │   ├── test_probe_targets_pure.py  # 探测目标纯函数（日期换算/provider 探测/三态判定/通道四类结果/持仓分类与数据集过滤）
 │       │   │   └── test_probe_report_claims.py # 报告数值声称体检（报告选取/核对聚合/CLI 退出码）
 │       │   ├── startup/              #   首次运行引导单元测试
 │       │   │   ├── __init__.py       #       子包标记
