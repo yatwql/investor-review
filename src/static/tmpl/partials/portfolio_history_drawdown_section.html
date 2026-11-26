@@ -118,7 +118,7 @@
                 </div>
                 {% endif %}
             </div>
-            <div style="text-align:center;font-size: var(--fs-table-sm);color:var(--text-muted);margin-top:4px;">说明：尾部风险基于历史日收益序列（历史模拟法 VaR）；恢复天数指自最大单日跌幅日收复跌幅前水平所需交易日</div>
+            <div class="text-muted" style="text-align:center;font-size: var(--fs-table-sm);margin-top:4px;">说明：尾部风险基于历史日收益序列（历史模拟法 VaR）；恢复天数指自最大单日跌幅日收复跌幅前水平所需交易日</div>
             {# 量化指标 Radar：3 张摘要卡片 + 雷达图增强（三级降级，同改造前） #}
             <div class="chart-box" style="height:320px;margin-top:16px;">
                 {% if data_unavailable %}
@@ -133,7 +133,7 @@
             <div class="chart-caption">组合量化指标画像</div>
             {% endif %}
             {% if not data_unavailable and chart_datasets and chart_datasets.get("radar", {}).get("labels") and chart_datasets["radar"]["datasets"][0].get("note") %}
-            <div style="text-align:center;font-size: var(--fs-table-sm);color:var(--text-muted);margin-top:4px;">{{ chart_datasets["radar"]["datasets"][0]["note"] }}</div>
+            <div class="text-muted" style="text-align:center;font-size: var(--fs-table-sm);margin-top:4px;">{{ chart_datasets["radar"]["datasets"][0]["note"] }}</div>
             {% endif %}
             <!-- ── 二、回撤矩阵：回撤走势 + 回撤明细表 ── -->
             {% if history_data.bars and history_data.get("drawdown_available") %}
@@ -321,12 +321,12 @@
         <div class="section-content">
             <div class="empty-note">
                 <p><strong>组合历史走势与回撤数据暂不可用</strong></p>
-                <p style="margin-top:8px;font-size: var(--fs-table);color:var(--text-muted);">
+                <p class="text-muted" style="margin-top:8px;font-size: var(--fs-table);">
                     模块说明：基于当前持仓份额假设历史持仓不变（as-if 模拟），使用历史股价/净值
                     回溯计算组合的模拟走势与回撤，包括累计收益率、最大回撤、年化波动率等关键指标，
                     并标注历史上 A 股主要危机时段。
                 </p>
-                <p style="margin-top:12px;font-size: var(--fs-table-sm);color: var(--text-faint);">
+                <p class="text-faint" style="margin-top:12px;font-size: var(--fs-table-sm);">
                     功能入口：菜单 L（生成全系列完整版报告）将自动获取历史数据 |
                     可在 config.json 的 history.fetch_mode 中设为 "auto" 自动获取
                 </p>

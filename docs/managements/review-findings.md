@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.18.7-dev
-> **编号源**：`rf-next = 1211`（新增问题提出后更新为 +1；已用最大 rf-1210，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1212`（新增问题提出后更新为 +1；已用最大 rf-1211，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -89,6 +89,7 @@
 | **rf-1209** | `DESIGN.md` 的 Do-Don't #1 把「Chart 配置域」整域豁免裸色值、#10 又禁图表配置写颜色字面量：`src/static/chart-config.js` 的 `doughnutColors`/`benchmarkColors`（裸 hex 常量）正好落在两条规则之间——既能引 #1 豁免，又违反 #10 | #1 收紧为「仅 token 兜底默认值豁免」（`cssVar('--chart-*', fallback)` 的 fallback、`ChartTheme` 调色板常量、页内脚本 `|| '#…'` 兜底值）+ 双主题 override 块；#10 写明模板与页内脚本取值一律经 `window.ChartTheme`（半透明填充由 `.alpha()` 派生）；补 #13 把分类调色板（`doughnutColors`/`benchmarkColors`/`barColors`）定为 `ChartTheme` 常量、随主题切换整组替换 |
 
 | **rf-1210** | `core/check_sources.py` 的 5 处函数内反向 import（`fetcher.report_adapters` 两处、`providers.cninfo`、`providers.utils`、`providers.akshare_extras`），而 `check-import-surface` 的 `layer-inversion` 规则集不含 `core` ⇒ 最底层的反向上依赖既不被机检拦、也不在例外表登记，`technical.md` 只留一句「不入例外表」的口头豁免 | `layer-inversion` 规则集补 `core → fetcher/providers/analysis/report/llm/tui/web/cli`（允许函数内延迟导入的探针面，逐处登记）；4 条目标模块（覆盖 5 处调用）登记进 `scripts/_import_surface_exceptions.json`（探针须在链外直呼源实现、按源侧口径区分负缓存与真失败，带到期日与收敛方向「探针注册表」）；`technical.md` §9 同步 core 行、例外行与探针说明，§8.7 新增代码质量口径 |
+| **rf-1211** | 模板 58 处内联 `style="…color: var(--text-muted|--text-faint|--text-secondary)"` 让色值出现在元素属性里，违反 DESIGN.md「颜色一律通过语义 class 施加、色值只在 token 与工具类」的契约形状（暗色下随 token 跟随，无视觉漂移，仅形状违规） | 语义色工具类补齐 `.text-faint` / `.text-secondary`（`.text-muted` 沿用既有规则）：报告侧落 `_report_styles.html` 语义色工具类块，What-if 页落 `_whatif_styles.html`；58 处颜色声明从 style 属性移到元素 class（已有 class 追加、不覆盖），其余声明（字号/间距/对齐）原样保留、空则整属性删除。证明等价：剥除全部 class/style 属性后的 HTML 与改动前逐字符一致，CSS 规则集多重集每页仅 +2 条（新工具类）、无删无改；whatif 逐字节基线与报告规则集哈希随之重标定。`--text-tertiary` 内联 2 处不在本批口径内，另议 |
 
 
 ### 归档档案

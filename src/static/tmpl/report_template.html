@@ -104,7 +104,7 @@
         {% if data_freshness and data_freshness.available and data_freshness.abnormal_count > 0 %}
         <div class="data-status" style="margin-top:8px;">
             <span class="src-matrix-failed">&#9888; {{ data_freshness.summary }}</span>
-            <span style="margin-left:8px;color: var(--text-muted);">含净值滞后/行情缺失/疑似跳变，详见第 {{ section_numbers["data_source_status"] }} 章</span>
+            <span class="text-muted" style="margin-left:8px;">含净值滞后/行情缺失/疑似跳变，详见第 {{ section_numbers["data_source_status"] }} 章</span>
         </div>
         {% endif %}
     </div>
@@ -258,7 +258,7 @@
     {% endif %}
     <!--  FOOTER                                                -->
     <!-- ═══════════════════════════════════════════════════════ -->
-    <div class="report-footer" style="text-align: center; padding: 12px 16px; color: var(--text-faint); font-size: var(--fs-table-sm);">
+    <div class="report-footer text-faint" style="text-align: center; padding: 12px 16px; font-size: var(--fs-table-sm);">
         由 {{ app_name }} v{{ app_version }} 生成 · 个人投资分析报告 | 生成时间: {{ now }}
         {%- if debate_mode_combination %}
         <br>辩论模式已启用：{{ debate_mode_combination }}

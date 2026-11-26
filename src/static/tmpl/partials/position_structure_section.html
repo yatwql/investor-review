@@ -45,7 +45,7 @@
                     <tr>
                         <td style="font-weight: bold; font-size: var(--fs-footnote); max-width: 80px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
                             title="{{ _fund_names.get(_funds[i], _funds[i]) }}">{{ _fund_names.get(_funds[i], _funds[i]) }}</td>
-                        <td style="font-size: var(--fs-footnote); color: var(--text-muted);">({{ _funds[i] }})</td>
+                        <td class="text-muted" style="font-size: var(--fs-footnote);">({{ _funds[i] }})</td>
                         {% for j in range(_funds | length) %}
                         {% set val = _matrix[i][j] %}
                         {# 档位 class 由 Python 侧 position_overlap.heat_class 计算（阈值单源） #}
@@ -135,18 +135,18 @@
                     <tr>
                         <td style="font-weight: bold; font-size: var(--fs-footnote); max-width: 80px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
                             title="{{ _corr_names.get(_corr_codes[i], _corr_codes[i]) }}">{{ _corr_names.get(_corr_codes[i], _corr_codes[i]) }}</td>
-                        <td style="font-size: var(--fs-footnote); color: var(--text-muted);">({{ _corr_codes[i] }})</td>
+                        <td class="text-muted" style="font-size: var(--fs-footnote);">({{ _corr_codes[i] }})</td>
                         {% for j in range(_corr_codes | length) %}
                         {% if j == i %}
-                        <td style="background-color: var(--row-first-check-bg); color: var(--text-faint);" title="自相关">1.00</td>
+                        <td class="text-faint" style="background-color: var(--row-first-check-bg);" title="自相关">1.00</td>
                         {% elif j < i %}
                         {% set _corr_r = _corr_matrix[i][j] %}
                         {% if _corr_r is none %}
-                        <td style="background-color: var(--cell-na-bg); color: var(--text-faint);" title="重叠样本不足，未计算">N/A</td>
+                        <td class="text-faint" style="background-color: var(--cell-na-bg);" title="重叠样本不足，未计算">N/A</td>
                         {% else %}
                         {% set _corr_p = _corr_pvals[i][j] %}
                         {% if _corr_p is not none and _corr_p >= 0.05 %}
-                        <td style="background-color: var(--surface); color: var(--text-faint);" title="p={{ '%.4f'|format(_corr_p) }}，不显著">{{ '%.2f'|format(_corr_r) }}</td>
+                        <td class="text-faint" style="background-color: var(--surface);" title="p={{ '%.4f'|format(_corr_p) }}，不显著">{{ '%.2f'|format(_corr_r) }}</td>
                         {% elif _corr_r >= 0.5 %}
                         <td class="corr-pos-strong" title="r={{ '%.2f'|format(_corr_r) }}，p={{ '%.4f'|format(_corr_p) }}">强正</td>
                         {% elif _corr_r >= 0.3 %}
@@ -309,7 +309,7 @@
                         {% if r.get("prev_top10_pct") is not none %}
                         <td>{{ '%.2f'|format(r["prev_top10_pct"]) }}%</td>
                         {% else %}
-                        <td style="color: var(--text-muted);">—</td>
+                        <td class="text-muted">—</td>
                         {% endif %}
                         {% if r.get("is_first_check") %}
                         <td><span class="gray-text">基线已记录</span></td>

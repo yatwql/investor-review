@@ -278,7 +278,10 @@ class TestReportCssRulesetBaseline:
     # 声明与原先写在 style 属性里的完全相同（background/color/font-weight），
     # 只是从内联属性搬到类；同时新增 --on-strong-bg / --chart-* 暗色 token。
     # 视觉等价（同属性同值，元素上无其他规则竞争），业务字节面零变化。
-    _RULESET_HASH = "d2e803743f529fd55a1a38b5bb7d625de09ffda2f4fa0ba09683578f60205510"
+    # 基线复核（2026-11-26，灰色内联色归位语义类批次）：语义色工具类块新增
+    # `.text-faint` / `.text-secondary` 两条规则（`.text-muted` 沿用既有规则），
+    # 声明即 `color: var(--text-<同名 token>)`，与原内联 style 声明等值；规则集仅此 +2。
+    _RULESET_HASH = "cc6f4ce62bab00fc9c8203b9cdf74ccf7003d8f73416275f737c1432e7e87c1e"
 
     def _ruleset_hash(self) -> tuple[str, int, int]:
         import hashlib

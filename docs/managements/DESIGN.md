@@ -24,7 +24,7 @@
 | 盈 / 涨 | `.profit` | `--profit` |
 | 亏 / 跌 | `.loss` | `--loss` |
 | 评级（优秀 / 偏差 / 较差 / 稳定） | `.rating-excellent` / `.rating-deviation` / `.rating-poor` / `.rating-stable` | 同名 token |
-| 告警文字 / 次级文字 / 主色文字 | `.text-warn` / `.text-muted` / `.text-primary` | `--warn-text` / `--text-muted` / `--primary` |
+| 告警文字 / 次级文字 / 弱化文字 / 主色文字 | `.text-warn` / `.text-muted` / `.text-faint` / `.text-secondary` / `.text-primary` | `--warn-text` / `--text-muted` / `--text-faint` / `--text-secondary` / `--primary` |
 | 相关性热力（强正 / 正 / 强负） | `.corr-pos-strong` / `.corr-pos-mid` / `.corr-neg-strong` | 同名 token |
 | 配置分布条填充 | `.fill-primary` / `.fill-alloc-mid` / `.fill-alloc-low` | `--primary` / `--alloc-mid` / `--alloc-low` |
 | 字重 / 字号 | `.fw-600` / `.fs-table-sm` / `.fs-kpi` | `--fs-table-sm` / `--fs-kpi` |

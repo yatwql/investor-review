@@ -355,8 +355,15 @@ class TestSwitchOffGoldenBaseline(unittest.TestCase):
     # 描边/填充取色处使用 window.ChartTheme 引用（基准蓝/目标橙/业绩基准绿 +
     # ChartTheme.alpha 派生半透明填充）；label/data/options 一字未动，
     # 关态业务字节面（数据、文案、结构、章节顺序）零变化。
-    _GOLDEN_BASE_SHA256 = "3ecbc3e5da7f86718415edb7fdf1f40a790c3c0896bee8984436f07ec7828cda"
-    _GOLDEN_FULL_SHA256 = "8625d3e72b8e1835f143c0b2f794ac57cac13485ad987da433d53af246d537a7"
+    #
+    # 基线复核记录（2026-11-26，模板灰色内联色归位语义类批次）：字节差异仅来自样式块
+    # 新增 `.text-muted` / `.text-faint` 两条工具类，以及模板里原先写在 style 属性中的
+    # `color: var(--text-muted)` / `color: var(--text-faint)` 声明移到元素 class 上；
+    # 类的声明与旧内联值一字不差，其余 style 声明（字号/间距）原样保留。
+    # 已按「结构与文案不变」验证：剥除全部 class/style 属性后的 HTML 与改动前逐字符
+    # 一致（唯一文本差异即上述两条 CSS 规则），CSS 规则集多重集仅增 2 条、无删无改。
+    _GOLDEN_BASE_SHA256 = "5aa6d8fc46b07dd1e69ee808791e595c840aa5e026c61e146b45298cf57a56db"
+    _GOLDEN_FULL_SHA256 = "ce4718d4385d9f3bda4ea03319279f3ef9a139a0e9d13a9da6e010707f53ca22"
 
     def _render(self, **extra) -> str:
         from unittest.mock import patch

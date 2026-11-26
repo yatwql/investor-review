@@ -400,17 +400,17 @@
         <div class="section-content">
             <div class="empty-note">
                 <p><strong>调仓对比数据暂不可用</strong></p>
-                <p style="margin-top:8px;font-size: var(--fs-table);color:var(--text-muted);">
+                <p class="text-muted" style="margin-top:8px;font-size: var(--fs-table);">
                     {% if whatif_data and whatif_data.get("reason") %}{{ whatif_data["reason"] }}{% else %}基准或目标持仓为空，无法对比{% endif %}。
                 </p>
-                <p style="margin-top:12px;font-size: var(--fs-table-sm);color:var(--text-faint);">请提供基准（调仓前）与目标（调仓后）两份持仓文件后重试。</p>
+                <p class="text-faint" style="margin-top:12px;font-size: var(--fs-table-sm);">请提供基准（调仓前）与目标（调仓后）两份持仓文件后重试。</p>
             </div>
         </div>
     </div>
     {% endif %}
 
     <div class="report-footer">
-        <div style="text-align:center; color: var(--text-faint); font-size: var(--fs-table-sm); padding-bottom:8px;">由 {{ app_name }} v{{ app_version }} 生成 · 调仓 What-if 模拟</div>
+        <div class="text-faint" style="text-align:center; font-size: var(--fs-table-sm); padding-bottom:8px;">由 {{ app_name }} v{{ app_version }} 生成 · 调仓 What-if 模拟</div>
         <div class="back-to-top-link"><a href="#report-top">↑ 回到顶部</a></div>
     </div>
 </div>

@@ -10,6 +10,7 @@
 
 ### 修复
 
+- **模板内联灰色内联色归位语义 class（rf-1211）**：报告与 What-if 模板中 58 处 `style="…color: var(--text-muted|--text-faint|--text-secondary)"` 的颜色声明移到元素 class 上，新增 `.text-faint` / `.text-secondary` 两条语义色工具类（`.text-muted` 沿用既有规则），色值只出现在 token 与工具类里，符合 DESIGN.md 的颜色施加契约；字号/间距等其余内联声明与视觉表现不变。
 - **抑制清单与启用规则对齐（rf-1208）**：`pyproject.toml` 的 `select` 含 `RUF100`——`noqa` 只在指向真在跑的规则时才有意义，落在未启用规则上的抑制判为死抑制并硬失败。全树 114 处落到未启用规则上的抑制（`BLE001`/`ANN001`/`ARG001`/`PERF203` 等）写成行内说明注释（`有意宽捕获：…` 交代失败后果与不窄化理由，`说明：…` 交代签名契约或入参对象）；6 个脚本门面的 200 个再导出名由 `__all__` 声明（再导出即公开面，行内 `# noqa: F401` 清零），其余冗余/失效指令整条删除，5 处仍会触发的 `E402` 保留抑制并补理由；`[tool.ruff.lint]` 上方写明抑制的生效域与评审口径落点（`technical.md` §8.7「代码质量口径」）。
 
 - **设计契约的图表色值口径收口（rf-1209）**：`DESIGN.md` 的 Do-Don't #1 只豁免 token 兜底默认值（`cssVar('--chart-*', fallback)` 的 fallback、`ChartTheme` 调色板常量、页内脚本 `|| '#…'` 兜底值）与双主题 override 块；#10 要求模板与页内脚本取值一律经 `window.ChartTheme`（半透明填充由 `.alpha()` 派生）；#13 把分类调色板（`doughnutColors`/`benchmarkColors`/`barColors`）定为 `ChartTheme` 常量、随主题切换整组替换。

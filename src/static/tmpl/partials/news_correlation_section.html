@@ -40,7 +40,7 @@
                             {% if item.llm_analysis %}
                             <span>{{ item.llm_analysis | sentiment_colorize | safe }}</span>
                             {% else %}
-                            <span style="color: var(--text-faint);">—</span>
+                            <span class="text-faint">—</span>
                             {% endif %}
                         </td>
                         {% endif %}
