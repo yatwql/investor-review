@@ -10,6 +10,8 @@
 
 ### 修复
 
+- **再平衡分类的 ETF 名称维度与两处死 logger（rf-1203）**：`analysis.rebalance.classify_holding` 只在场内区间（`is_exchange_fund_code(code)` 为真，即代码 5/1 前缀）内消费 ETF 判定的名称半区——场外 ETF 联接基金（`天弘沪深300ETF联接A`/`000961`）按场外基金口径归 `fund_equity`，代码 5/1 前缀的场内品种归 `equity`，`test_rebalance.py::TestClassifyHolding` 的两条用例分别钉住这两种口径（名称维度独立化的实现会让前者变红）；`analysis/rebalance.py` 与 `analysis/metrics_risk.py` 的 `import logging` 与 `logger` 对象无调用点，一并删除
+
 - **数据源 HTTP 替身单源（rf-1200）**：`src/test/_fixtures/http.py` 提供 `FakeResponse` / `FakeClient`——`FakeResponse(text, status_code, *, json_body, raise_status, encoding, content, json_error)` 覆盖 `.text` / `.content` / `.status_code` / `.encoding` / `.json()` / `.raise_for_status()`，`FakeClient(response, *, by_url, error)` 覆盖上下文管理器、`get` / `post`、按 URL 后缀或包含匹配分派、传输级异常注入与逐次请求记录（`calls` / `posts` / `gets`）。`test_cninfo` / `test_hithink` / `test_datasink` / `test_tiantian_fund_fee` / `test_tiantian_purchase` / `test_tiantian_base_faults` 六个用例文件共用这一份替身，本地 12 类替身定义删除，各文件断言与被 patch 目标保持一致；巨潮用例的「慢 post」时序桩由 3 行 `FakeClient` 子类表达。
 
 - **TUI 入口覆盖以委托断言与子进程表达（rf-1201）**：`test_tui_main_loop_branches.py` 的入口覆盖分两处——包入口用例经 `importlib.import_module("src.python.tui.__main__")` 断言 `__main__` 直接绑定 `tui.main`；`__main__` 的 Ctrl+C 收尾用例在子进程里执行（`sys.executable -c`，子进程内摘掉项目根后经 runpy 走真实入口，断言 `returncode == 0` 与 stdout 告别语），本进程的 `sys.path` / `sys.modules` 在用例前后保持一致。

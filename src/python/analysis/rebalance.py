@@ -32,7 +32,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from src.python.core.code_utils import (
@@ -54,8 +53,6 @@ from ._rebalance_deviation import (  # noqa: E402
     equity_fixed_income_deviation,
     compute_rebalance_signals,
 )
-
-logger = logging.getLogger("invest")
 
 __all__ = [
     "classify_holding",

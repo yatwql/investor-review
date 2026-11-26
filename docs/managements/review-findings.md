@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.18.7-dev
-> **编号源**：`rf-next = 1203`（新增问题提出后更新为 +1；已用最大 rf-1202，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1204`（新增问题提出后更新为 +1；已用最大 rf-1203，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -79,6 +79,7 @@
 | **rf-1200** | `src/test/unit/providers/` 的数据源用例各自定义 HTTP 替身（6 文件 12 份、三种命名 `_FakeResp/_FakeClient`、`_FakeResponse/_FakeClient`、`_Resp/_Client`），行为假设随用随加而分叉：巨潮要 `content` 字节 + 按 URL 后缀分派、同花顺/数据源只回单个 JSON、天天基金要 `raise_for_status` 与 `text`，新增数据源用例须再抄一份才能凑齐 | 新建 `src/test/_fixtures/http.py`：`FakeResponse`（`text` / `content` / `status_code` / `encoding` / `json()` / `raise_for_status()`）与 `FakeClient`（上下文管理器、`get` / `post`、`by_url` 后缀或包含分派、`error` 注入、`calls` / `posts` / `gets` 记录）表述行为契约；六个文件改用共享替身并删除本地定义，各文件断言与 patch 目标不变 |
 | **rf-1201** | `src/test/unit/ui/test_tui_main_loop_branches.py` 用 `runpy.run_path(tui_mod.__file__, run_name="__main__")` 在进程内重跑整套 TUI 验「Ctrl+C → 告别语 + 退出码 0」，模块级代码（logger 装配、退出钩子注册、启动边界日志）逐条用例重复执行，且改写本进程的 `sys.modules` / `sys.path` | 包入口用例改 `importlib` 断言 `src.python.tui.__main__` 绑定 `tui.main`；`__main__` 收尾用例移入子进程（`sys.executable -c`，子进程内摘掉项目根后经 runpy 执行入口，断言 `returncode == 0` 与 stdout 告别语），本进程 `sys.path` / `sys.modules` 不被改动 |
 | **rf-1202** | `logs/release.jsonl` 的解析同域实现在三处各写一遍——`scripts/probe-release-ledger.py` 的读取（跳过损坏行/非 dict/无 `command`）、`scripts/_release/_commands_base._finish_timing` 的内联逐行 `json.loads`、`scripts/_release/_timing.release_token_usage` 的会话快照差量；台账行口径（必填字段、损坏行容忍）改一次要同步三处 | `_release/_timing.read_ledger_records(path)` 作为唯一台账读取入口（含损坏行/非 dict/缺 `command` 跳过口径），probe 与 `_finish_timing` 改调它；probe 的输出格式与 `--last`/`--version`/`--json` CLI 面不变 |
+| **rf-1203** | 死码删除安全评审把 `analysis/rebalance.py:200` 的 ETF 名称维度判为「被误删的可达分支」（反例 `classify_holding("天弘沪深300ETF联接A", "000961")` 声称应为 `equity`），并要求据此回滚；同时 `analysis/rebalance.py` / `analysis/metrics_risk.py` 残留零调用的 `import logging` 与 `logger` 对象 | 以 `git worktree` 拉出删除前版本对 20 名称 × 19 代码共 380 组逐一比对 `classify_holding`，差异 0 组：被删的 `is_etf_by_name_or_code` 内层判断原本嵌在 `if is_exchange_fund_code(code):` 内（代码必 5/1 前缀 ⇒ 内层恒真），`return "alternative"` 从未可达 ⇒ 分支保持删除态（评审误报），补 `test_etf_name_with_otc_code_is_fund_equity` 与 `test_exchange_fund_code_prefix_is_equity` 钉住真实口径（前者在「名称维度独立」的错误实现下变红）；两处死 `import logging`／`logger` 一并清掉 |
 
 ### 归档档案
 - [`archived_review-findings.0.18.x.md`](../archive/v0.18.x/archived_review-findings.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-19）

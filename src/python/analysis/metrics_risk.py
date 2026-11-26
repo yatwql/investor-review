@@ -14,7 +14,6 @@
 
 from __future__ import annotations
 
-import logging
 import math
 
 from src.python.analysis._math_utils import (
@@ -27,8 +26,6 @@ from src.python.analysis.metrics_returns import (
     _TRADING_DAYS_PER_YEAR,
     sanitize_metric,
 )
-
-logger = logging.getLogger("invest")
 
 __all__ = [
     "hhi",

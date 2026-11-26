@@ -163,6 +163,21 @@ class TestClassifyHolding:
     def test_money_etf(self):
         assert classify_holding("华宝添益ETF", "511990") == "money_market"
 
+    def test_etf_name_with_otc_code_is_fund_equity(self):
+        """名称含 ETF 但代码非 5/1 前缀 → 场外基金口径 `fund_equity`。
+
+        名称维度并不独立成立：`classify_holding` 只在场内区间
+        （`is_exchange_fund_code(code)` 为真，即代码 5/1 前缀）内消费 ETF 判定的
+        名称半区，场外 ETF 联接基金代码为 00x，走场外基金分支，名称里的 "ETF"
+        不改变分类。
+        """
+        assert classify_holding("天弘沪深300ETF联接A", "000961") == "fund_equity"
+
+    def test_exchange_fund_code_prefix_is_equity(self):
+        """代码 5/1 前缀（场内区间）→ `equity`，与名称是否含 ETF 无关。"""
+        assert classify_holding("某某场内LOF", "161725") == "equity"
+        assert classify_holding("某沪市品种", "510880") == "equity"
+
     def test_otc_equity_fund(self):
         assert classify_holding("XX灵活配置混合", "002345") == "fund_equity"
 
