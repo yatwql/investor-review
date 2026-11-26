@@ -272,17 +272,16 @@ def main() -> int:
 
         logging.getLogger("invest").debug("首次运行引导显示失败（非关键）", exc_info=True)
 
-    if args.command == "report":
-        return _handle_report(args, config)
-    elif args.command == "cache":
-        return _handle_cache(args, config)
-    elif args.command == "whatif":
-        return _handle_whatif(args, config)
-    elif args.command == "settle-decisions":
-        return _handle_settle_decisions(args, config)
-    elif args.command == "config":
-        return _handle_config(args, config)
-    return _EXIT_SEVERE
+    # 五个免 config 命令（cassettes / check-sources / health-history / view-logs / doctor）
+    # 已在上方各自返回，此处只剩需 config 的五个命令——分发表与 subparsers 同域。
+    handlers = {
+        "report": _handle_report,
+        "cache": _handle_cache,
+        "whatif": _handle_whatif,
+        "settle-decisions": _handle_settle_decisions,
+        "config": _handle_config,
+    }
+    return handlers[args.command](args, config)
 
 
 def run_cli() -> NoReturn:

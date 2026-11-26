@@ -353,8 +353,6 @@ def build_purchase_constraint_block(
         else:  # 暂停申购（RESTRICTED_PURCHASE_STATUSES 仅两态，未知状态已被筛选）
             detail = f"下一开放日 {row['next_open_text']}" if row["next_open_text"] else "下一开放日未知"
         lines.append(f"- {code} {name} {row['status']}：{detail}")
-    if not lines:
-        return ""
     fetched_date = str(purchase_status_data.get("fetched_at") or "")[:10]
     head = (
         f"【申购限购约束】（天天基金渠道口径，数据抓取于 {fetched_date}；其他渠道限额可能不同，实际以下单渠道显示为准"

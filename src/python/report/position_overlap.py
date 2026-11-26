@@ -22,8 +22,6 @@ def _jaccard_similarity(set_a: set, set_b: set) -> float:
     if not set_a or not set_b:
         return 0.0
     denominator = len(set_a | set_b)
-    if denominator == 0:
-        return 0.0
     return round(len(set_a & set_b) / denominator, 4)
 
 
@@ -35,8 +33,6 @@ def _overlap_ratio(set_a: set, set_b: set) -> float:
     if not set_a or not set_b:
         return 0.0
     denominator = min(len(set_a), len(set_b))
-    if denominator == 0:
-        return 0.0
     return round(len(set_a & set_b) / denominator, 4)
 
 

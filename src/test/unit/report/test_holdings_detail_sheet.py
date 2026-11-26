@@ -741,3 +741,102 @@ class TestWriteMarketValueBlock(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════
 #  _weighted_avg_cost — 资金加权成本计算（成本流水子模块）
 # ═══════════════════════════════════════════════════════════
+
+
+# ═══════════════════════════════════════════════════════════
+#  本日盈亏「参考」口径脚注（滞后净值品种）
+# ═══════════════════════════════════════════════════════════
+
+
+class TestTodayProfitReferenceFootnote(unittest.TestCase):
+    """有滞后净值品种 → 两区块间空行写入口径脚注（与 HTML 端口径同一条文案）。"""
+
+    def test_lagging_row_adds_reference_footnote(self):
+        from openpyxl import Workbook
+
+        from src.python.report.market_value import TODAY_PROFIT_REFERENCE_NOTE
+
+        detail = hds.DetailRow(
+            account="证券账户",
+            name="债券基金",
+            code="110011",
+            price=1.2,
+            nav_date="2026-01-02",
+            yesterday_close=1.19,
+            price_type="场外净值(T-1)",
+            premium="--",
+            shares=1000.0,
+            market_value=1200.0,
+            cost=1000.0,
+            profit=200.0,
+            profit_rate=20.0,
+            today_profit=10.0,
+            source="天天基金",
+            source_api="eastmoney",
+            today_profit_reference=True,
+        )
+        wb = Workbook()
+
+        hds.write_holdings_detail_sheet(wb.active, holdings=[], details=[detail])
+
+        flat = [str(c.value) if c.value is not None else "" for row in wb.active.iter_rows() for c in row]
+        expected = TODAY_PROFIT_REFERENCE_NOTE.format(n=1)
+        self.assertIn(expected, flat)
+
+
+# ═══════════════════════════════════════════════════════════
+#  summary 匿名化：账户组内折叠为大类聚合行
+# ═══════════════════════════════════════════════════════════
+
+
+class TestSummaryModeFolding(unittest.TestCase):
+    """匿名化 summary 模式 → 明细在账户组内折叠（小计口径不变，明细行不裸露）。"""
+
+    def test_summary_mode_replaces_detail_rows_with_folded_rows(self):
+        from unittest.mock import patch
+
+        from openpyxl import Workbook
+
+        def _row(name: str, value: float) -> "hds.DetailRow":
+            return hds.DetailRow(
+                account="证券账户",
+                name=name,
+                code="600519",
+                price=10.0,
+                nav_date="2026-01-05",
+                yesterday_close=10.0,
+                price_type="场内收盘价(T)",
+                premium="--",
+                shares=100.0,
+                market_value=value,
+                cost=100.0,
+                profit=value - 100.0,
+                profit_rate=1.0,
+                today_profit=0.0,
+                source="腾讯财经",
+                source_api="tencent",
+            )
+
+        details = [_row("贵州茅台", 1000.0), _row("平安银行", 500.0)]
+        folded = [_row("股票(汇总)", 1500.0)]
+        wb = Workbook()
+
+        with (
+            patch("src.python.config.anonymizer.get_anonymization_mode", return_value="summary"),
+            patch(
+                "src.python.report._report_helpers.fold_detail_rows_summary",
+                return_value=folded,
+            ) as mock_fold,
+        ):
+            grand_mv, _cost, _profit, _today, _details = hds.write_holdings_detail_sheet(
+                wb.active, holdings=[], details=details
+            )
+
+        # 折叠函数拿到该账户全部明细（口径由它保证，调用侧不再二次汇总）
+        assert mock_fold.call_count == 1
+        assert [d.name for d in mock_fold.call_args.args[0]] == ["贵州茅台", "平安银行"]
+        # 写出的是聚合行而非原始明细行
+        names = [str(c.value) for row in wb.active.iter_rows() for c in row if isinstance(c.value, str)]
+        assert "股票(汇总)" in names
+        assert "贵州茅台" not in names and "平安银行" not in names
+        assert grand_mv == 1500.0

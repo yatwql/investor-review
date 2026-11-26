@@ -318,10 +318,7 @@ def build_discipline_detail(
         raw_distance = sig.get("distance_pct")
         distance_value: float | None = None
         if isinstance(raw_distance, (int, float)) and not isinstance(raw_distance, bool):
-            try:
-                distance_value = float(raw_distance)
-            except (TypeError, ValueError):  # 防御性：异常载荷按无距阈值呈现
-                distance_value = None
+            distance_value = float(raw_distance)
         note, stance = _discipline_note(rule, regime, stop_present=stop_present)
         items.append(
             {

@@ -472,3 +472,32 @@ class TestSettlementInactionLine:
         summary = build_settlement_summary(decisions)
         assert summary["inaction"]["sample_sufficient"] is True
         assert summary["inaction_label"] == "不动作建议：命中率 50%（n=20）"
+
+
+class TestDecisionBookAttachment:
+    """结构化决策书在场时补挂到判断依据块契约（缺席则键不存在，产物逐字节不变）。"""
+
+    def test_decision_book_key_present_with_claims(self, ledger_path, monkeypatch):
+        from src.python.llm import research_contract as rc
+
+        monkeypatch.setattr(rc, "is_enabled", lambda: True)
+        monkeypatch.setattr(
+            rc,
+            "get_module_contracts",
+            lambda: {
+                "expert_review": {
+                    "verdict": "偏向增持",
+                    "verdict_label": "增持",
+                    "claims": [
+                        {"statement": "估值处于历史低分位", "evidence": ["signal:valuation"], "invalidations": []}
+                    ],
+                }
+            },
+        )
+
+        d = build_decision_basis_data()
+
+        book = d["decision_book"]
+        assert book["available"] is True
+        assert book["modules"][0]["verdict_label"] == "增持"
+        assert book["modules"][0]["claims"][0]["statement"] == "估值处于历史低分位"

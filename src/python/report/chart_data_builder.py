@@ -428,9 +428,6 @@ def _build_radar_dataset(
     labels = [name for _, name, _ in axes]
     values = [float(value) if is_finite_number(value) else "N/A" for _, _, value in axes]
 
-    if not labels:
-        return _empty_dataset()
-
     dataset: dict[str, Any] = {
         "label": "量化指标",
         "data": values,
@@ -499,8 +496,6 @@ def _build_corr_rolling_dataset(position_relationship_data: dict | None) -> dict
         if not pts or pts[0].get("date") not in base_set:
             continue
         mapped.append((label, {pt["date"]: pt["value"] for pt in pts}, color, dash))
-    if not mapped:
-        return {}
     start = -1
     for i, d in enumerate(base_dates):
         if all(d in m for _l, m, _c, _d in mapped):

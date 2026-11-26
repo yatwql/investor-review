@@ -305,9 +305,6 @@ def _write_account_groupings(
             if has_flow:
                 vals += [_weighted_avg_cost(cost_map.get(d.code))]
             if show_purchase:
-                # 补齐到申购状态列前的槽位（资金加权成本缺值时保持列对齐）
-                while len(vals) < base_ncols:
-                    vals.append(None)
                 vals += [format_purchase_status_cell(purchase_status_data, d.code, purchase_level)]
             if show_cost_pos:
                 vals += [

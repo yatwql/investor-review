@@ -378,7 +378,7 @@ class TestNewsLlmSerialization:
         return fut
 
     @staticmethod
-    def _invoke(flag: bool, record: list[str]):
+    def _invoke(flag: bool, record: list[str], span_recorder=None):
         with (
             patch("src.python.config.features.is_feature_enabled", return_value=flag),
             patch(
@@ -411,6 +411,7 @@ class TestNewsLlmSerialization:
                 True,  # enable_llm
                 MagicMock(),
                 comparison_indices={"sh000300": "沪深300"},
+                span_recorder=span_recorder,
             )
 
     def test_flag_on_serializes_news_before_llm(self):
@@ -427,6 +428,15 @@ class TestNewsLlmSerialization:
         assert record.count("submit_news") == 1 and record.count("submit_llm") == 1, (
             f"开关关闭走并行原路径（双提交），实际 {record}"
         )
+
+    def test_span_recorder_times_event_window_assembly(self):
+        """子项记录器在场时，事件窗装配单独计一段耗时（父阶段内可下钻）。"""
+        recorder = MagicMock()
+        self._invoke(True, [], span_recorder=recorder)
+        recorder.record.assert_called_once()
+        span_name, seconds = recorder.record.call_args.args
+        assert span_name == "事件窗装配"
+        assert seconds >= 0.0
 
 
 # ── 契约装配（注入替身，全离线） ─────────────────────────

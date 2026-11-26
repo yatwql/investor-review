@@ -55,8 +55,6 @@ def normalize_benchmarks(
         return []
 
     portfolio_dates = [b["date"] for b in portfolio_bars]
-    if not portfolio_dates:
-        return []
 
     results: list[dict[str, Any]] = []
 
@@ -105,17 +103,14 @@ def normalize_benchmarks(
         if sorted_bar_dates[0] > align_start:
             align_start = sorted_bar_dates[0]
 
-        # 找到起算日处的最新 close（起算日当天或之前最近一条）
-        close_at_start: float | None = None
-        for d in sorted_bar_dates:
-            if d <= align_start:
-                close_at_start = date_to_close[d]
-            else:
+        # 找到起算日处的最新 close（起算日当天或之前最近一条）。
+        # align_start = max(组合起算日, 指数首条数据日) ≥ 指数首条数据日，故首条必被选中，
+        # 而 date_to_close 只收 > 0 的 close，起算日 close 恒为有效正数。
+        close_at_start = date_to_close[sorted_bar_dates[0]]
+        for d in sorted_bar_dates[1:]:
+            if d > align_start:
                 break
-
-        if close_at_start is None or close_at_start <= 0:
-            logger.warning("[normalize] %s(%s) 起算日 %s 无可用 close", name, code, align_start)
-            continue
+            close_at_start = date_to_close[d]
 
         # LOCF 填充 + 归一化
         normalized: list[dict[str, Any]] = []
@@ -133,9 +128,6 @@ def normalize_benchmarks(
 
             value = round(last_close / close_at_start * 100, 2)
             normalized.append({"date": pd, "value": value})
-
-        if not normalized:
-            continue
 
         logger.info("[normalize] %s(%s) 归一化完成, %d 条数据", name, code, len(normalized))
 

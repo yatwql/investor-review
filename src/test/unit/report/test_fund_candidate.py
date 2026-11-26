@@ -565,3 +565,38 @@ class TestCandidateRowRealShapes(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestFundCandidateOverlapBoundaries(unittest.TestCase):
+    """候选重合度的两条边界：现有基金无持仓明细、候选本身已在现有持仓中。"""
+
+    def test_existing_fund_without_holdings_not_in_baseline(self):
+        """基金持仓接口回空 → 不进基准映射（否则会把「无数据」算成重合度 0）。"""
+        from types import SimpleNamespace
+        from unittest.mock import patch
+
+        from src.python.report.fund_candidate import _collect_existing_fund_baseline
+
+        holding = SimpleNamespace(name="易方达", code="110011", account="主账户")
+        with (
+            patch("src.python.report.fund_candidate.is_fund_holding", return_value=True),
+            patch(
+                "src.python.report.fund_candidate.fetch_fund_holdings_cached",
+                return_value={"name": "易方达", "holdings": []},
+            ),
+        ):
+            baseline, stale_notes = _collect_existing_fund_baseline([holding])
+
+        self.assertEqual(baseline, {})
+        self.assertEqual(stale_notes, [])
+
+    def test_candidate_already_held_yields_no_overlap(self):
+        """候选代码已在现有持仓里 → 合并后仅一只基金，无可比对象，不写行。"""
+        from src.python.report.fund_candidate import _fill_overlap
+
+        row: dict = {}
+        holdings = [{"name": "茅台", "code": "600519", "ratio": 100.0}]
+
+        _fill_overlap(row, "110011", holdings, {"110011": holdings})
+
+        self.assertEqual(row, {})

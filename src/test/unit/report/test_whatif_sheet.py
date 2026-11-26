@@ -568,3 +568,29 @@ class TestWhatifCostSheet(unittest.TestCase):
         data["cost"]["trade_cost"] = {"available": False, "reason": "无交易腿"}
         flat = self._flat(self._write(data))
         self.assertTrue(any("无交易腿" in v for v in flat), "应写 reason")
+
+
+class TestWhatifBacktestSheetEmptySeries(unittest.TestCase):
+    """回测可用但净值序列为空 → 写占位行，不渲染序列表头。"""
+
+    def test_empty_series_writes_placeholder_row(self):
+        from openpyxl import Workbook
+
+        from src.python.report.whatif_sheet import write_whatif_backtest_sheet
+
+        data = _bt_data()
+        data["backtest"]["series"] = {
+            "labels": [],
+            "base": [],
+            "candidate": [],
+            "base_drawdown": [],
+            "candidate_drawdown": [],
+        }
+        wb = Workbook()
+        ws = wb.active
+
+        write_whatif_backtest_sheet(ws, data)
+
+        flat = [str(c.value) if c.value is not None else "" for row in ws.iter_rows() for c in row]
+        self.assertIn("无有效净值序列", flat)
+        self.assertNotIn("基准净值(100基点)", flat, "空序列不应写序列表头")

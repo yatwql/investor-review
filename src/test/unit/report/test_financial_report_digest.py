@@ -136,3 +136,18 @@ class TestHelpers:
     def test_doc_type_label_fallback(self):
         assert frd._doc_type_label("semiannual") == "半年报"
         assert frd._doc_type_label("unknown") == "unknown"
+
+
+class TestReporterProgress:
+    """传入进度报告器 → 取数前播报标的数（长耗时章节的可见性保障）。"""
+
+    def test_reporter_told_how_many_targets(self, monkeypatch):
+        from unittest.mock import MagicMock
+
+        monkeypatch.setattr(frd, "datasink_credential_missing", lambda: None)
+        monkeypatch.setattr(frd, "fetch_symbol_report_detailed", lambda *a, **k: (None, "离线桩"))
+        reporter = MagicMock()
+
+        frd.build_financial_report_digest([_holding(), _holding("000001", "平安银行")], reporter=reporter)
+
+        reporter.info.assert_called_once_with("正在获取 2 只 A 股的财报摘要...")

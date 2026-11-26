@@ -145,10 +145,7 @@ def _build_holdings_index(holdings_details: list[dict[str, Any]] | None) -> dict
         code = str(holding.get("code") or "").strip()
         if not code:
             continue
-        try:
-            price = finite_or(holding.get("price"))
-        except (TypeError, ValueError):
-            price = 0.0
+        price = finite_or(holding.get("price"))
         entry = {"name": str(holding.get("name") or "").strip(), "price": price}
         index.setdefault(code, entry)
         # 非裸 6 位持仓代码（sh600000 / 600000.SH 等交易所前缀）→ 补挂裸 6 位别名，
@@ -205,22 +202,20 @@ def extract_llm_decisions(
                 op_cell = cells[2] if len(cells) >= 4 else ""
                 if _is_no_action(op_cell):
                     code = extract_code(line)
-                    if code is not None:
-                        _note(
-                            _collect_decision(
-                                best,
-                                {
-                                    "code": code,
-                                    "name": _strip_code(cells[1]) if len(cells) >= 4 else "",
-                                    "direction": dl.DIRECTION_FLAT,
-                                    "magnitude": "low",
-                                    "detail": op_cell.strip(),
-                                },
-                                holdings,
-                            )
+                    assert code is not None  # 上方 elif 已判定该行含 6 位代码，此处必然成立
+                    _note(
+                        _collect_decision(
+                            best,
+                            {
+                                "code": code,
+                                "name": _strip_code(cells[1]) if len(cells) >= 4 else "",
+                                "direction": dl.DIRECTION_FLAT,
+                                "magnitude": "low",
+                                "detail": op_cell.strip(),
+                            },
+                            holdings,
                         )
-                    else:
-                        _note("no_direction")
+                    )
                 else:
                     _note("unparsed")
     if skipped:
