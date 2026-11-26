@@ -26,6 +26,7 @@ import os
 from dataclasses import dataclass, field
 
 import openpyxl
+from openpyxl.workbook.workbook import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
 from src.python.core.atomic_write import write_bytes_atomic
@@ -412,7 +413,7 @@ def build_workbook_bytes(book: HoldingsBook, *, append_flows: bool = False) -> b
         wb.close()
 
 
-def _append_flow_rows(wb, drafts: list[TradeIntent]) -> None:
+def _append_flow_rows(wb: Workbook, drafts: list[TradeIntent]) -> None:
     """向「交易流水」页签追加草稿行（缺页签时新建）。
 
     Raises:

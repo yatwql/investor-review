@@ -94,7 +94,7 @@ def strategy_label(strategy_raw: str) -> str:
     return labels.get(strategy_raw, strategy_raw)
 
 
-def priority_display(priority) -> str:
+def priority_display(priority: int | str | None) -> str:
     """provider 优先级展示（缺失 → 默认档说明）。"""
     return str(priority) if priority is not None else "99（默认）"
 

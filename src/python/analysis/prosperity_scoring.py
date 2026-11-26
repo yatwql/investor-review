@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import Any
 
 from src.python.analysis.prosperity_signals import (
@@ -93,7 +94,7 @@ def _unverified_dimension(key: str, name: str, max_score: int, reason: str) -> d
     }
 
 
-def _guard_dimension(build, key: str, name: str, max_score: int) -> dict[str, Any]:
+def _guard_dimension(build: Callable[[], dict[str, Any]], key: str, name: str, max_score: int) -> dict[str, Any]:
     """执行单维计算；异常时降级为「未验证」维度（**不得**让单维异常拖垮整份契约）。"""
     try:
         return build()

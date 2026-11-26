@@ -14,7 +14,10 @@ from collections.abc import Callable
 from concurrent.futures import as_completed
 
 from src.python.core.concurrency import worker_pool
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from src.python.fetcher.chain_diagnostics import FailureDiagnostics
 
 from src.python.cache import NegativeCache
 from src.python.cache import get as cache_get
@@ -51,7 +54,7 @@ INDEX_HISTORY_BACKOFF = NegativeCache(
 _DETERMINISTIC_EMPTY_REASONS = frozenset({"返回空", "无结果"})
 
 
-def _empty_is_deterministic(diag) -> bool:
+def _empty_is_deterministic(diag: FailureDiagnostics) -> bool:
     """全链空是否为**确定性**（各源应答但无数据）——只有这类才配 12h 负缓存。"""
     if not diag.has_failure:
         return True

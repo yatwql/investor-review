@@ -84,7 +84,7 @@ NETWORK_TIMEOUT_CEILING = 15.0
 
 
 def normalize_network_timeout(
-    value,
+    value: Any,
     *,
     default: float = NETWORK_TIMEOUT_DEFAULT,
     ceiling: float | None = NETWORK_TIMEOUT_CEILING,

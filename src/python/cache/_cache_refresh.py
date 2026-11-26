@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.python.cache.operations import CacheUpdateResult
+    from src.python.core.models import Holding
+    from src.python.report.progress import ProgressReporter
 
 import logging
 
@@ -30,7 +32,7 @@ def _get_pool() -> ThreadPoolExecutor:
     return _POOL
 
 
-def _refresh_one_fund_cache(fund) -> tuple:
+def _refresh_one_fund_cache(fund: Holding) -> tuple:
     """刷新单只基金的排名、持仓和基准缓存。"""
     from src.python.fetcher.fund import fetch_fund_benchmark, fetch_fund_holdings, fetch_fund_rankings
 
@@ -101,7 +103,7 @@ def sector_flow_hint() -> str:
 
 def _refresh_common_caches(
     holdings: list | None,
-    reporter,
+    reporter: ProgressReporter,
 ) -> tuple[int, int, int, int]:
     """刷新不依赖基金持仓的公共缓存，通过 reporter.* 输出进度。
 
@@ -246,7 +248,7 @@ def _refresh_extended_caches(
     holdings: list,
     funds: list,
     result: CacheUpdateResult,
-    reporter,
+    reporter: ProgressReporter,
 ) -> None:
     """刷新扩展缓存：新闻 / 基金经理 / 风格扩展，并行执行。
 

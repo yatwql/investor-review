@@ -46,7 +46,7 @@ FETCH_DAYS: int = 260
 _CONSTANT_EPS: float = 1e-12
 
 
-def _is_valid_return(value) -> bool:
+def _is_valid_return(value: int | float | str | None) -> bool:
     """收益值是否可参与相关计算：排除 None 与 NaN/Inf（后者会使 Pearson 产生虚假相关）。
 
     Args:

@@ -9,10 +9,14 @@ from __future__ import annotations
 import os
 from concurrent.futures import as_completed
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 import src.python.core.logger as _logger_mod
 
 logger = _logger_mod.setup_logger()
+
+if TYPE_CHECKING:
+    from src.python.report.progress import ProgressReporter
 
 
 # ── 数据结构 ───────────────────────────────────────────────
@@ -157,7 +161,7 @@ class CacheStats:
 # ═══════════════════════════════════════════════════════════════
 
 
-def update_basic_cache(holdings: list, reporter) -> CacheUpdateResult:
+def update_basic_cache(holdings: list, reporter: ProgressReporter) -> CacheUpdateResult:
     """更新基础类缓存（基金业绩+持仓+基准 + 公共缓存 + 扩展缓存）。
 
     内部管理线程池，operations 池唯一存在。
@@ -261,7 +265,7 @@ def update_basic_cache(holdings: list, reporter) -> CacheUpdateResult:
 # ═══════════════════════════════════════════════════════════════
 
 
-def _fetch_prices_and_indices(holdings: list, reporter) -> tuple[PositionCacheResult, list[dict]]:
+def _fetch_prices_and_indices(holdings: list, reporter: ProgressReporter) -> tuple[PositionCacheResult, list[dict]]:
     """并行获取持仓价格 + 市场指数，通过 reporter.* 输出进度。
 
     内部管理线程池，operations 池唯一存在。
@@ -320,7 +324,7 @@ def _fetch_prices_and_indices(holdings: list, reporter) -> tuple[PositionCacheRe
     return result, details
 
 
-def update_position_cache(holdings: list, reporter) -> PositionCacheResult:
+def update_position_cache(holdings: list, reporter: ProgressReporter) -> PositionCacheResult:
     """更新行情类缓存（价格+指数），并给出「刷新后仍有不规范数据」的判定。
 
     内部管理线程池，使用 reporter.* 输出进度。
@@ -462,7 +466,7 @@ def _judge_after_refresh(holdings: list, details: list[dict]) -> tuple[str, list
 # ═══════════════════════════════════════════════════════════════
 
 
-def cleanup_cache(reporter) -> int:
+def cleanup_cache(reporter: ProgressReporter) -> int:
     """清理过期缓存文件。
 
     Returns:
@@ -480,7 +484,7 @@ def cleanup_cache(reporter) -> int:
     return removed
 
 
-def get_cache_stats(reporter) -> CacheStats:
+def get_cache_stats(reporter: ProgressReporter) -> CacheStats:
     """返回缓存统计信息，无 print 格式化。
 
     扫描 data/cache、data/history/snapshots、data/state 三个目录。
@@ -546,7 +550,7 @@ def _dir_file_stats(directory: str, suffix: str = "") -> tuple[int, int]:
     return files, size
 
 
-def update_all_cache(holdings: list, reporter) -> int:
+def update_all_cache(holdings: list, reporter: ProgressReporter) -> int:
     """基础 + 持仓全量缓存更新（最大努力模式，渠道无关）。
 
     basic 失败仍继续 position；退出码取两者最大值（单调：失败等级越高越严重）。
@@ -563,7 +567,7 @@ def update_all_cache(holdings: list, reporter) -> int:
     return max(basic_result.exit_code, pos_result.exit_code)
 
 
-def warm_new_asset_caches(holdings: list, reporter) -> list[str]:
+def warm_new_asset_caches(holdings: list, reporter: ProgressReporter) -> list[str]:
     """持仓变更预热：检测新增资产并预取行情 / 基金业绩与持仓 / 行业分类。
 
     变更检测委托 ``cache.check_and_refresh_caches``；预取编排属缓存域业务，

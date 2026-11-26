@@ -26,6 +26,7 @@ import os
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
+from types import TracebackType
 from typing import Any, Callable
 
 from src.python.core.concurrency import GOVERNOR, PRIORITY_BATCH, scale_workers
@@ -115,7 +116,12 @@ class BatchDispatcher:
     def __enter__(self) -> BatchDispatcher:
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> bool:
         """退出时自动 shutdown，不抑制异常。"""
         self.shutdown(wait=True)
         return False  # 不抑制 with 块内异常
