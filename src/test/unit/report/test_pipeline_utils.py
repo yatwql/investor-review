@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import logging
 from concurrent.futures import Future
 
 import pytest
@@ -94,32 +95,24 @@ class TestPipelineUtils:
         assert llm_content[:4] == content
         assert debate_info == {"mode": "procon"}
 
-    def test_collect_llm_future_result_exception(self):
-        """异常 → 返回 (全 None, None)。"""
+    def test_collect_llm_future_result_exception(self, caplog):
+        """异常 → 返回 (全 None, None)；错误只走 add_error（进摘要 + WARNING 日志），不即时上屏。"""
         from src.python.report._llm_news import _collect_llm_future_result
+        from src.python.report.progress import ProgressReporter
 
         fut = Future()
         fut.set_exception(ValueError("test error"))
+        reporter = ProgressReporter()
 
-        class _MockReporter:
-            def ok(self, *a):
-                pass
+        with caplog.at_level(logging.WARNING, logger="invest"):
+            llm_content, debate_info = _collect_llm_future_result(fut, reporter)
 
-            def info(self, *a):
-                pass
-
-            def warn(self, *a):
-                pass
-
-            def add_error(self, *a):
-                pass
-
-            def error(self, *a):
-                pass
-
-        llm_content, debate_info = _collect_llm_future_result(fut, _MockReporter())
         assert all(c is None for c in llm_content)
         assert debate_info is None
+        assert any("LLM 内容生成异常" in msg for msg in reporter.get_errors()), reporter.get_errors()
+        assert any(
+            "LLM 内容生成异常" in rec.getMessage() for rec in caplog.records if rec.levelno == logging.WARNING
+        ), "异常必须先落 WARNING 日志（非 TTY 渠道看不到即时上屏）"
 
     def test_collect_news_future_result_success(self):
         """正常结果 → 返回 (data, meta, ok)。"""
@@ -143,24 +136,22 @@ class TestPipelineUtils:
         assert meta == {"total": 1}
         assert ok is True
 
-    def test_collect_news_future_result_exception(self):
-        """异常 → 返回 ([], {}, False)。"""
+    def test_collect_news_future_result_exception(self, caplog):
+        """异常 → 返回 ([], {}, False)；add_error 收到含「新闻获取异常」的消息并留 WARNING 日志。"""
         from src.python.report._llm_news import _collect_news_future_result
+        from src.python.report.progress import ProgressReporter
 
         fut = Future()
         fut.set_exception(RuntimeError("test error"))
+        reporter = ProgressReporter()
 
-        class _MockReporter:
-            def ok(self, *a):
-                pass
+        with caplog.at_level(logging.WARNING, logger="invest"):
+            data, meta, ok = _collect_news_future_result(fut, reporter)
 
-            def warn(self, *a):
-                pass
-
-            def add_error(self, *a):
-                pass
-
-        data, meta, ok = _collect_news_future_result(fut, _MockReporter())
         assert data == []
         assert meta == {}
         assert ok is False
+        assert any("新闻获取异常" in msg for msg in reporter.get_errors()), reporter.get_errors()
+        assert any("新闻获取异常" in rec.getMessage() for rec in caplog.records if rec.levelno == logging.WARNING), (
+            "新闻失败口径 = add_error（与 LLM 分支同级），WARNING 日志是它的可见面"
+        )

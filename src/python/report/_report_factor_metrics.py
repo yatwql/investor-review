@@ -18,6 +18,7 @@ from src.python.analysis.unavailable_contracts import factor_unavailable_result,
 from src.python.config import get_default
 from src.python.core.code_utils import is_six_digit_code
 from src.python.core.concurrency import worker_pool
+from src.python.core.log_dedupe import log_throttled
 from src.python.core.perf import SLOW_SPAN_WARN_SECONDS
 from src.python.report.progress import ProgressReporter
 
@@ -51,6 +52,26 @@ def _timed_fetch(fn: Callable[..., Any], *args, label: str = "", **kwargs):
 
 
 # ── 持仓历史 K 线路由 ──
+
+
+def _log_holding_bars_failure(stage: str, code: str, name: str, exc: BaseException) -> None:
+    """持仓 K 线取数异常留痕：同品种同异常只留一条带 traceback 的记录。
+
+    「风格因子」与「行业 Beta」两段各自对同一批持仓拉一次 K 线，同一次失败因此会被记
+    两遍 traceback（同一份堆栈，只差阶段前缀）。按 (品种, 异常类型) 折叠：窗口内首次带
+    traceback 上屏，重复降到 DEBUG；窗口外（下一次报告）照常重来。
+    """
+    if log_throttled(
+        logger,
+        f"holding_bars_fail:{code}:{type(exc).__name__}",
+        "[%s] 持仓 K 线获取失败：%s %s（%s: %s）",
+        stage,
+        code,
+        name,
+        type(exc).__name__,
+        exc,
+    ):
+        logger.info("[%s] 持仓 K 线获取失败（%s %s）", stage, code, name, exc_info=exc)
 
 
 def _fetch_holding_bars(code: str, name: str, days: int) -> list[dict] | None:
@@ -173,8 +194,8 @@ def compute_factor_exposure_data(
             for _fut, h in bar_futs.items():
                 try:
                     _bars = _fut.result()
-                except Exception:  # noqa: BLE001 — 单品种 K 线失败不阻断同类其余品种，但要留痕
-                    logger.info("[factor] 持仓 K 线获取失败：%s %s", h.code, h.name, exc_info=True)
+                except Exception as exc:  # noqa: BLE001 — 单品种 K 线失败不阻断同类其余品种，但要留痕
+                    _log_holding_bars_failure("factor", h.code, h.name, exc)
                     _bars = None
                 if _bars:
                     holdings_bars[h.code] = {"shares": float(h.shares), "bars": _bars}
@@ -316,8 +337,8 @@ def compute_industry_beta_data(
                 h = _futs[_fut]
                 try:
                     _bars = _fut.result()
-                except Exception:  # noqa: BLE001 — 单品种失败不阻断其余，留痕以便区分「无数据」与「取数异常」
-                    logger.info("[industry_beta] 持仓 K 线获取失败：%s %s", h.code, h.name, exc_info=True)
+                except Exception as exc:  # noqa: BLE001 — 单品种失败不阻断其余，留痕以便区分「无数据」与「取数异常」
+                    _log_holding_bars_failure("industry_beta", h.code, h.name, exc)
                     _bars = None
                 if _bars:
                     holdings_bars[h.code] = {"shares": float(h.shares), "bars": _bars}

@@ -3625,6 +3625,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `_factor_formulas` | 25 因子公式纯计算原语（技术族逐因子序列与基本面标量分发，无 I/O、不进报告层） | 风格与因子分析 | 数据获取 | 随 `factor_catalog` |
 | `holding_change_review` | 持仓变动复盘（快照事件级：差分事件清单 + 频率/结构/贡献分解 + 意图对账 + 账户结构重排标注 + LLM 归因） | 持仓变动复盘 | 报告输出 | 独立章节与回放开关 `holding_change_review`（默认关） |
 | `module_fingerprint` | LLM 模块缓存指纹唯一事实来源（预检侧与写侧同源） | LLM 生成 | LLM 生成 | 无（模块级） |
+| `module_registry` | LLM 模块键单一事实位（报告侧模块后缀全集/顺序 + 四并行派生；各调用点引用同一常量而非各持字面量，新增模块只改一处，顺序即结果元组位置契约） | LLM 生成 | LLM 生成 | 无（模块级） |
 | `decision_reflection` | 决策跨期反思闭环（登记决策 → 真实行情结算命中率 → 教训回灌专家复盘提示词） | 行动建议 | 监控 | 实验开关 `decision_reflection`（默认关） |
 | `decision_ledger` | 决策账本（append-only JSONL，pending/settled 折叠统计） | 行动建议 | 监控 | 随 `decision_reflection` |
 | `ledger_common` | 账本级共用原语（`feature_active` 开关收敛判定 / `now_iso` 秒级时间戳；决策账本与信号账本薄封装共用，改口径只动一处） | 行动建议 | 监控 | 已内置 |

@@ -18,7 +18,6 @@
 
 | # | 问题 | 修复方向 |
 | --- | --- | --- |
-| rf-1253 | `report/_llm_news.py:173-174` 同一失败既 `add_error` 又 `error` 上屏（语义分工与上条不同，未并入） | 先定「汇总记录 vs 即时上屏」边界再决定是否合并 |
 | rf-1252 | `report/_report_generation.py` 等 128 行巨型函数未拆分（本次未动） | 与门面收拢一并做，避免两次改同一处 |
 | rf-1251 | `pyproject.toml` 对 `src/python/report/_report_generation.py` 关掉 F821（唯一被豁免的生产文件） | 去掉函数内延迟导入或改 `TYPE_CHECKING` 后恢复 F821 |
 | rf-1250 | 生产入口为测试 patch 保留未使用 import（`scripts/check-test-redundancy.py` 的 `ast`、`release.py` 的 `os`，含整文件 F401 豁免） | 把 patch 点改到真实调用模块后删兼容 import 与豁免 |
@@ -70,6 +69,8 @@
 
 | # | 问题 | 修复方向 |
 |---|------|----------|
+| **rf-1253** | `report/_llm_news.py` 同一失败既 `add_error` 又即时 `error` 上屏（与 rf-1241 的「同消息双通道」不是同一处，当时未并入） | 与 rf-1246 同批收口：只保留 `add_error`（TUI 收尾摘要 `print_error_summary` + WARNING 日志即它的两个可见面），删即时 `error` 行 |
+| **rf-1246** | `report/_llm_news.py` 新闻失败提示与 LLM 分支**口径分裂**（新闻只 `add_error`；LLM 额外即时 `error`，同一类降级两个可见面） | 两条兄弟路径统一为只 `add_error`，各补一条 `caplog` 断言锁定 WARNING 级（判定依据：`add_error` 已进 TUI 收尾摘要与日志，即时 `error` 是重复上屏） |
 | **rf-1235** | 展示脚本取帧泄漏配置路径覆写：`scripts/_screenshots/tui_frame.py` 的 `capture_frame` 以 `get_config_path()`（有效路径）作还原值，原进程「无覆写」时该值即 `_CONFIG_FILE`，`finally` 里再 `set_config_path_override` 回写便把「覆写=默认路径」永久钉在进程上；同源的 `src/test/_path_isolation.py` 未清覆写则让上一条用例（如取帧）遗留的演示路径盖掉本轮隔离路径，跨用例配置串读。两处都缺会红的回归用例 | 还原改用**原覆写值** `_config_defaults._CONFIG_PATH_OVERRIDE`（None 即还原 None，直接回写），进入与还原各清一次配置缓存，私有的 `_clear_config_cache` 换成公开 `invalidate_config_cache`；补两条会红的回归用例（无前置覆写的真取帧结束后覆写仍为 None、隔离 seed 清掉泄漏覆写） |
 | **rf-1245** | `tui/handlers_switch.py` 同一查找逻辑三份内联实现、赋值通道 `parse_switch_override` 解析两次、一处 `[!]` 提示缺配色 | 抽 `_find_switch_item_by_key()` 共用、解析只做一次、按 DESIGN-TUI 补齐颜色角色，并引入 `SwitchItem` 类型别名 |
 | **rf-1244** | `report/penetration*.py` 的 `industry_status` 为裸字符串状态机，缺键默认值为「健康」 | 改显式常量集合，缺键显式归入「未知」而非静默算健康 |

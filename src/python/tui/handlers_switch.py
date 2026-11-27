@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""TUI ``[S]`` 报告章节内容呈现面板：18 项五组（组序与编号取自功能开关注册表）。
+"""TUI ``[S]`` 报告章节内容呈现面板：14 项六组（组序与编号取自功能开关注册表）。
 
 ``[S]`` 只呈现 ``PANEL_GROUPS["[S]"]`` 的六组内容开关（持仓与交易 / 市场与估值 /
 基金与风格 / 事件与摘要 / 机制与质量 / 交互与追问）；LLM 章节与默认关闭的整章在 ``[C]``，
@@ -32,6 +32,7 @@ from src.python.tui.switch_panel import (
     inner_width,
     layout_tier,
     legend_lines,
+    render_titled_panel,
     terminal_columns,
     use_panel_box,
     wrap_hanging,
@@ -203,9 +204,11 @@ def _render_switch_panel(
     elif use_panel_box(columns):
         print("\n".join(render_panel("配置报告章节内容呈现", panel_rows)))
     else:
-        header = truncate_display(f"章节内容（{len(tuples)} 项）", inner_width(columns) - 5)
-        print(style_heading(f"  ── {header} ──"))
-        print("\n".join(f"  {row}" if row else "" for row in panel_rows))
+        # 窄档不画盒线：标题行与逐行截断统一交给 `render_titled_panel`（面板输出不得手写
+        # `── … ──` 分隔符，且装饰列宽必须计入截断预算，否则越过「每行 ≤ 内宽」不变量）。
+        # 空串是窄档的分隔行占位 —— 按 None 传入，渲染成真空行而不是「两个空格」。
+        narrow_rows = [None if row == "" else row for row in panel_rows]
+        print("\n".join(render_titled_panel(f"章节内容（{len(tuples)} 项）", narrow_rows, columns=columns)))
     if state["repaint"]:
         for _line in wrap_hanging("  章节显隐（顶层 / LLM / 整章）在菜单 [C] 配置", inner_width(columns)):
             print(_line)

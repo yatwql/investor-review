@@ -212,6 +212,12 @@ def build_penetration_data_status(
     """
     status: DataStatus = {}
 
+    # 占位回退（穿透模块缺失时调用方传空 dict）不参与判定：空 dict 里没有
+    # industry_status 可判，落入「未分类/非法」分支会把文档化的占位回退误报成
+    # 生产者缺字段；盈利预测/分红取数也未经本函数触发，无可登记项。
+    if not result:
+        return {}
+
     # 行业分类（T3，push2）——按 :class:`IndustryStatus` 枚举一次分流；缺键即未分类，不当健康
     industry_status = result.get("industry_status", IndustryStatus.UNKNOWN)
     if industry_status in (IndustryStatus.EMPTY, IndustryStatus.UNREACHABLE):
@@ -245,7 +251,12 @@ def build_penetration_data_status(
     else:
         # 未分类/取值非法：既不知是否健康、也不知是否预期行为——不登记降级也不复位计数，
         # 只留一条告警（复位会把未知当成健康，登记降级则会把生产者缺字段误报成取数失败）。
-        logger.warning("[penetration] industry_status 未分类或非法（%r），不参与降级判定", industry_status)
+        # 文案取枚举值（`%r` 会把 ``<IndustryStatus.UNKNOWN: 'unknown'>`` 原样印进日志）；
+        # 非法值可能不是枚举，故取值回退到原对象。
+        logger.warning(
+            "[penetration] industry_status 未分类或非法（%s），不参与降级判定",
+            getattr(industry_status, "value", industry_status),
+        )
 
     # 盈利预测（T4，akshare）
     if not profit_success:

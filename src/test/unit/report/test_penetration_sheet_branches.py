@@ -168,6 +168,23 @@ class TestDataStatus:
             tracker.reset.assert_not_called()
         assert any("未分类" in rec.message for rec in caplog.records)
 
+    def test_placeholder_empty_dict_is_not_judged(self, caplog):
+        """穿透模块缺失时的空 dict 占位：既不动降级计数，也不发「未分类/非法」告警。"""
+        tracker = Mock()
+        with patch.object(ps, "_tracker", return_value=tracker), caplog.at_level("WARNING"):
+            assert ps.build_penetration_data_status({}, profit_success=False, dividend_success=False) == {}
+        tracker.record.assert_not_called()
+        tracker.reset.assert_not_called()
+        assert not [rec for rec in caplog.records if "未分类" in rec.getMessage()], "占位回退不得报成「生产者缺字段」"
+
+    def test_unknown_status_warning_prints_enum_value(self, caplog):
+        """缺键的非空结果仍要告警，但文案取枚举值（不把 ``<IndustryStatus.UNKNOWN: 'unknown'>`` 原样印出）。"""
+        with patch.object(ps, "_tracker", return_value=Mock()), caplog.at_level("WARNING"):
+            assert ps.build_penetration_data_status(_penetration_result()) == {}
+        messages = [rec.getMessage() for rec in caplog.records if "未分类" in rec.getMessage()]
+        assert messages
+        assert "unknown" in messages[0] and "IndustryStatus" not in messages[0], messages[0]
+
 
 class TestIndustryCounterHygiene:
     """预期行为与非预期行为交替时，历史失败计数不得污染下一次判定。"""

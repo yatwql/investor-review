@@ -6,7 +6,8 @@
   - 校验函数（prepare_report_data / capture_snapshot 完整性断言）
   - 持仓明细 → 行动建议消费字段子集（basic/both 共用）
 
-由 `_report_generation.py`（聚合门面）re-export 对外提供。
+消费方按需直接导入本模块（`_generation_both.py` / `_generation_full.py` / `_both_stages.py` /
+`excel_generator.py` 等），聚合门面不再代转。
 """
 
 from __future__ import annotations

@@ -171,8 +171,9 @@ def _collect_llm_future_result(fut: Future, reporter: ProgressReporter) -> tuple
         debate_info = _result[8] if len(_result) > 8 else None
         return llm_content, debate_info
     except Exception:  # noqa: BLE001 — LLM 内容生成异常（详情请查看日志）
+        # 只记汇总错误、不即时上屏：兄弟路径（新闻获取）同样口径——`add_error` 既进
+        # TUI 收尾摘要（`print_error_summary`）又留 WARNING 日志，即时 `error` 行是重复。
         reporter.add_error("LLM 内容生成异常（详情请查看日志文件 logs/app.log）")
-        reporter.error("LLM 内容生成异常（详情请查看日志）")
         return (None, None, None, None), None
 
 

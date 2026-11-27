@@ -31,6 +31,11 @@ pytestmark = [pytest.mark.unit, pytest.mark.unit_llm]
 #: 新闻关联模块：LLM 部分是二次增强，无独立正文可评级、无降级占位。
 NEWS_CORRELATION_MODULE = "news_correlation"
 
+#: 四并行单例模块的契约清单（字面量快照，**顺序 = `llm_content` 四元组的位置顺序**）。
+#: 字面量在此只做位置契约的锚点：断言写成「前缀 / 差集」这类结构关系，不把实现里的派生
+#: 表达式（`tuple(m for m in ... if m != ...)`）抄进断言——那只是同一个表达式自我验算。
+_PARALLEL_CONTRACT = ("global_macro", "expert_review", "health_check", "penetration_deep")
+
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 
 #: 「本地声明」允许保留文件后缀（相对 src/python）：core 是最底层、config 在其上，
@@ -43,10 +48,32 @@ _LAYERING_LOCAL_DECLARATIONS = {
 
 
 def test_order_and_suffixes_are_one_fact():
-    """有序常量与集合常量同源：成员一致、无重复、四并行 = 全集减去新闻关联。"""
-    assert set(LLM_MODULE_ORDER) == set(LLM_MODULE_SUFFIXES)
+    """有序常量与集合常量同源：成员一致、无重复、四并行 = 全集去掉串行后置项（结构关系断言）。"""
+    assert PARALLEL_MODULE_ORDER[: len(_PARALLEL_CONTRACT)] == _PARALLEL_CONTRACT, (
+        "四并行的成员与顺序即结果元组位置契约（错位会让 zip 整体对不上）"
+    )
+    assert set(LLM_MODULE_SUFFIXES) == set(LLM_MODULE_ORDER)
     assert len(set(LLM_MODULE_ORDER)) == len(LLM_MODULE_ORDER), "顺序常量不得含重复后缀"
-    assert PARALLEL_MODULE_ORDER == tuple(m for m in LLM_MODULE_ORDER if m != NEWS_CORRELATION_MODULE)
+    assert set(LLM_MODULE_ORDER) - set(PARALLEL_MODULE_ORDER) == {NEWS_CORRELATION_MODULE}, (
+        "全集与四并行的差集只能是串行后置的新闻关联"
+    )
+    assert LLM_MODULE_ORDER[: len(PARALLEL_MODULE_ORDER)] == PARALLEL_MODULE_ORDER, (
+        "四并行须是全集的前缀：调度顺序一致，不得各自重排"
+    )
+
+
+def test_universe_is_registered_in_authoritative_module_registry():
+    """新增后缀只改一处即红：单源全集的每个后缀都须在权威模块注册表登记。
+
+    `core/data_registry._MODULE_REGISTRY` 的 ``settings_suffix`` 决定缓存前缀、
+    模块中文名与章节可见性——新增后缀若只加在 `llm/module_registry.py`，
+    单源侧看上去一致，运行时则查不到模块名/缓存域。
+    """
+    registered = {d.settings_suffix for d in data_registry._MODULE_REGISTRY if d.settings_suffix}
+    missing = set(LLM_MODULE_SUFFIXES) - registered
+    assert missing == set(), (
+        f"以下后缀未在 core/data_registry._MODULE_REGISTRY 登记（缓存域/模块名/章节可见性会查不到）：{sorted(missing)}"
+    )
 
 
 def test_parallel_call_sites_share_the_same_constant():
