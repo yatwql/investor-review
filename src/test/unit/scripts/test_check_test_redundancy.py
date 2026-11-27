@@ -444,7 +444,7 @@ class TestLogicFingerprint:
         package.mkdir(parents=True)
         (scripts / "_shared").mkdir()
         (scripts / "_shared" / "checklib.py").write_text("VALUE = 1\n", encoding="utf-8")
-        (package / "facts_cache.py").write_text("")
+        (package / "facts_cache.py").write_text("", encoding="utf-8")
         monkeypatch.setattr(facts_cache, "__file__", str(package / "facts_cache.py"))
         return package
 
