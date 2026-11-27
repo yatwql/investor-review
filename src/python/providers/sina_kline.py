@@ -16,7 +16,7 @@ import httpx
 
 from src.python.core.code_utils import is_a_share_code, is_exchange_fund_code
 from src.python.core.code_utils import is_index_code
-from src.python.core.num_utils import safe_num
+from src.python.core.num_utils import finite_or
 from src.python.providers.utils import looks_like_block_page, with_exchange_prefix
 
 logger = logging.getLogger("invest")
@@ -200,7 +200,7 @@ def _parse_kline_json(data: list | dict | None) -> list[dict]:
 def _parse_sina_kline_float(v: Any) -> float:
     """安全解析 Sina K 线浮点数字段，失败/NaN/±inf 返回 0.0。
 
-    归一收敛于 :func:`core.num_utils.safe_num`——K 线数值会进入
-    ``analysis/`` 全部收益序列指标，NaN 泄漏的爆炸半径最大。
+    归一收敛于 :func:`core.num_utils.finite_or`（内部即 `safe_num` + `float`）——K 线
+    数值会进入 ``analysis/`` 全部收益序列指标，NaN 泄漏的爆炸半径最大。
     """
-    return float(safe_num(v, default=0.0))  # type: ignore[arg-type]
+    return finite_or(v)

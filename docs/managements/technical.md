@@ -3966,6 +3966,8 @@ lint 基线为 `E4`/`E7`/`E9`/`F`/`RUF100` + `ARG` + `BLE001` + `ANN001`（`pypr
 | 未用参数（`ARG`，机检） | 签名契约：回调、链层 `getattr` 调用、公开 API、测试桩须与对端签名一致 | `# noqa: ARG00x — <对齐的是哪一方签名>`（签名可控的内部助手则改名 `_x`，不留抑制） | 为消警告改名 `_x` 破坏对端契约；留无契约依据的死参数 |
 | 参数缺注解（`ANN001`，机检） | 生产域一律给出真实类型；容器/泛型写全（`list[str]`、`Callable[[str], None]`、`ProgressReporterProtocol`）；跨层引用走 `TYPE_CHECKING` 块避免运行期导入环；真开放域（框架约定的统一 handler 签名、无共同基类的结构化协议对象）按实际形态取最宽真实类型 | 用 `Any` 时必须写明「为何无法给真实类型」 | 公开函数缺注解；用 `Any` 顶替可推导的真实类型；为消警告改签名破坏对端契约 |
 
+**抑制形态单一**：`# noqa: BLE001 — <理由>` 是**唯一**可接受的宽捕获抑制形态。只写散文理由（「有意宽捕获：…」）而不挂 noqa 的形态对 ruff 无感——规则真命中时 CI 红在 BLE001，抑制空转时红在 RUF100——故由 `check-code-traces.py` 的 CAPTURE 支路（`_traces_code/broad_capture.py`）逐行报出；反向亦然：规则未命中的处（函数体已上抛 / 已 `logger.exception` 记账）**不得**挂 noqa（`RUF100` 判空转），只留理由注释。理由本身同样单源：同一降级理由在多处重复时抽为模块级口径注释（例：`core/doctor.py` 的「体检降级口径」），逐处只引一句短注释，不逐字复制。
+
 **收敛方向**：宽捕获密集处（如 `core/doctor.py` 的体检分组）优先收成「边界函数 + 显式结果类型」，把宽捕获收到一处；新增代码按上表交代，评审以「行内理由是否说清失败后果」为准。
 
 **跨层注解的导入方向**：注解引入的类型依赖**同样计入分层**（`scripts/check-import-surface.py` 的 `layer-inversion` 覆盖 `TYPE_CHECKING` 块与函数内导入）——下层需要上层的**只读接口**（如进度上报）时，协议定义在 `core`（例：`core/progress.py` 的 `ProgressReporterProtocol`），消费方向一律指向 `core`，上层实现按结构化子类型满足协议即可；**不得**为标注一个参数而反向 import 上层模块（`cache` → `report` 的类型边即是此坑，须走本口径而非例外表）。
@@ -4090,7 +4092,7 @@ lint 基线为 `E4`/`E7`/`E9`/`F`/`RUF100` + `ARG` + `BLE001` + `ANN001`（`pypr
 
 **再导出面声明口径**：包级公共聚合面与脚本门面（`scripts/` 下测试按脚本名访问的`check-doc-drift.py`/`check-doc-traces.py`/`perf-history.py`/`release.py`/`test-perf-report.py`/`_traces_code/patterns.py`）的再导出一律用 `__all__` 声明（再导出即公开面，增删门面名只改一处）——多行 import 上的语句级 `# noqa: F401` 会被 `RUF100` 判空转；**`noqa: F401` 保留口径**：包级公共聚合面（`core/registry.py`、`llm/__init__.py`、`llm/fact_checker/__init__.py`）的公开 API 再导出；动态调度面（`providers/sina.py` 的 K 线函数供 chain 按 provider 名 `getattr`）；显式副作用/类型导入。新增 `noqa: F401` 须在行内写明理由；测试私有导入只允许指向 owner。**抑制只对启用规则生效**（`select` 含 `RUF100`，未启用规则上的抑制即判死）：已由 `__all__` 显式再导出、ruff 不再报 `F401` 的聚合面（如 `analysis/__init__.py`）不挂 noqa；同理宽捕获/未用参数/缺注解不用 noqa 兜，写说明注释（口径见 §8.7）。
 
-**机检**：`scripts/check-import-surface.py`（守护清单成员，规则 compat-comment / private-all / cross-private / dynamic-target / layer-inversion + exception-table）；包 `__all__` 私有名、兼容注释、跨包私有导入当前
+**机检**：`scripts/check-import-surface.py`（守护清单成员，规则 compat-comment / private-all / cross-private / cross-private-scripts / dynamic-target / layer-inversion + exception-table）；包 `__all__` 私有名、兼容注释、跨包私有导入（含 `scripts/` 侧导入 `src/python` 私有模块）当前
 
 ### 9.1 模块门面 re-export 面与退出条件
 

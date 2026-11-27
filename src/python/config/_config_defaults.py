@@ -19,6 +19,22 @@ def set_config_path_override(path: str) -> None:
     _CONFIG_PATH_OVERRIDE = path
 
 
+def get_config_path_override() -> str | None:
+    """返回**当前覆写值**（``None`` = 无覆写，此时生效路径为 `_CONFIG_FILE`）。
+
+    与 :func:`get_config_path` 的区别：后者返回生效路径（无覆写时也返回默认路径），
+    据其回写 :func:`set_config_path_override` 会把「无覆写」的进程永久钉上覆写。
+    需要「临时改路径 → 原样还原」的调用方（如截图脚本的演示工作区）必须先取原值。
+    """
+    return _CONFIG_PATH_OVERRIDE
+
+
+def clear_config_path_override() -> None:
+    """清除路径覆写，回到默认配置路径（``_CONFIG_FILE``）。"""
+    global _CONFIG_PATH_OVERRIDE
+    _CONFIG_PATH_OVERRIDE = None
+
+
 def get_config_path() -> str:
     """返回配置文件路径（优先返回覆写路径）。"""
     return _CONFIG_PATH_OVERRIDE or _CONFIG_FILE

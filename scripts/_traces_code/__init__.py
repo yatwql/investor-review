@@ -9,6 +9,7 @@
   - layers     core 反向依赖 AST 守卫
   - logging_discipline 日志统一 AST 守卫（print() 仅限交互呈现层 + 日志器名称须为 "invest"）
   - config_defaults 配置默认值单源 AST 守卫（禁止与默认表同值的字面量兜底）
+  - broad_capture 宽捕获抑制形态守卫（散文「有意宽捕获」不挂 noqa: BLE001 即报 CAPTURE）
   - pragma_exemptions `pragma: no cover` 豁免清单校验（覆盖率口径债防增长）
 """
 
@@ -21,6 +22,10 @@ from _traces_code.config import (  # noqa: F401
     SCAN_DIRS,
     SKIP_FILES,
     _is_tool_self,
+)
+from _traces_code.broad_capture import (  # noqa: F401
+    _PROSE_MARKER,
+    _scan_broad_capture_prose,
 )
 from _traces_code.config_defaults import (  # noqa: F401
     _DEFAULT_TABLE_FILES,

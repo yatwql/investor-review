@@ -35,7 +35,7 @@
 | `check-semantic-index.py` | 文档 | 功能语义命名表正反向一致性校验（功能开关注册表表外键 / 僵尸条目 / 合并章 key 缺失） |
 | `check-doc-drift.py` | 文档 | 文档与实现一致性校验（章节表/章节数量、开关表/分组计数/默认值断言、配置与 LLM 默认值表、`datasource.md` 的 LLM 缓存 TTL 行（按前缀反查注册表）、`technical.md`+`how-to-config.md` 的缓存 TTL 表（逐类型对账）、TUI 面板编号、目录树、项目统计表；`--sync` 自动回写统计快照） |
 | `check-doc-links.py` | 文档 | 文档链接与结构一致性校验（死链/死锚点/重复标题/层级/编号序列/§引用） |
-| `check-import-surface.py` | 质量 | 导入面契约（compat-comment 兼容注释 / private-all 私有 `__all__` / cross-private 跨包私有导入 / dynamic-target 动态导入字面量 / exception-table 例外表自审（字段齐全+到期+失效）；例外表 `_import_surface_exceptions.json`；**已入域**：钩子只随 `src/python/` 变更触发（~1s），CI `guards` 与 P2 恒全量） |
+| `check-import-surface.py` | 质量 | 导入面契约（compat-comment 兼容注释 / private-all 私有 `__all__` / cross-private 跨包私有导入 / cross-private-scripts 脚本侧私有模块导入 / dynamic-target 动态导入字面量 / exception-table 例外表自审（字段齐全+到期+失效）；例外表 `_import_surface_exceptions.json`；**已入域**：钩子只随 `src/python/` 变更触发（~1s），CI `guards` 与 P2 恒全量） |
 | `check-file-length.py` | 质量 | 单文件行数红线守护（主程序/脚本 >1000 行 / 测试 >1200 行；豁免登记与 review-findings 挂账同步；另断言 review-findings P4 膨胀登记表行数与实测一致（防表腐化），`-v` 输出可选优化区间清单、登记实况与「行数 × 近 90 天改动」优先级） |
 | `check-test-redundancy.py` | 测试 | 测试用例冗余与无效检查（死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / 恒真断言 / 死 fixture / 弱 mock 断言 / 账本日期写死绝对日期；实现拆在 `_test_redundancy/`——九类用例质量检查 + 标记合规支路各一模块 + 共用 AST 原语 + 事实缓存 + 编排，入口只留 CLI） |
 | `check-requirement-trace.py` | 质量 | 需求 ID ↔ 验证载体追溯（单段 ID 全域覆盖 / 载体文件存在 / ID 双向一致） |
@@ -701,7 +701,7 @@ y 范围（svg 单位）；`margin` = 检测范围到卡片右缘的右扩量（
 
 ## 代码与文件质量类
 
-代码注释痕迹（含四条 AST 守卫）、文件行数红线、需求追溯与任务编号一致性（含钩子接线）、导入面契约与 scripts 顶层脚本契约机检。
+代码注释痕迹（含五条 AST/行级守卫）、文件行数红线、需求追溯与任务编号一致性（含钩子接线）、导入面契约与 scripts 顶层脚本契约机检。
 
 **`check-code-traces.py` — 代码注释历史痕迹检查**
 
@@ -709,7 +709,7 @@ y 范围（svg 单位）；`margin` = 检测范围到卡片右缘的右扩量（
 
 扫描 `src/python/`、`src/test/`、`src/static/`、`scripts/` 下所有 `.py` / `.js` / `.mjs` / `.html` / `.sh` / `.ps1` / `.bat` / `.cmd` 文件的注释和文档字符串，检查是否含有代码历史迭代信息（来源拆分、版本号、任务编号、历史迭代叙述等）。代码注释只应描述"当前是什么"，不应记录"从哪里来、怎么变的"。
 
-除注释痕迹外，另有四条 **AST 级架构守卫**（直接看语法树，与注释格式无关）：
+除注释痕迹外，另有五条 **AST/行级架构守卫**（直接看语法树，与注释格式无关）：
 
 | 守卫 | 检出内容 | 实现 |
 |:-----|:---------|:-----|
@@ -717,6 +717,7 @@ y 范围（svg 单位）；`margin` = 检测范围到卡片右缘的右扩量（
 | 日志统一 | 非交互呈现层调用 `print()`（诊断输出应走 `logging` 落盘） | `_traces_code/logging_discipline.py`（豁免域：`tui/`、`cli/` 整目录 + 进度/一次性检查报告/向导六个模块） |
 | 语义命名 | 标识符/注释夹带任务编号、系列代号、字母数字暗号 | `_traces_code/extract.py` + `patterns.py` |
 | 配置默认值单源 | 生产代码自带与默认值表同值同键的字面量兜底（`x.get("<键>", <默认值>)`，改默认表不会跟随） | `_traces_code/config_defaults.py`（默认表自身与测试不在扫描域） |
+| 宽捕获抑制形态 | 散文形态抑制（只写口径词「有意宽捕获」而不挂 `noqa: BLE001`）——与 BLE001/RUF100 脱钩的抑制无人校验 | `_traces_code/broad_capture.py`（只认 `# noqa: BLE001 — <理由>` 一种形态；限 `src/python` + `scripts`） |
 
 **使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
 
@@ -739,7 +740,7 @@ y 范围（svg 单位）；`margin` = 检测范围到卡片右缘的右扩量（
 |:------:|:-----|:-----|
 | 0 | 全部通过 | 无需处理 |
 | 1 | HIGH/ORIGIN/VERSION 痕迹 | 必须修复后再提交 |
-| 2 | CODE/IDENT/CHAPTER/ROUND/LOG/DEFAULTDUP（任务编号/标识符/章节编号引用/日志统一违规/默认值重复兜底） | 应改用语义描述，`print()` 改用 `logging`，默认值改走 `get_default()` / `get_llm_setting_default()` |
+| 2 | CODE/IDENT/CHAPTER/ROUND/LOG/DEFAULTDUP/CAPTURE（任务编号/标识符/章节编号引用/日志统一违规/默认值重复兜底/散文形态宽捕获抑制） | 应改用语义描述，`print()` 改用 `logging`，默认值改走 `get_default()` / `get_llm_setting_default()`，抑制改写成 `# noqa: BLE001 — <理由>` |
 | 3 | 仅 TODO/CHANGE/DEPR 级别 | 建议人工复核 |
 
 > **何时跑**：`git commit` 时由 pre-commit 钩子按暂存域自动执行（**勿手动重复**）；发布门禁（P2）与 CI `guards` job 恒跑全量兜底。
@@ -906,13 +907,14 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 **设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
 
-四条扫描规则对应 `technical.md`「导入面所有权」与导入面重命名分析稿的 compat-comment / private-all / cross-private / dynamic-target 规格，第五条是**例外表自审**：
+五条扫描规则对应 `technical.md`「导入面所有权」与导入面重命名分析稿的 compat-comment / private-all / cross-private / dynamic-target / cross-private-scripts 规格，第六条是**例外表自审**：
 
 1. **compat-comment 兼容注释**：`src/python/` 出现「兼容既有导入面 / 兼容既有引用 / 公开别名 / 私有名保留」即 finding。
 2. **private-all 私有 `__all__`**：包 `__init__.py` 的 `__all__` 不得列 `_` 开头的私有名。
 3. **cross-private 跨包私有导入**：跨包 `from src.python.<pkg>._x import ...` 即 finding；同包与测试私有导入不在此规则。
-4. **dynamic-target 动态导入字面量**：`importlib.import_module("字面量")` 的目标不可解析即 finding；变量形目标由 `test_check_import_surface.py` 的 smoke 覆盖。
-5. **exception-table 例外表自审**：每条须齐 `path / name / owner / reason / expiry / replacement`；`expiry`（`YYYY-MM-DD`）到期即 finding——续期须显式改日期并复核理由；登记项若已不再命中任何违规（规则早修好）也判 finding（`[exception-stale]`），防例外腐化成永久豁免。例外表解析失败同样按 finding 报（不以 traceback 窜出契约码域）。
+4. **cross-private-scripts 脚本侧私有模块导入**：`scripts/` 下任意脚本（递归，含 `_subpkg/`）导入 `src/python` 的私有模块即 finding——含 `from src.python.<pkg>._x import ...` 与从包门面取私有子模块（`from src.python.<pkg> import _x`，按该名是否确为一个模块判定）。口径与规则 3 同源：只判**模块面**，公开模块的私有**符号**导入不判；`scripts` 内部互引（`_shared/` 等）不受限（受判目标只有 `src.python.*`）。存在例外已登记在例外表（文档默认值对拍、离线因子/幻觉评测直连实现等，逐条带替代路径与复核期限）。
+5. **dynamic-target 动态导入字面量**：`importlib.import_module("字面量")` 的目标不可解析即 finding；变量形目标由 `test_check_import_surface.py` 的 smoke 覆盖。
+6. **exception-table 例外表自审**：每条须齐 `path / name / owner / reason / expiry / replacement`；`expiry`（`YYYY-MM-DD`）到期即 finding——续期须显式改日期并复核理由；登记项若已不再命中任何违规（规则早修好）也判 finding（`[exception-stale]`），防例外腐化成永久豁免。例外表解析失败同样按 finding 报（不以 traceback 窜出契约码域）。
 
 **门面脚本的再导出面一律写进 `__all__`**：多行 `from x import (...)` 的语句级 `# noqa: F401` 兜不住——`F401` 诊断落在名单行，抑制写在语句行时 `RUF100` 判「空转」；而删掉抑制 ruff 就把再导出名当未用导入整行删除。`scripts/` 下测试按脚本名访问的再导出面（`check-doc-drift.py` / `check-doc-traces.py` / `perf-history.py` / `release.py` / `test-perf-report.py` / `_traces_code/patterns.py`）用 `__all__` 声明：再导出即公开面，增删门面名只改这一处，行内不再挂 `# noqa: F401`。
 
@@ -928,7 +930,7 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 退出码：0 通过；2 发现 finding。
 
-处置：优先改 owner 导入或收窄 `__all__`；确需保留的公开门面/动态调度面写进例外表并注明替代路径与复核期限；到期或已被修复的例外由规则 5 报出，须删条目或续期。
+处置：优先改 owner 导入或收窄 `__all__`；确需保留的公开门面/动态调度面/脚本侧内部实现依赖写进例外表并注明替代路径与复核期限；到期或已被修复的例外由规则 6 报出，须删条目或续期。
 
 > **何时跑**：`git commit` 触及 `src/python/` 或本脚本时由钩子自动执行（**勿手动重复**）；发布门禁（P2）与 CI `guards` 恒全量兜底。
 

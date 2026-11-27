@@ -15,7 +15,7 @@ import httpx
 
 from src.python.core.code_utils import is_a_share_code, is_exchange_fund_code, is_index_code
 from src.python.core.http_client import make_http_client
-from src.python.core.num_utils import safe_num
+from src.python.core.num_utils import finite_or
 from src.python.providers.utils import HANG_ELAPSED_RATIO, looks_like_block_page, with_exchange_prefix
 from src.python.core.retry import (
     STRATEGY_EXPONENTIAL,
@@ -223,7 +223,7 @@ def _parse_response(text: str) -> dict[str, Any] | None:
 
 def _parse_float(s: str) -> float:
     """安全解析浮点数，失败或非正数返回 0.0。"""
-    v = float(safe_num(s, default=0.0))  # type: ignore[arg-type]
+    v = finite_or(s)
     return v if v > 0 else 0.0
 
 
@@ -450,4 +450,4 @@ def fetch_index_kline(code: str, days: int = 30, start_from: str | None = None) 
 
 def _parse_float_field(s: str) -> float:
     """安全解析浮点数字段，失败返回 0.0。"""
-    return float(safe_num(s, default=0.0))  # type: ignore[arg-type]
+    return finite_or(s)

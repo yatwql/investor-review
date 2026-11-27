@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from _traces_code.broad_capture import _scan_broad_capture_prose
 from _traces_code.config import RULE_CARRIER_DIRS, RULE_CARRIER_FILES, REPO_ROOT, SKIP_FILES, _is_tool_self
 from _traces_code.config_defaults import _scan_config_default_fallbacks
 from _traces_code.exemptions import _is_chapter_excluded, _is_round_excluded
@@ -90,8 +91,9 @@ def scan_file(fpath: Path, verbose: bool) -> list[tuple[int, str, str, str]]:
     # 配置默认值单源守卫（禁止与默认表同值的字面量兜底）
     hits.extend(_scan_config_default_fallbacks(fpath, REPO_ROOT))
 
-    # pragma: no cover 豁免清单守卫（覆盖率口径债不得无声增长；只管辖 src/python + scripts）
+    # 口径类守卫（只管辖 src/python + scripts）：pragma 豁免清单 + 宽捕获抑制形态
     if _is_guarded_surface(fpath):
         hits.extend(_scan_pragma_no_cover(fpath))
+        hits.extend(_scan_broad_capture_prose(fpath))
 
     return hits

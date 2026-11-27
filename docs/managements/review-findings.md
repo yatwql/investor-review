@@ -21,9 +21,6 @@
 | rf-1252 | `report/_report_generation.py` 等 128 行巨型函数未拆分（本次未动） | 与门面收拢一并做，避免两次改同一处 |
 | rf-1251 | `pyproject.toml` 对 `src/python/report/_report_generation.py` 关掉 F821（唯一被豁免的生产文件） | 去掉函数内延迟导入或改 `TYPE_CHECKING` 后恢复 F821 |
 | rf-1250 | 生产入口为测试 patch 保留未使用 import（`scripts/check-test-redundancy.py` 的 `ast`、`release.py` 的 `os`，含整文件 F401 豁免） | 把 patch 点改到真实调用模块后删兼容 import 与豁免 |
-| rf-1249 | 同一 `BLE001` 并存两种标注形态（`# noqa: BLE001` 与散文「有意宽捕获」），散文形态无机检；`core/doctor.py` 12 处逐字重复同一降级理由注释 | 统一形态并加守卫；重复理由抽为模块级常量注释 |
-| rf-1248 | 4 处 `float(safe_num(...))  # type: ignore[arg-type]`（`safe_num` 可返回 None，靠 `default=0.0` 巧合自保） | 归一到 `core/num_utils.finite_or` 单源，去掉 4 处 type-ignore |
-| rf-1247 | `scripts/_screenshots/tui_frame.py` 跨包读私有 `config._config_defaults._CONFIG_PATH_OVERRIDE`（`check-import-surface` 的 `PY_ROOT` 只扫 `src/python`，scripts 侧无兜底） | 在 `config` 包补公开 `get/restore_config_path_override()`，脚本改用公开面并把 scripts 纳入导入面受检域 |
 
 ### P3 — 持续监控：兼容残留
 
@@ -46,7 +43,7 @@
 | 文件 | 现状与拆分方向 |
 |------|----------------|
 | `src/python/core/perf.py` 797 行 | 采集器与台账落盘可拆（`perf` 采集 / `perf_history` 读写两文件） |
-| `src/python/core/doctor.py` 789 行 | 检查项按域分文件（环境 / 配置 / 数据源 / 报告产物），入口只留编排 |
+| `src/python/core/doctor.py` 793 行 | 检查项按域分文件（环境 / 配置 / 数据源 / 报告产物），入口只留编排 |
 | `src/python/llm/fact_checker/_numerical.py` 764 行 | 数值校验按规则族拆（金额 / 比率 / 计数），共享解析原语上提包内 `_common` |
 | `src/python/tui/handlers_config.py` 743 行 | 配置面板按域拆（内容选项 / 全局设置 / 目录与文件名） |
 | `scripts/_doc_drift/_format.py` 742 行 | 格式化规则按文档类型拆（章节 / 表格 / 树 / 统计） |
@@ -69,6 +66,9 @@
 
 | # | 问题 | 修复方向 |
 |---|------|----------|
+| **rf-1249** | 同一 `BLE001` 并存两种标注形态（`# noqa: BLE001` 与散文「有意宽捕获」），散文形态无机检；`core/doctor.py` 12 处逐字重复同一降级理由注释 | 散文形态按 ruff 实际命中分流：命中处补 `noqa: BLE001 — <理由>`，未命中处（函数体已上抛 / 已 `logger.exception`）只留理由不挂空转抑制；`doctor.py` 的 12 处重复理由抽为模块级「体检降级口径」注释、逐处只引一句短注释；新增 `check-code-traces` 的 CAPTURE 支路（口径词无 `noqa: BLE001` 即报）配单测与 scripts-reference 说明 |
+| **rf-1248** | 4 处 `float(safe_num(...))  # type: ignore[arg-type]`（`safe_num` 可返回 None，靠 `default=0.0` 巧合自保） | 归一到 `core/num_utils.finite_or` 单源（4 处 type-ignore 全删，全仓只剩 `num_utils` 一处），行为逐点等价；补一条四点联合回归用例覆盖 None/空串/非数字/NaN/±inf 与合法值 |
+| **rf-1247** | `scripts/_screenshots/tui_frame.py` 跨包读私有 `config._config_defaults._CONFIG_PATH_OVERRIDE`（`check-import-surface` 的 `PY_ROOT` 只扫 `src/python`，scripts 侧无兜底） | `config` 包补公开 `get_config_path_override()` / `clear_config_path_override()`（导出进 `__all__`），截图脚本改用公开面还原；`check-import-surface` 增 `cross-private-scripts` 规则把 `scripts/` 递归纳入导入面受检域（9 条存量例外登记，含替代路径与复核期限） |
 | **rf-1253** | `report/_llm_news.py` 同一失败既 `add_error` 又即时 `error` 上屏（与 rf-1241 的「同消息双通道」不是同一处，当时未并入） | 与 rf-1246 同批收口：只保留 `add_error`（TUI 收尾摘要 `print_error_summary` + WARNING 日志即它的两个可见面），删即时 `error` 行 |
 | **rf-1246** | `report/_llm_news.py` 新闻失败提示与 LLM 分支**口径分裂**（新闻只 `add_error`；LLM 额外即时 `error`，同一类降级两个可见面） | 两条兄弟路径统一为只 `add_error`，各补一条 `caplog` 断言锁定 WARNING 级（判定依据：`add_error` 已进 TUI 收尾摘要与日志，即时 `error` 是重复上屏） |
 | **rf-1235** | 展示脚本取帧泄漏配置路径覆写：`scripts/_screenshots/tui_frame.py` 的 `capture_frame` 以 `get_config_path()`（有效路径）作还原值，原进程「无覆写」时该值即 `_CONFIG_FILE`，`finally` 里再 `set_config_path_override` 回写便把「覆写=默认路径」永久钉在进程上；同源的 `src/test/_path_isolation.py` 未清覆写则让上一条用例（如取帧）遗留的演示路径盖掉本轮隔离路径，跨用例配置串读。两处都缺会红的回归用例 | 还原改用**原覆写值** `_config_defaults._CONFIG_PATH_OVERRIDE`（None 即还原 None，直接回写），进入与还原各清一次配置缓存，私有的 `_clear_config_cache` 换成公开 `invalidate_config_cache`；补两条会红的回归用例（无前置覆写的真取帧结束后覆写仍为 None、隔离 seed 清掉泄漏覆写） |

@@ -23,7 +23,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from datetime import datetime
 from typing import Any, Callable
 
-from src.python.core.num_utils import safe_num
+from src.python.core.num_utils import finite_or
 
 logger = logging.getLogger("invest")
 
@@ -258,7 +258,7 @@ def run_with_timeout(
             on_retry=_on_retry,
             sleep=time.sleep,
         )
-    except BaseException:  # 有意宽捕获：默认吞异常返回 None（与原行为一致）
+    except BaseException:  # 默认吞异常返回 None（与原行为一致）；raise_on_failure 时上抛
         if raise_on_failure:
             raise  # 链路消费方：只有异常才能被识别为传输级失败（同源重试 + 熔断计数）
         return None
@@ -286,7 +286,8 @@ def safe_float(s: Any) -> float:
 
     转换失败返回 0.0。NaN/±inf 一并归一为 0.0——它们不抛异常、能一路
     穿透到市值/收益聚合链污染聚合结果，故必须在此显式拦下，而非依赖
-    后续调用方逐处判空。
+    后续调用方逐处判空。归一实现单源：:func:`core.num_utils.finite_or`
+    （与 ``float(safe_num(...))`` 同语义，但不在此另挂类型忽略）。
 
     Args:
         s: 输入值
@@ -294,8 +295,7 @@ def safe_float(s: Any) -> float:
     Returns:
         有限的 float，转换失败返回 0.0
     """
-    result = safe_num(s, default=0.0)
-    return float(result)  # type: ignore[arg-type]
+    return finite_or(s)
 
 
 def with_exchange_prefix(code: str) -> str:

@@ -178,6 +178,16 @@ class TestCaptureFrame:
         assert "demo" not in effective
         assert effective == config_pkg._config_defaults._CONFIG_FILE, "应回到隔离的默认配置路径"
 
+    def test_restores_previous_override_value_after_capture(self, tui, config_file):
+        """原本有覆写时，取帧结束须回写**原覆写值**（既不残留演示路径，也不落成「无覆写」状态）。"""
+        import src.python.config as config_pkg
+
+        original = str(config_file.parents[1] / "real-config.json")
+        config_pkg.set_config_path_override(original)
+        tui.capture_frame(config_file)
+        assert config_pkg.get_config_path_override() == original
+        assert config_pkg.get_config_path() == original
+
     def test_unknown_default_key_falls_back_to_first_entry(self, tui, stubs, config_file, monkeypatch):
         import src.python.tui.tui_menu as tui_menu
 

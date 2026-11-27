@@ -36,6 +36,9 @@ _magic_excludes() / _dash_excludes() / _under_excludes() 行豁免。
     handler、级别与落盘）（LOG）
   - 配置默认值单源：生产代码不得自带与默认值表同值的字面量兜底
     （DEFAULTDUP，改用 get_default() / get_llm_setting_default()）
+  - 宽捕获抑制形态：抑制宽捕获只认 `# noqa: BLE001 — <理由>`；只写散文理由
+    （「有意宽捕获：…」）而无 noqa 即报 CAPTURE（与 BLE001/RUF100 脱钩的抑制
+    无人校验：规则命中时 CI 红在 BLE001，抑制空转时红在 RUF100）
   - pragma 豁免清单：`# pragma: no cover` 只能在 test-coverage.md 的
     「豁免清单」表里按 `文件:行号` 登记后使用，未登记报 PRAGMA（LOW）
 
@@ -55,8 +58,9 @@ _magic_excludes() / _dash_excludes() / _under_excludes() 行豁免。
   1 — 发现高置信度痕迹（HIGH/ORIGIN/VERSION）
   2 — 发现任务编号/章节编号/架构约束代号/语义命名暗号引用
       （CODE/IDENT/CHAPTER/ROUND/MAGIC/DASHTASK/UNDERSCORE）或日志统一违规（LOG）
-      或配置默认值重复兜底（DEFAULTDUP），
+      或配置默认值重复兜底（DEFAULTDUP）或散文形态宽捕获抑制（CAPTURE），
       应从注释/标识符中移除 / 改用 logging 落盘 / 改走默认值单一入口
+      / 改写成 `# noqa: BLE001 — <理由>`（CAPTURE）
       （CHAPTER：注释中用数字章节号"N 章"/"第 N 章"指代报告具体章节，
       章节合并/重排后数字即失效，须改用语义章节名「X」章；
       ROUND：注释中用"第 N 轮"/"经 N 轮"/"N 轮"/"轮 N"指代开发迭代
@@ -107,6 +111,7 @@ from _traces_code import (
     _py_identifier_names,  # noqa: F401
     _round_excludes,
     _scan_config_default_fallbacks,  # noqa: F401
+    _scan_broad_capture_prose,  # noqa: F401
     _scan_core_layering,  # noqa: F401
     _scan_identifiers,  # noqa: F401
     _scan_pragma_no_cover,  # noqa: F401
@@ -142,6 +147,7 @@ CODE_CATEGORIES = (
     "UNDERSCORE",
     "LOG",
     "DEFAULTDUP",
+    "CAPTURE",
 )
 LOW_CATEGORIES = ("TODO", "CHANGE", "DEPR", "PRAGMA")
 
@@ -243,8 +249,8 @@ def _scan_all(args: argparse.Namespace, jobs: int | None = None) -> int:
 
     if code_count > 0:
         print(
-            f"    {code_count} 处任务编号/章节编号引用或日志统一违规"
-            "（CODE/IDENT/CHAPTER/ROUND/LOG），应改写为语义描述 / 改用 logging"
+            f"    {code_count} 处任务编号/章节编号引用或日志/抑制形态违规"
+            "（CODE/IDENT/CHAPTER/ROUND/LOG/CAPTURE），应改写为语义描述 / 改用 logging / 改成 noqa 形态"
         )
         return 2
 

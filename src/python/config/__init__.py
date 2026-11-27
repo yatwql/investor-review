@@ -15,7 +15,9 @@ from src.python.core.json_comments import strip_json_comments
 
 # ── 默认配置路径（config.json）──
 from src.python.config._config_defaults import (
+    clear_config_path_override,
     get_config_path,
+    get_config_path_override,
     set_config_path_override,
 )
 
@@ -99,7 +101,9 @@ __all__ = [
     "strip_json_comments",
     # 配置路径
     "get_config_path",
+    "get_config_path_override",
     "set_config_path_override",
+    "clear_config_path_override",
     # 配置文件时效（自检用）
     "check_config_freshness",
     # 核心读写
