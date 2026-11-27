@@ -140,7 +140,7 @@
 |:--|:--|:--|:--|
 | `src/python/core/doctor.py:164` | 平台分支 | `os.name == "nt"` 只决定 Windows 的 venv 解释器路径（`.venv/Scripts/python.exe`）；Linux CI 跑不到该分支 | 下次发布前 |
 | `scripts/_assets/social_preview.py:68` | 可选依赖缺失 | `cairosvg` 属可选资产依赖（`.[svg]` 额外），CI 测试依赖面不含它；缺失时该分支转成带安装指引的 `RenderDependencyError` | 下次发布前 |
-| `scripts/_screenshots/tui_frame.py:155` | 可选依赖缺失 | `Pillow` 导入失败分支：依赖齐备的 CI 环境走不到，缺依赖时转成 `RenderDependencyError` 提示装依赖 | 下次发布前 |
+| `scripts/_screenshots/tui_frame.py:157` | 可选依赖缺失 | `Pillow` 导入失败分支：依赖齐备的 CI 环境走不到，缺依赖时转成 `RenderDependencyError` 提示装依赖 | 下次发布前 |
 
 ## 功能域对应测试源
 

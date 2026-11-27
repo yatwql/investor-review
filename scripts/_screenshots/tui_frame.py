@@ -54,6 +54,8 @@ PALETTE: dict[int, tuple[int, int, int]] = {
     97: (255, 255, 255),
 }
 DEFAULT_FG = (224, 224, 224)
+
+
 def resolve_foreground(code: int, current: tuple[int, int, int]) -> tuple[int, int, int]:
     """SGR 码 → 前景色（0 复位、2 淡色走 90 号灰、其余查 PALETTE，未登记保持当前色）。
 
