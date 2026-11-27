@@ -54,6 +54,18 @@ PALETTE: dict[int, tuple[int, int, int]] = {
     97: (255, 255, 255),
 }
 DEFAULT_FG = (224, 224, 224)
+def resolve_foreground(code: int, current: tuple[int, int, int]) -> tuple[int, int, int]:
+    """SGR 码 → 前景色（0 复位、2 淡色走 90 号灰、其余查 PALETTE，未登记保持当前色）。
+
+    单独成函数以便脱离「等宽 CJK 字体 + Pillow」环境直接断言配色口径。
+    """
+    if code == 0:
+        return DEFAULT_FG
+    if code == 2:
+        return PALETTE[90]
+    return PALETTE.get(code, current)
+
+
 SGR_RE = re.compile(r"\x1b\[([0-9;]*)m")
 
 
@@ -170,12 +182,7 @@ def render(text: str, out: Path) -> Path:
                 x += draw.textlength(chunk, font=font)
             codes = [int(code) for code in match.group(1).split(";") if code != ""] or [0]
             for code in codes:
-                if code == 0:
-                    foreground = DEFAULT_FG
-                elif code == 2:
-                    foreground = PALETTE[90]
-                elif code in PALETTE:
-                    foreground = PALETTE[code]
+                foreground = resolve_foreground(code, foreground)
             position = match.end()
         rest = line[position:]
         if rest:

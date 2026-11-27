@@ -81,8 +81,17 @@ class TestTuiFramePrimitives:
         with pytest.raises(tui.RenderDependencyError, match="未找到等宽 CJK 字体"):
             tui.resolve_font()
 
-    def test_render_dim_code_uses_muted_palette(self, tui, tmp_path):
-        """SGR 2（dim）在配色表里映射 90 号灰，不落回默认前景。"""
+    def test_sgr_dim_resolves_to_muted_palette(self, tui):
+        """SGR 2（dim）解析为 90 号灰，不落回默认前景；0 复位、未登记码保持当前色。"""
+        assert tui.resolve_foreground(2, tui.DEFAULT_FG) == tui.PALETTE[90]
+        assert tui.resolve_foreground(2, tui.PALETTE[31]) == tui.PALETTE[90], "dim 覆盖既有前景色"
+        assert tui.resolve_foreground(0, tui.PALETTE[90]) == tui.DEFAULT_FG
+        assert tui.resolve_foreground(999, tui.PALETTE[31]) == tui.PALETTE[31]
+
+    def test_render_writes_png_when_font_available(self, tui, tmp_path):
+        """帧文本落盘为 PNG（本机缺等宽 CJK 字体时跳过：CI 环境无 fonts-noto-cjk）。"""
+        if not any(Path(p).exists() for p in tui.FONT_CANDIDATES):
+            pytest.skip("本机未安装等宽 CJK 字体（Noto Sans Mono CJK）")
         out = tui.render("\x1b[2m次要文本\x1b[0m\n\x1b[31m主要文本\x1b[0m\n", tmp_path / "frames" / "shot.png")
         assert out.is_file() and out.stat().st_size > 0
         assert out.parent.is_dir(), "输出目录应自动创建"
