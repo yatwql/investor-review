@@ -854,12 +854,15 @@ test-reports/latest/
   - ❌ `assert beta == portfolio_beta(portfolio[:200], benchmark)`（内部对齐 vs 显式截断，末位差 1 ulp：3.13 相等、3.11 不等）
   - ✅ `assert beta == pytest.approx(portfolio_beta(portfolio[:200], benchmark), abs=1e-12)` + 长度敏感反例 `assert abs(portfolio_beta(portfolio[:100], benchmark) - beta) > 1e-6`
   - 只有整数、`len`、set/list 结构、字符串/指纹等精确可表示的值才用 `==`；容差取「远大于 ulp、远小于真正区分的量级」
+  - **数值口径**：生产侧的浮点**均值/方差**求和一律用 `math.fsum`（正确舍入，跨解释器与相加顺序末位一致）——内建 `sum()` 对浮点的累加策略随版本演进（朴素累加 → 补偿求和），同一数据在 3.11/3.12 上末位可能不同，足以让「零方差」判据翻转并算出假标准误。整数计数（`sum(1 for …)`、`len()` 组合）不受此限
+  - 由此守：`scripts/check-code-traces.py --ci` 的 FLOATSUM 支路（新增均值/方差求和若仍用内建 `sum` 会在提交钩子红）
 - **勿断言「随周期/环境变化的仓库状态」**：读**真实仓库**的契约测试（如 `TestRealArchiveContract`）只能约束「结构的 invariant」，不能要求「某种状态必须存在」——例如「主台账至少有一节开发期已修复」在新开发周期开张时必然不成立（`devbump` 会清空上一版占位），本地恰巧有节、CI 上却是空台账，于是出现「本地全绿、CI 三版本 + portability 全红」。写这类断言时穷举状态并给出各自的合法判据；**能空的状态就要允许空**。同理：新增子命令/新条目的测试优先从实现集合派生（如 `cmd_*` 函数集合），不写死清单。
 - **勿用绝对日期参与「与现在比较」的判定**：保留期/TTL/回看窗口、`market_hours` 判定、`data_freshness` 阈值这类逻辑以 `now()` 为基准，测试若写死日期造样本，会在墙钟走过「日期 + 窗口」后静默改走另一条分支——实测 2026-10-01 的样本在 2026-10-31 当天全部被判 `expired`，体积裁剪用例退化成保留期用例、断言失败却看起来像功能坏了。
   - ✅ `ts = _recent_ts(days_ago=2)`（相对 `datetime.now()` 计算）；✅ 被测路径加**前提自检**：`assert result["expired"] == 0, "样本已超出保留期"`
   - ❌ `self._row("cross_skip", title, "2026-10-01 10:00")` 配 30 天保留期
   - 语义上确实需要「远过去/远未来」时用常量偏移（`2020-01-02` 表示必过期）而非「今天附近」的绝对日期
 - **质量指标：覆盖率为必要条件，变异得分为有效性指标**：行覆盖率只证明「用例执行到这行」，不证明「断言仉住了它的行为」；变异得分（killed / (killed + survived)）补后者。变异评测按需**离线**跑（`eval-` 域）——`.venv/bin/python scripts/eval-mutation-score.py -v`（`--list-targets` / `--dry` 免装后端），**不进提交门禁**（单切片要反复重跑用例集、后端 `mutmut` 是可选工具不入 `requirements.txt`）；新增/重写高杠杆纯计算与基础设施用例时建议顺手跑一次。入口与首期目标/算子口径见 `scripts-reference.md`
+- **测试不得引入真实耗时与真实子进程**：测试验证行为，不消耗墙钟。`time.sleep(<≥0.1s>)` 真睡满耗时、`subprocess.run` / `check_output` / `Popen` 真跑 `pytest` 或 `python -m …`（同作用域内无 `patch(subprocess…)` / `monkeypatch.setattr(subprocess…, …)` 证据）都会被 `check-test-redundancy.py` 判 finding——它们让墙钟随宿主与门禁并行度漂移，是 flaky 的主要来源。改用事件/条件等待（`threading.Event`）、可注入时钟或替身；确需真等/真跑的量测（并发重叠、慢源模拟、CLI 退出码契约、pty 按键解码）登记在 `scripts/_test_redundancy_exceptions.json` 的 `slow-or-subprocess` 规则（owner / reason / expiry / replacement，到期须复核）
 - 新增文件后运行 `.venv/bin/python scripts/check-test-redundancy.py --ci` 验证标记合规性（标记支路在 `src/test/` 变更时由钩子自动执行）
 
 ### 新增测试指南

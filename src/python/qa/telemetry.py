@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -194,14 +195,14 @@ def summarize_qa_usage(days: int = 30, *, path: Path | None = None) -> dict[str,
         "no_answer_rate": no_answer_rate,
         "by_code": dict(sorted(by_code.items(), key=lambda kv: -kv[1])),
         "by_channel": by_channel,
-        "avg_rounds": round(sum(rounds) / len(rounds), 2) if rounds else 0.0,
+        "avg_rounds": round(math.fsum(rounds) / len(rounds), 2) if rounds else 0.0,
         "max_rounds": max(rounds) if rounds else 0,
         "avg_input_tokens": int(in_total / attempts) if attempts else 0,
         "avg_output_tokens": int(out_total / attempts) if attempts else 0,
         "total_tokens": in_total + out_total,
         "total_cost": round(sum(costs), 4) if costs else 0.0,
         "currency_mixed": _currency_mixed(records),
-        "avg_cost": round(sum(costs) / len(costs), 4) if costs else 0.0,
+        "avg_cost": round(math.fsum(costs) / len(costs), 4) if costs else 0.0,
         "fact_warning_rate": fact_warning_rate,
         "verdict": {"ready": all(c["passed"] for c in checks), "checks": checks},
     }

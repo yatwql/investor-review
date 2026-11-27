@@ -23,7 +23,7 @@ _DRIFT_MIN_SAMPLES = 6
 def _mean(values: list[float]) -> float:
     if not values:
         return 0.0
-    return sum(values) / len(values)
+    return math.fsum(values) / len(values)
 
 
 def _min_max(values: list[float]) -> tuple[float, float]:
@@ -102,7 +102,7 @@ def _stdev(values: list[float]) -> float:
     if not values:
         return 0.0
     mean = _mean(values)
-    return math.sqrt(sum((v - mean) ** 2 for v in values) / len(values))
+    return math.sqrt(math.fsum((v - mean) ** 2 for v in values) / len(values))
 
 
 def _cv(values: list[float]) -> float:

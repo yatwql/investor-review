@@ -203,11 +203,13 @@ def sharpe_ratio(
     rf = rf_annual if rf_annual is not None else _RISK_FREE_RATE_DEFAULT
     rf_daily = rf / trading_days
 
-    mean_daily_return = sum(portfolio_daily_returns) / len(portfolio_daily_returns)
+    mean_daily_return = math.fsum(portfolio_daily_returns) / len(portfolio_daily_returns)
     excess_daily = mean_daily_return - rf_daily
 
     # 计算日收益率标准差
-    variance = sum((r - mean_daily_return) ** 2 for r in portfolio_daily_returns) / (len(portfolio_daily_returns) - 1)
+    variance = math.fsum((r - mean_daily_return) ** 2 for r in portfolio_daily_returns) / (
+        len(portfolio_daily_returns) - 1
+    )
     # 使用 epsilon 容差避免 Linux/Windows 浮点精度差异
     _VARIANCE_EPSILON = 1e-15
     if variance < _VARIANCE_EPSILON:

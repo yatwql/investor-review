@@ -218,7 +218,7 @@ def run_schedule_replay(
 
     # 逐品种覆盖率 → 整体缺口（> max_gap 判失真，章隐藏）
     coverages = [sum(1 for d in union if d in clean[r["code"]]) / len(union) for r in rows]
-    gap_pct = 1.0 - (sum(coverages) / len(coverages) if coverages else 0.0)
+    gap_pct = 1.0 - (math.fsum(coverages) / len(coverages) if coverages else 0.0)
     if gap_pct > max_gap:
         return _unavailable(f"行情缺口 {gap_pct:.0%} 超过上限 {max_gap:.0%}（回放失真风险）", schedule=parsed)
 

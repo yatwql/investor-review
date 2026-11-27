@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import logging
+import math
 
 from src.python.llm.rate_caliber import CALIBER_NOTE, LABEL_POSITION_SHORT, MONEY_SIGN_NOTE
 
@@ -145,7 +146,7 @@ def _build_concentration_qa_block(
 
     # 触发器②：前 3 品种合计 > 60%
     sorted_by_mv = sorted(holdings_details, key=lambda x: x.get("mv", 0) or 0, reverse=True)
-    top3_ratio = sum((h.get("mv", 0) or 0) for h in sorted_by_mv[:3]) / total_mv
+    top3_ratio = math.fsum((h.get("mv", 0) or 0) for h in sorted_by_mv[:3]) / total_mv
     if top3_ratio > 0.60:
         questions.append(
             f"2. **前 3 大品种合计 {top3_ratio:.1%}**，超过 60% 集中度警戒线，前 3 品种同时回调将对组合造成较大影响。"

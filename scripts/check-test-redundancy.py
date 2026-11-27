@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """测试用例冗余与无效检查（test redundancy / dead test check）—— 静态扫测试源，找「跑不到」「测不出」「同义反复」「重复」的用例。
 
-十类用例质量检查 + 一条标记合规支路（全部基于 AST 静态分析，不执行测试、不依赖网络）：
+十一类用例质量检查 + 一条标记合规支路（全部基于 AST 静态分析，不执行测试、不依赖网络）：
 
   A. **死用例（不可收集 / 被覆盖）** — pytest 永远不会执行的用例：
      - 同文件同类内同名重复定义（后者覆盖前者）
@@ -38,6 +38,13 @@
      与模块 ``__all__`` 声明项本就是刻意维持的统一导入面；符号在本模块内被真实使用（自己定义 /
      被调用）也不报。合法例外登记在 ``scripts/_test_redundancy_exceptions.json`` 的
      ``patch-surface`` 规则（owner / reason / expiry / replacement）。
+  L. **真实耗时 / 真实子进程**（实现在 `_test_redundancy/slow_io.py`）—— 测试内
+     `time.sleep(<≥0.1s 字面量>)` 真睡满墙钟；`subprocess.run/check_output/Popen` 真跑
+     `pytest` / `python -m …`（调用源码含 `pytest` 或 `sys.executable`）且同作用域内无
+     `patch(subprocess…)` / `monkeypatch.setattr(subprocess…, …)` 证据。两者都是 CI 抖动与
+     flaky 的主要来源（墙钟随宿主/并行度漂移，失败还隔着子进程边界）。确需真等/真跑
+     （并发重叠量测、假源模拟慢源、CLI 退出码契约）登记在
+     `scripts/_test_redundancy_exceptions.json` 的 `slow-or-subprocess` 规则。
   J. **标记合规**（与用例质量同源同窗的支路，实现在 `_test_redundancy/markers.py`）——
      标记注册集从 `src/test/conftest.py` 的 `addinivalue_line("markers", …)` 静态派生；
      未注册标记（拼写错误）/ 已移除标记 / `_edge.py` 缺 `edge` / 目录缺域标记 /
@@ -48,7 +55,7 @@
 `*_edge.py` 不特殊对待（同为测试，同样受检）。
 
 用法：
-  python scripts/check-test-redundancy.py                 # 十类 + 标记合规全查
+  python scripts/check-test-redundancy.py                 # 十一类 + 标记合规全查
   python scripts/check-test-redundancy.py -v              # 详细输出（打印被跳过的间接调用用例数等）
   python scripts/check-test-redundancy.py --ci            # CI 模式：仅输出 文件:描述，退出码 2
   python scripts/check-test-redundancy.py --include-live  # 连带扫描 src/test/live/
@@ -58,7 +65,7 @@
 退出码：
   0 — 全部通过
   2 — 发现死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / 恒真断言 / 死 fixture / 弱 mock 断言 /
-      账本日期写死绝对日期 / 标记合规违规 / patch 打在 re-export 面
+      账本日期写死绝对日期 / 标记合规违规 / patch 打在 re-export 面 / 真实耗时或真实子进程
   注：`--audit` 为建议性附加输出，恒不改变退出码（骨架同构多为合法矩阵契约，须人工判读）
 
 性能（增量事实缓存）：
@@ -134,7 +141,8 @@ def main() -> None:
         report(
             findings,
             "[OK] 测试用例冗余与无效检查通过（无死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / "
-            "恒真断言 / 死 fixture / 弱 mock 断言 / 账本日期写死绝对日期 / 标记合规 / patch 打在 re-export 面）",
+            "恒真断言 / 死 fixture / 弱 mock 断言 / 账本日期写死绝对日期 / 标记合规 / patch 打在 re-export 面 / "
+            "无真实耗时与真实子进程）",
             ci=args.ci,
             fail_message="[!] 发现 {n} 处测试用例问题，须修正后提交",
         )

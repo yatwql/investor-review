@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import math
 
 from src.python.analysis.correlation import _pearson_pvalue
 from src.python.schemas.factor_catalog import (
@@ -34,7 +35,7 @@ def _closes(bars: list[dict]) -> list[float]:
 
 def _mean(values: list[float]) -> float | None:
     vals = [v for v in values if v == v]
-    return sum(vals) / len(vals) if vals else None
+    return math.fsum(vals) / len(vals) if vals else None
 
 
 def _std(values: list[float]) -> float | None:
@@ -42,8 +43,8 @@ def _std(values: list[float]) -> float | None:
     n = len(vals)
     if n < 2:
         return None
-    m = sum(vals) / n
-    var = sum((v - m) ** 2 for v in vals) / (n - 1)
+    m = math.fsum(vals) / n
+    var = math.fsum((v - m) ** 2 for v in vals) / (n - 1)
     return var**0.5
 
 
@@ -73,9 +74,9 @@ def _rolling_beta(rets: list[float], mkt: list[float], window: int) -> list[floa
     for i in range(window, len(rets) + 1):
         pr = rets[i - window : i]
         br = mkt[i - window : i]
-        mp, mb = sum(pr) / window, sum(br) / window
-        cov = sum((a - mp) * (b - mb) for a, b in zip(pr, br)) / (window - 1)
-        var = sum((b - mb) ** 2 for b in br) / (window - 1)
+        mp, mb = math.fsum(pr) / window, math.fsum(br) / window
+        cov = math.fsum((a - mp) * (b - mb) for a, b in zip(pr, br)) / (window - 1)
+        var = math.fsum((b - mb) ** 2 for b in br) / (window - 1)
         out[i - 1] = cov / var if var > 0 else None
     return out
 
@@ -183,7 +184,7 @@ def compute_factor_values(
             seg_c = closes[i - window : i + 1]
             seg_v = [float(b["volume"]) for b in bars[i - window : i + 1]]
             vol_sum = sum(seg_v)
-            vwma = sum(c * v for c, v in zip(seg_c, seg_v)) / vol_sum if vol_sum else None
+            vwma = math.fsum(c * v for c, v in zip(seg_c, seg_v)) / vol_sum if vol_sum else None
             out[i] = (closes[i] - vwma) / vwma if vwma else None
     elif slug == "gtja_mom_20":
         for i in range(window, n):
@@ -245,7 +246,7 @@ def compute_factor_values(
             m, sd = _mean(seg), _std(seg)
             if m is None or not sd or len(seg) < 3:
                 continue
-            skew = sum(((v - m) / sd) ** 3 for v in seg) * len(seg) / ((len(seg) - 1) * (len(seg) - 2))
+            skew = math.fsum(((v - m) / sd) ** 3 for v in seg) * len(seg) / ((len(seg) - 1) * (len(seg) - 2))
             out[i] = skew
     return out
 
@@ -267,5 +268,5 @@ def cross_sectional_series(
     for date in sorted(buckets):
         values = buckets[date]
         if len(values) >= MIN_CODES_PER_DAY:
-            series[date] = sum(values) / len(values)
+            series[date] = math.fsum(values) / len(values)
     return series

@@ -15,6 +15,12 @@ from _test_redundancy.patch_surface import (
     check_patch_surface,
     load_exceptions as load_patch_exceptions,
 )
+from _test_redundancy.slow_io import (
+    audit_exceptions as audit_slow_exceptions,
+    audit_stale_exceptions as audit_stale_slow_exceptions,
+    check_slow_or_subprocess,
+    load_exceptions as load_slow_exceptions,
+)
 
 import sys
 from pathlib import Path
@@ -46,8 +52,10 @@ def run_checks(include_live: bool = False) -> tuple[list[str], dict[str, int]]:
     trivial: list[str] = []
     weak: list[str] = []
     date_bomb: list[str] = []
+    slow: list[str] = []
     marker: list[str] = []
     entries: list[tuple[str, int, str, str | None]] = []
+    slow_facts: dict[Path, list[list]] = {}
     n_cases = 0
     for key, item in facts.items():
         rel_path = rel(Path(key))
@@ -58,6 +66,7 @@ def run_checks(include_live: bool = False) -> tuple[list[str], dict[str, int]]:
         trivial += item["trivial"]
         weak += item["weak"]
         date_bomb += item["date_bomb"]
+        slow_facts[Path(key)] = item["slow"]
         marker += item["markers"]
         n_cases += item["count"]
         entries.extend((rel_path, e["lineno"], e["name"], e["sig"]) for e in item["entries"])
@@ -70,8 +79,13 @@ def run_checks(include_live: bool = False) -> tuple[list[str], dict[str, int]]:
     )
     # 例外表自审只对「本仓 src/test」的扫描生效：夹具造 tmp 树时例外条目必然全不命中，
     # 那不是陈旧例外而是没扫到。
+    # 真实耗时/真实子进程：抽取是 per-file 事实（进缓存），例外过滤与自审按本次工作树现算
+    slow_exceptions = load_slow_exceptions()
+    slow = check_slow_or_subprocess(slow_facts, slow_exceptions)
     if _scans_real_test_tree(facts):
         patch_surface += audit_patch_exceptions(patch_exceptions)
+        slow += audit_slow_exceptions(slow_exceptions)
+        slow += audit_stale_slow_exceptions(slow_exceptions, slow_facts)
     findings: list[str] = []
     findings += parse_errors
     findings += dead
@@ -84,6 +98,7 @@ def run_checks(include_live: bool = False) -> tuple[list[str], dict[str, int]]:
     findings += weak
     findings += date_bomb
     findings += marker
+    findings += slow
     findings += patch_surface
     stats = {
         "files": len(facts),
@@ -100,5 +115,6 @@ def run_checks(include_live: bool = False) -> tuple[list[str], dict[str, int]]:
         "date_bombs": len(date_bomb),
         "markers": len(marker),
         "patch_surface": len(patch_surface),
+        "slow_or_subprocess": len(slow),
     }
     return findings, stats

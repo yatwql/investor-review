@@ -182,11 +182,11 @@ def spearman(xs: list[float], ys: list[float]) -> float | None:
     if n < 3 or len(ys) != n:
         return None
     rx, ry = _ranks(xs), _ranks(ys)
-    mx = sum(rx) / n
-    my = sum(ry) / n
-    num = sum((a - mx) * (b - my) for a, b in zip(rx, ry))
-    dx = math.sqrt(sum((a - mx) ** 2 for a in rx))
-    dy = math.sqrt(sum((b - my) ** 2 for b in ry))
+    mx = math.fsum(rx) / n
+    my = math.fsum(ry) / n
+    num = math.fsum((a - mx) * (b - my) for a, b in zip(rx, ry))
+    dx = math.sqrt(math.fsum((a - mx) ** 2 for a in rx))
+    dy = math.sqrt(math.fsum((b - my) ** 2 for b in ry))
     if dx == 0 or dy == 0:
         return None
     return round(num / (dx * dy), 4)
@@ -204,7 +204,7 @@ def tercile_monotonic(xs: list[float], ys: list[float]) -> bool:
         chunk = [y for _, y in pairs[b * size : n if b == TERCILE_BUCKETS - 1 else (b + 1) * size]]
         if not chunk:
             return False
-        means.append(sum(chunk) / len(chunk))
+        means.append(math.fsum(chunk) / len(chunk))
     if len(set(means)) == 1:  # 组均值无差异（零区分度）不算单调
         return False
     asc = all(a <= b for a, b in zip(means, means[1:]))
@@ -255,8 +255,8 @@ def _aggregate_horizon(rows: list[dict[str, Any]], horizon: int) -> dict[str, An
         "n_matured": n,
         "n_unmatured": len(rows) - n,
         "hit_rate": round(sum(hits) / n_hit, 4) if n_hit else None,
-        "mean_raw_return": round(sum(raws) / n, 6) if n else None,
-        "mean_excess": round(sum(excess) / len(excess), 6) if excess else None,
+        "mean_raw_return": round(math.fsum(raws) / n, 6) if n else None,
+        "mean_excess": round(math.fsum(excess) / len(excess), 6) if excess else None,
         "n_with_bench": len(excess),
         "by_direction": by_dir,
         **verdict_sample_gate(n),

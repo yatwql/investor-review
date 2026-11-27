@@ -159,7 +159,7 @@ def turnover_rate(
 
     # 计算差异总和
     all_codes = set(old_weights.keys()) | set(new_weights.keys())
-    total_diff = sum(abs(new_weights.get(code, 0) - old_weights.get(code, 0)) for code in all_codes)
+    total_diff = math.fsum(abs(new_weights.get(code, 0) - old_weights.get(code, 0)) for code in all_codes)
 
     turnover = total_diff / 2.0
     return sanitize_metric(turnover)
@@ -242,8 +242,8 @@ def individual_volatility(
             result[code] = None
             continue
 
-        mean_r = sum(returns) / len(returns)
-        variance = sum((r - mean_r) ** 2 for r in returns) / (len(returns) - 1)
+        mean_r = math.fsum(returns) / len(returns)
+        variance = math.fsum((r - mean_r) ** 2 for r in returns) / (len(returns) - 1)
         # 使用 epsilon 容差避免 Linux/Windows 浮点精度差异
         _VAR_EPS = 1e-15
         if variance < _VAR_EPS:
@@ -287,11 +287,11 @@ def portfolio_beta(
     pr = portfolio_returns[-n:]
     br = benchmark_returns[-n:]
 
-    mean_pr = sum(pr) / n
-    mean_br = sum(br) / n
+    mean_pr = math.fsum(pr) / n
+    mean_br = math.fsum(br) / n
 
-    cov = sum((pr[i] - mean_pr) * (br[i] - mean_br) for i in range(n)) / (n - 1)
-    var_br = sum((br[i] - mean_br) ** 2 for i in range(n)) / (n - 1)
+    cov = math.fsum((pr[i] - mean_pr) * (br[i] - mean_br) for i in range(n)) / (n - 1)
+    var_br = math.fsum((br[i] - mean_br) ** 2 for i in range(n)) / (n - 1)
 
     if var_br == 0:
         return None

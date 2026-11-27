@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from typing import TYPE_CHECKING
 
 from src.python.core.detail_view import detail_value
@@ -72,7 +73,7 @@ def _classify_qdii_value_diff(details: list, old: SnapshotData | None) -> tuple[
     if not qdii_codes:
         return 0.0, False
 
-    value_diff = sum(new_by_code.get(code, 0.0) - old_by_code.get(code, 0.0) for code in qdii_codes)
+    value_diff = math.fsum(new_by_code.get(code, 0.0) - old_by_code.get(code, 0.0) for code in qdii_codes)
 
     from src.python.core.trading_calendar import get_last_trading_day
 

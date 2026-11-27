@@ -37,7 +37,7 @@
 | `check-doc-links.py` | 文档 | 文档链接与结构一致性校验（死链/死锚点/重复标题/层级/编号序列/§引用） |
 | `check-import-surface.py` | 质量 | 导入面契约（compat-comment 兼容注释 / private-all 私有 `__all__` / cross-private 跨包私有导入 / cross-private-scripts 脚本侧私有模块导入 / dynamic-target 动态导入字面量 / layer-inversion 分层倒置（底层不得依赖上层） / exception-table 例外表自审（字段齐全+到期+失效）；例外表 `_import_surface_exceptions.json`；**已入域**：钩子只随 `src/python/` 变更触发（~1s），CI `guards` 与 P2 恒全量） |
 | `check-file-length.py` | 质量 | 单文件行数红线守护（主程序/脚本 >1000 行 / 测试 >1200 行；豁免登记与 review-findings 挂账同步；另断言 review-findings P4 膨胀登记表行数与实测一致（防表腐化），`-v` 输出可选优化区间清单、登记实况与「行数 × 近 90 天改动」优先级） |
-| `check-test-redundancy.py` | 测试 | 测试用例冗余与无效检查（死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / 恒真断言 / 死 fixture / 弱 mock 断言 / 账本日期写死绝对日期 / patch 打在 re-export 面；实现拆在 `_test_redundancy/`——十类用例质量检查 + 标记合规支路各一模块 + 共用 AST 原语 + 事实缓存 + 编排，入口只留 CLI） |
+| `check-test-redundancy.py` | 测试 | 测试用例冗余与无效检查（死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / 恒真断言 / 死 fixture / 弱 mock 断言 / 账本日期写死绝对日期 / 真实耗时与真实子进程 / patch 打在 re-export 面；实现拆在 `_test_redundancy/`——十一类用例质量检查 + 标记合规支路各一模块 + 共用 AST 原语 + 事实缓存 + 编排，入口只留 CLI） |
 | `check-requirement-trace.py` | 质量 | 需求 ID ↔ 验证载体追溯（单段 ID 全域覆盖 / 载体文件存在 / ID 双向一致） |
 | `hook-install-claude.py` | 质量 | 安装/卸载 Claude Code PostToolUse hook（任务编号一致性自动校验） |
 | `probe-date-bombs.py` | 测试 | 时间炸弹经验筛查（变异法）：把候选测试文件里的绝对日期整体回移 N 年再逐个跑 pytest，失败即「依赖日期处于近期」（rot-suspect）；`--detail` 打印失败断言原文（实际/期望两侧）供判读；改写前备份、`finally`/`atexit` 双兜底还原并校验 sha256，脏文件默认跳过；结果需人工判读（生产侧显式注入 today / 星期-财季语义 / 断言目标在未变异 fixture 均为伪信号）；不入门禁 |
@@ -282,7 +282,7 @@ Web 模式全链路可复跑冒烟验证（上传→生成→进度→产物，F
 
 **设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
 
-静态分析 `src/test/`（默认跳过 `pytest.ini` 刻意排除的 `live/` 真网套件），抓十类「看着有测试其实没测住」的问题：
+静态分析 `src/test/`（默认跳过 `pytest.ini` 刻意排除的 `live/` 真网套件），抓十一类「看着有测试其实没测住 / 测不安稳」的问题：
 
 1. **死用例**：同文件同类同名重复定义（后者覆盖前者）、类名不以 `Test` 开头的方法形式 `test_*`、`Test*` 类定义了 `__init__`（pytest 整类跳过）
 2. **无断言用例**：既无 `assert`、也无 `pytest.raises/warns/fail`、也无 `assertEqual` 等 `assert*` / `assert_called*`，且不经同类辅助方法（如 `self._assert_pairs_contain(...)`，其内部含断言）——断言落在辅助方法里同样算数
@@ -296,11 +296,12 @@ Web 模式全链路可复跑冒烟验证（上传→生成→进度→产物，F
 7. **死 fixture**：test 文件内定义（排除 conftest 自身与 autouse）且全仓语料（测试 + conftest）无任何引用——定义后从未被消费的死代码
 8. **弱 mock 断言**：`assert <mock>.<属性>` 作真值 / `assertIsNotNone(<mock>)`——Mock 恒真且恒不为 None，断言恒成立不验证行为（`.called` / `assert_called*` 等专用断言不算弱）
 9. **账本日期写死绝对日期（时间炸弹）**：账本写入/裁剪类调用（`append_signals` / `append_decision` / `register_deterministic_signals` / `prune_jsonl_by_age` …）的 `report_date` / `settle_date` / `date` 实参写死「当前年 ±2 年」内的绝对日期字面量（含经模块级常量转手）。账本按保留期（730 天）在**写侧即裁剪**并按 `now()` 判定，这类用例会在「日期 + 保留期」之后静默退化成「空账本 / 键缺失」。远过去锚点（`"2020-01-02"` 表「必过期」）不报；正确写法是从当天回推派生。经验筛查（真跑、不入门禁）见 `probe-date-bombs.py`
+11. **真实耗时 / 真实子进程**：测试内 `time.sleep(<≥0.1s 字面量>)` 真睡满墙钟；`subprocess.run` / `check_output` / `Popen` 真跑 `pytest` 或 `python -m …`（调用源码含 `pytest` 或 `sys.executable`）且同作用域内无 `patch(subprocess…)` / `monkeypatch.setattr(subprocess…, …)` 证据。两类都是 CI 抖动与 flaky 的主要来源——墙钟随宿主环境与门禁并行度漂移，失败信息还隔着子进程边界。确需真等/真跑（并发重叠量测、假源模拟慢源、CLI 退出码契约）登记在 `scripts/_test_redundancy_exceptions.json` 的 `slow-or-subprocess` 规则
 
 **使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
 
 ```bash
-.venv/bin/python scripts/check-test-redundancy.py                 # 十类用例质量 + 标记合规全查
+.venv/bin/python scripts/check-test-redundancy.py                 # 十一类用例质量 + 标记合规全查
 .venv/bin/python scripts/check-test-redundancy.py -v              # 详细输出（扫描规模 + 各类计数 + 跳过的间接调用用例数）
 .venv/bin/python scripts/check-test-redundancy.py --ci            # CI 模式（只输出 文件:描述，退出码 2）
 .venv/bin/python scripts/check-test-redundancy.py --include-live  # 连带扫描 src/test/live/
@@ -334,12 +335,19 @@ Web 模式全链路可复跑冒烟验证（上传→生成→进度→产物，F
 .venv/bin/python scripts/check-test-redundancy.py --ci
 ```
 
-判 finding 与其余十类同一退出码（2）。`src/test/` 变更即由 pre-commit 触发；入口本身不另设开关。
+判 finding 与其余十一类同一退出码（2）。`src/test/` 变更即由 pre-commit 触发；入口本身不另设开关。
 
 **patch 打在 re-export 面（第 10 类）**：扫描 `src/test/**` 的 `patch("a.b.c")` 与 `monkeypatch.setattr(<module>, "name")`，
 解析目标模块；若该 `name` 在模块里只来自 import（模块体内没有任何其它引用）即报 finding——这类 patch 会让测试绿着通过、而生产仍走真实绑定。
 口径刻意排除包门面 `__init__.py` 与模块 `__all__` 里声明的公开导出面（那是刻意维持的公开导入面，报它等于把公开 API 判成违规）。
 确有正当理由的（目标模块自己就在函数体里调用了该符号）登记在 `scripts/_test_redundancy_exceptions.json`（owner / reason / expiry / replacement）。
+
+**真实耗时与真实子进程（第 11 类，实现 `_test_redundancy/slow_io.py`）**：真睡满整段耗时、真起解释器跑 `pytest`，
+把测试的墙钟绑到宿主环境与并行度上，是 CI 抖动与 flaky 的主要来源。判据刻意收窄以免误报——非字面量的
+`sleep(x)` 不判、与解释器/测试无关的子进程（如 `ls`）不判、已被替身接管（同作用域内有 `patch(subprocess…)` /
+`monkeypatch.setattr(subprocess…, …)`，含装饰器形态）不判。确需真等/真跑的量测（并发重叠、慢源模拟、CLI 退出码契约、
+pty 按键解码）登记在 `scripts/_test_redundancy_exceptions.json` 的 `slow-or-subprocess` 规则，定位键为
+`<仓库相对路径>::<分类>::<细节>`（sleep 取字面量值、子进程取 argv 源码），到期须复核或按 `replacement` 消除。
 
 ## 文档类
 
@@ -707,7 +715,7 @@ y 范围（svg 单位）；`margin` = 检测范围到卡片右缘的右扩量（
 
 ## 代码与文件质量类
 
-代码注释痕迹（含五条 AST/行级守卫）、文件行数红线、需求追溯与任务编号一致性（含钩子接线）、导入面契约与 scripts 顶层脚本契约机检。
+代码注释痕迹（含六条 AST/行级守卫）、文件行数红线、需求追溯与任务编号一致性（含钩子接线）、导入面契约与 scripts 顶层脚本契约机检。
 
 **`check-code-traces.py` — 代码注释历史痕迹检查**
 
@@ -715,7 +723,7 @@ y 范围（svg 单位）；`margin` = 检测范围到卡片右缘的右扩量（
 
 扫描 `src/python/`、`src/test/`、`src/static/`、`scripts/` 下所有 `.py` / `.js` / `.mjs` / `.html` / `.sh` / `.ps1` / `.bat` / `.cmd` 文件的注释和文档字符串，检查是否含有代码历史迭代信息（来源拆分、版本号、任务编号、历史迭代叙述等）。代码注释只应描述"当前是什么"，不应记录"从哪里来、怎么变的"。
 
-除注释痕迹外，另有五条 **AST/行级架构守卫**（直接看语法树，与注释格式无关）：
+除注释痕迹外，另有六条 **AST/行级架构守卫**（直接看语法树，与注释格式无关）：
 
 | 守卫 | 检出内容 | 实现 |
 |:-----|:---------|:-----|
@@ -724,6 +732,7 @@ y 范围（svg 单位）；`margin` = 检测范围到卡片右缘的右扩量（
 | 语义命名 | 标识符/注释夹带任务编号、系列代号、字母数字暗号 | `_traces_code/extract.py` + `patterns.py` |
 | 配置默认值单源 | 生产代码自带与默认值表同值同键的字面量兜底（`x.get("<键>", <默认值>)`，改默认表不会跟随） | `_traces_code/config_defaults.py`（默认表自身与测试不在扫描域） |
 | 宽捕获抑制形态 | 散文形态抑制（只写口径词「有意宽捕获」而不挂 `noqa: BLE001`）——与 BLE001/RUF100 脱钩的抑制无人校验 | `_traces_code/broad_capture.py`（只认 `# noqa: BLE001 — <理由>` 一种形态；限 `src/python` + `scripts`） |
+| 浮点求和口径单源 | 浮点均值/方差用内建 `sum()` 朴素累加（`sum(xs) / len(xs)`、`sum((a-b)**2 …)`）——3.11 朴素 vs 3.12 起补偿求和，末位差会让零方差判定失效（假标准误）；须改 `math.fsum` | `_traces_code/numeric_sum.py`（整数计数 / 已 fsum 包裹 / `sum` 被重绑定不报；例外登记 `_code_traces_exceptions.json`，逐条自审字段/到期/仍命中） |
 
 **使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
 
@@ -746,7 +755,7 @@ y 范围（svg 单位）；`margin` = 检测范围到卡片右缘的右扩量（
 |:------:|:-----|:-----|
 | 0 | 全部通过 | 无需处理 |
 | 1 | HIGH/ORIGIN/VERSION 痕迹 | 必须修复后再提交 |
-| 2 | CODE/IDENT/CHAPTER/ROUND/LOG/DEFAULTDUP/CAPTURE（任务编号/标识符/章节编号引用/日志统一违规/默认值重复兜底/散文形态宽捕获抑制） | 应改用语义描述，`print()` 改用 `logging`，默认值改走 `get_default()` / `get_llm_setting_default()`，抑制改写成 `# noqa: BLE001 — <理由>` |
+| 2 | CODE/IDENT/CHAPTER/ROUND/LOG/DEFAULTDUP/CAPTURE/FLOATSUM（任务编号/标识符/章节编号引用/日志统一违规/默认值重复兜底/散文形态宽捕获抑制/浮点均值方差用内建 `sum`） | 应改用语义描述，`print()` 改用 `logging`，默认值改走 `get_default()` / `get_llm_setting_default()`，抑制改写成 `# noqa: BLE001 — <理由>`，浮点均值/方差求和改 `math.fsum()` |
 | 3 | 仅 TODO/CHANGE/DEPR 级别 | 建议人工复核 |
 
 > **何时跑**：`git commit` 时由 pre-commit 钩子按暂存域自动执行（**勿手动重复**）；发布门禁（P2）与 CI `guards` job 恒跑全量兜底。

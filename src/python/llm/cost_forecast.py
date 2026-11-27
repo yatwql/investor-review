@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from datetime import date
 from typing import Any
 
@@ -507,7 +508,7 @@ def estimate_cached_saving(
             unpriced.append(key)
             continue
         for code, samples in paid_by_currency.items():
-            saved[code] = saved.get(code, 0.0) + sum(samples) / len(samples)
+            saved[code] = saved.get(code, 0.0) + math.fsum(samples) / len(samples)
         priced.append(key)
     rounded = {code: round(amount, 6) for code, amount in saved.items()}
     return {

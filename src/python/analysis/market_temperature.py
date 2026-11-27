@@ -152,7 +152,7 @@ def valuation_percentile(
     available = [p for p in comps.values() if p is not None]
     if not available:
         return None
-    percentile = round(sum(available) / len(available), 2)
+    percentile = round(math.fsum(available) / len(available), 2)
     return {"percentile": percentile, "components": comps}
 
 
@@ -165,7 +165,7 @@ def moving_average(closes: list[float], window: int = MA_WINDOW) -> float | None
     """最近 window 期简单移动平均。样本不足返回 None。"""
     if len(closes) < window:
         return None
-    return sum(closes[-window:]) / window
+    return math.fsum(closes[-window:]) / window
 
 
 def ma_deviation(closes: list[float], current: float | None = None, window: int = MA_WINDOW) -> float | None:
@@ -195,8 +195,8 @@ def returns_volatility(closes: list[float], window: int = VOL_WINDOW) -> float |
     if len(returns) < 2:
         return None
     tail = returns[-window:]
-    mean = sum(tail) / len(tail)
-    var = sum((r - mean) ** 2 for r in tail) / (len(tail) - 1)
+    mean = math.fsum(tail) / len(tail)
+    var = math.fsum((r - mean) ** 2 for r in tail) / (len(tail) - 1)
     return math.sqrt(var * TRADING_DAYS_PER_YEAR)
 
 

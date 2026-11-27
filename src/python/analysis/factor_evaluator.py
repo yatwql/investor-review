@@ -17,6 +17,7 @@ rating 摘要，供 signal_record 入账与风格与因子分析区「因子目�
 from __future__ import annotations
 
 import logging
+import math
 from typing import Any
 
 
@@ -131,7 +132,7 @@ def _apply_scalar(
             continue
     row["codes_ok"] = len(values)
     if len(values) >= MIN_CODES_PER_DAY:
-        row["value"] = sum(values) / len(values)
+        row["value"] = math.fsum(values) / len(values)
         row["computable"] = True
     elif values:
         row["reason"] = f"有效码数不足({len(values)}<{MIN_CODES_PER_DAY})"
@@ -158,7 +159,7 @@ def _apply_bars(
             values.append(float(latest))
     row["codes_ok"] = len(values)
     if len(values) >= MIN_CODES_PER_DAY:
-        row["value"] = sum(values) / len(values)
+        row["value"] = math.fsum(values) / len(values)
         row["computable"] = True
     elif values:
         row["reason"] = f"有效码数不足({len(values)}<{MIN_CODES_PER_DAY})"

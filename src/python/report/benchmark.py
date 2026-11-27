@@ -148,8 +148,8 @@ def normalize_benchmarks(
         # 计算年化波动率（%）：日收益率标准差 × sqrt(252) × 100（与组合走势同一口径）
         daily_ret = [(values[i] - values[i - 1]) / values[i - 1] for i in range(1, len(values)) if values[i - 1] > 0]
         if len(daily_ret) >= 2:
-            _mean = sum(daily_ret) / len(daily_ret)
-            _var = sum((r - _mean) ** 2 for r in daily_ret) / (len(daily_ret) - 1)
+            _mean = math.fsum(daily_ret) / len(daily_ret)
+            _var = math.fsum((r - _mean) ** 2 for r in daily_ret) / (len(daily_ret) - 1)
             annualized_vol_pct = math.sqrt(_var) * math.sqrt(252) * 100
         else:
             annualized_vol_pct = 0.0
