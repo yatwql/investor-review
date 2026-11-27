@@ -21,11 +21,12 @@ from src.python.llm._llm_context_blocks import (
     LlmContextBlocks,
     extract_historical_codes,
 )
+from src.python.llm.module_registry import PARALLEL_MODULE_ORDER
 
 logger = logging.getLogger("invest")
 
-#: 四基础模块（顺序即返回元组位序，供调用方按位取回）。
-BASE_MODULES: tuple[str, ...] = ("global_macro", "expert_review", "health_check", "penetration_deep")
+#: 四基础模块（顺序即返回元组位序，供调用方按位取回；单源：`module_registry`）。
+BASE_MODULES: tuple[str, ...] = PARALLEL_MODULE_ORDER
 
 
 def review_text(html: str | None) -> str | None:

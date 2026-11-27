@@ -11,6 +11,7 @@ from typing import Any
 from src.python.config import DEFAULT_PROVIDER_PRIORITY
 from src.python.core.registry import get_llm_module_names
 from src.python.llm.failure_reasons import FAIL_REASON_LABELS as _DISPLAY_REASON
+from src.python.llm.module_registry import LLM_MODULE_ORDER
 from src.python.llm.pricing import costs_of, format_costs
 
 try:
@@ -26,9 +27,10 @@ except ImportError:
     FAIL_REASON_DISABLED = FAIL_REASON_NOT_CONFIGURED = "disabled"
     FAIL_REASON_API_ERROR = FAIL_REASON_NETWORK_ERROR = FAIL_REASON_TIMEOUT = FAIL_REASON_CIRCUIT_OPEN = "error"
 
-_MODULE_KEYS = ["global_macro", "expert_review", "health_check", "penetration_deep", "news_correlation"]
-"""明细行固定枚举的模块。
+_MODULE_KEYS: list[str] = list(LLM_MODULE_ORDER)
+"""明细行固定枚举的模块（顺序与集合取自 `llm/module_registry.py` 单源）。
 
+只枚举报告侧模块全集（news_correlation 在内：它有明细行但无质量评级与占位），
 刻意不直接从注册表枚举：辩论三键（pro/con/synthesis）在注册表中保留但**不应**
 占明细行（它们是智囊团模块的内部阶段）；生成后自检则由 :func:`_module_keys` 按
 「有数据或有状态」条件追加（见该函数）。

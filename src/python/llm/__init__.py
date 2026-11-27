@@ -19,6 +19,7 @@
   circuit_breaker.py         — 熔断器（连续失败自动暂停）
   strategy.py                — Provider 链策略引擎（priority/weighted/cost_first）
   markdown.py                — Markdown → HTML 转换
+  module_registry.py          — 报告侧 LLM 模块键单一事实位（后缀全集/顺序/派生子集）
 """
 
 from __future__ import annotations

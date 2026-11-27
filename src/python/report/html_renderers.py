@@ -23,6 +23,7 @@ from src.python.report.holdings_freshness import (
     fund_period_label,
 )
 from src.python.report.html_builders import _build_category_data, _build_perf_data
+from src.python.llm.module_registry import LLM_MODULE_ORDER, PARALLEL_MODULE_ORDER
 from src.python.report.llm_module_info import build_llm_endpoint_display, build_llm_module_info
 from src.python.report.market_value import (
     DetailRow,
@@ -569,8 +570,9 @@ def _with_contract_blocks(gm: str | None, er: str | None, hc: str | None, pd: st
     """
     from src.python.report.llm_contract_block import contract_html, strip_contract_line
 
+    # 四模块正文按位对齐（单源：`llm/module_registry.py`）
     pairs = zip(
-        ("global_macro", "expert_review", "health_check", "penetration_deep"),
+        PARALLEL_MODULE_ORDER,
         (gm, er, hc, pd),
     )
     out = []
@@ -647,10 +649,7 @@ def _render_llm_module_info(
     if _llm_session_usage:
         _per_module = _llm_session_usage.get("per_module", {}) or {}
 
-    module_disabled = {
-        mk: _llm_failure.get(mk) == FAIL_REASON_DISABLED
-        for mk in ["global_macro", "expert_review", "health_check", "penetration_deep", "news_correlation"]
-    }
+    module_disabled = {mk: _llm_failure.get(mk) == FAIL_REASON_DISABLED for mk in LLM_MODULE_ORDER}
 
     llm_module_info = build_llm_module_info(_llm_failure, _per_module)
 

@@ -43,6 +43,7 @@ from typing import Callable
 
 from src.python.config.features import is_feature_enabled
 from src.python.llm.fact_checker._constants import FACT_CHECK_RULES_VERSION
+from src.python.llm.module_registry import PARALLEL_MODULE_ORDER
 from src.python.core import decision_ledger
 from src.python.core import signal_ledger
 from src.python.llm.fingerprint import (
@@ -236,10 +237,7 @@ def fingerprint_components(inputs: "ModuleFingerprintInputs") -> dict[str, str]:
         "pipeline_blocks": compute_fingerprint(_pipeline_blocks_text(inputs.pipeline_data)),
         "ledger_blocks": compute_fingerprint(ledger_blocks),
         "generation_params": compute_fingerprint(
-            *[
-                generation_params_suffix(module)
-                for module in ("global_macro", "expert_review", "health_check", "penetration_deep")
-            ]
+            *[generation_params_suffix(module) for module in PARALLEL_MODULE_ORDER]
         ),
     }
 

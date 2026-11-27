@@ -31,16 +31,17 @@ def _report_llm_module_results(
 ) -> None:
     """统一的 LLM 模块结果报告逻辑。"""
     from src.python.llm import FAIL_REASON_DISABLED
+    from src.python.llm.module_registry import PARALLEL_MODULE_ORDER
     from src.python.llm.prompts import LLM_MODULE_FAILURE
     from src.python.core.registry import get_llm_module_name
     from src.python.report.llm_module_info import get_llm_module_failure_reason
 
-    _MODULE_KEYS = ("global_macro", "expert_review", "health_check", "penetration_deep")
     ok_count = 0
     disabled: list[str] = []
     failed: list[str] = []
 
-    for mk, r in zip(_MODULE_KEYS, results):
+    # 四并行模块的结果元组按位对齐（单源：`llm/module_registry.py`）
+    for mk, r in zip(PARALLEL_MODULE_ORDER, results):
         if r is not None:
             ok_count += 1
         elif get_llm_module_failure_reason(LLM_MODULE_FAILURE, mk) == FAIL_REASON_DISABLED:

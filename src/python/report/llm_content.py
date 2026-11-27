@@ -22,6 +22,7 @@ from src.python.llm import (
     FAIL_REASON_QUOTA_EXCEEDED,
     FAIL_REASON_TIMEOUT,
 )
+from src.python.llm.module_registry import PARALLEL_MODULE_ORDER
 from src.python.llm.prompts import LLM_MODULE_FAILURE
 from src.python.core.registry import get_llm_module_name, get_report_section_order
 from src.python.report.excel_writer import (
@@ -356,19 +357,15 @@ def write_llm_sheets(
     """
     _reverse = {v: k for k, v in _get_module_key_map(section_order).items()}
 
-    _module_keys = ["global_macro", "expert_review", "health_check", "penetration_deep"]
+    _module_keys = list(PARALLEL_MODULE_ORDER)
     _disabled = tuple(
         get_llm_module_failure_reason(LLM_MODULE_FAILURE, mk) == FAIL_REASON_DISABLED for mk in _module_keys
     )
 
     content7, content8, content9, contentA = llm_content
 
-    _module_contents = [
-        ("global_macro", content7),
-        ("expert_review", content8),
-        ("health_check", content9),
-        ("penetration_deep", contentA),
-    ]
+    # 模块键与内容四元组按位对齐（单源：`llm/module_registry.py`）
+    _module_contents = list(zip(PARALLEL_MODULE_ORDER, llm_content))
     for i, (mk, content) in enumerate(_module_contents):
         if _disabled[i]:
             logger.info("LLM 分析章节跳过（已禁用）: %s", get_llm_module_name(mk))

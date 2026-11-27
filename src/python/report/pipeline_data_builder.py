@@ -19,132 +19,140 @@ B 通道（prep）流向：
 from __future__ import annotations
 
 import logging
+from collections.abc import Set as AbstractSet
 from datetime import datetime
 from typing import Any
 
 logger = logging.getLogger("invest")
 
 # ── 已知 pipeline_data 顶层键（用于 build() 类型校验） ──
+# 不可变（frozenset）：未注册键**不得**在运行时补登记进来——权威键集单源，
+# 键须先在 technical.md 附录 H 登记，否则「代码用键 ⊆ 附录 H」立即失效。
 
-_PIPELINE_DATA_KNOWN_KEYS: set[str] = {
-    "diff",
-    "data_degradation",
-    "risk_metrics",
-    # 风格与因子分析（数据契约 style_factor_data，内嵌 industry_beta 子键）
-    "style_factor_data",
-    # 因子目录（实验性功能 factor_catalog；关态为 None → 区块/信号全链无感）
-    "factor_catalog_data",
-    "position_relationship_data",
-    "evolution_data",
-    # 品种覆盖诊断：数据质量仪表盘品种覆盖区块数据源
-    "position_status",
-    # 可信度摘要：数据质量仪表盘可信度区块数据源（新鲜度 + 单日跳变）
-    "data_freshness",
-    # 行动建议单一数据源：行动板块 + 智囊团深度复盘行动摘要（单源计算两处呈现）
-    "action_data",
-    # 判断依据章内块（形态 A）：确定性事实块数据契约（开关 decision_basis，
-    # 关闭时 enabled=False → 双端完全隐藏；骨架阶段 available=False 走空态）
-    "decision_basis_data",
-    # 景气度框架诊断（实验性功能 prosperity_framework）：六维评分卡组合契合度
-    "prosperity_framework_data",
-    # 市场情绪与持仓热点（报告增强开关 market_sentiment）：龙虎榜/连板梯队 ∩ 持仓与穿透
-    "market_sentiment_data",
-    # 成本流水：成本分档 + XIRR + 分红累计（功能开关 `cost_lots`，
-    # 由 excel 渲染层 resolve_market_data 基于交易/分红流水组装）
-    "fund_flow_data",
-    # 估值分位：当前 PE/PB + 价格分位代理（功能开关 `valuation_percentile`，
-    # 由编排层 compute_valuation_data 组装；开关关闭时为 None）
-    "valuation_data",
-    # 市场温度：价格分位+均线偏离+波动率三因子合成温度计（功能开关 `market_temperature`，
-    # 由编排层 compute_market_temperature_data 组装；开关关闭时为 None）
-    "market_temperature_data",
-    # 宏观事件标注：危机/政策事件叠加到走势图的标注数据（build_crisis_annotation(history_data)，
-    # 由编排层 compute_crisis_annotation_data 组装；无事件时为 None）
-    "crisis_annotation_data",
-    # 风险调整超额：走势章子块数据源（功能开关 `risk_adjusted_excess`，
-    # 滚动 1Y 超额 + 年化 IR/跟踪误差 + 跑赢基准胜率，由编排层
-    # build_risk_adjusted_excess 组装；开关关闭时键不写入）
-    "risk_adjusted_excess_data",
-    # 尾部风险：极端行情风险提示数据（尾部风险统计，
-    # 由编排层 compute_tail_risk_data 组装；开关关闭时为 None）
-    "tail_risk_data",
-    # 快照差异：当前持仓快照与上次快照的差异数据（快照差异摘要，
-    # 由编排层 compute_snapshot_diff_data 组装；无差异时为 None）
-    "snapshot_diff_data",
-    # 决策复盘区块：行动章内嵌复盘表数据（决策跨期反思闭环开启时由
-    # report/_experimental_seams.record_llm_decisions_and_review_block 注入；
-    # 实验功能关闭或区块为空时键缺席，两条输出路径保持既有输出）
-    "decision_review_data",
-    # 持仓变动复盘：快照差分事件清单/频率/结构演变/意图对账（报告章节与增强开关
-    # `holding_change_review`，由 report/_experimental_seams.inject_holding_change_data
-    # 注入；开关关闭时键缺席，整章隐藏）
-    "holding_change_data",
-    # 事件窗对照：新闻事件窗口收益与文本极性对照表（报告章节与增强开关
-    # `event_window_impact`，由 report/_experimental_seams.inject_event_impact_data
-    # 注入；开关关闭时键缺席，整章隐藏）
-    "event_impact_data",
-    # 调仓纪律回放：多期规则回放 vs 买入持有（实验开关
-    # `rebalance_schedule_replay`，由 report/_experimental_seams.inject_schedule_replay_data
-    # 注入；开关关闭时键缺席，整章隐藏）
-    "schedule_replay_data",
-    # 持仓个股财报摘要：A 股标的的财报章节摘要（功能开关 `stock_fundamentals`，
-    # 由 report/financial_report_digest.build_financial_report_digest 组装；开关关闭时为 None）
-    "financial_report_digest_data",
-    # 财务指标：持仓 A 股基本面（功能开关 `stock_fundamentals`，
-    # 由 report/financial_indicator.build_financial_indicator 组装；开关关闭时为 None）
-    "financial_indicator_data",
-    # 申购限购状态：持仓明细「申购状态」列数据源（功能开关 `fund_purchase_limit`，
-    # 由 report/purchase_status.build_purchase_status_data 组装；开关关闭时为 None、
-    # 全链失败时 available=False 静默隐列）
-    "purchase_status_data",
-    # 首页执行摘要卡：摘要区首屏执行摘要卡（报告章节与增强开关 `summary_highlights`，
-    # 由 report/summary_highlights.build_summary_highlights 派生；开关关闭时键缺席、
-    # 无上期快照时键值为 None，首屏整块隐藏）
-    "summary_highlights_data",
-}
+_PIPELINE_DATA_KNOWN_KEYS: frozenset[str] = frozenset(
+    {
+        "diff",
+        "data_degradation",
+        "risk_metrics",
+        # 风格与因子分析（数据契约 style_factor_data，内嵌 industry_beta 子键）
+        "style_factor_data",
+        # 因子目录（实验性功能 factor_catalog；关态为 None → 区块/信号全链无感）
+        "factor_catalog_data",
+        "position_relationship_data",
+        "evolution_data",
+        # 品种覆盖诊断：数据质量仪表盘品种覆盖区块数据源
+        "position_status",
+        # 可信度摘要：数据质量仪表盘可信度区块数据源（新鲜度 + 单日跳变）
+        "data_freshness",
+        # 行动建议单一数据源：行动板块 + 智囊团深度复盘行动摘要（单源计算两处呈现）
+        "action_data",
+        # 判断依据章内块（形态 A）：确定性事实块数据契约（开关 decision_basis，
+        # 关闭时 enabled=False → 双端完全隐藏；骨架阶段 available=False 走空态）
+        "decision_basis_data",
+        # 景气度框架诊断（实验性功能 prosperity_framework）：六维评分卡组合契合度
+        "prosperity_framework_data",
+        # 市场情绪与持仓热点（报告增强开关 market_sentiment）：龙虎榜/连板梯队 ∩ 持仓与穿透
+        "market_sentiment_data",
+        # 成本流水：成本分档 + XIRR + 分红累计（功能开关 `cost_lots`，
+        # 由 excel 渲染层 resolve_market_data 基于交易/分红流水组装）
+        "fund_flow_data",
+        # 估值分位：当前 PE/PB + 价格分位代理（功能开关 `valuation_percentile`，
+        # 由编排层 compute_valuation_data 组装；开关关闭时为 None）
+        "valuation_data",
+        # 市场温度：价格分位+均线偏离+波动率三因子合成温度计（功能开关 `market_temperature`，
+        # 由编排层 compute_market_temperature_data 组装；开关关闭时为 None）
+        "market_temperature_data",
+        # 宏观事件标注：危机/政策事件叠加到走势图的标注数据（build_crisis_annotation(history_data)，
+        # 由编排层 compute_crisis_annotation_data 组装；无事件时为 None）
+        "crisis_annotation_data",
+        # 风险调整超额：走势章子块数据源（功能开关 `risk_adjusted_excess`，
+        # 滚动 1Y 超额 + 年化 IR/跟踪误差 + 跑赢基准胜率，由编排层
+        # build_risk_adjusted_excess 组装；开关关闭时键不写入）
+        "risk_adjusted_excess_data",
+        # 尾部风险：极端行情风险提示数据（尾部风险统计，
+        # 由编排层 compute_tail_risk_data 组装；开关关闭时为 None）
+        "tail_risk_data",
+        # 快照差异：当前持仓快照与上次快照的差异数据（快照差异摘要，
+        # 由编排层 compute_snapshot_diff_data 组装；无差异时为 None）
+        "snapshot_diff_data",
+        # 决策复盘区块：行动章内嵌复盘表数据（决策跨期反思闭环开启时由
+        # report/_experimental_seams.record_llm_decisions_and_review_block 注入；
+        # 实验功能关闭或区块为空时键缺席，两条输出路径保持既有输出）
+        "decision_review_data",
+        # 持仓变动复盘：快照差分事件清单/频率/结构演变/意图对账（报告章节与增强开关
+        # `holding_change_review`，由 report/_experimental_seams.inject_holding_change_data
+        # 注入；开关关闭时键缺席，整章隐藏）
+        "holding_change_data",
+        # 事件窗对照：新闻事件窗口收益与文本极性对照表（报告章节与增强开关
+        # `event_window_impact`，由 report/_experimental_seams.inject_event_impact_data
+        # 注入；开关关闭时键缺席，整章隐藏）
+        "event_impact_data",
+        # 调仓纪律回放：多期规则回放 vs 买入持有（实验开关
+        # `rebalance_schedule_replay`，由 report/_experimental_seams.inject_schedule_replay_data
+        # 注入；开关关闭时键缺席，整章隐藏）
+        "schedule_replay_data",
+        # 持仓个股财报摘要：A 股标的的财报章节摘要（功能开关 `stock_fundamentals`，
+        # 由 report/financial_report_digest.build_financial_report_digest 组装；开关关闭时为 None）
+        "financial_report_digest_data",
+        # 财务指标：持仓 A 股基本面（功能开关 `stock_fundamentals`，
+        # 由 report/financial_indicator.build_financial_indicator 组装；开关关闭时为 None）
+        "financial_indicator_data",
+        # 申购限购状态：持仓明细「申购状态」列数据源（功能开关 `fund_purchase_limit`，
+        # 由 report/purchase_status.build_purchase_status_data 组装；开关关闭时为 None、
+        # 全链失败时 available=False 静默隐列）
+        "purchase_status_data",
+        # 首页执行摘要卡：摘要区首屏执行摘要卡（报告章节与增强开关 `summary_highlights`，
+        # 由 report/summary_highlights.build_summary_highlights 派生；开关关闭时键缺席、
+        # 无上期快照时键值为 None，首屏整块隐藏）
+        "summary_highlights_data",
+    }
+)
 
 # ── 已知 prep 顶层键（用于 build_prep() 类型校验） ──
+# 不可变（frozenset）：同 _PIPELINE_DATA_KNOWN_KEYS，不在运行时吸收未注册键。
 
-_PREP_KNOWN_KEYS: set[str] = {
-    "details",
-    "total_mv",
-    "total_cost",
-    "total_profit",
-    "total_today_profit",
-    "categories",
-    "a_indices",
-    "us_indices",
-    "penetrated_assets",
-    "holdings_details",
-    "today_str",
-    "output_dir",
-    "news_top_count",
-    "risk_metrics",
-    # 品种覆盖诊断：由 prepare_report_data 组装
-    "position_status",
-    # 可信度摘要：由 prepare_report_data 组装（新鲜度 + 单日跳变）
-    "data_freshness",
-    # 行动建议单一数据源：由 prepare_report_data 组装（单源计算两处呈现）
-    "action_data",
-    # 成本流水：成本分档 + XIRR + 分红累计（功能开关 `cost_lots`，
-    # 由 excel 渲染层 resolve_market_data 基于交易/分红流水组装）
-    "fund_flow_data",
-    # 估值分位：当前 PE/PB + 价格分位代理（功能开关 `valuation_percentile`，
-    # 由编排层 compute_valuation_data 组装；开关关闭时为 None）
-    "valuation_data",
-    # 市场温度：价格分位+均线偏离+波动率三因子合成温度计（功能开关 `market_temperature`，
-    # 由编排层 compute_market_temperature_data 组装；开关关闭时为 None）
-    "market_temperature_data",
-    # 持仓个股财报摘要：A 股标的的财报章节摘要（功能开关 `stock_fundamentals`，
-    # 由 prepare_report_data 组装；开关关闭时为 None）
-    "financial_report_digest_data",
-    # 财务指标：持仓 A 股基本面（功能开关 `stock_fundamentals`，
-    # 由 prepare_report_data 组装；开关关闭时为 None）
-    "financial_indicator_data",
-    # 申购限购状态：持仓明细「申购状态」列数据源（功能开关 `fund_purchase_limit`，
-    # 由 prepare_report_data 组装；开关关闭时为 None、全链失败时 available=False）
-    "purchase_status_data",
-}
+_PREP_KNOWN_KEYS: frozenset[str] = frozenset(
+    {
+        "details",
+        "total_mv",
+        "total_cost",
+        "total_profit",
+        "total_today_profit",
+        "categories",
+        "a_indices",
+        "us_indices",
+        "penetrated_assets",
+        "holdings_details",
+        "today_str",
+        "output_dir",
+        "news_top_count",
+        "risk_metrics",
+        # 品种覆盖诊断：由 prepare_report_data 组装
+        "position_status",
+        # 可信度摘要：由 prepare_report_data 组装（新鲜度 + 单日跳变）
+        "data_freshness",
+        # 行动建议单一数据源：由 prepare_report_data 组装（单源计算两处呈现）
+        "action_data",
+        # 成本流水：成本分档 + XIRR + 分红累计（功能开关 `cost_lots`，
+        # 由 excel 渲染层 resolve_market_data 基于交易/分红流水组装）
+        "fund_flow_data",
+        # 估值分位：当前 PE/PB + 价格分位代理（功能开关 `valuation_percentile`，
+        # 由编排层 compute_valuation_data 组装；开关关闭时为 None）
+        "valuation_data",
+        # 市场温度：价格分位+均线偏离+波动率三因子合成温度计（功能开关 `market_temperature`，
+        # 由编排层 compute_market_temperature_data 组装；开关关闭时为 None）
+        "market_temperature_data",
+        # 持仓个股财报摘要：A 股标的的财报章节摘要（功能开关 `stock_fundamentals`，
+        # 由 prepare_report_data 组装；开关关闭时为 None）
+        "financial_report_digest_data",
+        # 财务指标：持仓 A 股基本面（功能开关 `stock_fundamentals`，
+        # 由 prepare_report_data 组装；开关关闭时为 None）
+        "financial_indicator_data",
+        # 申购限购状态：持仓明细「申购状态」列数据源（功能开关 `fund_purchase_limit`，
+        # 由 prepare_report_data 组装；开关关闭时为 None、全链失败时 available=False）
+        "purchase_status_data",
+    }
+)
 
 # ── 类型映射（用于自动类型断言） ──
 
@@ -211,7 +219,7 @@ _PREP_TYPE_MAP: dict[str, type | tuple[type, ...]] = {
 # ═══════════════════════════════════════════════════════════════
 
 
-def _validate_keys(data: dict, known_keys: set[str], label: str) -> None:
+def _validate_keys(data: dict, known_keys: AbstractSet[str], label: str) -> None:
     """校验字典键是否在已知范围内，记录未知键警告。
 
     Args:
@@ -259,12 +267,10 @@ def build(
         "data_degradation": data_degradation or [],
     }
 
-    # 合并额外键
+    # 合并额外键。未注册键**不**自动登记（权威键集单源：键须先在附录 H
+    # 登记类型与消费方）——由下方 _validate_keys 统一告警并放行，集合不增长。
     for k, v in extra.items():
         result[k] = v
-        if k not in _PIPELINE_DATA_KNOWN_KEYS:
-            logger.warning("[pipeline_data] 未注册键 '%s' 通过 extra 注入，请先在 Schema 定义中注册", k)
-            _PIPELINE_DATA_KNOWN_KEYS.add(k)
 
     # 类型校验
     for key, expected in _PIPELINE_DATA_TYPE_MAP.items():
@@ -335,10 +341,10 @@ def build_prep(
         "news_top_count": news_top_count,
     }
 
-    # 合并额外键
+    # 合并额外键。未注册键**不**自动登记（同 build()：权威键集单源，由下方
+    # _validate_keys 统一告警）。
     for k, v in extra.items():
         result[k] = v
-        _PREP_KNOWN_KEYS.add(k)
 
     # 类型校验
     for key, expected in _PREP_TYPE_MAP.items():
@@ -404,7 +410,7 @@ def merge_pipeline_data(
         if k in merged:
             logger.debug("[pipeline_data] 覆盖已有键 '%s'", k)
         merged[k] = v
+        # 未注册键不自动登记（权威键集单源）：本函数不跑 _validate_keys，故在此告警
         if k not in _PIPELINE_DATA_KNOWN_KEYS:
-            logger.warning("[pipeline_data] 未注册键 '%s' 通过 merge 注入，请先在 Schema 定义中注册", k)
-            _PIPELINE_DATA_KNOWN_KEYS.add(k)
+            logger.warning("[pipeline_data] 未注册键 '%s' 通过 merge 注入，请先在 technical.md 附录 H 登记", k)
     return merged

@@ -1,6 +1,7 @@
 """pipeline_data 构建器的注册/校验分支（`report/pipeline_data_builder`）。
 
-契约面：未知键必须告警并自注册（否则报告消费端静默丢字段），类型不符只告警不抛
+契约面：未知键必须告警且**不得**自动登记进权威键集（键须先在附录 H 登记，
+集合被运行时污染后「代码用键 ⊆ 附录 H」这条不变式即失效），类型不符只告警不抛
 （生产容错），`merge_pipeline_data` 的四条合并路径各有明确返回值。本文件补齐
 `build` / `build_prep` / `_validate_diff` / `merge_pipeline_data` 的未覆盖分支。
 """
@@ -16,29 +17,15 @@ from src.python.report import pipeline_data_builder as pdb
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
 
 
-def _known_keys():
-    """已知键集合的快照与恢复（`build`/`merge` 会往全局集合里补注册键）。"""
-    return set(pdb._PIPELINE_DATA_KNOWN_KEYS), set(pdb._PREP_KNOWN_KEYS)
-
-
-@pytest.fixture(autouse=True)
-def _restore_known_keys():
-    pipeline_snapshot, prep_snapshot = _known_keys()
-    yield
-    pdb._PIPELINE_DATA_KNOWN_KEYS.clear()
-    pdb._PIPELINE_DATA_KNOWN_KEYS.update(pipeline_snapshot)
-    pdb._PREP_KNOWN_KEYS.clear()
-    pdb._PREP_KNOWN_KEYS.update(prep_snapshot)
-
-
 class TestBuildRegistration:
-    def test_unregistered_extra_key_warns_and_registers(self, caplog):
-        """未登记键经 extra 注入 → 告警 + 自动补注册（后续同类注入不再刷告警）。"""
+    def test_unregistered_extra_key_warns_without_registering(self, caplog):
+        """未登记键经 extra 注入 → 告警，但**不得**进权威键集（否则无需登记即生效）。"""
         with caplog.at_level(logging.WARNING, logger="invest"):
-            pdb.build(probe_unregistered_key={"v": 1})
+            result = pdb.build(probe_unregistered_key={"v": 1})
 
+        assert result["probe_unregistered_key"] == {"v": 1}
         assert "probe_unregistered_key" in caplog.text
-        assert "probe_unregistered_key" in pdb._PIPELINE_DATA_KNOWN_KEYS
+        assert "probe_unregistered_key" not in pdb._PIPELINE_DATA_KNOWN_KEYS
 
     def test_registered_extra_key_is_silent(self, caplog):
         key = next(iter(pdb._PIPELINE_DATA_KNOWN_KEYS))
@@ -89,9 +76,10 @@ class TestValidateDiff:
 
 
 class TestBuildPrep:
-    def test_defaults_and_extra_key(self):
-        """缺省值齐备（列表/字典不为 None），extra 键合并并登记。"""
-        prep = pdb.build_prep(probe_prep_extra={"v": 1})
+    def test_defaults_and_extra_key(self, caplog):
+        """缺省值齐备（列表/字典不为 None），未登记 extra 键合并并告警（不登记）。"""
+        with caplog.at_level(logging.WARNING, logger="invest"):
+            prep = pdb.build_prep(probe_prep_extra={"v": 1})
 
         assert prep["details"] == []
         assert prep["categories"] == {}
@@ -99,7 +87,8 @@ class TestBuildPrep:
         assert prep["penetrated_assets"] == []
         assert prep["output_dir"] == "reports"
         assert prep["probe_prep_extra"] == {"v": 1}
-        assert "probe_prep_extra" in pdb._PREP_KNOWN_KEYS
+        assert "probe_prep_extra" in caplog.text
+        assert "probe_prep_extra" not in pdb._PREP_KNOWN_KEYS
 
     def test_today_str_defaults_to_current_date(self):
         prep = pdb.build_prep()
@@ -152,7 +141,7 @@ class TestMergePipelineData:
         assert merged["snapshot_diff_data"] == {"new": 2}
         assert base["snapshot_diff_data"] == {"old": 1}, "不得就地修改调用方的 dict"
 
-    def test_unregistered_merge_key_warns_and_registers(self, caplog):
+    def test_unregistered_merge_key_warns_without_registering(self, caplog):
         base = {"diff": None, "data_degradation": []}
 
         with caplog.at_level(logging.WARNING, logger="invest"):
@@ -160,4 +149,4 @@ class TestMergePipelineData:
 
         assert merged["probe_merge_key"] == 1
         assert "probe_merge_key" in caplog.text
-        assert "probe_merge_key" in pdb._PIPELINE_DATA_KNOWN_KEYS
+        assert "probe_merge_key" not in pdb._PIPELINE_DATA_KNOWN_KEYS
