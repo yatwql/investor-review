@@ -12,14 +12,14 @@
 | 主程序代码 | Python | 455 | 124,029 | `src/` 下所有 `.py`（不含测试：`src/__init__.py` 顶层包标记 + `src/python/` 下 15 个 `__init__.py`，含 `web/` 服务层；近期新增 `providers/tiantian_purchase.py` 天天基金申购状态总表 provider + `fetcher/fund_purchase.py` 申购状态取数编排（双链路/准入/会话复用） + `core/jsonl_store.py` JSONL 原子原语 + `core/signal_ledger.py` 确定性信号账本 + `report/signal_record.py` 信号登记适配器 + `core/num_utils.py` 数值归一原语 + `core/doctor.py` 系统自检 + `core/cassette.py` 请求回放引擎 + `core/datasource_credential.py` 数据源凭据声明 + `fetcher/source_adapter.py` 适配契约 + `fetcher/quote_adapters.py` 行情域适配器 + `llm/module_fingerprint.py` 模块指纹唯一事实来源 + `report/_experimental_seams.py` 实验挂载点 + `report/holdings_freshness.py` 持仓报告期时效判定 + `report/experimental_notice.py` 实验功能清单语句单源 + `core/trading_calendar.py` 交易日历原语（时间距离一律以交易日计） + `providers/datasink.py` 全文本财报 provider（密钥/限速/配额） + `providers/hithink.py` 同花顺金融数据服务 provider（A 股行情/财务/基金/情绪面；凭据/qps 限速/信封错误码） + `fetcher/financial_report.py` 财报取数编排 + `fetcher/report_adapters.py` 财报域适配器 + `report/financial_report_digest.py` 财报摘要章节装配 + `providers/akshare_financial.py` 结构化财务指标主源 + `fetcher/financial_indicator_adapters.py` 财务指标域适配器 + `core/code_symbols.py::to_fmp_symbol` 共享符号映射 + `providers/utils.py::run_with_timeout` 共享取数超时原语 + `analysis/financial_indicator_extract.py` 财务指标全文解析（压平正文锚点提取，备用支路） + `fetcher/financial_indicator.py` 财务指标多期取数编排 + `analysis/financial_indicator.py` 财务指标派生（质量档/趋势/当前 PE·PB） + `report/financial_indicator.py` 财务指标章装配 + `report/holdings_detail_sheet.py` 持仓明细与分类 Excel 页签 + `report/position_structure_sheet.py` 持仓结构与集中度 Excel 页签 + `report/fundamental_snapshot_sheet.py` 持仓基本面 Excel 页签（三者均为章节合并写入器） + `llm/compliance.py` 合规声明集中注入（幂等叠加，单一漏斗覆盖全模块）） |
 | HTML 报告模板 | HTML | 26 | 5,547 | `src/static/tmpl/report_template.html` + `whatif_template.html`（调仓 What-if 独立 HTML 页）+ `partials/`（章节级/区块级 partial，主模板按 TOC 六组经 Jinja include 拆入，清单见目录树 `partials/` 节点） |
 | 架构图示 | SVG | 4 | 396 | `src/static/` README 架构图（architecture 三渠道→引擎→双报告、llm-chain Provider 链式分发、capabilities 九大功能域总览、owl-mascot 吉祥物猫头鹰「守望」）+ 截图 7 张 PNG（报告实景 `report-overview`/`report-toc`/`report-charts` + 界面实景 `tui-menu`/`web-workbench`/`web-config`/`cli-report`，不计入本行） |
-| 辅助脚本 | Python | 156 | 33,491 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评测与因子目录评测、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、视觉资产（社交预览图/架构图体检）、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
-| 源代码合计 | — | 641 | 163,463 | 主程序 + 模板 + 脚本 + SVG |
-| 测试代码 | Python | 1031 | 255,523 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
-| 测试用例 | — | — | 17,787 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
+| 辅助脚本 | Python | 162 | 34,449 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评测与因子目录评测、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、视觉资产（社交预览图/架构图体检）、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
+| 源代码合计 | — | 647 | 164,421 | 主程序 + 模板 + 脚本 + SVG |
+| 测试代码 | Python | 1033 | 256,052 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
+| 测试用例 | — | — | 17,844 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 15 | 7,086 | 含 README.md；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 14 | 6,849 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 226 | 75,932 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 14,971 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 226 | 76,001 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 15,040 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 203 | 59,249 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 9 | ~1616 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + TUI 交互改进（议题 + 第一/二批实施方案） + PanWatch 借鉴分析（含评估政策单源化与 LLM 复盘契约两份设计） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -1537,7 +1537,9 @@ investor-review/
 │       │   │   ├── test_make_assets_svg.py     #   make-assets svg-geom 几何审查测试（字符档位/锚点包围盒/最小面积容器归属/越界·贴边·重叠·越画布/坏元素跳过/退出码）
 │       │   │   ├── test_make_screenshots.py    #   演示截图生成器测试（演示工作区持仓与绝对路径配置/报告命令装配/折行保色/路径瘦身/渲染尺寸/浏览器解析/Excel 页签显示值与列宽收敛/入口分发）
 │       │   │   ├── test_eval_llm_budget.py     #   表达预算评测脚本测试（预算分节守卫/度量解析/样本构建/汇总判定/CLI 干跑）
-│       │   │   ├── test_eval_mutation_score.py #   变异得分评测脚本测试（目标配置表/干跑命令/进度行得分解析/阈值三态与后端缺失/输出面，后端全部打桩离线）
+│       │   │   ├── test_eval_mutation_score.py #   变异得分评测脚本测试（目标配置表/干跑命令与测试选择/进度行得分解析/阈值三态/内置后端拒跑与中断/输出面，后端全部打桩离线）
+│       │   │   ├── test_eval_mutation_operators.py # 变异算子纯函数（四类算子逐条正反例/单点性/UTF-8 字节偏移/跨行跳过/产物可编译）
+│       │   │   ├── test_eval_mutation_runner.py # 变异执行协议（tmp_path 内备份还原与 sha256/四态分类/安全阀截断与时限/文件互斥/SIGTERM 兜底还原）
 │       │   │   ├── test_eval_from_report.py #   既有报告重放（章节/持仓表解析 + 覆盖率报告，零 LLM）
 │       │   │   ├── test_eval_halluc_self_review.py  # 幻觉抽样自评（样本裁剪、提示词拼装与干跑分支）
 │       │   │   ├── test_eval_halluc_report.py  # 幻觉抽样报告渲染（分模块命中表、汇总统计与写盘结构）
@@ -1797,7 +1799,14 @@ investor-review/
 │   │   ├── runner.py                #       单次测量编排（会话用量差 + 墙钟 + 模式路由）
 │   │   ├── report.py                #       汇总分位、验收判定与 Markdown/JSON 落盘
 │   │   └── cli.py                   #       freeze/run 子命令与退出码
-│   ├── eval-mutation-score.py       #   变异得分离线评测（委托可选后端 mutmut 按目标切片逐个跑，killed/(killed+survived) 与阈值比对；--list-targets/--dry 免后端；退出码 0 达标 / 1 后端缺失 / 2 低于阈值；不入门禁）
+│   ├── eval-mutation-score.py       #   变异得分离线评测入口（默认内置有界变异器逐点注入、四类算子，killed/(killed+survived) 与阈值比对；--backend mutmut 为可选后端；--list-targets/--dry 不跑变异；退出码 0 达标 / 1 可选后端缺失 / 2 不达标或工作树脏 / 130 中断；不入门禁）
+│   ├── _eval_mutation/              #   变异评测内部实现包（入口仅留 CLI、判定与门面 re-export）
+│   │   ├── __init__.py              #       子包标记（模块职责索引）
+│   │   ├── targets.py               #       目标切片表（变异路径 / 测试选择 / 算子口径 / 安全阀默认值）
+│   │   ├── operators.py             #       四类算子（AST 定位 + 单点文本替换；col_offset 按 UTF-8 字节）
+│   │   ├── results.py               #       结果类型与计数口径（killed/survived 进分母，timeout/error 不进）
+│   │   ├── runner.py                #       执行协议（工作树前置 / 字节级备份 + finally·atexit·SIGTERM 还原校验 / 判定分类 / 安全阀）
+│   │   └── mutmut_backend.py        #       可选后端 mutmut 的命令拼装、输出解析与可用性探测
 │   ├── test-perf-report.py          #   端到端性能基准测试（独立脚本，mock 外部数据源）
 │   ├── perf-history.py                 #   性能历史趋势查看（perf_history.jsonl -> 分位/演进/漂移 Markdown + 机读）
 │   ├── _perf_history/                  #   perf-history 实现包（入口 perf-history.py 仅留 docstring/sys.path 引导与 re-export）

@@ -59,7 +59,7 @@
 | `probe-report-claims.py` | 运维观测 | 批量重放历史报告做确定性数值核对（覆盖率/告警/自动改写，零 LLM 调用、只读；不入门禁） |
 | `eval-factor-zoo.py` | 评测 | 因子动物园目录评测（非生产代码；五个来源族各抽 5 个因子，评测 A 字段可得率 / B 与既有信号族增量 / C 全量计算耗时占比三项指标，A/B/C 全过才转正立项；子命令 catalog / fields / signals / timing / verdict / all，产物只落 `docs/tmp/factor-zoo/`；实现拆在 `_eval_factor_zoo/`） |
 | `eval-decision-quality.py` | 评测 | 投资决策质量待验证项回测（决策视界命中率 / 因子单因子 IC / 估值两口径区分度；判据预注册于脚本常量，样本门槛 100、IC 绝对值拒绝线 0.05；子命令 horizon / factor-ic / valuation / all，产物落 `docs/tmp/decision-quality/`） |
-| `eval-mutation-score.py` | 评测 | 变异得分离线评测（委托可选后端 mutmut 按目标切片逐个跑，killed/(killed+survived) 与阈值比对；`--list-targets`/`--dry` 不依赖后端；退出码 0 达标 / 1 后端缺失 / 2 低于阈值；不入门禁） |
+| `eval-mutation-score.py` | 评测 | 变异得分离线评测（**默认内置有界变异器**逐点注入，四类算子，killed/(killed+survived) 与阈值比对；`--backend mutmut` 为可选后端；`--list-targets`/`--dry` 不跑变异；退出码 0 达标 / 1 可选后端缺失 / 2 不达标或工作树脏 / 130 中断；不入门禁） |
 | `_assets/` | 内部 | 视觉资产实现包（`social_preview.py` 预览图绘制与栅格化 / `svg_check.py` 架构图渲染体检） |
 | `_screenshots/` | 内部 | 演示截图实现包（`demo_workspace.py` 隔离工作区与报告 / `tui_frame.py` 帧文本折行保色与渲染 / `web_shot.py` CDP 封装 + `cdp_shot.mjs` / `xlsx_frame.py` Excel 页签 → HTML 网格 → PNG） |
 | `_shared/` | 内部 | 跨脚本共享设施包（`checklib.py` CLI 契约与输出/路径/区间解析；`traces_common.py` 两域共用痕迹词表） |
@@ -1332,48 +1332,96 @@ curl 对照命令：`curl -s "https://push2.eastmoney.com/api/qt/stock/get?secid
 **`eval-mutation-score.py` — 变异得分离线评测**
 
 **干什么**：行覆盖率证明「用例执行过这行代码」，不证明「断言住了它的行为」——恒真断言、自证用例、
-弱 mock 断言在接近满格的覆盖率下照样存活。本脚本按**目标切片**委托后端 `mutmut` 逐块注入变异，
-解析其输出统计 `变异得分 = killed / (killed + survived)`，逐目标与阈值（默认 80%）比对。
+弱 mock 断言在接近满格的覆盖率下照样存活。本脚本按**目标切片**逐点注入变异，再只跑该切片的相关
+测试，统计 `变异得分 = killed / (killed + survived)`，逐目标与阈值（默认 80%）比对。
+
+**后端**：默认 `builtin` = 脚本自带的**内置有界变异器**（`_eval_mutation/`，无任何外部依赖，
+缺失可选工具也能跑）。`--backend mutmut` 保留为可选后端，但需要 3.x 兼容配置（`[tool.mutmut]`
+声明路径与测试命令、关掉它在 `mutants/` 子目录里的裸 `pytest`）才真能跑，缺配置的表现是
+`collected 0 items`，故不作默认。
 
 ```bash
-# 本期目标清单（文件 + 声明算子口径）：纯配置读取，没装 mutmut 也能跑
+# 本期目标清单（路径 + 测试选择 + 声明算子口径）：纯配置读取，不跑任何变异
 .venv/bin/python scripts/eval-mutation-score.py --list-targets
 
-# 干跑：只打印每个切片将要执行的后端命令（不执行任何变异）
+# 干跑：打印每个切片的变异体规模与将要执行的 pytest 选择命令（不写文件、不起子进程）
 .venv/bin/python scripts/eval-mutation-score.py --dry
 
-# 实跑并判定（需先装后端）：逐切片调用 `python -m mutmut run --paths-to-mutate=<切片>`
+# 实跑并判定（默认内置变异器）：逐变异体跑 `python -B -m pytest <该切片测试> -x -q --tb=no`
 .venv/bin/python scripts/eval-mutation-score.py -v
+
+# 单切片 / 安全阀 / 并行
+.venv/bin/python scripts/eval-mutation-score.py --only core-dates -v
+.venv/bin/python scripts/eval-mutation-score.py --max-mutants 30 --timeout 60 --slice-timeout 900
+.venv/bin/python scripts/eval-mutation-score.py --jobs 2      # 多文件切片并行（按文件互斥）
 
 # 机读结果 / 只输出 文件:描述（未达标目标各一行）/ 放宽阈值
 .venv/bin/python scripts/eval-mutation-score.py --json
 .venv/bin/python scripts/eval-mutation-score.py --ci
-.venv/bin/python scripts/eval-mutation-score.py --threshold 60 --timeout 3600
+.venv/bin/python scripts/eval-mutation-score.py --threshold 60
+
+# 可选后端（需 3.x 兼容配置，否则 collected 0 items）
+.venv/bin/python scripts/eval-mutation-score.py --backend mutmut --dry
 ```
 
-**退出码**：0 全部目标达标（`--list-targets` / `--dry` 亦返回 0）/ 1 后端 mutmut 未安装（打印安装命令，
-与 `check-types.py`=1 环境缺失同口径）/ 2 存在低于阈值或得分解析不出的目标（fail-closed：解析不出即算不达标，
-不猜成 0 分）。
+**退出码**：0 全部目标达标（`--list-targets` / `--dry` 亦返回 0）/ 1 `--backend mutmut` 但后端未安装
+（打印安装命令，与 `check-types.py`=1 环境缺失同口径；内置后端不会返回本码）/ 2 存在低于阈值或算不出
+得分的目标、工作树在切片路径上有未提交改动（拒跑）、`--only` 未匹配任何切片、还原校验失败
+（fail-closed：算不出即算不达标，不猜成 0 分）/ 130 用户中断（Ctrl-C，原文件已还原）。
 
-**为什么是离线评测、不进提交门禁**：单个切片要反复重跑被测用例集，时长以分钟计；`mutmut` 还是**可选工具**，
-刻意不写入 `requirements.txt`（提交门禁必须短而决定性，不允许依赖可选工具与长尾耗时）。故本脚本只在
-「测试质量自省」时按需人工跑——`eval-` 域一律不进 pre-commit 钩子与 CI 守护清单。
+**算子口径**（内置变异器，AST 定位 + 单点文本替换，逐条实现）：
 
-**首期目标与算子口径**（集中在一处：模块级 `TARGETS` / `OPERATORS`，改目标只改这张表）：
-
-| 目标切片 | 路径 | 为什么盯它 |
+| 算子 | 变换 | 说明 |
 |:--|:--|:--|
-| `analysis-metrics` | `src/python/analysis/metrics*.py` | 纯算术，算术替换与返回值替换最能曝出弱断言 |
-| `analysis-correlation` | `src/python/analysis/correlation.py` | 比较取反会翻转符号判定，只查范围不查方向的用例在此暴露 |
-| `cache-ttl-atomic-write` | `src/python/cache/` | TTL 边界比较（`>` / `>=`）与布尔取反决定过期与覆盖语义 |
-| `core-dates` | `src/python/core/dates.py` | 日期边界错位会静默影响全仓取数窗口 |
+| 比较取反 | `<`↔`<=`、`>`↔`>=`、`==`↔`!=`、`in`↔`not in` | `is` / `is not` 不在声明口径内，不动 |
+| 布尔取反 | `and`↔`or`、`not x` → `(x)` | 跨行书写的操作符跳过（边界不确定） |
+| 算术替换 | `+`↔`-`、`*`↔`/` | `%` / `**` / `//` 不在口径内 |
+| 返回值替换 | `return X` → `return None` | `X` 是 `None` 常量或裸 `return` 时不算变异体 |
 
-算子首期取**算术替换 / 比较取反 / 布尔取反 / 返回值替换**四类；mutmut 侧用其内置算子集，配置表只记录
-**声明口径**——后端不提供算子筛选时按全量跑，差异如实体现在得分里，脚本不擅自回算分数。
+只替换操作符那一小段文本，其余字节原样保留（差异可读，判读 survived 时看得出改了什么）；唯一例外是
+`not x`（要连 `not ` 一起削掉，用 `ast.unparse` 重排操作数）。`col_offset` 是**UTF-8 字节**偏移，
+故所有位置运算都在字节上做（源码含中文注释时分叉）。
 
-**得分解析口径**：优先取 mutmut 进度行（`3/40  🎉 2  ⏰ 0  🤔 0  🙁 1  🔇 0`，每行是累计值，取最后一条）
-的 killed / survived；无进度行时退回 `killed:` / `survived:` 计数行；两者都没有则判「无法解析」并按不达标处理。
-超时（timeout）与可疑（suspicious）变异体不计入分母。
+**判定口径**：pytest 退出码 0 → survived（测试没断言住）；1 → killed（有用例失败）；子进程超时 →
+timeout；其余退出码（2 收集中断/变异体语法错误、3 内部错误、4 用法错、5 无用例）→ error。
+**timeout 与 error 单独计数、不进分母**——否则工具故障会被算成测试质量问题。
+
+**安全协议**（改的是真实源码，故四层兜底）：
+
+1. **跑之前**校验工作树干净（`git status --porcelain` 在切片源码路径与测试选择路径上为空），脏即
+   退出 2 并列出脏文件（否则还原会把用户未提交的编辑一起写掉）；
+2. **逐文件字节级备份**，每个变异体 `finally` 还原并**校验 sha256** 与备份一致，不一致立刻抛错中止
+   整轮（大声失败，不静默继续）；
+3. `atexit` + **SIGTERM/SIGHUP 处理器**兜底：Ctrl-C 走 `finally`，被 `kill`/supervisord 结束走信号
+   处理（`atexit` 对 SIGTERM 不生效，只靠它会留下变异版源码）；
+4. 子进程带 `-B` 且 `PYTHONDONTWRITEBYTECODE=1`——变异源码绝不写 `.pyc`（否则断言重写缓存按
+   size/mtime 命中，还原后仍指向变异版字节码，下一次正常跑测试会凭空失败）。
+
+**安全阀**：`--max-mutants`（默认 60/切片，防无界耗时；截断如实记进 note）、`--timeout`（默认 180s/
+变异体）、`--slice-timeout`（默认 1800s/切片，到点即停、未执行的不计入分母）、`--jobs`（默认 1 串行；
+>1 按**文件互斥**分组并行，跨文件相互依赖的切片可能误判 killed，判读存疑时用 `--jobs 1` 复跑）。
+
+**首期目标与测试选择**（模块级 `TARGETS`，改目标只改这张表；`tests` 字段决定逐变异体跑哪些用例——
+只跑相关测试是可承受的唯一前提）：
+
+| 目标切片 | 变异路径 | 测试选择 |
+|:--|:--|:--|
+| `analysis-metrics` | `src/python/analysis/metrics*.py` | `src/test/unit/analysis/test_metrics*.py` 与指标属性/尾部风险用例 |
+| `analysis-correlation` | `src/python/analysis/correlation.py` | `test_correlation.py` / `test_correlation_edge.py` / `test_property_correlation_invariants.py` |
+| `cache-ttl-atomic-write` | `src/python/cache/` | `src/test/unit/cache/` |
+| `core-dates` | `src/python/core/dates.py` | `src/test/unit/core/test_dates.py` |
+
+**为什么是离线评测、不进提交门禁**：单个切片要跑几十到上百次 pytest（分钟量级），且可选后端 mutmut
+不在 `requirements.txt` 里——提交门禁必须短而决定性。故本脚本只在「测试质量自省」时按需人工跑，
+`eval-` 域一律不进 pre-commit 钩子与 CI 守护清单。**实现分包**：算子在 `_eval_mutation/operators.py`、
+执行协议与安全阀在 `_eval_mutation/runner.py`、结果类型在 `_eval_mutation/results.py`、目标表在
+`_eval_mutation/targets.py`、可选后端适配在 `_eval_mutation/mutmut_backend.py`，入口只留 CLI、判定与
+门面 re-export。
+
+**mutmut 后端得分解析口径**（`--backend mutmut` 仍保留）：优先取 mutmut 进度行
+（`3/40  🎉 2  ⏰ 0  🤔 0  🙁 1  🔇 0`，每行是累计值，取最后一条）的 killed / survived；无进度行时退回
+`killed:` / `survived:` 计数行；两者都没有则判「无法解析」并按不达标处理。timeout 与 suspicious
+同样不进分母。
 
 ## 启动脚本
 

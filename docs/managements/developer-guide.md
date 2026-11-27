@@ -861,7 +861,7 @@ test-reports/latest/
   - ✅ `ts = _recent_ts(days_ago=2)`（相对 `datetime.now()` 计算）；✅ 被测路径加**前提自检**：`assert result["expired"] == 0, "样本已超出保留期"`
   - ❌ `self._row("cross_skip", title, "2026-10-01 10:00")` 配 30 天保留期
   - 语义上确实需要「远过去/远未来」时用常量偏移（`2020-01-02` 表示必过期）而非「今天附近」的绝对日期
-- **质量指标：覆盖率为必要条件，变异得分为有效性指标**：行覆盖率只证明「用例执行到这行」，不证明「断言仉住了它的行为」；变异得分（killed / (killed + survived)）补后者。变异评测按需**离线**跑（`eval-` 域）——`.venv/bin/python scripts/eval-mutation-score.py -v`（`--list-targets` / `--dry` 免装后端），**不进提交门禁**（单切片要反复重跑用例集、后端 `mutmut` 是可选工具不入 `requirements.txt`）；新增/重写高杠杆纯计算与基础设施用例时建议顺手跑一次。入口与首期目标/算子口径见 `scripts-reference.md`
+- **质量指标：覆盖率为必要条件，变异得分为有效性指标**：行覆盖率只证明「用例执行到这行」，不证明「断言仉住了它的行为」；变异得分（killed / (killed + survived)）补后者。变异评测按需**离线**跑（`eval-` 域）——`.venv/bin/python scripts/eval-mutation-score.py -v`（**默认内置变异器，无需装任何额外依赖**；`--list-targets` / `--dry` 连变异都不跑，`--backend mutmut` 才是需自备的可选后端），**不进提交门禁**（单切片要反复重跑用例集，分钟量级）；新增/重写高杠杆纯计算与基础设施用例时建议顺手跑一次。入口、首期目标/算子口径、安全协议（工作树前置 + 字节级备份 + `finally`/`atexit`/SIGTERM 还原校验）见 `scripts-reference.md`「`eval-mutation-score.py`」
 - **测试不得引入真实耗时与真实子进程**：测试验证行为，不消耗墙钟。`time.sleep(<≥0.1s>)` 真睡满耗时、`subprocess.run` / `check_output` / `Popen` 真跑 `pytest` 或 `python -m …`（同作用域内无 `patch(subprocess…)` / `monkeypatch.setattr(subprocess…, …)` 证据）都会被 `check-test-redundancy.py` 判 finding——它们让墙钟随宿主与门禁并行度漂移，是 flaky 的主要来源。改用事件/条件等待（`threading.Event`）、可注入时钟或替身；确需真等/真跑的量测（并发重叠、慢源模拟、CLI 退出码契约、pty 按键解码）登记在 `scripts/_test_redundancy_exceptions.json` 的 `slow-or-subprocess` 规则（owner / reason / expiry / replacement，到期须复核）
 - 新增文件后运行 `.venv/bin/python scripts/check-test-redundancy.py --ci` 验证标记合规性（标记支路在 `src/test/` 变更时由钩子自动执行）
 
