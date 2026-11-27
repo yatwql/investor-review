@@ -91,39 +91,15 @@ from _shared.checklib import add_common_args
 from _shared.checklib import conclusion_cache_load, conclusion_cache_save
 from _shared.checklib import rel as rel_path  # 统一相对路径展示（原面 re-export）
 from _traces_code import (
-    EXCLUDE_LINE,  # noqa: F401
-    IDENTIFIER_PATTERNS,  # noqa: F401
-    PATTERNS,  # noqa: F401
-    REPO_ROOT,  # noqa: F401
     SCAN_DIRS,
-    TEST_META_EXCLUDE,  # noqa: F401
     _COMPILED_CHAPTER_EXCLUDE,
     _COMPILED_ROUND_EXCLUDE,
     _chapter_excludes,
-    _html_comment_lines,  # noqa: F401
     _is_chapter_excluded,
-    _is_dash_excluded,  # noqa: F401
-    _is_excluded,  # noqa: F401
-    _is_magic_match_excluded,  # noqa: F401
     _is_round_excluded,
-    _is_tool_self,  # noqa: F401
-    _is_under_excluded,  # noqa: F401
-    _iter_comment_lines,  # noqa: F401
-    _js_comment_lines,  # noqa: F401
-    _js_identifier_names,  # noqa: F401
-    _magic_excludes,  # noqa: F401
-    _py_comment_lines,  # noqa: F401
-    _py_identifier_names,  # noqa: F401
     _round_excludes,
-    _scan_config_default_fallbacks,  # noqa: F401
-    _scan_broad_capture_prose,  # noqa: F401
-    _scan_core_layering,  # noqa: F401
-    _scan_identifiers,  # noqa: F401
-    _scan_pragma_no_cover,  # noqa: F401
-    _shell_comment_lines,  # noqa: F401
     FLOAT_SUM_EXCEPTIONS_FILE,
     PRAGMA_EXEMPTION_DOC,
-    _scan_float_sum,  # noqa: F401
     audit_float_sum_exceptions,
     load_float_sum_exceptions,
     scan_file,

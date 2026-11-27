@@ -17,37 +17,39 @@ re-export 并加 ``# noqa: F401``——本规则即为拦住这一形态而设�
      也没被读取）→ 报 finding：patch 打在 re-export 面。
 
 判据是「纯 re-export 面」而非「被 import 过」：模块自己 import 后真的用了（``get_config``
-被本模块函数调用）属**合法** patch 面，不报。属合法场景（如刻意验证门面的导出同名）走例外表
-``scripts/_test_redundancy_exceptions.json`` 的 ``patch-surface`` 规则，字段与
-``_import_surface_exceptions.json`` 同风格（owner / reason / expiry / replacement）。
+被本模块函数调用）属**合法** patch 面，不报。属合法场景（如刻意验证门面的导出同名）走
+例外表登记：表与定位键 schema 见 `_shared.exceptions` 的 `test-redundancy` 表（`patch-surface`
+规则），字段 owner / reason / expiry / replacement 由该设施统一校验。
 """
 
 from __future__ import annotations
 
 import ast
-import json
 import sys
-from datetime import date
 from pathlib import Path
 from typing import NamedTuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享模块（_checklib）
 from _shared.checklib import REPO_ROOT, rel
+from _shared.exceptions import (
+    ExceptionTable,
+    load_exception_table,
+    table_spec,
+)
 
 
 #: 生产模块搜索根：包形态（`src.python.x`）与 `src/python` 入 sys.path 后的扁平形态（`x`）
 _MODULE_ROOTS = (REPO_ROOT, REPO_ROOT / "src" / "python")
 
 
+#: 例外表路径与规则 schema 取自 `_shared.exceptions` 的登记表（`test-redundancy` 表）
+_TABLE_SPEC = table_spec("test-redundancy")
+
 #: 例外表路径（与被检入口同目录，便于随检查一起评审）
-EXCEPTIONS_FILE = Path(__file__).resolve().parents[1] / "_test_redundancy_exceptions.json"
+EXCEPTIONS_FILE = _TABLE_SPEC.path
 
-
-#: 例外条目必填字段（缺一即无法追责或无法自动到期）
-_REQUIRED_FIELDS = ("owner", "reason", "expiry", "replacement")
-
-
-_EXPIRY_LEN = len("YYYY-MM-DD")
+#: 例外表里本检查的规则键
+RULE_KEY = "patch-surface"
 
 
 def _chain_src(node: ast.AST) -> str:
@@ -263,30 +265,14 @@ def _reexport_only(module_file: Path, name: str, cache: dict[Path, _ModuleFacts]
     return name in facts.imported and name not in facts.bound_or_read
 
 
-class _ExceptionTable(NamedTuple):
-    """例外表：``{点分目标}`` 集合 + 原始条目 + 命中记录 + 读表失败原因。"""
-
-    allowed: set[str]
-    raw: list[dict]
-    used: set[str]
-    load_error: str = ""
-
-
-def load_exceptions() -> _ExceptionTable:
+def load_exceptions() -> ExceptionTable:
     """读 ``patch-surface`` 例外（文件缺失视为无例外，解析失败落在 ``load_error``）。"""
-    if not EXCEPTIONS_FILE.exists():
-        return _ExceptionTable(set(), [], set())
-    try:
-        raw_table = json.loads(EXCEPTIONS_FILE.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        return _ExceptionTable(set(), [], set(), f"{rel(EXCEPTIONS_FILE)} 无法解析：{exc}")
-    raw = [entry for entry in raw_table.get("patch-surface", []) if isinstance(entry, dict)]
-    return _ExceptionTable({str(entry.get("name", "")) for entry in raw}, raw, set())
+    return load_exception_table(EXCEPTIONS_FILE, _TABLE_SPEC.rules)
 
 
 def check_patch_surface(
     targets_by_file: dict[Path, list[list]],
-    exceptions: _ExceptionTable | None = None,
+    exceptions: ExceptionTable | None = None,
 ) -> list[str]:
     """K：patch 打在 re-export 面——目标属性在被 patch 的模块里只由 import 带入。
 
@@ -308,42 +294,20 @@ def check_patch_surface(
                 continue
             if not _reexport_only(module_file, name, module_cache):
                 continue
-            if dotted in table.allowed:
-                table.used.add(dotted)
+            if table.is_excepted(RULE_KEY, dotted):
                 continue
             findings.append(
                 f"{rel(path)}:{lineno}: patch 打在 re-export 面「{dotted}」——{rel(module_file)} 里的 {name} 仅由 import"
                 " 带入、模块体内无其它引用，真实调用点很可能不在该模块（用例绿而生产走原实现）；"
-                "应改 patch 到该符号真实被使用的模块，或在 _test_redundancy_exceptions.json 登记例外"
+                "应改 patch 到该符号真实被使用的模块，或登记例外"
             )
     return findings
 
 
-def audit_exceptions(table: _ExceptionTable) -> list[str]:
+def audit_exceptions(table: ExceptionTable) -> list[str]:
     """例外表自审：字段齐全 + 未到期 + 仍命中违规（防长期免死金牌）。"""
-    findings: list[str] = []
-    if table.load_error:
-        findings.append(table.load_error)
-    today = date.today()
-    for entry in table.raw:
-        name = str(entry.get("name", ""))
-        where = f"{rel(EXCEPTIONS_FILE)} patch-surface::{name}"
-        missing = [field for field in _REQUIRED_FIELDS if not str(entry.get(field, "")).strip()]
-        if missing:
-            findings.append(f"[exception-metadata] {where} 缺少字段 {'/'.join(missing)}")
-            continue
-        expiry_raw = str(entry["expiry"]).strip()
-        if not _is_iso_date(expiry_raw):
-            findings.append(f"[exception-metadata] {where} expiry 须为 YYYY-MM-DD，实为「{expiry_raw}」")
-        elif date.fromisoformat(expiry_raw) < today:
-            findings.append(f"[exception-expiry] {where} 已于 {expiry_raw} 到期，须删除例外或续期并复核理由")
-        elif name not in table.used:
-            findings.append(f"[exception-stale] {where} 未命中任何违规（规则已修复），须删除该例外")
+    audit = table.audit(RULE_KEY)
+    findings: list[str] = [table.load_error] if table.load_error else []
+    findings += audit.findings
+    findings += table.stale_findings(audit)
     return findings
-
-
-def _is_iso_date(text: str) -> bool:
-    try:
-        return len(text) == _EXPIRY_LEN and date.fromisoformat(text).isoformat() == text
-    except ValueError:
-        return False

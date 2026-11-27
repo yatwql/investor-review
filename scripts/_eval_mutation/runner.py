@@ -153,8 +153,12 @@ def test_command(
     """逐变异体跑的 pytest 选择命令（只跑该切片的相关测试，命中首个失败即停）。
 
     `-B` 与继承的 `PYTHONDONTWRITEBYTECODE=1` 是硬要求：变异源码不得留下 `.pyc`。
+
+    `python_executable` 缺省取 `sys.executable`，**不用**裸 `python`：PATH 上的 `python`
+    可能指向系统解释器（缺 pytest/pandas）或另一个版本，子进程于是直接失败、每个变异体都
+    以非预期退出码落档，得分口径随之失真；取当前解释器才与本次调用的环境一致。
     """
-    executable = python_executable or "python"
+    executable = python_executable or sys.executable
     return [
         executable,
         "-B",

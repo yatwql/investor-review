@@ -15,8 +15,9 @@ pytestmark = [pytest.mark.unit, pytest.mark.unit_scripts]
 
 @pytest.fixture(name="mutation")
 def fixture_mutation():
-    """加载入口脚本（每次全新模块实例，补丁不外溢）。"""
-    return load_script("eval-mutation-score.py")
+    """加载算子实现模块（被测面；入口只做 argparse 装配与调用）。"""
+    load_script("eval-mutation-score.py")  # 先接上 scripts/ 的 sys.path
+    return load_script("_eval_mutation/operators.py", module_name="_eval_mutation_operators")
 
 
 def _mutants(mutation, source: str, operator: str) -> list:

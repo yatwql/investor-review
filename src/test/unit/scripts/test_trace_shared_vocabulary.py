@@ -13,16 +13,23 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import sys
+
 import pytest
 from src.test._script_loader import load_script
+
+#: 仓库根 `scripts/`（本文件位于 src/test/unit/scripts/，向上 4 级即仓库根）
+_SCRIPTS_DIR = Path(__file__).resolve().parents[4] / "scripts"
+if str(_SCRIPTS_DIR) not in sys.path:
+    # 实现包是扁平 import（`_traces_code.*`），注入 scripts/ 才能加载
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+
+from _traces_code import PATTERNS as CODE_PATTERNS  # noqa: E402
 
 pytestmark = [
     pytest.mark.unit,
     pytest.mark.unit_scripts,
 ]
-
-#: 仓库根 `scripts/`（本文件位于 src/test/unit/scripts/，向上 4 级即仓库根）
-_SCRIPTS_DIR = Path(__file__).resolve().parents[4] / "scripts"
 
 
 @pytest.fixture(scope="module")
@@ -49,14 +56,14 @@ class TestSharedVocabularyWiring:
     def test_both_pattern_tables_reference_every_shared_regex(self, vocabulary, code_traces, doc_traces):
         """两侧模式表都必须引用共享词表的每一条（漏接的一侧会静默漏检）。"""
         shared = set(vocabulary.SHARED_REGEXES)
-        code_patterns = {pat for pat, _cat, _desc in code_traces.PATTERNS}
+        code_patterns = {pat for pat, _cat, _desc in CODE_PATTERNS}
         doc_patterns = {pat for pat, _cat, _desc in doc_traces._DOC_PATTERNS}
         assert shared <= code_patterns
         assert shared <= doc_patterns
 
     def test_pattern_table_intersection_equals_shared_vocabulary(self, vocabulary, code_traces, doc_traces):
         """两表交集必须恰为共享词表：新增同源模式未收编即报出（漂移面回归）。"""
-        code_patterns = {pat for pat, _cat, _desc in code_traces.PATTERNS}
+        code_patterns = {pat for pat, _cat, _desc in CODE_PATTERNS}
         doc_patterns = {pat for pat, _cat, _desc in doc_traces._DOC_PATTERNS}
         assert (code_patterns & doc_patterns) == set(vocabulary.SHARED_REGEXES)
 
@@ -77,7 +84,7 @@ class TestMultiDomainPattern:
     def test_pattern_tables_have_no_duplicate_entries(self, doc_traces, code_traces):
         """模式表内不得出现完全重复条目（同正则+分类+描述写两遍）。"""
         assert len(set(doc_traces._DOC_PATTERNS)) == len(doc_traces._DOC_PATTERNS)
-        assert len(set(code_traces.PATTERNS)) == len(code_traces.PATTERNS)
+        assert len(set(CODE_PATTERNS)) == len(CODE_PATTERNS)
 
 
 class TestDocDomainMatrix:
@@ -136,7 +143,7 @@ class TestCodeSeverityBucket:
 
     def test_pattern_categories_are_all_bucketed(self, code_traces):
         covered = set(code_traces.HIGH_CATEGORIES) | set(code_traces.CODE_CATEGORIES) | set(code_traces.LOW_CATEGORIES)
-        pattern_categories = {cat for _pat, cat, _desc in code_traces.PATTERNS}
+        pattern_categories = {cat for _pat, cat, _desc in CODE_PATTERNS}
         assert pattern_categories - covered == set()
 
     def test_scan_emitted_categories_are_bucketed(self, code_traces, tmp_path):

@@ -30,7 +30,15 @@ if str(_SCRIPTS_DIR) not in sys.path:
     # 实现包内部是扁平 import（`_test_redundancy.*`），注入 scripts/ 才能加载
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
+from _shared.exceptions import ExceptionTable, table_spec  # noqa: E402
 from _test_redundancy import patch_surface  # noqa: E402
+
+
+def _table(entries: list[dict]) -> ExceptionTable:
+    """合成一张只含 ``patch-surface`` 规则的例外表（不读仓库文件）。"""
+    spec = table_spec("test-redundancy")
+    return ExceptionTable(spec.path, spec.rules, {patch_surface.RULE_KEY: entries})
+
 
 pytestmark = [
     pytest.mark.unit,
@@ -63,7 +71,7 @@ def _findings(py_root: Path, test_src: str, exceptions=None) -> list[str]:
     test_file = py_root.parent.parent / "test_fake.py"
     tree = ast.parse(test_src)
     targets = {test_file: patch_surface.extract_patch_targets(tree)}
-    return patch_surface.check_patch_surface(targets, exceptions or patch_surface._ExceptionTable(set(), [], set()))
+    return patch_surface.check_patch_surface(targets, exceptions or _table([]))
 
 
 # ═══ 目标抽取 ═══
@@ -226,26 +234,22 @@ class TestExceptionTable:
     def test_registered_target_not_reported(self, fake_tree):
         _write(fake_tree / "pkg" / "impl.py", "def fetch():\n    return 1\n")
         _write(fake_tree / "pkg" / "mod.py", "from pkg.impl import fetch\n")
-        table = patch_surface._ExceptionTable({"pkg.mod.fetch"}, [], set())
+        table = _table([{"name": "pkg.mod.fetch"}])
         assert (
             _findings(fake_tree, 'def test_a(monkeypatch):\n    monkeypatch.setattr("pkg.mod.fetch", None)\n', table)
             == []
         )
-        assert table.used == {"pkg.mod.fetch"}
+        assert table.used == {("patch-surface", "pkg.mod.fetch")}
 
     def test_missing_metadata_field_reported(self):
-        table = patch_surface._ExceptionTable(
-            {"pkg.mod.fetch"},
-            [{"name": "pkg.mod.fetch", "owner": "x", "reason": "y", "expiry": "2027-06-30"}],
-            {"pkg.mod.fetch"},
-        )
+        table = _table([{"name": "pkg.mod.fetch", "owner": "x", "reason": "y", "expiry": "2027-06-30"}])
+        table.used.add(("patch-surface", "pkg.mod.fetch"))
         findings = patch_surface.audit_exceptions(table)
         assert len(findings) == 1
         assert "replacement" in findings[0]
 
     def test_expired_entry_reported(self):
-        table = patch_surface._ExceptionTable(
-            {"pkg.mod.fetch"},
+        table = _table(
             [
                 {
                     "name": "pkg.mod.fetch",
@@ -254,17 +258,16 @@ class TestExceptionTable:
                     "expiry": "2020-01-02",
                     "replacement": "z",
                 }
-            ],
-            {"pkg.mod.fetch"},
+            ]
         )
+        table.used.add(("patch-surface", "pkg.mod.fetch"))
         findings = patch_surface.audit_exceptions(table)
         assert len(findings) == 1
         assert "到期" in findings[0]
 
     def test_stale_entry_reported(self):
         """登记了但不再命中任何违规 → 说明规则已修复，例外成了免死金牌。"""
-        table = patch_surface._ExceptionTable(
-            {"pkg.mod.gone"},
+        table = _table(
             [
                 {
                     "name": "pkg.mod.gone",
@@ -273,8 +276,7 @@ class TestExceptionTable:
                     "expiry": "2027-06-30",
                     "replacement": "z",
                 }
-            ],
-            set(),
+            ]
         )
         findings = patch_surface.audit_exceptions(table)
         assert len(findings) == 1
@@ -288,8 +290,8 @@ class TestExceptionTable:
         )
         monkeypatch.setattr(patch_surface, "EXCEPTIONS_FILE", table_file)
         table = patch_surface.load_exceptions()
-        assert table.allowed == {"pkg.mod.fetch"}
-        assert table.raw[0]["owner"] == "x"
+        assert table.allowed("patch-surface") == {("pkg.mod.fetch",)}
+        assert table.entries_of("patch-surface")[0]["owner"] == "x"
 
     def test_load_exceptions_parse_error_reported(self, tmp_path, monkeypatch):
         table_file = tmp_path / "exceptions.json"

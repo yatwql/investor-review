@@ -21,15 +21,22 @@ if str(_SCRIPTS_DIR) not in sys.path:
     # 实现包内部是扁平 import（`_test_redundancy.*`），注入 scripts/ 才能加载
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
+from _shared.exceptions import ExceptionTable, table_spec  # noqa: E402
 from _test_redundancy.slow_io import (  # noqa: E402
+    EXCEPTIONS_FILE,
     KIND_SLEEP,
     KIND_SUBPROCESS,
-    _ExceptionTable,
+    RULE_KEY,
     audit_exceptions,
-    audit_stale_exceptions,
     check_slow_or_subprocess,
     extract_slow_or_subprocess,
 )
+
+
+def _table(entries: list[dict]) -> ExceptionTable:
+    """合成一张只含 `slow-or-subprocess` 规则的例外表（不读仓库文件）。"""
+    return ExceptionTable(EXCEPTIONS_FILE, table_spec("test-redundancy").rules, {RULE_KEY: entries})
+
 
 pytestmark = [
     pytest.mark.unit,
@@ -60,7 +67,7 @@ class TestSlowSleep:
         path, facts = _extract(tmp_path, "import time\n\ndef test_x():\n    time.sleep(1)\n")
         assert [(line, kind) for line, kind, _key in facts] == [(4, KIND_SLEEP)]
         assert facts[0][2].endswith("::slow-sleep::time.sleep(1)")
-        findings = check_slow_or_subprocess({path: facts}, _ExceptionTable(set(), []))
+        findings = check_slow_or_subprocess({path: facts}, _table([]))
         assert len(findings) == 1
         assert "真实等待" in findings[0]
 
@@ -83,7 +90,7 @@ class TestRealSubprocess:
             """,
         )
         assert [(line, kind) for line, kind, _key in facts] == [(5, KIND_SUBPROCESS)]
-        findings = check_slow_or_subprocess({path: facts}, _ExceptionTable(set(), []))
+        findings = check_slow_or_subprocess({path: facts}, _table([]))
         assert len(findings) == 1
         assert "真实执行子进程" in findings[0]
 
@@ -132,23 +139,26 @@ class TestSlowOrSubprocessExceptions:
 
     def test_registered_site_is_accepted(self, tmp_path):
         path, facts = _extract(tmp_path, "import time\n\ndef test_x():\n    time.sleep(1)\n")
-        table = _ExceptionTable({facts[0][2]}, [self._entry(facts[0][2])])
+        table = _table([self._entry(facts[0][2])])
         assert check_slow_or_subprocess({path: facts}, table) == []
 
     def test_metadata_audit_reports_missing_fields(self):
-        findings = audit_exceptions(_ExceptionTable(set(), [{"name": "x"}]))
+        findings = audit_exceptions(_table([{"name": "x"}]))
         assert any("缺少字段" in finding for finding in findings)
 
     def test_metadata_audit_reports_expired_entry(self):
         entry = self._entry("x", expiry="2020-01-01")
-        findings = audit_exceptions(_ExceptionTable(set(), [entry]))
+        findings = audit_exceptions(_table([entry]))
         assert any("已于 2020-01-01 到期" in finding for finding in findings)
 
     def test_stale_entry_is_reported(self, tmp_path):
         """登记点已删/已改（不再命中）→ 例外成免死金牌，须报 stale。"""
-        path, facts = _extract(tmp_path, "import time\n\ndef test_x():\n    time.sleep(1)\n")
-        entry = self._entry("test_sample.py::slow-sleep::time.sleep(9)")
-        stale = audit_stale_exceptions(_ExceptionTable(set(), [entry]), {path: facts})
+        path, facts = _extract(tmp_path, "import time\n\ndef test_x():\n    time.sleep(0.01)\n")
+        entry = self._entry("test_sample.py::slow-sleep::time.sleep(1)")
+        table = _table([entry])
+        assert facts == []
+        assert check_slow_or_subprocess({path: facts}, table) == []
+        stale = audit_exceptions(table)
         assert any("未命中任何违规" in finding for finding in stale)
 
     def test_repo_exception_table_is_well_formed(self):
@@ -156,9 +166,9 @@ class TestSlowOrSubprocessExceptions:
         from _test_redundancy.slow_io import load_exceptions
 
         table = load_exceptions()
-        assert audit_exceptions(table) == []
         facts = {
             path: extract_slow_or_subprocess(_parse(path), path)
             for path in sorted((_REPO_ROOT / "src" / "test").rglob("test_*.py"))
         }
-        assert audit_stale_exceptions(table, facts) == []
+        assert check_slow_or_subprocess(facts, table) == []
+        assert audit_exceptions(table) == []

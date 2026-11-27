@@ -21,8 +21,9 @@ MODULE_SOURCE = '"""演示模块（临时目录内）。"""\n\n\ndef pick(a, b):
 
 @pytest.fixture(name="mutation")
 def fixture_mutation():
-    """加载入口脚本（每次全新模块实例：模块级备份登记表不外溢）。"""
-    return load_script("eval-mutation-score.py")
+    """加载执行模块（每次全新实例；备份登记表在 `_eval_mutation.runner`，按模块实例隔离）。"""
+    load_script("eval-mutation-score.py")  # 先接上 scripts/ 的 sys.path
+    return load_script("_eval_mutation/cli.py", module_name="_eval_mutation_cli")
 
 
 def _write_module(root: Path, relative: str, source: str = MODULE_SOURCE) -> Path:

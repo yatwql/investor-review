@@ -1,19 +1,30 @@
 """`scripts/eval-mutation-score.py` 单测：目标配置、干跑输出、得分解析、阈值三态与输出面。
 
-全部离线：**不跑真实变异、不发起网络、不写 git、不碰仓库源码**——后端可用性探测、
-`subprocess.run` 与工作树检查一律由 monkeypatch 换成桩，故 mutmut 未安装的机器上本文件
-照常全绿（默认后端 `builtin` 也只在桩上跑，真变异由 `test_eval_mutation_runner.py` 在
-`tmp_path` 里验）。
+被测面是入口背后的执行模块 `scripts/_eval_mutation/cli.py`（入口只做 argparse 装配与
+调用，接线由 `TestEntryWiring` 一侧守住）。全部离线：**不跑真实变异、不发起网络、不写
+git、不碰仓库源码**——后端可用性探测、`subprocess.run` 与工作树检查一律由 monkeypatch
+换成桩，故 mutmut 未安装的机器上本文件照常全绿（默认后端 `builtin` 也只在桩上跑，真变异
+由 `test_eval_mutation_runner.py` 在 `tmp_path` 里验）。
 """
 
 from __future__ import annotations
 
 import json
 import subprocess
+import sys
+from pathlib import Path
 
 import pytest
 
 from src.test._script_loader import load_script
+
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+_SCRIPTS_DIR = _REPO_ROOT / "scripts"
+if str(_SCRIPTS_DIR) not in sys.path:
+    # 实现包内部是扁平 import（`_eval_mutation.*`），注入 scripts/ 才能加载
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+
+from _eval_mutation.operators import OPERATOR_RETURN, Mutant  # noqa: E402
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_scripts]
 
@@ -26,8 +37,9 @@ MUTMUT_OUTPUT = """⠋ Generating mutants
 
 @pytest.fixture(name="mutation")
 def fixture_mutation():
-    """加载脚本（每次拿到全新模块实例，补丁不外溢）。"""
-    return load_script("eval-mutation-score.py")
+    """加载评测执行模块（每次拿到全新实例，补丁不外溢）。"""
+    load_script("eval-mutation-score.py")  # 先接上 scripts/ 的 sys.path
+    return load_script("_eval_mutation/cli.py", module_name="_eval_mutation_cli")
 
 
 def _completed(stdout: str, returncode: int = 0) -> subprocess.CompletedProcess[str]:
@@ -323,11 +335,11 @@ class TestBuiltinBackend:
 
     def test_verbose_lists_survivors_and_execution_scale(self, mutation, monkeypatch, capsys):
         survivor = mutation.MutantOutcome(
-            mutant=mutation.Mutant(
+            mutant=Mutant(
                 path="src/python/core/dates.py",
                 line=22,
                 column=11,
-                operator=mutation.OPERATOR_RETURN,
+                operator=OPERATOR_RETURN,
                 detail="返回值 → None",
                 source="",
             ),
@@ -346,3 +358,19 @@ class TestBuiltinBackend:
         assert "生成 4 / 执行 4" in out
         assert "survived src/python/core/dates.py:22:11" in out
         assert "75.0%" in out
+
+
+class TestEntryWiring:
+    """入口脚本只做 argparse 装配与调用：判定逻辑全在执行模块，入口导入期可独立运行。"""
+
+    def test_entry_only_forwards_to_cli_main(self, capsys):
+        entry = load_script("eval-mutation-score.py")
+        assert entry.main.__module__ == "_eval_mutation.cli"
+        assert entry.main(["--list-targets"]) == 0
+        assert "变异评测目标" in capsys.readouterr().out
+        assert not hasattr(entry, "TARGETS")  # 目标表不在入口，判定面全在下沉模块
+
+    def test_entry_stays_thin(self):
+        """入口行数上限 60：超过即说明评测逻辑又回流进入口。"""
+        source = (_SCRIPTS_DIR / "eval-mutation-score.py").read_text(encoding="utf-8")
+        assert len(source.splitlines()) <= 60

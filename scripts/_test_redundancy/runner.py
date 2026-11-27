@@ -17,7 +17,6 @@ from _test_redundancy.patch_surface import (
 )
 from _test_redundancy.slow_io import (
     audit_exceptions as audit_slow_exceptions,
-    audit_stale_exceptions as audit_stale_slow_exceptions,
     check_slow_or_subprocess,
     load_exceptions as load_slow_exceptions,
 )
@@ -85,7 +84,6 @@ def run_checks(include_live: bool = False) -> tuple[list[str], dict[str, int]]:
     if _scans_real_test_tree(facts):
         patch_surface += audit_patch_exceptions(patch_exceptions)
         slow += audit_slow_exceptions(slow_exceptions)
-        slow += audit_stale_slow_exceptions(slow_exceptions, slow_facts)
     findings: list[str] = []
     findings += parse_errors
     findings += dead

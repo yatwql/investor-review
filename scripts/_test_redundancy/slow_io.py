@@ -18,35 +18,36 @@
     被替身接管的子进程不真执行，不属本规则要拦的形态。
 
 确认必须真等/真跑（并发重叠量测、假源模拟慢源、CLI 退出码契约量测等）的，登记在
-`scripts/_test_redundancy_exceptions.json` 的 `slow-or-subprocess` 规则键下：
+`_shared.exceptions` 的 `test-redundancy` 表（`slow-or-subprocess` 规则）：
 定位键为 `<仓库相对路径>::<分类>::<细节>`（sleep 取字面量值，子进程取 argv 源码），
-字段与 `patch-surface` 规则同风格（owner / reason / expiry / replacement），并由
-:func:`audit_exceptions` 自审（字段齐全 / 未到期 / 仍命中违规）。
+字段 owner / reason / expiry / replacement 由该设施统一校验，未被任何扫描命中的登记点由
+:func:`audit_exceptions` 报成陈旧例外。
 """
 
 from __future__ import annotations
 
 import ast
-import json
 import sys
-from datetime import date
 from pathlib import Path
 from typing import NamedTuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录共享模块（_checklib）
 from _shared.checklib import rel
+from _shared.exceptions import (
+    ExceptionTable,
+    load_exception_table,
+    table_spec,
+)
 
+
+#: 例外表路径与规则 schema 取自 `_shared.exceptions` 的登记表（`test-redundancy` 表）
+_TABLE_SPEC = table_spec("test-redundancy")
 
 #: 例外表路径（与被检入口同目录，便于随检查一起评审）
-EXCEPTIONS_FILE = Path(__file__).resolve().parents[1] / "_test_redundancy_exceptions.json"
+EXCEPTIONS_FILE = _TABLE_SPEC.path
 
-#: 例外表里的规则键
+#: 例外表里本检查的规则键
 RULE_KEY = "slow-or-subprocess"
-
-#: 例外条目必填字段（缺一即无法追责或无法自动到期）
-REQUIRED_FIELDS = ("owner", "reason", "expiry", "replacement")
-
-_EXPIRY_LEN = len("YYYY-MM-DD")
 
 #: 真实等待的秒数阈值：低于它（轮询/让出一次调度）的短等待不属浪费墙钟的形态
 SLOW_SLEEP_SECONDS = 0.1
@@ -194,92 +195,46 @@ def extract_slow_or_subprocess(tree: ast.Module, path: Path) -> list[list]:
     return hits
 
 
-class _ExceptionTable(NamedTuple):
-    """例外表：允许的定位键集合 + 原始条目 + 读表失败原因。"""
-
-    allowed: set[str]
-    raw: list[dict]
-    load_error: str = ""
-
-
-def load_exceptions() -> _ExceptionTable:
+def load_exceptions() -> ExceptionTable:
     """读 `slow-or-subprocess` 例外（文件缺失视为无例外，解析失败落在 `load_error`）。"""
-    if not EXCEPTIONS_FILE.exists():
-        return _ExceptionTable(set(), [])
-    try:
-        raw_table = json.loads(EXCEPTIONS_FILE.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        return _ExceptionTable(set(), [], f"{rel(EXCEPTIONS_FILE)} 无法解析：{exc}")
-    raw = [entry for entry in raw_table.get(RULE_KEY, []) if isinstance(entry, dict)]
-    return _ExceptionTable({str(entry.get("name", "")) for entry in raw}, raw)
+    return load_exception_table(EXCEPTIONS_FILE, _TABLE_SPEC.rules)
 
 
 def check_slow_or_subprocess(
     facts_by_file: dict[Path, list[list]],
-    exceptions: _ExceptionTable | None = None,
+    exceptions: ExceptionTable | None = None,
 ) -> list[str]:
     """L：测试内真实等待 / 真实子进程——未登记例外的逐条报 finding。
 
     Args:
         facts_by_file: ``{测试文件: [[行号, 分类, 定位键], ...]}``（由本模块的
             :func:`extract_slow_or_subprocess` 逐文件产出，经事实缓存传递）。
-        exceptions: 例外表；缺省读 ``_test_redundancy_exceptions.json``。
+        exceptions: 例外表；缺省读 `_test_redundancy_exceptions.json`。
     """
     table = exceptions if exceptions is not None else load_exceptions()
     findings: list[str] = []
     for path, facts in sorted(facts_by_file.items()):
         for lineno, kind, key in facts:
-            if key in table.allowed:
+            if table.is_excepted(RULE_KEY, key):
                 continue
             detail = key.split("::", 2)[2]
             if kind == KIND_SLEEP:
                 findings.append(
                     f"{rel(path)}:{lineno}: 测试内真实等待 {detail}（≥{SLOW_SLEEP_SECONDS:g}s）——"
-                    "CI 抖动与 flaky 的主要来源；改用事件/条件等待（threading.Event 等）或在 "
-                    "_test_redundancy_exceptions.json 登记例外"
+                    "CI 抖动与 flaky 的主要来源；改用事件/条件等待（threading.Event 等）或登记例外表"
                 )
             else:
                 findings.append(
                     f"{rel(path)}:{lineno}: 测试内真实执行子进程 {detail}（真跑解释器/测试，未见 mock 证据）——"
-                    "墙钟随宿主环境漂移；改 patch 掉 subprocess.run/check_output/Popen，或在 "
-                    "_test_redundancy_exceptions.json 登记例外"
+                    "墙钟随宿主环境漂移；改 patch 掉 subprocess.run/check_output/Popen，或登记例外表"
                 )
     return findings
 
 
-def audit_exceptions(table: _ExceptionTable) -> list[str]:
-    """例外表自审：字段齐全 + expiry 合法未到期（登记点的存活性由下一轮扫描发现）。"""
-    findings: list[str] = []
-    if table.load_error:
-        findings.append(table.load_error)
-    today = date.today()
-    for entry in table.raw:
-        name = str(entry.get("name", ""))
-        where = f"{rel(EXCEPTIONS_FILE)} {RULE_KEY}::{name}"
-        missing = [field for field in REQUIRED_FIELDS if not str(entry.get(field, "")).strip()]
-        if missing:
-            findings.append(f"[exception-metadata] {where} 缺少字段 {'/'.join(missing)}")
-            continue
-        expiry_raw = str(entry["expiry"]).strip()
-        if not _is_iso_date(expiry_raw):
-            findings.append(f"[exception-metadata] {where} expiry 须为 YYYY-MM-DD，实为「{expiry_raw}」")
-        elif date.fromisoformat(expiry_raw) < today:
-            findings.append(f"[exception-expiry] {where} 已于 {expiry_raw} 到期，须删除例外或续期并复核理由")
+def audit_exceptions(table: ExceptionTable) -> list[str]:
+    """例外表自审：字段齐全 + expiry 合法未到期 + 未被扫描命中即陈旧。"""
+    audit = table.audit(RULE_KEY)
+    findings: list[str] = [table.load_error] if table.load_error else []
+    findings += audit.findings
+    findings += table.stale_findings(audit)
     return findings
-
-
-def audit_stale_exceptions(table: _ExceptionTable, facts_by_file: dict[Path, list[list]]) -> list[str]:
-    """例外存活性自审：本次扫描里未命中任何违规的条目即陈旧（规则已修复），须删除。"""
-    used = {key for facts in facts_by_file.values() for _lineno, _kind, key in facts}
-    return [
-        f"[exception-stale] {rel(EXCEPTIONS_FILE)} {RULE_KEY}::{entry.get('name', '')} 未命中任何违规（规则已修复），须删除该例外"
-        for entry in table.raw
-        if str(entry.get("name", "")) not in used
-    ]
-
-
-def _is_iso_date(text: str) -> bool:
-    try:
-        return len(text) == _EXPIRY_LEN and date.fromisoformat(text).isoformat() == text
-    except ValueError:
-        return False

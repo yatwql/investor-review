@@ -33,7 +33,7 @@ class TestExceptionTableLoading:
         monkeypatch.setattr(surface, "EXCEPTIONS_FILE", tmp_path / "absent.json")
         table = surface._load_exceptions()
         assert table.load_error == ""
-        assert all(not entries for entries in table.values())
+        assert all(not entries for entries in table.entries.values())
 
 
 class TestPrivateAllLiteral:
@@ -100,7 +100,12 @@ class TestDynamicTarget:
             "import importlib\nimportlib.import_module('_no_such_module_for_surface_check')\n", encoding="utf-8"
         )
         monkeypatch.setattr(surface, "rel", lambda path: "bad.py")
-        exceptions = {"dynamic-target": {("bad.py", "_no_such_module_for_surface_check")}}
+        exceptions = surface._load_exceptions()
+        exceptions = surface.ExceptionTable(
+            exceptions.path,
+            exceptions.rules,
+            {"dynamic-target": [{"path": "bad.py", "name": "_no_such_module_for_surface_check"}]},
+        )
         assert surface.scan_dynamic(root, exceptions) == []
 
 

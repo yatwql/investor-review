@@ -59,10 +59,10 @@
 | `probe-report-claims.py` | 运维观测 | 批量重放历史报告做确定性数值核对（覆盖率/告警/自动改写，零 LLM 调用、只读；不入门禁） |
 | `eval-factor-zoo.py` | 评测 | 因子动物园目录评测（非生产代码；五个来源族各抽 5 个因子，评测 A 字段可得率 / B 与既有信号族增量 / C 全量计算耗时占比三项指标，A/B/C 全过才转正立项；子命令 catalog / fields / signals / timing / verdict / all，产物只落 `docs/tmp/factor-zoo/`；实现拆在 `_eval_factor_zoo/`） |
 | `eval-decision-quality.py` | 评测 | 投资决策质量待验证项回测（决策视界命中率 / 因子单因子 IC / 估值两口径区分度；判据预注册于脚本常量，样本门槛 100、IC 绝对值拒绝线 0.05；子命令 horizon / factor-ic / valuation / all，产物落 `docs/tmp/decision-quality/`） |
-| `eval-mutation-score.py` | 评测 | 变异得分离线评测（**默认内置有界变异器**逐点注入，四类算子，killed/(killed+survived) 与阈值比对；`--backend mutmut` 为可选后端；`--list-targets`/`--dry` 不跑变异；退出码 0 达标 / 1 可选后端缺失 / 2 不达标或工作树脏 / 130 中断；不入门禁） |
+| `eval-mutation-score.py` | 评测 | 变异得分离线评测（**默认内置有界变异器**逐点注入，四类算子，killed/(killed+survived) 与阈值比对；`--backend mutmut` 为可选后端；`--list-targets`/`--dry` 不跑变异；退出码 0 达标 / 1 可选后端缺失 / 2 不达标或工作树脏 / 130 中断；不入门禁；入口只做 argparse 装配与调用，执行/判定/汇总在 `_eval_mutation/cli.py`） |
 | `_assets/` | 内部 | 视觉资产实现包（`social_preview.py` 预览图绘制与栅格化 / `svg_check.py` 架构图渲染体检） |
 | `_screenshots/` | 内部 | 演示截图实现包（`demo_workspace.py` 隔离工作区与报告 / `tui_frame.py` 帧文本折行保色与渲染 / `web_shot.py` CDP 封装 + `cdp_shot.mjs` / `xlsx_frame.py` Excel 页签 → HTML 网格 → PNG） |
-| `_shared/` | 内部 | 跨脚本共享设施包（`checklib.py` CLI 契约与输出/路径/区间解析；`traces_common.py` 两域共用痕迹词表） |
+| `_shared/` | 内部 | 跨脚本共享设施包（`checklib.py` CLI 契约与输出/路径/区间解析；`exceptions.py` 例外表规范化加载与自审设施、三张例外表路径与规则 schema 的登记表；`traces_common.py` 两域共用痕迹词表） |
 | `_test_runner/` | 内部 | 测试驱动内部实现包（paths / modes / pytest_env / machine_info / doc_writer / report_html / runner） |
 | `launch.sh` / `launch.ps1` | 启动 | Linux/macOS / Windows 一键启动脚本（无参数启动 TUI；`web` 子命令启动 Web 浏览器模式） |
 | `cli.sh` / `cli.ps1` | 启动 | Linux/macOS / Windows CLI 命令行包装（无参数默认生成报告） |
@@ -117,10 +117,19 @@
 - **统一契约**（`checklib.add_common_args()` / `report()`）：`-v/--verbose` 详细输出、`--ci` 仅输出 `文件:描述`；**通过退出 0，发现 finding 退出 2**（`check-code-traces.py` 另有 HIGH=1 / LOW=3 的分级语义，属其自身约定）；通过打印 `[OK] …`，失败逐条 `[ERR] file:desc`（`--ci` 下为裸行）+ 汇总行
 - **共享原语**：`REPO_ROOT` / `rel()`（仓库相对路径，非仓库内路径原样返回）、`extract_region()` / `replace_region()`（标记区间）、`extract_table_region()` / `replace_table_region()`（表区域，带结构校验）
 - **子进程一律设超时**：检查/钩子脚本对 `git`、`pytest`、子脚本的调用必须带 `timeout=`，超时按「环境不可用」走明确分支（缓存指纹退全量、钩子放行并告警、编排抛 `ReleaseError`），**不得**裸等——卡死的 git 会把提交钩子或 CI `guards` job 挂成无输出等待，现场还看不出原因
-- **`_traces_code/`**：check-code-traces 内部实现包——`patterns.py`（**匹配表**：历史痕迹/标识符/暗号模式与编译镜像；只管「命中了什么」，共享历史叙述正则引用 `_traces_common` 常量）、`exemptions.py`（**豁免表**：章节计数与迭代轮次豁免〔check-doc-traces 共用〕+ 代码侧行级豁免〔合法领域值/魔法编号领域值/测试回归元描述〕与 `_is_*_excluded` 判定——调漏检改前者、调误报改后者，不在一处相互淹没）、`extract.py`（注释/标识符抽取）、`scan.py`（扫描调度）、`layers.py`（core 反向依赖守卫）、`config.py`（扫描域配置与规则载体豁免：`RULE_CARRIER_DIRS` / `RULE_CARRIER_FILES`）；check-code-traces.py 只留 CLI 与原面 re-export
+- **`_traces_code/`**：check-code-traces 内部实现包——`patterns.py`（**匹配表**：历史痕迹/标识符/暗号模式与编译镜像；只管「命中了什么」，共享历史叙述正则引用 `_traces_common` 常量）、`exemptions.py`（**豁免表**：章节计数与迭代轮次豁免〔check-doc-traces 共用〕+ 代码侧行级豁免〔合法领域值/魔法编号领域值/测试回归元描述〕与 `_is_*_excluded` 判定——调漏检改前者、调误报改后者，不在一处相互淹没）、`extract.py`（注释/标识符抽取）、`scan.py`（扫描调度）、`layers.py`（core 反向依赖守卫）、`config.py`（扫描域配置与规则载体豁免：`RULE_CARRIER_DIRS` / `RULE_CARRIER_FILES`）；check-code-traces.py 只留 CLI，词表与豁免判定按实现包名直接引用（入口不做私有面 re-export）
 - **`_traces_doc/`**：check-doc-traces 后端包——`patterns.py`（文档痕迹模式表 `DOC_PATTERNS` / 树行专属 `TREE_ONLY_PATTERNS` / 行级豁免 `EXCLUDE_PATTERNS`+`is_excluded`，共享历史叙述正则引用 `_traces_common` 常量）、`bundle.py`（编译镜像 + 按域取子集 + 树行拼表 + 高置信度分类 `HIGH_CATEGORIES`，`pattern_bundle` 按〔分类集, CIPHER 开关, 树行〕lru 缓存并集预筛——预筛面与精确面同源）、`dedup.py`（结构性冗余扫描：单次遍历内完成标题路径感知判重、台账/归档域重复长行与区块同小节限定、空白归一与同块单报）、`deleted_refs.py`（已删除函数残留：git 历史 def 全集 × 当前 def 全集差集比对，浅克隆告警不假绿）、`findings.py`（结论汇总行与退出码 + 缓存结论结构校验，全量与回放两路共用），入口薄 CLI 与原面 re-export
 - **`_shared/traces_common.py`**：两脚本**逐字节相同**的历史叙述正则单一来源（命名常量 + `SHARED_REGEXES` 元组）；只登记字面量，**分类与描述仍按各自域定义**，判定入口/域矩阵/豁免语义不在此模块——新增同源词汇先加此处再两侧引用，仅一域需要的词汇不进共享表（机检见 `test_trace_shared_vocabulary`：两表交集须恰等于词表、两侧须都引用、模式源码内不得写死字面量）
 - **`_test_runner/`**：`test-runner.py` 的内部实现包（paths / modes / pytest_env / machine_info / doc_writer / report_html / runner），入口仅保留 CLI 与主流程并原面 re-export —— 既有测试访问 `test_runner._env_value` 等名字仍有效；**注意**：monkeypatch 内部状态（如 `_LATEST_DIR` / `_DOC_COVERAGE_PATH`）须指向持有它的子模块（`_test_runner.report_html` / `_test_runner.doc_writer`）
+- **`_shared/exceptions.py`**：例外表统一设施——三张例外表的**文件名与规则 schema 单源登记在此**（`TABLE_SPECS`：表键 → 路径 + 规则定位键 schema），各检查脚本按表键取 `path` / `rules`，不再各自写字面量路径。协议：规范化加载（文件缺失视为无例外；JSON 非法 / 顶层不是对象 / 规则值不是数组 / 未登记规则键一律落 `load_error`，文案形如 `<文件> 无法解析：<原因>`）、必填字段与 `expiry` 的 ISO 日历日回环校验、到期判定、「已使用」标记与陈旧自审（finding 前缀统一 `[exception-metadata]` / `[exception-expiry]` / `[exception-stale]`）。定位键 schema 按规则声明（多数是单字段 `name`，导入面检查是「文件路径 + 符号」三元组，规则名后以 `:` 内联）；同表内共用的字段（典型：同一续期日）写顶层 `defaults` 段，条目只写差异字段
+
+**例外表清单**（登记表：`scripts/_shared/exceptions.py` 的 `TABLE_SPECS`。新增例外表或改文件名只改登记表 + 本表，不必逐个脚本翻找）
+
+| 例外表文件 | 表键 | 规则（定位键） | 消费方 |
+|:---|:---|:---|:---|
+| `_code_traces_exceptions.json` | `code-traces` | `float-sum`（`<仓库相对路径>::<外围限定名>::<sum 调用源码>`） | `check-code-traces.py`（浮点均值/方差求和守卫） |
+| `_test_redundancy_exceptions.json` | `test-redundancy` | `patch-surface`（点分目标）、`slow-or-subprocess`（`<仓库相对路径>::<分类>::<细节>`） | `check-test-redundancy.py` |
+| `_import_surface_exceptions.json` | `import-surface` | `compat-comment` / `private-all` / `cross-private` / `cross-private-scripts` / `dynamic-target` / `layer-inversion`（`path` = 违规文件、`name` = 符号/目标） | `check-import-surface.py` |
 
 **跨脚本口径：共性 / 差异（`_shared/traces_common` 的边界）**
 
@@ -1339,6 +1348,11 @@ curl 对照命令：`curl -s "https://push2.eastmoney.com/api/qt/stock/get?secid
 缺失可选工具也能跑）。`--backend mutmut` 保留为可选后端，但需要 3.x 兼容配置（`[tool.mutmut]`
 声明路径与测试命令、关掉它在 `mutants/` 子目录里的裸 `pytest`）才真能跑，缺配置的表现是
 `collected 0 items`，故不作默认。
+
+**代码分层**：入口 `eval-mutation-score.py` 只做 argparse 装配与调用；逐切片执行、判定与三种
+汇总输出在 `_eval_mutation/cli.py`，目标表与默认阈值在 `_eval_mutation/targets.py`，内置变异器与
+四层安全阀在 `_eval_mutation/runner.py`。子进程解释器一律取 `sys.executable`（不裸用 `python`：
+PATH 上的命令可能是系统解释器，缺 pytest/mutmut 时每个变异体都会以非预期退出码落档）。
 
 ```bash
 # 本期目标清单（路径 + 测试选择 + 声明算子口径）：纯配置读取，不跑任何变异

@@ -23,37 +23,37 @@
     该名字不是内建函数，判定不成立。
 
 确属整数求均值/方差、但形态上无法静态证明是整数的（例如对 `bool` 命中列表求和），
-在 `scripts/_code_traces_exceptions.json` 的 `float-sum` 规则键下登记：条目按
-`<仓库相对路径>::<外围限定名>::<sum 调用源码>` 定位（不用行号，改写行不会让登记失效），字段与
-`_test_redundancy_exceptions.json` 同风格（owner / reason / expiry / replacement），
-并由 :func:`audit_exceptions` 自审（字段齐全 / 未到期 / 仍命中违规）。
+例外登记在 `_shared.exceptions` 登记的 `code-traces` 表（`float-sum` 规则）：条目按
+`<仓库相对路径>::<外围限定名>::<sum 调用源码>` 定位（不用行号，改写行不会让登记失效），
+字段 owner / reason / expiry / replacement 的校验与到期判定由该设施统一提供，
+本模块的 :func:`audit_exceptions` 只补「登记点是否仍命中」这一侧。
 """
 
 from __future__ import annotations
 
 import ast
-import json
-from datetime import date
 from pathlib import Path
-from typing import NamedTuple
 
-from _shared.checklib import repo_relative_posix as _rel_posix
+from _shared.checklib import file_signature as _file_signature, repo_relative_posix as _rel_posix
+from _shared.exceptions import (
+    ExceptionTable,
+    load_exception_table,
+    table_spec,
+)
 
 from _traces_code.config import REPO_ROOT
 
 #: 守卫面（生产代码 + 脚本；`src/test` 由测试冗余检查管辖，不在本规则内）
 _NUMERIC_SURFACE = ("src/python/", "scripts/")
 
+#: 例外表路径与规则 schema 取自 `_shared.exceptions` 的登记表（`code-traces` 一张表一条规则）
+_TABLE_SPEC = table_spec("code-traces")
+
 #: 例外表路径（与检查入口同目录，便于随检查一起评审）
-EXCEPTIONS_FILE = Path(__file__).resolve().parents[1] / "_code_traces_exceptions.json"
+EXCEPTIONS_FILE = _TABLE_SPEC.path
 
 #: 例外表里的规则键（一个键一族例外，便于逐族到期与追责）
-RULE_KEY = "float-sum"
-
-#: 例外条目必填字段（缺一即无法追责或无法自动到期）
-REQUIRED_FIELDS = ("owner", "reason", "expiry", "replacement")
-
-_EXPIRY_LEN = len("YYYY-MM-DD")
+RULE_KEY = _TABLE_SPEC.rules[0].name
 
 #: 判定分类 → 提示语（分类只用于 finding 文案，两者都进 CODE 桶）
 _KIND_MEAN = "浮点均值用内建 sum() 求和"
@@ -67,14 +67,6 @@ _INT_CALLS = frozenset({"len", "int"})
 
 #: 整数封闭的算术运算（两侧都是整数时结果为整数）
 _INT_BINOPS = (ast.Add, ast.Sub, ast.Mult, ast.FloorDiv, ast.Mod)
-
-
-class _ExceptionTable(NamedTuple):
-    """例外表：允许的定位键集合 + 原始条目 + 读表失败原因。"""
-
-    allowed: set[str]
-    raw: list[dict]
-    load_error: str = ""
 
 
 def _scope_bindings(scope: ast.AST) -> set[str]:
@@ -254,22 +246,30 @@ def _cached_hits(fpath: Path) -> list[tuple[int, str, str]]:
     return cached
 
 
-def load_exceptions(path: Path | None = None) -> _ExceptionTable:
-    """读 `float-sum` 例外（文件缺失视为无例外，解析失败落在 `load_error`）。"""
-    path = path or EXCEPTIONS_FILE
-    if not path.exists():
-        return _ExceptionTable(set(), [])
+_TABLE_CACHE: dict[str, ExceptionTable] = {}
+
+
+def _cached_table(path: Path) -> ExceptionTable:
+    """按（路径, 尺寸, mtime）记忆化例外表解析（逐文件扫描会反复取同一张表）。"""
     try:
-        raw_table = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        return _ExceptionTable(set(), [], f"{_rel_posix(path)} 无法解析：{exc}")
-    raw = [entry for entry in raw_table.get(RULE_KEY, []) if isinstance(entry, dict)]
-    return _ExceptionTable({str(entry.get("name", "")) for entry in raw}, raw)
+        key = f"{path.resolve()}|{_file_signature(path)}"
+    except OSError:
+        return load_exception_table(path, _TABLE_SPEC.rules)
+    table = _TABLE_CACHE.get(key)
+    if table is None:
+        table = load_exception_table(path, _TABLE_SPEC.rules)
+        _TABLE_CACHE[key] = table
+    return table
+
+
+def load_exceptions(path: Path | None = None) -> ExceptionTable:
+    """读 `float-sum` 例外（文件缺失视为无例外，解析失败落在 `load_error`）。"""
+    return _cached_table(path or EXCEPTIONS_FILE)
 
 
 def _scan_float_sum(
     fpath: Path,
-    exceptions: _ExceptionTable | None = None,
+    exceptions: ExceptionTable | None = None,
     repo_root: Path | None = None,
 ) -> list[tuple[int, str, str, str]]:
     """扫描单文件的浮点均值/方差求和，返回 [(行号, 分类, 说明, 调用片段)]。
@@ -281,9 +281,10 @@ def _scan_float_sum(
     if fpath.suffix.lower() != ".py" or not _rel_posix(fpath, root).startswith(_NUMERIC_SURFACE):
         return []
     table = exceptions if exceptions is not None else load_exceptions()
+    allowed = table.allowed(RULE_KEY)
     hits: list[tuple[int, str, str, str]] = []
     for lineno, kind, key in _cached_hits(fpath):
-        if key in table.allowed:
+        if (key,) in allowed:
             continue
         snippet = key.split("::", 2)[2]
         hits.append(
@@ -297,39 +298,19 @@ def _scan_float_sum(
     return hits
 
 
-def audit_exceptions(table: _ExceptionTable, repo_root: Path | None = None) -> list[str]:
+def audit_exceptions(table: ExceptionTable, repo_root: Path | None = None) -> list[str]:
     """例外表自审：字段齐全 + expiry 合法未到期 + 仍命中违规（防长期免死金牌）。"""
     root = repo_root or REPO_ROOT
-    findings: list[str] = []
-    if table.load_error:
-        findings.append(table.load_error)
-    today = date.today()
-    for entry in table.raw:
+    audit = table.audit(RULE_KEY)
+    findings: list[str] = [table.load_error] if table.load_error else []
+    findings += audit.findings
+    for _rule_name, entry in audit.usable:
         name = str(entry.get("name", ""))
-        where = f"{_rel_posix(EXCEPTIONS_FILE)} {RULE_KEY}::{name}"
-        missing = [field for field in REQUIRED_FIELDS if not str(entry.get(field, "")).strip()]
-        if missing:
-            findings.append(f"[exception-metadata] {where} 缺少字段 {'/'.join(missing)}")
-            continue
-        expiry_raw = str(entry["expiry"]).strip()
-        if not _is_iso_date(expiry_raw):
-            findings.append(f"[exception-metadata] {where} expiry 须为 YYYY-MM-DD，实为「{expiry_raw}」")
-            continue
-        if date.fromisoformat(expiry_raw) < today:
-            findings.append(f"[exception-expiry] {where} 已于 {expiry_raw} 到期，须删除例外或续期并复核理由")
-            continue
         rel_path, _, _rest = name.partition("::")
         target = root / rel_path
         if not target.is_file():
-            findings.append(f"[exception-stale] {where} 目标文件不存在，须删除该例外")
+            findings.append(table.stale_finding(RULE_KEY, entry, "目标文件不存在，须删除该例外"))
             continue
         if name not in {key for _lineno, _kind, key in _cached_hits(target)}:
-            findings.append(f"[exception-stale] {where} 未命中任何违规（规则已修复），须删除该例外")
+            findings.append(table.stale_finding(RULE_KEY, entry))
     return findings
-
-
-def _is_iso_date(text: str) -> bool:
-    try:
-        return len(text) == _EXPIRY_LEN and date.fromisoformat(text).isoformat() == text
-    except ValueError:
-        return False

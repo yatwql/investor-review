@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+import sys
 
 from _eval_mutation.results import MutationCounts
 from _eval_mutation.targets import MutationTarget
@@ -62,14 +63,22 @@ def parse_counts(output: str) -> MutationCounts | None:
 
 
 def mutmut_command(target: MutationTarget, *, python_executable: str | None = None) -> list[str]:
-    """目标切片 → mutmut 命令行（同一解释器起 `-m mutmut`，按路径切片逐个跑）。"""
-    executable = python_executable or "python"
+    """目标切片 → mutmut 命令行（同一解释器起 `-m mutmut`，按路径切片逐个跑）。
+
+    `python_executable` 缺省取 `sys.executable`，不用裸 `python`：PATH 上的 `python` 可能是
+    系统解释器（mutmut 装在本项目虚拟环境里，探测与实跑都会扑空）。
+    """
+    executable = python_executable or sys.executable
     return [executable, "-m", BACKEND_MODULE, "run", f"--paths-to-mutate={','.join(target.paths)}"]
 
 
 def backend_available(*, python_executable: str | None = None, timeout: int = 60) -> bool:
-    """后端是否已安装（`-c "import mutmut"` 探测，不触发任何变异、不写任何文件）。"""
-    executable = python_executable or "python"
+    """后端是否已安装（`-c "import mutmut"` 探测，不触发任何变异、不写任何文件）。
+
+    解释器缺省取 `sys.executable`（同 :func:`mutmut_command`：探测的解释器要与实跑的一致，
+    否则会把「装在本项目虚拟环境里」判成未安装）。
+    """
+    executable = python_executable or sys.executable
     try:
         completed = subprocess.run(
             [executable, "-c", f"import {BACKEND_MODULE}"],

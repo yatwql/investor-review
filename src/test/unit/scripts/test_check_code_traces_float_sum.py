@@ -36,9 +36,16 @@ def _write_source(tmp_path: Path, body: str, rel: str = "scripts/sample.py") -> 
     return path, tmp_path
 
 
+def _table(guard, entries: list[dict] | None = None):
+    """合成一张只含 `float-sum` 规则的例外表（不读仓库文件）。"""
+    return guard.ExceptionTable(
+        guard.EXCEPTIONS_FILE, guard.table_spec("code-traces").rules, {guard.RULE_KEY: list(entries or [])}
+    )
+
+
 def _scan(guard, source: Path, root: Path, exceptions=None):
     """按合成仓库根扫描（守卫面判定与例外表均可控）。"""
-    table = exceptions if exceptions is not None else guard._ExceptionTable(set(), [])
+    table = exceptions if exceptions is not None else _table(guard)
     return guard._scan_float_sum(source, table, repo_root=root)
 
 
@@ -97,10 +104,10 @@ class TestFloatSumExceptions:
         source, root = _write_source(tmp_path, "def f(xs):\n    return sum(xs) / len(xs)\n")
         key = self._key_of(float_sum_guard, source)
         assert key.endswith("sample.py::f::sum(xs)")
-        assert _scan(float_sum_guard, source, root, float_sum_guard._ExceptionTable({key}, [])) == []
+        assert _scan(float_sum_guard, source, root, _table(float_sum_guard, [{"name": key}])) == []
 
     def test_metadata_audit_reports_missing_fields(self, float_sum_guard):
-        table = float_sum_guard._ExceptionTable({"scripts/sample.py::f::sum(xs)"}, [{"name": "scripts/sample.py::f"}])
+        table = _table(float_sum_guard, [{"name": "scripts/sample.py::f"}])
         findings = float_sum_guard.audit_exceptions(table, repo_root=Path("/nonexistent"))
         assert any("缺少字段" in finding for finding in findings)
 
@@ -113,7 +120,7 @@ class TestFloatSumExceptions:
             "expiry": "2020-01-01",
             "replacement": "x",
         }
-        findings = float_sum_guard.audit_exceptions(float_sum_guard._ExceptionTable(set(), [entry]), repo_root=root)
+        findings = float_sum_guard.audit_exceptions(_table(float_sum_guard, [entry]), repo_root=root)
         assert any("已于 2020-01-01 到期" in finding for finding in findings)
 
     def test_audit_reports_stale_entry(self, float_sum_guard, tmp_path):
@@ -126,7 +133,7 @@ class TestFloatSumExceptions:
             "expiry": "2027-06-30",
             "replacement": "x",
         }
-        findings = float_sum_guard.audit_exceptions(float_sum_guard._ExceptionTable(set(), [entry]), repo_root=root)
+        findings = float_sum_guard.audit_exceptions(_table(float_sum_guard, [entry]), repo_root=root)
         assert any("未命中任何违规" in finding for finding in findings)
         assert source.is_file()
 
@@ -139,7 +146,7 @@ class TestFloatSumExceptions:
             "expiry": "2027-06-30",
             "replacement": "x",
         }
-        assert float_sum_guard.audit_exceptions(float_sum_guard._ExceptionTable(set(), [entry]), repo_root=root) == []
+        assert float_sum_guard.audit_exceptions(_table(float_sum_guard, [entry]), repo_root=root) == []
 
 
 class TestFloatSumWiring:
@@ -152,12 +159,14 @@ class TestFloatSumWiring:
 
     def test_repo_tree_is_clean_for_float_sum(self):
         """现树零 FLOATSUM finding（改用例/改生产代码时同步处理，不留存量）。"""
-        traces = load_script("check-code-traces.py")
+        load_script("check-code-traces.py")  # 先接上 scripts/ 的 sys.path
+        from _traces_code.config import REPO_ROOT
+
         guard = load_script("_traces_code/numeric_sum.py", module_name="_traces_code_numeric_sum")
         assert guard.audit_exceptions(guard.load_exceptions()) == []
-        repo_root = Path(traces.REPO_ROOT)
+        repo_root = Path(REPO_ROOT)
         remaining = []
         for subdir in ("src/python", "scripts"):
             for path in sorted((repo_root / subdir).rglob("*.py")):
-                remaining += [(path, hit) for hit in traces._scan_float_sum(path)]
+                remaining += [(path, hit) for hit in guard._scan_float_sum(path)]
         assert remaining == []

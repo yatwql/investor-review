@@ -27,6 +27,29 @@ from pathlib import Path
 import pytest
 from src.test._script_loader import load_script
 
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+_SCRIPTS_DIR = _REPO_ROOT / "scripts"
+if str(_SCRIPTS_DIR) not in sys.path:
+    # 实现包是扁平 import（`_traces_code.*`），注入 scripts/ 才能加载
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+
+from _traces_code import (  # noqa: E402
+    PATTERNS,
+    REPO_ROOT,
+    _is_chapter_excluded,
+    _is_dash_excluded,
+    _is_excluded,
+    _is_magic_match_excluded,
+    _is_round_excluded,
+    _is_tool_self,
+    _is_under_excluded,
+    _js_identifier_names,
+    _py_comment_lines,
+    _py_identifier_names,
+    _scan_core_layering,
+    _scan_identifiers,
+)
+
 
 @pytest.fixture(scope="module")
 def code_traces():
@@ -44,27 +67,27 @@ pytestmark = [
 ]
 
 
-def _code_hit(mod, line: str) -> str | None:
+def _code_hit(line: str) -> str | None:
     """返回 check-code-traces 命中的 desc；未命中返回 None。
 
     与 scan_file 行为一致：对 CHAPTER/ROUND 应用计数/序数豁免，
     对 DASHTASK/UNDERSCORE 应用合法领域值豁免，对 MAGIC 逐 token 应用
     合法领域值豁免（"共 19 章"/"T-1 交易日"/"S1 场景"等合法表述不误报）。
     """
-    if mod._is_excluded(line):
+    if _is_excluded(line):
         return None
-    for pat, cat, desc in mod.PATTERNS:
-        if cat == "CHAPTER" and mod._is_chapter_excluded(line):
+    for pat, cat, desc in PATTERNS:
+        if cat == "CHAPTER" and _is_chapter_excluded(line):
             continue
-        if cat == "ROUND" and mod._is_round_excluded(line):
+        if cat == "ROUND" and _is_round_excluded(line):
             continue
-        if cat == "DASHTASK" and mod._is_dash_excluded(line):
+        if cat == "DASHTASK" and _is_dash_excluded(line):
             continue
-        if cat == "UNDERSCORE" and mod._is_under_excluded(line):
+        if cat == "UNDERSCORE" and _is_under_excluded(line):
             continue
         if cat == "MAGIC":
             for m in __import__("re").finditer(pat, line):
-                if not mod._is_magic_match_excluded(line, m.start(), m.end()):
+                if not _is_magic_match_excluded(line, m.start(), m.end()):
                     return desc
             continue
         if __import__("re").search(pat, line):
@@ -101,17 +124,17 @@ def _doc_hit(mod, line: str, task_record: bool = False) -> str | None:
 
 class TestToolSelfExemption:
     def test_recognizes_self(self, code_traces):
-        assert code_traces._is_tool_self("check-code-traces.py") is True
-        assert code_traces._is_tool_self("check-doc-traces.py") is True
+        assert _is_tool_self("check-code-traces.py") is True
+        assert _is_tool_self("check-doc-traces.py") is True
 
     def test_recognizes_future_sibling(self, code_traces):
         """未来新增同类工具（check-xml-traces.py）自动豁免，无需改豁免列表。"""
-        assert code_traces._is_tool_self("check-xml-traces.py") is True
+        assert _is_tool_self("check-xml-traces.py") is True
 
     def test_does_not_exempt_other_scripts(self, code_traces):
-        assert code_traces._is_tool_self("test-runner.py") is False
-        assert code_traces._is_tool_self("check-version-consistency.py") is False
-        assert code_traces._is_tool_self("chart.min.js") is False
+        assert _is_tool_self("test-runner.py") is False
+        assert _is_tool_self("check-version-consistency.py") is False
+        assert _is_tool_self("chart.min.js") is False
 
     def test_self_file_scan_clean(self, code_traces):
         """工具自身文件（含新增强模式特征字面量——合并历史与中文数字章节/轮次字样）应
@@ -124,35 +147,35 @@ class TestCodeTraceDetection:
     """补强后 check-code-traces 应能检出此前/曾经/原始/历史/旧逻辑/迁移等痕迹。"""
 
     def test_prior_state_narrative(self, code_traces):
-        assert _code_cat(code_traces, "之前是直接读取文件") == "HIGH"
+        assert _code_cat("之前是直接读取文件") == "HIGH"
 
     def test_prior_noun(self, code_traces):
-        assert _code_cat(code_traces, "此前的判断逻辑") == "HIGH"
-        assert _code_cat(code_traces, "以前的实现方案") == "HIGH"
+        assert _code_cat("此前的判断逻辑") == "HIGH"
+        assert _code_cat("以前的实现方案") == "HIGH"
 
     def test_once_implemented(self, code_traces):
-        assert _code_cat(code_traces, "曾经的实现逻辑") == "HIGH"
+        assert _code_cat("曾经的实现逻辑") == "HIGH"
 
     def test_considered_alternative(self, code_traces):
-        assert _code_cat(code_traces, "曾考虑过A方案") == "HIGH"
+        assert _code_cat("曾考虑过A方案") == "HIGH"
 
     def test_original_version(self, code_traces):
-        assert _code_cat(code_traces, "原始版本") == "HIGH"
+        assert _code_cat("原始版本") == "HIGH"
 
     def test_historical_implementation(self, code_traces):
-        assert _code_cat(code_traces, "历史实现") == "HIGH"
+        assert _code_cat("历史实现") == "HIGH"
 
     def test_old_logic(self, code_traces):
-        assert _code_cat(code_traces, "旧逻辑") == "HIGH"
+        assert _code_cat("旧逻辑") == "HIGH"
 
     def test_refactored_before(self, code_traces):
-        assert _code_cat(code_traces, "重构前逻辑") == "HIGH"
+        assert _code_cat("重构前逻辑") == "HIGH"
 
     def test_migrated_to_new(self, code_traces):
-        assert _code_cat(code_traces, "迁移到新模块") == "HIGH"
+        assert _code_cat("迁移到新模块") == "HIGH"
 
     def test_replaced_old(self, code_traces):
-        assert _code_cat(code_traces, "替代了旧方案") == "HIGH"
+        assert _code_cat("替代了旧方案") == "HIGH"
 
     def test_original_contract_migration_flagged(self, code_traces):
         """契约改名叙述（历史主键名变迁）须检出，当前只描述 style_factor_data。"""
@@ -163,7 +186,7 @@ class TestCodeTraceDetection:
             "原 contract_a 改称 contract_b",
         ]
         for line in flagged:
-            assert _code_cat(code_traces, line) == "HIGH", f"契约改名叙述未检出: {line}"
+            assert _code_cat(line) == "HIGH", f"契约改名叙述未检出: {line}"
 
     # ── 合法运行时/当前状态描述不应误伤 ──
 
@@ -179,18 +202,18 @@ class TestCodeTraceDetection:
             "原始数据迁移至新库是运行时功能",
         ]
         for line in legit:
-            assert _code_hit(code_traces, line) is None, f"合法描述被误伤: {line}"
+            assert _code_hit(line) is None, f"合法描述被误伤: {line}"
 
     # ── 既有模式仍工作 ──
 
     def test_version_marker(self, code_traces):
-        assert _code_cat(code_traces, "该功能在 v0.9.9 引入") == "VERSION"
+        assert _code_cat("该功能在 v0.9.9 引入") == "VERSION"
 
     def test_task_id(self, code_traces):
-        assert _code_cat(code_traces, "见 rf-117 修复") == "CODE"
+        assert _code_cat("见 rf-117 修复") == "CODE"
 
     def test_source_narrative(self, code_traces):
-        assert _code_cat(code_traces, "从 utils.py 拆分而来") == "HIGH"
+        assert _code_cat("从 utils.py 拆分而来") == "HIGH"
 
     def test_split_out_narrative(self, code_traces):
         """「拆出」来源归属叙述须检出（含反引号包裹模块路径）。"""
@@ -202,7 +225,7 @@ class TestCodeTraceDetection:
             "拆出自 metrics.py",
         ]
         for line in flagged:
-            assert _code_cat(code_traces, line) == "HIGH", f"拆出来源叙述未检出: {line}"
+            assert _code_cat(line) == "HIGH", f"拆出来源叙述未检出: {line}"
 
 
 class TestTestFileMetaExemption:
@@ -217,7 +240,7 @@ class TestTestFileMetaExemption:
             "# ── 回归：百分单位契约 + 单日涨跌语境 + 表格行归因 ──",
         ]
         for line in legit:
-            assert code_traces._is_excluded(line, test_file=True) is True, f"回归元描述未豁免: {line}"
+            assert _is_excluded(line, test_file=True) is True, f"回归元描述未豁免: {line}"
 
     def test_old_behavior_narrative_exempted_in_test_file(self, code_traces):
         """测试注释描述旧实现错误行为（旧实现+误/把/会）应豁免。"""
@@ -227,7 +250,7 @@ class TestTestFileMetaExemption:
             "修复后 orchestrator 源头 ×100、单日涨跌语境按 change_pct 校验。",
         ]
         for line in legit:
-            assert code_traces._is_excluded(line, test_file=True) is True, f"旧行为描述未豁免: {line}"
+            assert _is_excluded(line, test_file=True) is True, f"旧行为描述未豁免: {line}"
 
     def test_rf_task_id_in_test_comment_not_exempted(self, code_traces):
         """任务编号不属测试元描述豁免范围：测试注释中的 rf-N 仍视为违规。
@@ -235,8 +258,8 @@ class TestTestFileMetaExemption:
         `TEST_META_EXCLUDE` 只覆盖「回归场景/旧实现」等元描述；任务代号只属
         内部计划表（plan.md/review-findings.md），不扩散到实现层注释。
         """
-        assert code_traces._is_excluded("表格行归因（rf-159 批次修复）", test_file=True) is False
-        assert code_traces._is_excluded("表格行归因（rf-159 批次修复）", test_file=False) is False
+        assert _is_excluded("表格行归因（rf-159 批次修复）", test_file=True) is False
+        assert _is_excluded("表格行归因（rf-159 批次修复）", test_file=False) is False
 
     def test_task_id_hard_ban_in_test_file_comment(self, code_traces):
         """scan_file 对 src/test/ 注释中的任务编号硬检出（不受整行豁免放行）。"""
@@ -261,8 +284,8 @@ class TestTestFileMetaExemption:
 
     def test_not_exempted_outside_test_file(self, code_traces):
         """同样的旧实现叙述在非测试文件（test_file=False）仍应被检出——工具应检出此历史痕迹，源码侧不削弱。"""
-        assert code_traces._is_excluded("旧实现把 3.41/4.43 修正成 1.9", test_file=False) is False
-        assert _code_cat(code_traces, "旧实现把 3.41/4.43 修正成 1.9") == "HIGH"
+        assert _is_excluded("旧实现把 3.41/4.43 修正成 1.9", test_file=False) is False
+        assert _code_cat("旧实现把 3.41/4.43 修正成 1.9") == "HIGH"
 
 
 class TestReleaseTagExemption:
@@ -308,7 +331,7 @@ class TestCodeChapterDetection:
             "4 章估值分位",
         ]
         for line in flagged:
-            assert _code_cat(code_traces, line) == "CHAPTER", f"章节编号暗号未检出: {line}"
+            assert _code_cat(line) == "CHAPTER", f"章节编号暗号未检出: {line}"
 
     def test_chapter_codes_chinese_flagged(self, code_traces):
         """中文数字章节编号（第X章 / 裸X章式）指代报告具体章节须检出。"""
@@ -319,7 +342,7 @@ class TestCodeChapterDetection:
             "第四章摘要引用",
         ]
         for line in flagged:
-            assert _code_cat(code_traces, line) == "CHAPTER", f"中文数字章节暗号未检出: {line}"
+            assert _code_cat(line) == "CHAPTER", f"中文数字章节暗号未检出: {line}"
 
     def test_chapter_count_exempted(self, code_traces):
         legit = [
@@ -333,7 +356,7 @@ class TestCodeChapterDetection:
             "开启才出现第 19 章",
         ]
         for line in legit:
-            assert _code_hit(code_traces, line) is None, f"章节计数表述被误伤: {line}"
+            assert _code_hit(line) is None, f"章节计数表述被误伤: {line}"
 
     def test_chapter_count_chinese_exempted(self, code_traces):
         """中文数字计数表述（共X章 / 减至X章 / 一章三区块式计数）应豁免。"""
@@ -346,7 +369,7 @@ class TestCodeChapterDetection:
             "一章两区块",
         ]
         for line in legit:
-            assert _code_hit(code_traces, line) is None, f"中文数字章节计数表述被误伤: {line}"
+            assert _code_hit(line) is None, f"中文数字章节计数表述被误伤: {line}"
 
     def test_non_patterns_clean(self, code_traces):
         legit = [
@@ -357,7 +380,7 @@ class TestCodeChapterDetection:
             "21 轮每轮量化验收",
         ]
         for line in legit:
-            assert _code_hit(code_traces, line) is None, f"合法表述被误伤: {line}"
+            assert _code_hit(line) is None, f"合法表述被误伤: {line}"
 
 
 class TestCodeRoundDetection:
@@ -379,7 +402,7 @@ class TestCodeRoundDetection:
             "对应轮6/轮7",
         ]
         for line in flagged:
-            assert _code_cat(code_traces, line) == "ROUND", f"迭代轮次暗号未检出: {line}"
+            assert _code_cat(line) == "ROUND", f"迭代轮次暗号未检出: {line}"
 
     def test_round_codes_chinese_flagged(self, code_traces):
         """中文数字迭代轮次（第 X 轮式——X 为中文数字三及以上；及"轮 X"式）指代
@@ -392,7 +415,7 @@ class TestCodeRoundDetection:
             "对应轮四/轮五",
         ]
         for line in flagged:
-            assert _code_cat(code_traces, line) == "ROUND", f"中文数字轮次暗号未检出: {line}"
+            assert _code_cat(line) == "ROUND", f"中文数字轮次暗号未检出: {line}"
 
     def test_round_count_exempted(self, code_traces):
         legit = [
@@ -402,7 +425,7 @@ class TestCodeRoundDetection:
             "计划分 5 轮推进",
         ]
         for line in legit:
-            assert _code_hit(code_traces, line) is None, f"轮次计数表述被误伤: {line}"
+            assert _code_hit(line) is None, f"轮次计数表述被误伤: {line}"
 
     def test_round_runtime_exempted(self, code_traces):
         legit = [
@@ -412,7 +435,7 @@ class TestCodeRoundDetection:
             "轮换到下一品种",
         ]
         for line in legit:
-            assert _code_hit(code_traces, line) is None, f"轮次运行时表述被误伤: {line}"
+            assert _code_hit(line) is None, f"轮次运行时表述被误伤: {line}"
 
     def test_round_runtime_chinese_exempted(self, code_traces):
         """中文数字运行时序数/计数表述应豁免：LLM 圆桌会两轮辩论、第一轮/第二轮
@@ -425,7 +448,7 @@ class TestCodeRoundDetection:
             "一轮行情",
         ]
         for line in legit:
-            assert _code_hit(code_traces, line) is None, f"中文数字轮次运行时表述被误伤: {line}"
+            assert _code_hit(line) is None, f"中文数字轮次运行时表述被误伤: {line}"
 
     def test_round_non_patterns_clean(self, code_traces):
         legit = [
@@ -436,7 +459,7 @@ class TestCodeRoundDetection:
             "两个回合",
         ]
         for line in legit:
-            assert _code_hit(code_traces, line) is None, f"合法表述被误伤: {line}"
+            assert _code_hit(line) is None, f"合法表述被误伤: {line}"
 
     def test_physical_merge_flagged(self, code_traces):
         """章节/模块合并历史痕迹（类似迁移，合并写法见下方 flagged 用例）须检出。"""
@@ -446,7 +469,7 @@ class TestCodeRoundDetection:
             "两页签已物理合并为统一渲染模块",
         ]
         for line in flagged:
-            assert _code_cat(code_traces, line) == "CHANGE", f"物理合并痕迹未检出: {line}"
+            assert _code_cat(line) == "CHANGE", f"物理合并痕迹未检出: {line}"
 
 
 class TestCommentExtraction:
@@ -456,7 +479,7 @@ class TestCommentExtraction:
     def test_close_line_with_trailing_text_no_leak(self, code_traces):
         """关闭行含内容（…内容\"\"\"）时正确关闭，docstring 后的 assert 不泄漏。"""
         sample = 'x = 1\n"""这是说明，\n第二行内容。"""\nassert _doc_hit(doc_traces, "此前直接读取文件") is not None\n'
-        extracted = [txt for _, txt in code_traces._py_comment_lines(sample)]
+        extracted = [txt for _, txt in _py_comment_lines(sample)]
         assert "此前直接读取文件" not in "".join(extracted), "docstring 状态泄漏到 assert 行"
 
     def test_plain_close_line_no_leak(self, code_traces):
@@ -467,20 +490,20 @@ class TestCommentExtraction:
             '"""\n'
             'assert _doc_hit(doc_traces, "历史实现") is not None\n'
         )
-        extracted = [txt for _, txt in code_traces._py_comment_lines(sample)]
+        extracted = [txt for _, txt in _py_comment_lines(sample)]
         assert '历史实现" is not None' not in "".join(extracted), "docstring 状态泄漏到 assert 行"
 
 
-def _code_cat(mod, line: str) -> str | None:
+def _code_cat(line: str) -> str | None:
     """返回 check-code-traces 命中的**分类**（HIGH/VERSION/CODE/CHAPTER/ROUND/MAGIC…）。
 
     只断言「有命中」无法区分命中哪条规则——规则顺序调整或跨类误匹配都会被漏掉，
     故断言落到分类上（desc → cat 由模式表反查，与 `_code_hit` 同源）。
     """
-    desc = _code_hit(mod, line)
+    desc = _code_hit(line)
     if desc is None:
         return None
-    return next((cat for _pat, cat, d in mod.PATTERNS if d == desc), None)
+    return next((cat for _pat, cat, d in PATTERNS if d == desc), None)
 
 
 def _doc_cat(mod, line: str, task_record: bool = False) -> str | None:
@@ -501,7 +524,7 @@ def _ident_hit(code_traces, source: str) -> str | None:
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(source)
     try:
-        hits = code_traces._scan_identifiers(Path(path))
+        hits = _scan_identifiers(Path(path))
         return hits[0][2] if hits else None
     finally:
         os.remove(path)
@@ -511,15 +534,15 @@ class TestTaskCodeCommentPatterns:
     """注释 CODE 模式应检出任务编号/系列代号，不误伤合法字母+数字引用。"""
 
     def test_series_alias_english(self, code_traces):
-        assert _code_cat(code_traces, "b_series 说明") == "CODE"
+        assert _code_cat("b_series 说明") == "CODE"
 
     def test_series_alias_chinese(self, code_traces):
-        assert _code_cat(code_traces, "G系列 方案") == "CODE"
-        assert _code_cat(code_traces, "B系列 批次") == "CODE"
+        assert _code_cat("G系列 方案") == "CODE"
+        assert _code_cat("B系列 批次") == "CODE"
 
     def test_existing_task_id_patterns_still_work(self, code_traces):
-        assert _code_cat(code_traces, "见 rf-117 修复") == "CODE"
-        assert _code_cat(code_traces, "plan-18 任务") == "CODE"
+        assert _code_cat("见 rf-117 修复") == "CODE"
+        assert _code_cat("plan-18 任务") == "CODE"
 
     def test_legit_series_words_not_flagged(self, code_traces):
         legit = [
@@ -529,7 +552,7 @@ class TestTaskCodeCommentPatterns:
             "中证指数系列",
         ]
         for line in legit:
-            assert _code_hit(code_traces, line) is None, f"合法系列词被误伤: {line}"
+            assert _code_hit(line) is None, f"合法系列词被误伤: {line}"
 
     def test_arch_constraint_codes_flagged(self, code_traces):
         """架构约束代号（C1~C25，technical.md 定义）在注释中属暗号须检出。"""
@@ -546,7 +569,7 @@ class TestTaskCodeCommentPatterns:
             "C25 交易日基准",
         ]
         for line in flagged:
-            assert _code_cat(code_traces, line) == "CODE", f"架构约束代号未检出: {line}"
+            assert _code_cat(line) == "CODE", f"架构约束代号未检出: {line}"
 
     def test_arch_constraint_code_false_positives(self, code_traces):
         """非约束 C+数字不误伤：十六进制色值（#C00000）、标识符内嵌（x_c20_style）。"""
@@ -555,7 +578,7 @@ class TestTaskCodeCommentPatterns:
             "x_c20_style",  # 标识符内嵌（_c20 前为小写字母，MAGIC 需大写开头）
         ]
         for line in legit:
-            assert _code_hit(code_traces, line) is None, f"非约束 C+数字被误伤: {line}"
+            assert _code_hit(line) is None, f"非约束 C+数字被误伤: {line}"
 
 
 class TestTaskCodeIdentifierCheck:
@@ -602,12 +625,12 @@ class TestIdentifierExtraction:
             "        result = data + 1\n"
             "        return result\n"
         )
-        names = {n for _, n in code_traces._py_identifier_names(ast.parse(src))}
+        names = {n for _, n in _py_identifier_names(ast.parse(src))}
         assert {"PortfolioModel", "compute", "data", "result", "m"} <= names
 
     def test_js_decl_extracts_names(self, code_traces):
         src = "var B6 = 1;\nconst chart = new Chart();\nfunction draw() {}\n"
-        names = sorted(n for _, n in code_traces._js_identifier_names(src))
+        names = sorted(n for _, n in _js_identifier_names(src))
         assert "B6" in names
         assert "chart" in names
         assert "draw" in names
@@ -629,7 +652,7 @@ class TestCoreLayeringGuard:
             "def bad():\n    from src.python.llm.circuit_breaker import _circuit_failures\n    return _circuit_failures\n",
             encoding="utf-8",
         )
-        hits = code_traces._scan_core_layering(fpath)
+        hits = _scan_core_layering(fpath)
         assert hits and hits[0][1] == "HIGH" and "llm" in hits[0][3]
 
     def test_core_top_level_import_flagged(self, code_traces, tmp_path):
@@ -637,18 +660,18 @@ class TestCoreLayeringGuard:
         core_dir.mkdir(parents=True, exist_ok=True)
         fpath = core_dir / "demo_top_import.py"
         fpath.write_text("from src.python.fetcher import chain\n", encoding="utf-8")
-        assert code_traces._scan_core_layering(fpath)
+        assert _scan_core_layering(fpath)
 
     def test_non_core_and_tests_not_in_scope(self, code_traces, tmp_path):
         fpath = tmp_path / "src" / "test" / "unit" / "core" / "test_x.py"
         fpath.parent.mkdir(parents=True, exist_ok=True)
         fpath.write_text("from src.python.fetcher.chain import _DEFAULT_CHAINS\n", encoding="utf-8")
-        assert code_traces._scan_core_layering(fpath) == []
+        assert _scan_core_layering(fpath) == []
         # 测试文件位置的其他 core 目录同样不约束
         other = tmp_path / "elsewhere" / "core" / "demo.py"
         other.parent.mkdir(parents=True, exist_ok=True)
         other.write_text("from src.python.report.foo import bar\n", encoding="utf-8")
-        assert code_traces._scan_core_layering(other) == []
+        assert _scan_core_layering(other) == []
 
     def test_exempt_probe_file(self, code_traces, tmp_path):
         core_dir = tmp_path / "src" / "python" / "core"
@@ -656,7 +679,7 @@ class TestCoreLayeringGuard:
         # 生产目录中的豁免文件名（探针网关薄透传，technical.md 已登记例外）
         fpath = core_dir / "check_sources.py"
         fpath.write_text("from src.python.fetcher.gw import x\n", encoding="utf-8")
-        assert code_traces._scan_core_layering(fpath) == []
+        assert _scan_core_layering(fpath) == []
         del tmp_path
 
 
@@ -669,11 +692,11 @@ class TestScanDomainIntegrity:
     """
 
     def test_scan_dirs_exist_under_repo_root(self, code_traces):
-        assert (code_traces.REPO_ROOT / "src" / "python").is_dir()
-        assert (code_traces.REPO_ROOT / "scripts" / "_traces_code").is_dir()
+        assert (REPO_ROOT / "src" / "python").is_dir()
+        assert (REPO_ROOT / "scripts" / "_traces_code").is_dir()
         missing = [str(p) for p in code_traces.SCAN_DIRS if not p.is_dir()]
         assert missing == [], f"扫描目录不存在（会静默跳过整轮扫描）：{missing}"
-        outside = [str(p) for p in code_traces.SCAN_DIRS if not p.is_relative_to(code_traces.REPO_ROOT)]
+        outside = [str(p) for p in code_traces.SCAN_DIRS if not p.is_relative_to(REPO_ROOT)]
         assert outside == [], f"扫描目录跑出仓库根（路径深度算错）：{outside}"
 
     def test_planted_violation_is_reported(self, code_traces, tmp_path, monkeypatch, capsys):
@@ -735,12 +758,12 @@ class TestLegitimateDomainValueExemption:
             "# 样式护栏 E1/W2 已机检",
             "# 回环网段 127.0.0.0/8 覆盖全部本机地址",
         ):
-            assert _code_hit(code_traces, line) is None, line
+            assert _code_hit(line) is None, line
 
     def test_neighbour_violation_on_same_line_still_flagged(self, code_traces):
         """合法值与违规 token 同行 → 仍必须报出（行级豁免不吞 token）。"""
-        assert _code_cat(code_traces, "# F10 与 P1 之外还有 R11") == "MAGIC"
-        assert _code_cat(code_traces, "# 127.0.0.1 另有 0.12.6 版本痕迹") == "VERSION"
+        assert _code_cat("# F10 与 P1 之外还有 R11") == "MAGIC"
+        assert _code_cat("# 127.0.0.1 另有 0.12.6 版本痕迹") == "VERSION"
 
 
 class TestSharedCliContract:
