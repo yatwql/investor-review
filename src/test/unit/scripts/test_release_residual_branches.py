@@ -15,6 +15,10 @@
 
 from __future__ import annotations
 
+import importlib
+import subprocess
+from pathlib import Path
+
 import pytest
 
 from src.test._script_loader import load_script
@@ -347,3 +351,158 @@ class TestLocalGateRunner:
         rc, out = module._run(["scripts/check-doc-drift.py", "--ci"], tmp_path)
         assert rc == 1
         assert "执行失败" in out and "无法执行" in out
+
+
+# ─────────────── 形态拒绝 / 超时 / OSError 兜底 / 空窗口（纯函数与最佳努力分支） ───────────────
+
+
+def _module(name: str):
+    """取 `scripts/_release/` 子模块（`scripts.` 口径，与本文件既有用例一致）。"""
+    return importlib.import_module(f"scripts._release.{name}")
+
+
+@pytest.fixture(name="versioning")
+def fixture_versioning():
+    return _module("_versioning")
+
+
+@pytest.fixture(name="common")
+def fixture_common():
+    return _module("_common")
+
+
+@pytest.fixture(name="hygiene")
+def fixture_hygiene():
+    return _module("_hygiene")
+
+
+@pytest.fixture(name="archive_init")
+def fixture_archive_init():
+    return _module("_archive_init")
+
+
+@pytest.fixture(name="timing")
+def fixture_timing():
+    return _module("_timing")
+
+
+class TestVersioningRejectsMissingAnchorLines:
+    """样式行（APP_VERSION / README 版本指针）缺失时必须报错，而不是静默返回原文。"""
+
+    def test_render_app_version_without_app_version_line(self, versioning):
+        with pytest.raises(versioning.ReleaseError, match="APP_VERSION"):
+            versioning.render_app_version("# 无版本行\n", "0.12.7")
+
+    def test_render_readme_version_without_version_pointer(self, versioning):
+        with pytest.raises(versioning.ReleaseError, match="当前版本"):
+            versioning.render_readme_version("# README\n\n无版本指针。\n", "0.12.7")
+
+    def test_archive_name_for_rejects_dev_version(self, versioning):
+        """归档名按发布版号派生；开发版号传进来必须拒绝（否则生成怪名归档文件）。"""
+        with pytest.raises(versioning.ReleaseError, match="不是 X.Y.Z 发布版形态"):
+            versioning.archive_name_for("0.12.7-dev")
+
+
+class TestChangelogArchiveSectionGuard:
+    def test_dev_section_without_archive_block_is_rejected(self, rel):
+        """开发段之后必须有 `## 归档` 索引块，否则迁出后无处落索引行。"""
+        text = "# 变更日志\n\n## [0.12.6-dev] - 开发中（未发布）\n\n- 条目一\n"
+        with pytest.raises(rel.ReleaseError, match="开发段之后没有归档章节"):
+            rel.apply_changelog_release(text, "0.12.6", "2026-10-08")
+
+
+class TestExecCommandTimeout:
+    def test_timeout_raises_release_error(self, common, monkeypatch, tmp_path):
+        """无 runner 时的真实子进程分支：超时不得挂死，转成带命令行的 ReleaseError。"""
+
+        def _timeout(*_args, **_kwargs):
+            raise subprocess.TimeoutExpired(cmd="git push", timeout=5)
+
+        monkeypatch.setattr(common.subprocess, "run", _timeout)
+        with pytest.raises(common.ReleaseError, match="命令超时（5s）：git push"):
+            common.exec_command(["git", "push"], tmp_path, timeout=5)
+
+
+class TestCleanStaleBytecodeOsErrors:
+    """删除动作的 OSError 只影响该项统计，不中断清理（最佳努力语义）。"""
+
+    def test_unlink_failure_skips_file(self, hygiene, tmp_path, monkeypatch):
+        cache = tmp_path / "gone" / "__pycache__"
+        cache.mkdir(parents=True)
+        (cache / "gone.cpython-313.pyc").write_bytes(b"pyc")
+
+        def _denied(_self):
+            raise OSError("permission denied")
+
+        monkeypatch.setattr(Path, "unlink", _denied)
+        assert hygiene.clean_stale_bytecode(tmp_path) == {"files": 0, "dirs": 0}
+
+    def test_rmtree_failure_keeps_dir_out_of_count(self, hygiene, tmp_path, monkeypatch):
+        cache = tmp_path / "gone" / "__pycache__"
+        cache.mkdir(parents=True)
+        (cache / "gone.cpython-313.pyc").write_bytes(b"pyc")
+
+        def _busy(*_args, **_kwargs):
+            raise OSError("device busy")
+
+        monkeypatch.setattr(hygiene.shutil, "rmtree", _busy)
+        assert hygiene.clean_stale_bytecode(tmp_path) == {"files": 1, "dirs": 0}
+        assert cache.is_dir()  # 目录删不掉时保留，不计入目录数
+
+    def test_non_empty_parent_dir_rmdir_failure_is_tolerated(self, hygiene, tmp_path):
+        """源目录还有别的文件时 `rmdir` 失败属预期，计入目录数但不抛错。"""
+        pkg = tmp_path / "gone"
+        cache = pkg / "__pycache__"
+        cache.mkdir(parents=True)
+        (cache / "gone.cpython-313.pyc").write_bytes(b"pyc")
+        (pkg / "keep.txt").write_text("keep\n", encoding="utf-8")
+
+        assert hygiene.clean_stale_bytecode(tmp_path) == {"files": 1, "dirs": 1}
+        assert pkg.is_dir()
+        assert not cache.exists()
+
+
+class TestArchiveInitTreeGuards:
+    def test_insert_tree_block_without_archive_subtree(self, archive_init):
+        with pytest.raises(archive_init.ReleaseError, match="未找到任何 `vX.Y.x/` 归档子树"):
+            archive_init.insert_tree_block("# 目录树\n\n├── docs/\n└── src/\n", "0.13")
+
+    def test_insert_tree_block_rejects_older_minor(self, archive_init):
+        """脚本只追加到末尾，新归档早于末位版本时必须人工插入而非静默错位。"""
+        text = "# 目录树\n\n│   └── archive/\n│       ├── v0.11.x/            # 归档\n│       └── v0.12.x/            # 归档\n"
+        with pytest.raises(archive_init.ReleaseError, match="早于目录树中最后一个版本 v0.12.x"):
+            archive_init.insert_tree_block(text, "0.10")
+
+    def test_init_archive_rejects_non_release_version(self, rel):
+        """`0.13`（缺补丁位）在建任何文件前就被拦下。"""
+        with pytest.raises(rel.ReleaseError, match="不是 X.Y.Z 发布版形态"):
+            rel.init_archive(rel._archive_ctx("0.13.0"), "0.13", "2026-10-20")
+
+
+class TestBuildEvolutionStatsFailures:
+    def test_git_ls_files_failure_propagates(self, rel, tmp_path):
+        runner = FakeRunner(responses=[(["git", "ls-files"], (128, "", "fatal: not a git repository"))])
+        with pytest.raises(rel.ReleaseError, match="git ls-files 失败：fatal: not a git repository"):
+            rel.build_evolution_stats(tmp_path, runner)
+
+
+class TestReleaseTokenUsageWindows:
+    def test_empty_window_after_devbump(self, timing):
+        """最后一条是 devbump → 发布窗口未开始，用量为空（而不是负数）。"""
+        assert timing.release_token_usage([{"command": "devbump", "session_usage": {"total": 5}}]) == {}
+
+    def test_records_without_usage_are_skipped(self, timing):
+        usage = timing.release_token_usage(
+            [
+                {"command": "devbump"},
+                {"command": "gate"},
+                {"command": "publish", "session_usage": {"input": 60, "output": 40, "total": 100}},
+            ]
+        )
+        assert usage["total"] == 100
+        assert usage["input"] == 60
+
+    def test_unrecorded_step_has_no_seconds(self, timing):
+        timer = timing.StepTimer()
+        timer.mark_elapsed("已有的步骤", 0.0)
+        assert timer.step_seconds("别的步骤") is None
