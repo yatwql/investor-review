@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -73,14 +74,18 @@ class TestGate:
         monkeypatch.setattr(rel, "has_archive_section", lambda *_a, **_k: True)
 
     def test_gate_workers_converge_with_cpu(self, rel, monkeypatch):
-        """并行度随核数收敛：弱机器降路、4 核+ 封顶、缺核信息取封顶、单核不下 1 路。"""
-        monkeypatch.setattr(rel.os, "cpu_count", lambda: 2)
+        """并行度随核数收敛：弱机器降路、4 核+ 封顶、缺核信息取封顶、单核不下 1 路。
+
+        打桩点落在真正被调用的 `os.cpu_count` 上：并行度实现（`_release/_commands_base.py`
+        的 `_gate_workers`）`import os` 后直接调用，入口不再为打桩保留未使用的 import。
+        """
+        monkeypatch.setattr(os, "cpu_count", lambda: 2)
         assert rel._gate_workers() == 2
-        monkeypatch.setattr(rel.os, "cpu_count", lambda: 8)
+        monkeypatch.setattr(os, "cpu_count", lambda: 8)
         assert rel._gate_workers() == 4
-        monkeypatch.setattr(rel.os, "cpu_count", lambda: None)
+        monkeypatch.setattr(os, "cpu_count", lambda: None)
         assert rel._gate_workers() == 4
-        monkeypatch.setattr(rel.os, "cpu_count", lambda: 1)
+        monkeypatch.setattr(os, "cpu_count", lambda: 1)
         assert rel._gate_workers() == 1
 
     def test_guard_scripts_exist_and_unique(self, rel):

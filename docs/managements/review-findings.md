@@ -18,9 +18,6 @@
 
 | # | 问题 | 修复方向 |
 | --- | --- | --- |
-| rf-1252 | `report/_report_generation.py` 等 128 行巨型函数未拆分（本次未动） | 与门面收拢一并做，避免两次改同一处 |
-| rf-1251 | `pyproject.toml` 对 `src/python/report/_report_generation.py` 关掉 F821（唯一被豁免的生产文件） | 去掉函数内延迟导入或改 `TYPE_CHECKING` 后恢复 F821 |
-| rf-1250 | 生产入口为测试 patch 保留未使用 import（`scripts/check-test-redundancy.py` 的 `ast`、`release.py` 的 `os`，含整文件 F401 豁免） | 把 patch 点改到真实调用模块后删兼容 import 与豁免 |
 
 ### P3 — 持续监控：兼容残留
 
@@ -82,6 +79,12 @@
 | **rf-1238** | 报告生成门面把同一组符号 `# noqa: F401` 复述三遍；其中一处 patch 打在从未被调用的绑定上（死 patch） | 权威 re-export 收拢到 `_report_generation`，`_generation_shared` 整块删除、`_generation_full` 仅留实际调用依赖；死 patch 改指真实调用点 |
 | **rf-1237** | LLM 模块键元组在 10+ 处各抄一份且成员已不一致（4 元素 vs 5 元素），新增模块会静默漏入质量评分/模块明细 | 新建 `llm/module_registry.py` 单源（产出序 / 后缀集合 / 并行子集 + 排除理由），11 处调用点改派生；`core`/`config` 因分层不改，由守卫用例锁定等值 |
 | **rf-1236** | `scripts/_release/_evolution.py` 在 `git ls-files` 含工作区缺失文件时 `sum(lines[p] for p in paths)` 抛 KeyError，崩在缺失清单打印之前 | 求和跳过未读入路径，`missing` 语义不变；补回归用例（缺失文件下命令存活且计数正确） |
+| **rf-1252** | `report/_report_factor_metrics.py::compute_factor_exposure_data` 128 行未拆分 | 按职责提取 4 个同文件私有辅助（延迟导入+降级/并发取数/停更剔除/装配），主函数 128→51 行，签名与行为不变 |
+| **rf-1251** | `pyproject.toml` 对生产文件 `report/_report_generation.py` 禁用 F821 | 该文件已收为 37 行纯门面，豁免成陈旧条目 → 删除；`ruff --select F821 src/python` 干净 |
+| **rf-1250** | 生产入口为测试 patch 保留无使用者 import（`check-test-redundancy` 的 `ast`、`release` 的 `os`）+ 整文件 F401 豁免 | patch 点改到真实调用模块后删 import；`test-runner.py` 以 70 项显式 `__all__` 替代整文件豁免，未声明者仍报 F401 |
+| **rf-1249** | 同一 `BLE001` 并存两种标注形态、散文形态无机检；`core/doctor.py` 12 处逐字重复降级理由 | 形态统一为 `# noqa: BLE001 — 理由`、doctor 重复理由收为模块级口径注释；`check-code-traces` 增散文宽捕获检查 |
+| **rf-1248** | 4 处 `float(safe_num(...))  # type: ignore[arg-type]` 靠 `default=0.0` 巧合自保 | 归一到 `core/num_utils.finite_or` 单源，删 4 处 type-ignore；补 None/空串/NaN/inf 回归用例 |
+| **rf-1247** | `scripts/_screenshots/tui_frame.py` 跨包读写私有 `_CONFIG_PATH_OVERRIDE`，scripts 侧无导入面兜底 | `config` 包补 `get/clear_config_path_override()` 公开入口并改用；`check-import-surface` 增 `cross-private-scripts` 规则 + 9 条存量例外 |
 | **rf-1234** | 用例名与体内验证行为不对应 10 处（去重口径/排序/并发/符号链接/上限配置等） | 名字与体内行为取同一口径：按名字补齐断言或按行为命名；已落 8 处，其余目标文件在仓库中不存在 |
 | **rf-1233** | 弱断言 14 处（截断未验收缩、入参回显、硬边界值、任意单元格命中、写死条数等） | 取可区分的期望值（截断前后集合、显式档位差、具体单元格定位）与结构关系断言；已落 7 处，其余目标文件不存在 |
 | **rf-1232** | 跨文件语义重复 13 组（行情/缓存矩阵/限速/进度器/凭证矩阵等） | 保留双方但一侧承担该模块独有差异断言（矩阵轮次、来源、非零退出码、缺条目各报一条）；已落 9 组 |

@@ -335,16 +335,20 @@ class TestFactsCache:
         return path
 
     @staticmethod
-    def _track_parses(monkeypatch, redundancy) -> list:
-        """拦截 ast.parse 计数，用于断言「哪些文件被（重新）解析」。"""
+    def _track_parses(monkeypatch) -> list:
+        """拦截 stdlib `ast.parse` 计数，用于断言「哪些文件被（重新）解析」。
+
+        打桩点直接落在真正被调用的 `ast` 模块上：实现模块（`_test_redundancy/*`）
+        各自 `import ast` 后按 `ast.parse` 调用，入口不再为打桩保留未使用的 import。
+        """
         calls: list = []
-        original = redundancy.ast.parse
+        original = ast.parse
 
         def _tracking_parse(*args, **kwargs):
             calls.append(args[0] if args else "")
             return original(*args, **kwargs)
 
-        monkeypatch.setattr(redundancy.ast, "parse", _tracking_parse)
+        monkeypatch.setattr(ast, "parse", _tracking_parse)
         return calls
 
     @pytest.fixture()
@@ -368,7 +372,7 @@ class TestFactsCache:
         cold = redundancy.run_checks()
         assert any("完全重复" in f for f in cold[0])
         assert redundancy._facts_cache_path().is_file(), "冷路径应回写缓存"
-        calls = self._track_parses(monkeypatch, redundancy)
+        calls = self._track_parses(monkeypatch)
         warm = redundancy.run_checks()
         assert calls == [], "缓存命中仍触发解析（缓存未生效）"
         assert warm == cold
@@ -379,7 +383,7 @@ class TestFactsCache:
         self._write(tmp_tree, "test_b.py", "def test_y():\n    assert 2\n")
         redundancy.run_checks()
         self._write(tmp_tree, "test_a.py", "def test_x():\n    assert 1\n\ndef test_new():\n    do_work()\n")
-        calls = self._track_parses(monkeypatch, redundancy)
+        calls = self._track_parses(monkeypatch)
         findings, _ = redundancy.run_checks()
         assert len(calls) == 1, "应只重解析变更文件"
         assert any("test_new" in f and "无任何断言" in f for f in findings)
@@ -402,7 +406,7 @@ class TestFactsCache:
         data = json.loads(cache_file.read_text(encoding="utf-8"))
         data["version"] = "stale-version"
         cache_file.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
-        calls = self._track_parses(monkeypatch, redundancy)
+        calls = self._track_parses(monkeypatch)
         redundancy.run_checks()
         n_files = len(list(tmp_tree.rglob("test_*.py")))
         assert len(calls) == n_files, "逻辑版本失效应全量重解析"

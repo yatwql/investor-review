@@ -62,7 +62,6 @@
 from __future__ import annotations
 
 import argparse
-import ast  # noqa: F401 — 测试按 redundancy.ast 打桩（与原单文件行为一致）
 import os
 import sys
 
@@ -72,8 +71,8 @@ if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
 # 九类检查已按 finding 分类拆到 scripts/_test_redundancy/（各检查一个模块，共用
-# _common 的 AST 原语，runner 负责编排）；入口只保留 CLI 与兼容 re-export，
-# 使 load_script 的既有直调面（run_checks / check_* / cases_in_module …）不变。
+# _common 的 AST 原语，runner 负责编排）；入口保留 CLI，并 re-export「测试按
+# load_script 直调的面」（run_checks / check_* / cases_in_module …）。
 from _test_redundancy._common import (  # noqa: F401 — 兼容 load_script 直调面
     TestCase,
     _iter_test_files,
