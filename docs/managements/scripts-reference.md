@@ -59,6 +59,7 @@
 | `probe-report-claims.py` | 运维观测 | 批量重放历史报告做确定性数值核对（覆盖率/告警/自动改写，零 LLM 调用、只读；不入门禁） |
 | `eval-factor-zoo.py` | 评测 | 因子动物园目录评测（非生产代码；五个来源族各抽 5 个因子，评测 A 字段可得率 / B 与既有信号族增量 / C 全量计算耗时占比三项指标，A/B/C 全过才转正立项；子命令 catalog / fields / signals / timing / verdict / all，产物只落 `docs/tmp/factor-zoo/`；实现拆在 `_eval_factor_zoo/`） |
 | `eval-decision-quality.py` | 评测 | 投资决策质量待验证项回测（决策视界命中率 / 因子单因子 IC / 估值两口径区分度；判据预注册于脚本常量，样本门槛 100、IC 绝对值拒绝线 0.05；子命令 horizon / factor-ic / valuation / all，产物落 `docs/tmp/decision-quality/`） |
+| `eval-mutation-score.py` | 评测 | 变异得分离线评测（委托可选后端 mutmut 按目标切片逐个跑，killed/(killed+survived) 与阈值比对；`--list-targets`/`--dry` 不依赖后端；退出码 0 达标 / 1 后端缺失 / 2 低于阈值；不入门禁） |
 | `_assets/` | 内部 | 视觉资产实现包（`social_preview.py` 预览图绘制与栅格化 / `svg_check.py` 架构图渲染体检） |
 | `_screenshots/` | 内部 | 演示截图实现包（`demo_workspace.py` 隔离工作区与报告 / `tui_frame.py` 帧文本折行保色与渲染 / `web_shot.py` CDP 封装 + `cdp_shot.mjs` / `xlsx_frame.py` Excel 页签 → HTML 网格 → PNG） |
 | `_shared/` | 内部 | 跨脚本共享设施包（`checklib.py` CLI 契约与输出/路径/区间解析；`traces_common.py` 两域共用痕迹词表） |
@@ -1318,6 +1319,52 @@ curl 对照命令：`curl -s "https://push2.eastmoney.com/api/qt/stock/get?secid
 取数只经既有能力（`decision_settlement` 行情/指数序列 + `valuation_percentile` 口径函数 +
 `financial_indicator` 缓存链），不裸调 provider；只读账本与缓存，不写 `data/` 生产状态；
 产物只落 `docs/tmp/decision-quality/`（git 忽略）。首批评测结论见讨论稿 §8.1。
+
+**`eval-mutation-score.py` — 变异得分离线评测**
+
+**干什么**：行覆盖率证明「用例执行过这行代码」，不证明「断言住了它的行为」——恒真断言、自证用例、
+弱 mock 断言在接近满格的覆盖率下照样存活。本脚本按**目标切片**委托后端 `mutmut` 逐块注入变异，
+解析其输出统计 `变异得分 = killed / (killed + survived)`，逐目标与阈值（默认 80%）比对。
+
+```bash
+# 本期目标清单（文件 + 声明算子口径）：纯配置读取，没装 mutmut 也能跑
+.venv/bin/python scripts/eval-mutation-score.py --list-targets
+
+# 干跑：只打印每个切片将要执行的后端命令（不执行任何变异）
+.venv/bin/python scripts/eval-mutation-score.py --dry
+
+# 实跑并判定（需先装后端）：逐切片调用 `python -m mutmut run --paths-to-mutate=<切片>`
+.venv/bin/python scripts/eval-mutation-score.py -v
+
+# 机读结果 / 只输出 文件:描述（未达标目标各一行）/ 放宽阈值
+.venv/bin/python scripts/eval-mutation-score.py --json
+.venv/bin/python scripts/eval-mutation-score.py --ci
+.venv/bin/python scripts/eval-mutation-score.py --threshold 60 --timeout 3600
+```
+
+**退出码**：0 全部目标达标（`--list-targets` / `--dry` 亦返回 0）/ 1 后端 mutmut 未安装（打印安装命令，
+与 `check-types.py`=1 环境缺失同口径）/ 2 存在低于阈值或得分解析不出的目标（fail-closed：解析不出即算不达标，
+不猜成 0 分）。
+
+**为什么是离线评测、不进提交门禁**：单个切片要反复重跑被测用例集，时长以分钟计；`mutmut` 还是**可选工具**，
+刻意不写入 `requirements.txt`（提交门禁必须短而决定性，不允许依赖可选工具与长尾耗时）。故本脚本只在
+「测试质量自省」时按需人工跑——`eval-` 域一律不进 pre-commit 钩子与 CI 守护清单。
+
+**首期目标与算子口径**（集中在一处：模块级 `TARGETS` / `OPERATORS`，改目标只改这张表）：
+
+| 目标切片 | 路径 | 为什么盯它 |
+|:--|:--|:--|
+| `analysis-metrics` | `src/python/analysis/metrics*.py` | 纯算术，算术替换与返回值替换最能曝出弱断言 |
+| `analysis-correlation` | `src/python/analysis/correlation.py` | 比较取反会翻转符号判定，只查范围不查方向的用例在此暴露 |
+| `cache-ttl-atomic-write` | `src/python/cache/` | TTL 边界比较（`>` / `>=`）与布尔取反决定过期与覆盖语义 |
+| `core-dates` | `src/python/core/dates.py` | 日期边界错位会静默影响全仓取数窗口 |
+
+算子首期取**算术替换 / 比较取反 / 布尔取反 / 返回值替换**四类；mutmut 侧用其内置算子集，配置表只记录
+**声明口径**——后端不提供算子筛选时按全量跑，差异如实体现在得分里，脚本不擅自回算分数。
+
+**得分解析口径**：优先取 mutmut 进度行（`3/40  🎉 2  ⏰ 0  🤔 0  🙁 1  🔇 0`，每行是累计值，取最后一条）
+的 killed / survived；无进度行时退回 `killed:` / `survived:` 计数行；两者都没有则判「无法解析」并按不达标处理。
+超时（timeout）与可疑（suspicious）变异体不计入分母。
 
 ## 启动脚本
 

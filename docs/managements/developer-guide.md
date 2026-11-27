@@ -859,6 +859,7 @@ test-reports/latest/
   - ✅ `ts = _recent_ts(days_ago=2)`（相对 `datetime.now()` 计算）；✅ 被测路径加**前提自检**：`assert result["expired"] == 0, "样本已超出保留期"`
   - ❌ `self._row("cross_skip", title, "2026-10-01 10:00")` 配 30 天保留期
   - 语义上确实需要「远过去/远未来」时用常量偏移（`2020-01-02` 表示必过期）而非「今天附近」的绝对日期
+- **质量指标：覆盖率为必要条件，变异得分为有效性指标**：行覆盖率只证明「用例执行到这行」，不证明「断言仉住了它的行为」；变异得分（killed / (killed + survived)）补后者。变异评测按需**离线**跑（`eval-` 域）——`.venv/bin/python scripts/eval-mutation-score.py -v`（`--list-targets` / `--dry` 免装后端），**不进提交门禁**（单切片要反复重跑用例集、后端 `mutmut` 是可选工具不入 `requirements.txt`）；新增/重写高杠杆纯计算与基础设施用例时建议顺手跑一次。入口与首期目标/算子口径见 `scripts-reference.md`
 - 新增文件后运行 `.venv/bin/python scripts/check-test-redundancy.py --ci` 验证标记合规性（标记支路在 `src/test/` 变更时由钩子自动执行）
 
 ### 新增测试指南
