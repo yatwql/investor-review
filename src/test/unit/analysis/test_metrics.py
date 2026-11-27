@@ -376,6 +376,12 @@ class TestCheckDataSufficiency:
 
         assert check_data_sufficiency([]) == 0
 
+    def test_exactly_min_days_is_low_confidence(self):
+        """恰好等于最小样本天数 → 低置信度而非 0（不足判定是严格小于）。"""
+        from src.python.analysis.metrics import check_data_sufficiency
+
+        assert check_data_sufficiency([0.001] * 20, min_days=20) == 1
+
 
 class TestComputePortfolioPeakMv:
     """组合历史峰值市值（回撤纪律基准）计算测试。"""
@@ -412,3 +418,66 @@ class TestComputePortfolioPeakMv:
         assert compute_portfolio_peak_mv([]) is None
         assert compute_portfolio_peak_mv([{"date": "2026-01-01", "total_value": 0.0}]) is None
         assert compute_portfolio_peak_mv([{"date": "2026-01-01", "total_value": -5.0}]) is None
+
+
+class TestComputeDailyReturns:
+    """日收益率口径（统一源）：空输入返回空列表，而非 None。"""
+
+    def test_empty_input_returns_empty_list(self):
+        from src.python.analysis.metrics import compute_daily_returns
+
+        assert compute_daily_returns(None) == []
+        assert compute_daily_returns([]) == []
+
+
+class TestComputeAllMetricsDerivedFields:
+    """全量聚合里派生出的 HHI 等效数 / 换手率 / 个股波动率 / 风险贡献。"""
+
+    def test_hhi_equivalent_is_reciprocal_of_hhi(self):
+        """等权两品种 → HHI 0.5、等效品种数 2.0（是 1/HHI 而非 HHI 本身）。"""
+        from src.python.analysis.metrics import compute_all_metrics
+
+        result = compute_all_metrics([], portfolio_weights=[0.5, 0.5])
+
+        assert result["hhi"] == pytest.approx(0.5)
+        assert result["hhi_equivalent"] == pytest.approx(2.0)
+
+    def test_turnover_needs_both_periods(self, monkeypatch):
+        """只给上期持仓（本期为 None）→ 换手率为 None，且不调用 turnover_rate。"""
+        from src.python.analysis import metrics
+
+        calls: list = []
+        monkeypatch.setattr(metrics, "turnover_rate", lambda before, after: calls.append((before, after)) or 0.5)
+
+        result = metrics.compute_all_metrics([], holdings_before=[{"code": "600900", "shares": 100}])
+
+        assert result["turnover_rate"] is None
+        assert calls == []
+
+    def test_individual_volatility_passed_through(self):
+        """传入个股波动率字典 → 原样透出，不被抹成 None。"""
+        from src.python.analysis.metrics import compute_all_metrics
+
+        vols = {"600900": 0.21}
+
+        result = compute_all_metrics([], individual_vols=vols)
+
+        assert result["individual_volatility"] == vols
+
+    def test_risk_contributions_empty_without_individual_vols(self):
+        """有权重但无个股波动率 → 风险贡献为空（不去对 None 取 values）。"""
+        from src.python.analysis.metrics import compute_all_metrics
+
+        result = compute_all_metrics([], portfolio_weights=[0.6, 0.4], individual_vols=None)
+
+        assert result["risk_contributions"] == []
+
+    def test_missing_volatility_padded_with_zero(self):
+        """波动率条目少于权重 → 缺的按 0 补齐，仍逐品种出贡献条目。"""
+        from src.python.analysis.metrics import compute_all_metrics
+
+        weights = [0.6, 0.4]
+
+        result = compute_all_metrics([], portfolio_weights=weights, individual_vols={"600900": 0.2})
+
+        assert len(result["risk_contributions"]) == len(weights)

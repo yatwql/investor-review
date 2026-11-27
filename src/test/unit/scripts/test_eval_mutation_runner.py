@@ -281,3 +281,17 @@ class TestTerminationGuard:
         mutation.run_slice(_target(mutation, paths=("pkg/mod.py",)), repo_root=tmp_path, max_mutants=1)
 
         assert runner_module.signal.SIGTERM in installed
+
+
+def test_slice_files_expands_directory_to_python_modules(mutation, tmp_path):
+    """目录形态切片按 **/*.py 展开（实测曾因 is_file() 过滤得到 0 变异体）。"""
+    (tmp_path / "pkg" / "sub").mkdir(parents=True)
+    (tmp_path / "pkg" / "a.py").write_text("X = 1\n", encoding="utf-8")
+    (tmp_path / "pkg" / "sub" / "b.py").write_text("Y = 2\n", encoding="utf-8")
+    (tmp_path / "pkg" / "notes.md").write_text("z\n", encoding="utf-8")
+
+    runner = load_script("_eval_mutation/runner.py", module_name="_eval_mutation_runner_slice")
+    target = mutation.MutationTarget(name="tmp-slice", paths=("pkg",), tests=(), rationale="目录展开")
+    files = runner.slice_files(target, repo_root=tmp_path)
+
+    assert [f.relative_to(tmp_path).as_posix() for f in files] == ["pkg/a.py", "pkg/sub/b.py"]

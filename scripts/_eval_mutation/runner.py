@@ -121,10 +121,21 @@ def install_termination_guard() -> None:
 
 
 def slice_files(target: MutationTarget, *, repo_root: Path = REPO_ROOT) -> tuple[Path, ...]:
-    """切片路径（可含 glob）→ 实际源文件清单（排序后确定）。"""
+    """切片路径（可含 glob，也可给目录）→ 实际源文件清单（排序后确定）。
+
+    目录形态（如 `src/python/cache/`）按 `**/*.py` 展开：`Path.glob` 对目录只返回
+    目录本身、不是文件，若按 `is_file()` 过滤会得到空清单（实测曾让整个切片 0 变异体）。
+    """
     files: list[Path] = []
+    seen: set[Path] = set()
     for pattern in target.paths:
-        files.extend(sorted(path for path in repo_root.glob(pattern) if path.is_file()))
+        matched = [path for path in repo_root.glob(pattern) if path.is_file()]
+        if not matched:
+            matched = [path for path in repo_root.glob(pattern.rstrip("/") + "/**/*.py") if path.is_file()]
+        for path in sorted(matched):
+            if path not in seen:
+                seen.add(path)
+                files.append(path)
     return tuple(files)
 
 

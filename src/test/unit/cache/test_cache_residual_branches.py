@@ -33,7 +33,15 @@ class TestStartupSensitiveCleanup:
 
         _reload_with_cleaner(monkeypatch, lambda **_kw: 3)
 
-        assert "启动清理" in caplog.text
+        assert "移除 3 个" in caplog.text
+
+    def test_zero_removals_stay_silent(self, monkeypatch, caplog):
+        """清理到 0 个文件 → 不打启动清理日志（只有真删了东西才记一条）。"""
+        caplog.set_level(logging.INFO, logger="invest")
+
+        _reload_with_cleaner(monkeypatch, lambda **_kw: 0)
+
+        assert "移除 0 个" not in caplog.text
 
     def test_cleaner_failure_does_not_break_import(self, monkeypatch, caplog):
         caplog.set_level(logging.DEBUG, logger="invest")
