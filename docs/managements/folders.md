@@ -14,12 +14,12 @@
 | 架构图示 | SVG | 4 | 396 | `src/static/` README 架构图（architecture 三渠道→引擎→双报告、llm-chain Provider 链式分发、capabilities 九大功能域总览、owl-mascot 吉祥物猫头鹰「守望」）+ 截图 7 张 PNG（报告实景 `report-overview`/`report-toc`/`report-charts` + 界面实景 `tui-menu`/`web-workbench`/`web-config`/`cli-report`，不计入本行） |
 | 辅助脚本 | Python | 151 | 31,912 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评测与因子目录评测、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、视觉资产（社交预览图/架构图体检）、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
 | 源代码合计 | — | 635 | 161,709 | 主程序 + 模板 + 脚本 + SVG |
-| 测试代码 | Python | 990 | 247,284 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
-| 测试用例 | — | — | 17,161 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
+| 测试代码 | Python | 994 | 248,039 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
+| 测试用例 | — | — | 17,220 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 15 | 7,088 | 含 README.md；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 14 | 6,851 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 223 | 75,722 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 14,838 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 223 | 75,726 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 14,842 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 200 | 59,172 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 9 | ~1616 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + TUI 交互改进（议题 + 第一/二批实施方案） + PanWatch 借鉴分析（含评估政策单源化与 LLM 复盘契约两份设计） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -1423,6 +1423,8 @@ investor-review/
 │       │   │   ├── test_trace_logging_discipline.py #  日志统一守卫（非交互层 print 检出 / 豁免域 / 白名单完整性）
 │       │   │   ├── test_trace_config_defaults.py #   配置默认值单源守卫（重复兜底检出/类型敏感/豁免域/真实仓库零 finding）
 │       │   │   ├── test_doc_trace_deleted_refs.py #   doc-traces 已删函数残留检查测试（历史 def 注入/引用形态过滤/git 不可用容错）
+│       │   │   ├── test_doc_trace_cli.py #   doc-traces CLI 编排（受检文档两态清单/退出码 0-1-2 契约/结论缓存回放与写回/scan_file 跳过与豁免旁注）
+│       │   │   ├── test_doc_trace_findings.py #   doc-traces 结论汇总与缓存回放解析（退出码契约/汇总行分类统计排序/脏缓存结构校验）
 │       │   │   ├── test_test_quality_regression.py #  测试质量回归守护（静态禁止空测试体=死用例）
 │       │   │   ├── test_test_runner_machine_info.py  #  test_runner 机器信息采集/bench 别名/耗时表格渲染测试
 │       │   │   ├── test_test_runner_runner.py  # 测试运行器编排（argv 组装/退出码映射/阶段调度）
@@ -1462,6 +1464,7 @@ investor-review/
 │       │   │   ├── test_check_doc_drift_sections.py   #   章节-区块矩阵 / 手册菜单块与键引用 / 返回键不变式 / 可见性
 │       │   │   ├── test_check_doc_drift_tree.py       #   目录树解析、说明计数与版本目录顺序
 │       │   │   ├── test_check_doc_drift_crosscheck.py # 文档↔代码交叉校验分片（链路表/Thinking 支持矩阵/收集快照/生成产物/真库冒烟/统计回写/守护同源）
+│       │   │   ├── test_check_doc_drift_cli.py # 一致性检查 CLI 编排（结论缓存输入面/非 git 环境降级/-v 统计段/--sync 回写与入暂存/导入期路径修补）
 │       │   │   ├── test_check_doc_drift_requirements_menu.py # 需求菜单表检查单测（解析/真库一致/缺行·多行·组序·组名漂移检出）
 │       │   │   ├── _release_fixtures.py     #   发布编排测试共享设备（子进程替身/临时仓库夹具/台账与目录树样例，非测试模块不收集）
 │       │   │   ├── _perf_history_fixtures.py #  性能趋势测试共享夹具（模块加载 fixture + 记录构造器，非测试模块不收集）
@@ -1473,6 +1476,7 @@ investor-review/
 │       │   │   ├── test_no_legacy_software_name.py #   旧软件名残留守卫（运行面不得出现旧仓库名）
 │       │   │   ├── test_release_archive.py  #   台账归档迁移纯函数单测（rf 表块无损搬运与幂等/头部追加与索引延展/plan 扁平搬入/docs-plan 完成判定/目录树搬迁/头部缺行报错）
 │       │   │   ├── test_check_doc_links.py  #   文档链接与结构一致性检查脚本测试（死链/死锚点/重复标题/层级/编号序列/§引用）
+│       │   │   ├── test_check_doc_links_cli.py #   链接检查 CLI 编排（中文序号整十/十位带个位解析/不可读目标与文档分支/main 缓存契约/__main__ 入口）
 │       │   │   ├── test_check_conclusion_cache.py #   守护结论缓存机制测试（冷热 --ci 输出逐字一致/输入·逻辑·结构失配矩阵/通过与发现都缓存/隔离重定向；接入 namespace 见测试文件头）
 │       │   │   ├── test_check_file_length.py  #   单文件行数红线守护脚本测试（阈值边界/豁免登记/--ci 退出码契约/-v 清单派生）
 │       │   │   ├── test_check_requirement_trace.py  #   需求 ID ↔ 验证载体追溯检查脚本测试（解析/五项断言/真实仓库冒烟）

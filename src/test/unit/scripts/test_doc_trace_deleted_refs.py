@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -127,3 +128,77 @@ class TestHistoricalDefsEnvironment:
             assert "_sample_async_fn" in hist
         finally:
             deleted_refs._HIST_DEFS = None
+
+    def test_git_unavailable_skips_with_warning(self, deleted_refs):
+        """git 不可用（OSError）→ 空集 + stderr 告警，不抛错。"""
+        deleted_refs._HIST_DEFS = None
+        try:
+            with patch.object(deleted_refs.subprocess, "run") as mrun:
+                mrun.side_effect = OSError("git 缺失")
+                err = io.StringIO()
+                with contextlib.redirect_stderr(err):
+                    assert deleted_refs._historical_defs() == set()
+            assert "git 不可用" in err.getvalue()
+        finally:
+            deleted_refs._HIST_DEFS = None
+
+    def test_git_log_timeout_skips_with_warning(self, deleted_refs):
+        """`git log` 超时（大仓历史提取超时）→ 空集 + stderr 告警。"""
+        deleted_refs._HIST_DEFS = None
+        shallow = SimpleNamespace(returncode=0, stdout="false\n", stderr="")
+        try:
+            with patch.object(deleted_refs.subprocess, "run") as mrun:
+                mrun.side_effect = [shallow, subprocess.TimeoutExpired("git log", 600)]
+                err = io.StringIO()
+                with contextlib.redirect_stderr(err):
+                    assert deleted_refs._historical_defs() == set()
+            assert "git log 超时" in err.getvalue()
+        finally:
+            deleted_refs._HIST_DEFS = None
+
+
+class TestCurrentDefsScan:
+    """当前 def 全集（真实库存扫描，模块级缓存）。"""
+
+    def test_scans_repository_definitions(self, deleted_refs):
+        """扫描 src/ 与 scripts/ 得到当前 def 名（含本模块自身的函数）。"""
+        deleted_refs._CUR_DEFS = None
+        try:
+            defs = deleted_refs._current_defs()
+        finally:
+            deleted_refs._CUR_DEFS = None  # 复位进程级缓存
+        assert "scan_deleted_symbol_refs" in defs  # scripts/ 下的函数
+        assert "run_checks" in defs  # src/python 下的函数
+
+    def test_cache_returns_same_set(self, deleted_refs):
+        """二次调用命中缓存（同一集合对象，不重复走盘）。"""
+        deleted_refs._CUR_DEFS = None
+        try:
+            first = deleted_refs._current_defs()
+            assert deleted_refs._current_defs() is first
+        finally:
+            deleted_refs._CUR_DEFS = None
+
+    def test_unreadable_file_skipped(self, deleted_refs, monkeypatch, tmp_path):
+        """个别文件读不开（如以 .py 结尾的目录）→ 跳过该条目，其余照收。"""
+        repo = tmp_path / "repo"
+        (repo / "scripts").mkdir(parents=True)
+        (repo / "scripts" / "good.py").write_text("def alpha_fn():\n    pass\n", encoding="utf-8")
+        (repo / "scripts" / "bad.py").mkdir()
+        monkeypatch.setattr(deleted_refs, "REPO_ROOT", repo)
+        deleted_refs._CUR_DEFS = None
+        try:
+            assert deleted_refs._current_defs() == {"alpha_fn"}
+        finally:
+            deleted_refs._CUR_DEFS = None
+
+
+class TestUnreadableDoc:
+    """文档读取失败（路径不存在/解码失败）→ 静默跳过。"""
+
+    def test_unreadable_doc_skipped(self, doc_traces, tmp_path):
+        """读取失败 → 空命中（前缀名仍按文件名规则判，但无正文可查）。"""
+        hits = doc_traces.scan_deleted_symbol_refs(
+            tmp_path / "missing.md", historical_defs={"_old_helper_fn"}, current_defs=set()
+        )
+        assert hits == []
