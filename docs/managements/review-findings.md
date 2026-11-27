@@ -68,7 +68,7 @@
 | **rf-1247** | `scripts/_screenshots/tui_frame.py` 跨包读私有 `config._config_defaults._CONFIG_PATH_OVERRIDE`（`check-import-surface` 的 `PY_ROOT` 只扫 `src/python`，scripts 侧无兜底） | `config` 包补公开 `get_config_path_override()` / `clear_config_path_override()`（导出进 `__all__`），截图脚本改用公开面还原；`check-import-surface` 增 `cross-private-scripts` 规则把 `scripts/` 递归纳入导入面受检域（9 条存量例外登记，含替代路径与复核期限） |
 | **rf-1253** | `report/_llm_news.py` 同一失败既 `add_error` 又即时 `error` 上屏（与 rf-1241 的「同消息双通道」不是同一处，当时未并入） | 与 rf-1246 同批收口：只保留 `add_error`（TUI 收尾摘要 `print_error_summary` + WARNING 日志即它的两个可见面），删即时 `error` 行 |
 | **rf-1246** | `report/_llm_news.py` 新闻失败提示与 LLM 分支**口径分裂**（新闻只 `add_error`；LLM 额外即时 `error`，同一类降级两个可见面） | 两条兄弟路径统一为只 `add_error`，各补一条 `caplog` 断言锁定 WARNING 级（判定依据：`add_error` 已进 TUI 收尾摘要与日志，即时 `error` 是重复上屏） |
-| **rf-1235** | 展示脚本取帧泄漏配置路径覆写：`scripts/_screenshots/tui_frame.py` 的 `capture_frame` 以 `get_config_path()`（有效路径）作还原值，原进程「无覆写」时该值即 `_CONFIG_FILE`，`finally` 里再 `set_config_path_override` 回写便把「覆写=默认路径」永久钉在进程上；同源的 `src/test/_path_isolation.py` 未清覆写则让上一条用例（如取帧）遗留的演示路径盖掉本轮隔离路径，跨用例配置串读。两处都缺会红的回归用例 | 还原改用**原覆写值** `_config_defaults._CONFIG_PATH_OVERRIDE`（None 即还原 None，直接回写），进入与还原各清一次配置缓存，私有的 `_clear_config_cache` 换成公开 `invalidate_config_cache`；补两条会红的回归用例（无前置覆写的真取帧结束后覆写仍为 None、隔离 seed 清掉泄漏覆写） |
+| **rf-1235** | 展示脚本取帧泄漏配置路径覆写：`scripts/_screenshots/tui_frame.py` 的 `capture_frame` 以 `get_config_path()`（有效路径）作还原值，原进程「无覆写」时该值即 `_CONFIG_FILE`，`finally` 里再 `set_config_path_override` 回写便把「覆写=默认路径」永久钉在进程上；同源的 `src/test/_path_isolation.py` 未清覆写则让上一条用例（如取帧）遗留的演示路径盖掉本轮隔离路径，跨用例配置串读。两处都缺会红的回归用例 | 还原改用**原覆写值**，走 `config` 包已提供的公开入口 `get_config_path_override()` / `clear_config_path_override()`（原值为 None 即 `clear`），覆写值的读写统一经该公开面；进入与还原各清一次配置缓存，私有 `_clear_config_cache` 换成公开 `invalidate_config_cache`；隔离 seed 由 `seed_sensitive_path_isolation` 把 `_CONFIG_PATH_OVERRIDE` 置 None；补两条会红的回归用例（无前置覆写的真取帧结束后覆写仍为 None、隔离 seed 清掉泄漏覆写） |
 | **rf-1245** | `tui/handlers_switch.py` 同一查找逻辑三份内联实现、赋值通道 `parse_switch_override` 解析两次、一处 `[!]` 提示缺配色 | 抽 `_find_switch_item_by_key()` 共用、解析只做一次、按 DESIGN-TUI 补齐颜色角色，并引入 `SwitchItem` 类型别名 |
 | **rf-1244** | `report/penetration*.py` 的 `industry_status` 为裸字符串状态机，缺键默认值为「健康」 | 改显式常量集合，缺键显式归入「未知」而非静默算健康 |
 | **rf-1243** | `report/_report_factor_metrics.py` 的 `factor_workers` 默认值 3 处硬编码 6 | 收敛为单源常量（取自配置默认值表），三处引用该常量 |
@@ -83,9 +83,6 @@
 | **rf-1252** | `report/_report_factor_metrics.py::compute_factor_exposure_data` 128 行未拆分 | 按职责提取 4 个同文件私有辅助（延迟导入+降级/并发取数/停更剔除/装配），主函数 128→51 行，签名与行为不变 |
 | **rf-1251** | `pyproject.toml` 对生产文件 `report/_report_generation.py` 禁用 F821 | 该文件已收为 37 行纯门面，豁免成陈旧条目 → 删除；`ruff --select F821 src/python` 干净 |
 | **rf-1250** | 生产入口为测试 patch 保留无使用者 import（`check-test-redundancy` 的 `ast`、`release` 的 `os`）+ 整文件 F401 豁免 | patch 点改到真实调用模块后删 import；`test-runner.py` 以 70 项显式 `__all__` 替代整文件豁免，未声明者仍报 F401 |
-| **rf-1249** | 同一 `BLE001` 并存两种标注形态、散文形态无机检；`core/doctor.py` 12 处逐字重复降级理由 | 形态统一为 `# noqa: BLE001 — 理由`、doctor 重复理由收为模块级口径注释；`check-code-traces` 增散文宽捕获检查 |
-| **rf-1248** | 4 处 `float(safe_num(...))  # type: ignore[arg-type]` 靠 `default=0.0` 巧合自保 | 归一到 `core/num_utils.finite_or` 单源，删 4 处 type-ignore；补 None/空串/NaN/inf 回归用例 |
-| **rf-1247** | `scripts/_screenshots/tui_frame.py` 跨包读写私有 `_CONFIG_PATH_OVERRIDE`，scripts 侧无导入面兜底 | `config` 包补 `get/clear_config_path_override()` 公开入口并改用；`check-import-surface` 增 `cross-private-scripts` 规则 + 9 条存量例外 |
 | **rf-1234** | 用例名与体内验证行为不对应 10 处（去重口径/排序/并发/符号链接/上限配置等） | 名字与体内行为取同一口径：按名字补齐断言或按行为命名；已落 8 处，其余目标文件在仓库中不存在 |
 | **rf-1233** | 弱断言 14 处（截断未验收缩、入参回显、硬边界值、任意单元格命中、写死条数等） | 取可区分的期望值（截断前后集合、显式档位差、具体单元格定位）与结构关系断言；已落 7 处，其余目标文件不存在 |
 | **rf-1232** | 跨文件语义重复 13 组（行情/缓存矩阵/限速/进度器/凭证矩阵等） | 保留双方但一侧承担该模块独有差异断言（矩阵轮次、来源、非零退出码、缺条目各报一条）；已落 9 组 |

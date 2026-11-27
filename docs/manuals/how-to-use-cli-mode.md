@@ -68,8 +68,6 @@ CLI 与 TUI 共享同一套缓存、配置与报告管线，可交替使用。
 > # 用显示名指定；已转正的开关（如正反辩论）改用 --feature 开启
 > .venv/bin/python -m src.python.cli --experiment 决策跨期反思闭环 --feature llm_debate_procon=on report --type full
 >
-
-
 > # 本次运行启用全部实验功能
 > .venv/bin/python -m src.python.cli --experiment all report --type full
 > ```
@@ -79,8 +77,8 @@ CLI 与 TUI 共享同一套缓存、配置与报告管线，可交替使用。
 > **`--feature` 说明**：`--experiment` 的补集——它面向**全部**开关而非仅实验项，且**双向**（既能开也能关）。常用来在不动持久化配置的前提下临时关闭某个默认开启的常规开关，或复现「关掉某开关后报告长什么样」：
 >
 > ```bash
-> # 本次运行关闭系统自检的界面入口（CLI 的 doctor 子命令本就不受该开关约束）
-> `.venv/bin/python -m src.python.cli --feature report_qa=on doctor`
+> # 本次运行临时打开报告追问入口（report_qa 默认关；该开关门控 TUI [Q] 菜单项，CLI 侧无对应入口，此处只演示取值与生效范围）
+> .venv/bin/python -m src.python.cli --feature report_qa=on doctor
 >
 > # 本次运行关闭两项报告增强：持仓成本区间位置列 + 市场温度刻度行（其余照常）
 > .venv/bin/python -m src.python.cli --feature cost_position=off --feature market_temperature=off report --type full

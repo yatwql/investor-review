@@ -35,7 +35,7 @@
 | `check-semantic-index.py` | 文档 | 功能语义命名表正反向一致性校验（功能开关注册表表外键 / 僵尸条目 / 合并章 key 缺失） |
 | `check-doc-drift.py` | 文档 | 文档与实现一致性校验（章节表/章节数量、开关表/分组计数/默认值断言、配置与 LLM 默认值表、`datasource.md` 的 LLM 缓存 TTL 行（按前缀反查注册表）、`technical.md`+`how-to-config.md` 的缓存 TTL 表（逐类型对账）、TUI 面板编号、目录树、项目统计表；`--sync` 自动回写统计快照） |
 | `check-doc-links.py` | 文档 | 文档链接与结构一致性校验（死链/死锚点/重复标题/层级/编号序列/§引用） |
-| `check-import-surface.py` | 质量 | 导入面契约（compat-comment 兼容注释 / private-all 私有 `__all__` / cross-private 跨包私有导入 / cross-private-scripts 脚本侧私有模块导入 / dynamic-target 动态导入字面量 / exception-table 例外表自审（字段齐全+到期+失效）；例外表 `_import_surface_exceptions.json`；**已入域**：钩子只随 `src/python/` 变更触发（~1s），CI `guards` 与 P2 恒全量） |
+| `check-import-surface.py` | 质量 | 导入面契约（compat-comment 兼容注释 / private-all 私有 `__all__` / cross-private 跨包私有导入 / cross-private-scripts 脚本侧私有模块导入 / dynamic-target 动态导入字面量 / layer-inversion 分层倒置（底层不得依赖上层） / exception-table 例外表自审（字段齐全+到期+失效）；例外表 `_import_surface_exceptions.json`；**已入域**：钩子只随 `src/python/` 变更触发（~1s），CI `guards` 与 P2 恒全量） |
 | `check-file-length.py` | 质量 | 单文件行数红线守护（主程序/脚本 >1000 行 / 测试 >1200 行；豁免登记与 review-findings 挂账同步；另断言 review-findings P4 膨胀登记表行数与实测一致（防表腐化），`-v` 输出可选优化区间清单、登记实况与「行数 × 近 90 天改动」优先级） |
 | `check-test-redundancy.py` | 测试 | 测试用例冗余与无效检查（死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / 恒真断言 / 死 fixture / 弱 mock 断言 / 账本日期写死绝对日期；实现拆在 `_test_redundancy/`——九类用例质量检查 + 标记合规支路各一模块 + 共用 AST 原语 + 事实缓存 + 编排，入口只留 CLI） |
 | `check-requirement-trace.py` | 质量 | 需求 ID ↔ 验证载体追溯（单段 ID 全域覆盖 / 载体文件存在 / ID 双向一致） |
@@ -907,14 +907,15 @@ sh .githooks/install-hooks.sh --off   # 停用
 
 **设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
 
-五条扫描规则对应 `technical.md`「导入面所有权」与导入面重命名分析稿的 compat-comment / private-all / cross-private / dynamic-target / cross-private-scripts 规格，第六条是**例外表自审**：
+六条扫描规则对应 `technical.md`「导入面所有权」与导入面重命名分析稿的 compat-comment / private-all / cross-private / cross-private-scripts / dynamic-target / layer-inversion 规格，第七条是**例外表自审**（字段齐全 + 未到期 + 仍命中违规）：：
 
 1. **compat-comment 兼容注释**：`src/python/` 出现「兼容既有导入面 / 兼容既有引用 / 公开别名 / 私有名保留」即 finding。
 2. **private-all 私有 `__all__`**：包 `__init__.py` 的 `__all__` 不得列 `_` 开头的私有名。
 3. **cross-private 跨包私有导入**：跨包 `from src.python.<pkg>._x import ...` 即 finding；同包与测试私有导入不在此规则。
 4. **cross-private-scripts 脚本侧私有模块导入**：`scripts/` 下任意脚本（递归，含 `_subpkg/`）导入 `src/python` 的私有模块即 finding——含 `from src.python.<pkg>._x import ...` 与从包门面取私有子模块（`from src.python.<pkg> import _x`，按该名是否确为一个模块判定）。口径与规则 3 同源：只判**模块面**，公开模块的私有**符号**导入不判；`scripts` 内部互引（`_shared/` 等）不受限（受判目标只有 `src.python.*`）。存在例外已登记在例外表（文档默认值对拍、离线因子/幻觉评测直连实现等，逐条带替代路径与复核期限）。
 5. **dynamic-target 动态导入字面量**：`importlib.import_module("字面量")` 的目标不可解析即 finding；变量形目标由 `test_check_import_surface.py` 的 smoke 覆盖。
-6. **exception-table 例外表自审**：每条须齐 `path / name / owner / reason / expiry / replacement`；`expiry`（`YYYY-MM-DD`）到期即 finding——续期须显式改日期并复核理由；登记项若已不再命中任何违规（规则早修好）也判 finding（`[exception-stale]`），防例外腐化成永久豁免。例外表解析失败同样按 finding 报（不以 traceback 窜出契约码域）。
+6. **layer-inversion 分层倒置**：底层模块不得依赖上层——`core` 函数内反向依赖 `fetcher`/`providers`/…（逐处登记），`analysis` 层（纯计算）不得 import `report/` 或 `llm/`（须改由 `core/` 提供共用面）。
+7. **exception-table 例外表自审**：每条须齐 `path / name / owner / reason / expiry / replacement`；`expiry`（`YYYY-MM-DD`）到期即 finding——续期须显式改日期并复核理由；登记项若已不再命中任何违规（规则早修好）也判 finding（`[exception-stale]`），防例外腐化成永久豁免。例外表解析失败同样按 finding 报（不以 traceback 窜出契约码域）。
 
 **门面脚本的再导出面一律写进 `__all__`**：多行 `from x import (...)` 的语句级 `# noqa: F401` 兜不住——`F401` 诊断落在名单行，抑制写在语句行时 `RUF100` 判「空转」；而删掉抑制 ruff 就把再导出名当未用导入整行删除。`scripts/` 下测试按脚本名访问的再导出面（`check-doc-drift.py` / `check-doc-traces.py` / `perf-history.py` / `release.py` / `test-perf-report.py` / `_traces_code/patterns.py`）用 `__all__` 声明：再导出即公开面，增删门面名只改这一处，行内不再挂 `# noqa: F401`。
 
