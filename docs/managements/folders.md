@@ -14,12 +14,12 @@
 | 架构图示 | SVG | 4 | 396 | `src/static/` README 架构图（architecture 三渠道→引擎→双报告、llm-chain Provider 链式分发、capabilities 九大功能域总览、owl-mascot 吉祥物猫头鹰「守望」）+ 截图 7 张 PNG（报告实景 `report-overview`/`report-toc`/`report-charts` + 界面实景 `tui-menu`/`web-workbench`/`web-config`/`cli-report`，不计入本行） |
 | 辅助脚本 | Python | 151 | 31,912 | `scripts/`（启动脚本 + CLI 命令行包装、测试驱动、工具检查、任务编号检查、性能测试、LLM 幻觉率评测与因子目录评测、测试覆盖计数、代码/文档历史痕迹与结构性冗余检查、视觉资产（社交预览图/架构图体检）、语义命名索引校验、Claude Code hook 安装/校验、Web 冒烟脚本、push2 连通性诊断、SVG 架构图检查） |
 | 源代码合计 | — | 635 | 161,709 | 主程序 + 模板 + 脚本 + SVG |
-| 测试代码 | Python | 997 | 248,679 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
-| 测试用例 | — | — | 17,260 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
+| 测试代码 | Python | 1002 | 250,164 | `src/test/` 所有 `.py` 文件（含近期 ruff format 全仓重排） |
+| 测试用例 | — | — | 17,367 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 15 | 7,088 | 含 README.md；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 14 | 6,851 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 223 | 75,729 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 14,845 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 223 | 75,734 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 14,850 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 200 | 59,172 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 9 | ~1616 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + TUI 交互改进（议题 + 第一/二批实施方案） + PanWatch 借鉴分析（含评估政策单源化与 LLM 复盘契约两份设计） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -1438,6 +1438,11 @@ investor-review/
 │       │   │   ├── test_find_order_dependent_main.py  # 顺序依赖用例发现（子进程打桩、种子对比、命中判定）
 │       │   │   ├── test_eval_decision_quality_factor_ic.py  # 因子 IC 阶段（脏值跳过、逐因子×视界判定行、无基准降级）
 │       │   │   ├── test_eval_decision_quality_report.py  # 决策质量评测报告（五阶段判定表渲染与控制台摘要）
+│       │   │   ├── test_check_style_guardrails_rare.py  # 设计护栏稀有分支（E/W 判定、发布门禁域、白名单）
+│       │   │   ├── test_doc_drift_rare_branches.py  # 文档漂移稀有分支（测试快照采集、目录树/矩阵探针降级）
+│       │   │   ├── test_eval_decision_quality_stage_branches.py  # 决策质量阶段分支（因子 IC/判定行/无基准降级）
+│       │   │   ├── test_eval_dedup_threshold_report.py  # 去重阈值评测报告（ratio 分档边界、样本不足降级、矩阵结构）
+│       │   │   ├── test_probe_date_bombs_main.py  # 日期炸弹探测主流程（固定 today 注入、finding 分类与退出码）
 │       │   │   ├── test_eval_llm_budget_pipeline.py  # LLM 预算评测管线（提示词追加与还原、repair 重试、矩阵口径）
 │       │   │   ├── test_make_assets_svg_pixel.py  # SVG/图标像素校验（Pillow 缺失契约、亮色与文字色 finding、main 分支）
 │       │   │   ├── test_make_screenshots_commands.py  # 截图与演示工作区命令（伪 TTY 代理、PTY 打桩、浏览器回退链）
