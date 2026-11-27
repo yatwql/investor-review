@@ -15,8 +15,12 @@
 from __future__ import annotations
 
 import unittest
+from typing import TYPE_CHECKING
 
 import pytest
+
+if TYPE_CHECKING:  # 仅注解用；真实实例化在各用例内
+    from bs4 import BeautifulSoup
 
 from src.test.unit.report.test_html_report_structure import (
     _REPORT_SECTION_DEFAULT,
