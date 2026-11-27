@@ -365,7 +365,7 @@
 |---|---|
 | TUI | 主菜单 `D` → `H` 查看数据源健康历史 |
 | Web | 「日志查看」区的健康历史接口 / 面板（`GET /api/health/history`） |
-| CLI | `python -m src.python.cli health-history`（`--limit N`、`--json`） |
+| CLI | `.venv/bin/python -m src.python.cli health-history`（`--limit N`、`--json`） |
 
 **用途**：区分「这次为什么降级」与「一直正常」——比单次 `check-sources` 更能看出偶发断连/限流。
 
