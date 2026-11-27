@@ -99,7 +99,7 @@ class TestFullPathPhaseSpans:
         perf = _RecordingPerf()
         _bind(monkeypatch, perf)
         monkeypatch.setattr("src.python.config.features.is_feature_enabled", lambda *a, **k: False)
-        monkeypatch.setattr(rg, "_build_chart_datasets_for_report", lambda *a, **k: {})
+        monkeypatch.setattr("src.python.report._report_output._build_chart_datasets_for_report", lambda *a, **k: {})
         monkeypatch.setattr(
             "src.python.report.html_writer.write_html_report",
             lambda *a, **k: str(tmp_path / "report.html"),
@@ -143,7 +143,7 @@ class TestFullPathPhaseSpans:
         monkeypatch.setattr("src.python.report.html_writer.write_html_report", _fake_html)
         _bind(monkeypatch, _RecordingPerf())
         monkeypatch.setattr("src.python.config.features.is_feature_enabled", lambda *a, **k: False)
-        monkeypatch.setattr(rg, "_build_chart_datasets_for_report", lambda *a, **k: {})
+        monkeypatch.setattr("src.python.report._report_output._build_chart_datasets_for_report", lambda *a, **k: {})
         basis = {"enabled": True, "summary": "x"}
         prep_stub["decision_basis_data"] = basis
 
@@ -235,7 +235,7 @@ class TestFullPathPhaseSpans:
         perf = _RecordingPerf()
         _bind(monkeypatch, perf)
         monkeypatch.setattr("src.python.config.features.is_feature_enabled", lambda *a, **k: False)
-        monkeypatch.setattr(rg, "_build_chart_datasets_for_report", lambda *a, **k: {})
+        monkeypatch.setattr("src.python.report._report_output._build_chart_datasets_for_report", lambda *a, **k: {})
 
         def _boom(*a, **k):
             raise RuntimeError("渲染失败")
@@ -429,7 +429,7 @@ class TestSlowStageWarningSplit:
         perf = _SpanPerf(spans)
         _bind(monkeypatch, perf)
         monkeypatch.setattr("src.python.config.features.is_feature_enabled", lambda *a, **k: False)
-        monkeypatch.setattr(rg, "_build_chart_datasets_for_report", lambda *a, **k: {})
+        monkeypatch.setattr("src.python.report._report_output._build_chart_datasets_for_report", lambda *a, **k: {})
         monkeypatch.setattr(
             "src.python.report.html_writer.write_html_report",
             lambda *a, **k: str(tmp_path / "report.html"),

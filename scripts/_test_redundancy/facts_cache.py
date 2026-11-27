@@ -30,6 +30,7 @@ from _test_redundancy.trivial import (
 )
 from _test_redundancy import _common
 from _test_redundancy.markers import check_file as _check_marker_file
+from _test_redundancy.patch_surface import extract_patch_targets
 from _test_redundancy.weak_mock import (
     check_weak_mock_assertions,
 )
@@ -63,9 +64,10 @@ def _cache_version() -> str:
     logic_files = (
         Path(__file__),
         Path(__file__).resolve().parents[1] / "_shared" / "checklib.py",
-        # 标记支路的判定口径（EXPECTED_DIR_MARKERS / 注册集解析）是同源的 per-file 事实，
-        # 改它必须与改本文件一样让缓存全量失效，否则旧「合规」结论会继续命中
+        # 标记支路的判定口径（EXPECTED_DIR_MARKERS / 注册集解析）与 patch 面目标的抽取规则
+        # 是同源的 per-file 事实，改它们必须与改本文件一样让缓存全量失效，否则旧结论会继续命中
         Path(__file__).with_name("markers.py"),
+        Path(__file__).with_name("patch_surface.py"),
     )
     for src in logic_files:
         try:
@@ -133,6 +135,7 @@ def _file_facts(path: Path, tree: ast.Module, cases: list[TestCase]) -> dict:
         "trivial": check_trivially_true(cases),
         "weak": check_weak_mock_assertions(cases),
         "date_bomb": check_ledger_absolute_dates(tree, path),
+        "patch_targets": extract_patch_targets(tree),
         "fixtures": fixtures,
         "params": params,
         "usefix": usefix,

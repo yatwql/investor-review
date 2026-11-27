@@ -37,7 +37,7 @@
 | `check-doc-links.py` | 文档 | 文档链接与结构一致性校验（死链/死锚点/重复标题/层级/编号序列/§引用） |
 | `check-import-surface.py` | 质量 | 导入面契约（compat-comment 兼容注释 / private-all 私有 `__all__` / cross-private 跨包私有导入 / cross-private-scripts 脚本侧私有模块导入 / dynamic-target 动态导入字面量 / layer-inversion 分层倒置（底层不得依赖上层） / exception-table 例外表自审（字段齐全+到期+失效）；例外表 `_import_surface_exceptions.json`；**已入域**：钩子只随 `src/python/` 变更触发（~1s），CI `guards` 与 P2 恒全量） |
 | `check-file-length.py` | 质量 | 单文件行数红线守护（主程序/脚本 >1000 行 / 测试 >1200 行；豁免登记与 review-findings 挂账同步；另断言 review-findings P4 膨胀登记表行数与实测一致（防表腐化），`-v` 输出可选优化区间清单、登记实况与「行数 × 近 90 天改动」优先级） |
-| `check-test-redundancy.py` | 测试 | 测试用例冗余与无效检查（死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / 恒真断言 / 死 fixture / 弱 mock 断言 / 账本日期写死绝对日期；实现拆在 `_test_redundancy/`——九类用例质量检查 + 标记合规支路各一模块 + 共用 AST 原语 + 事实缓存 + 编排，入口只留 CLI） |
+| `check-test-redundancy.py` | 测试 | 测试用例冗余与无效检查（死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / 恒真断言 / 死 fixture / 弱 mock 断言 / 账本日期写死绝对日期 / patch 打在 re-export 面；实现拆在 `_test_redundancy/`——十类用例质量检查 + 标记合规支路各一模块 + 共用 AST 原语 + 事实缓存 + 编排，入口只留 CLI） |
 | `check-requirement-trace.py` | 质量 | 需求 ID ↔ 验证载体追溯（单段 ID 全域覆盖 / 载体文件存在 / ID 双向一致） |
 | `hook-install-claude.py` | 质量 | 安装/卸载 Claude Code PostToolUse hook（任务编号一致性自动校验） |
 | `probe-date-bombs.py` | 测试 | 时间炸弹经验筛查（变异法）：把候选测试文件里的绝对日期整体回移 N 年再逐个跑 pytest，失败即「依赖日期处于近期」（rot-suspect）；`--detail` 打印失败断言原文（实际/期望两侧）供判读；改写前备份、`finally`/`atexit` 双兜底还原并校验 sha256，脏文件默认跳过；结果需人工判读（生产侧显式注入 today / 星期-财季语义 / 断言目标在未变异 fixture 均为伪信号）；不入门禁 |
@@ -281,7 +281,7 @@ Web 模式全链路可复跑冒烟验证（上传→生成→进度→产物，F
 
 **设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
 
-静态分析 `src/test/`（默认跳过 `pytest.ini` 刻意排除的 `live/` 真网套件），抓九类「看着有测试其实没测住」的问题：
+静态分析 `src/test/`（默认跳过 `pytest.ini` 刻意排除的 `live/` 真网套件），抓十类「看着有测试其实没测住」的问题：
 
 1. **死用例**：同文件同类同名重复定义（后者覆盖前者）、类名不以 `Test` 开头的方法形式 `test_*`、`Test*` 类定义了 `__init__`（pytest 整类跳过）
 2. **无断言用例**：既无 `assert`、也无 `pytest.raises/warns/fail`、也无 `assertEqual` 等 `assert*` / `assert_called*`，且不经同类辅助方法（如 `self._assert_pairs_contain(...)`，其内部含断言）——断言落在辅助方法里同样算数
@@ -299,7 +299,7 @@ Web 模式全链路可复跑冒烟验证（上传→生成→进度→产物，F
 **使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
 
 ```bash
-.venv/bin/python scripts/check-test-redundancy.py                 # 九类用例质量 + 标记合规全查
+.venv/bin/python scripts/check-test-redundancy.py                 # 十类用例质量 + 标记合规全查
 .venv/bin/python scripts/check-test-redundancy.py -v              # 详细输出（扫描规模 + 各类计数 + 跳过的间接调用用例数）
 .venv/bin/python scripts/check-test-redundancy.py --ci            # CI 模式（只输出 文件:描述，退出码 2）
 .venv/bin/python scripts/check-test-redundancy.py --include-live  # 连带扫描 src/test/live/
@@ -333,7 +333,12 @@ Web 模式全链路可复跑冒烟验证（上传→生成→进度→产物，F
 .venv/bin/python scripts/check-test-redundancy.py --ci
 ```
 
-判 finding 与其余九类同一退出码（2）。`src/test/` 变更即由 pre-commit 触发；入口本身不另设开关。
+判 finding 与其余十类同一退出码（2）。`src/test/` 变更即由 pre-commit 触发；入口本身不另设开关。
+
+**patch 打在 re-export 面（第 10 类）**：扫描 `src/test/**` 的 `patch("a.b.c")` 与 `monkeypatch.setattr(<module>, "name")`，
+解析目标模块；若该 `name` 在模块里只来自 import（模块体内没有任何其它引用）即报 finding——这类 patch 会让测试绿着通过、而生产仍走真实绑定。
+口径刻意排除包门面 `__init__.py` 与模块 `__all__` 里声明的公开导出面（那是刻意维持的公开导入面，报它等于把公开 API 判成违规）。
+确有正当理由的（目标模块自己就在函数体里调用了该符号）登记在 `scripts/_test_redundancy_exceptions.json`（owner / reason / expiry / replacement）。
 
 ## 文档类
 

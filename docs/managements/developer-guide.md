@@ -928,6 +928,7 @@ mod = load_script("_test_runner/modes.py", module_name="modes_under_test")   # �
 4. **`plan.md`** — 如果在迭代中新增的功能，更新对应条目的完成状态
 5. **`unit/conftest.py`** — 新增 `unit/` 下测试文件时确认 `pytestmark` 列表包含正确的 `unit_*` 子标记
 6. **`conftest.py` 隔离 fixture** — 新增模块级单例时加 autouse 复位 fixture（参照 `_auto_reset_last_reason` 习语，如 `_auto_reset_llm_failure_state`）；新增持久化状态文件/输出目录时在 `_isolate_sensitive_paths` 增加 `monkeypatch.setattr` 重定向——细则见 CLAUDE.md「新增测试隔离要求」，漏加会让用例随执行顺序漂移；**配置路径覆写须逐例清空**：`_CONFIG_PATH_OVERRIDE` 覆写优先于 `_CONFIG_FILE`，每条用例由 `seed_sensitive_path_isolation` 置 None（不清会串读上一条用例的临时配置，如截图取帧遗留的演示工作区路径）
+7. **会话级全局状态守卫** — `src/test/_conftest_state_guard.py` 在收集结束与整套跑结束各取一次白名单快照（配置覆写/配置缓存键/开关默认值/`invest` logger 级别与类/`cwd`/`sys.path`/网络守卫函数），不一致即 `pytest.fail` 并给 `pytest -p no:randomly --lf` 复跑与文件二分定位；新增进程级全局时须登记到 `_ITEM_LABELS`（有用例断言字段全覆盖）。该守卫专抓「单跑绿、整套红」的跨用例污染。
 
 **新增后必须执行的验证**：
 
