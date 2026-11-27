@@ -12,9 +12,10 @@ import logging
 import time
 from collections.abc import Callable
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 from src.python.analysis.unavailable_contracts import factor_unavailable_result, industry_unavailable_result
+from src.python.config import get_default
 from src.python.core.code_utils import is_six_digit_code
 from src.python.core.concurrency import worker_pool
 from src.python.core.perf import SLOW_SPAN_WARN_SECONDS
@@ -27,6 +28,10 @@ logger = logging.getLogger("invest")
 #: 若无单路耗时与告警，事后只能看到「因子暴露 10.5s」这一个总数。
 #: 与落盘慢告警共用同一阈值源（core.perf），避免两处数字各改一半。
 _SLOW_FETCH_WARN_SECONDS = SLOW_SPAN_WARN_SECONDS
+
+#: 风格因子 / 行业 Beta 两段的并发热点默认值——单源取 config 默认值表 `batch.factor_workers`，
+#: 三个取数点共用本常量（同一热点在调用点各写一份字面量，改一处漏两处即静默不一致）。
+_FACTOR_WORKERS_DEFAULT: int = cast(int, get_default("batch.factor_workers"))
 
 
 def _timed_fetch(fn: Callable[..., Any], *args, label: str = "", **kwargs):
@@ -152,7 +157,7 @@ def compute_factor_exposure_data(
 
         with worker_pool(
             "batch:orch_factor",
-            min(get_batch_worker_count("factor_workers", 6), max(1, _n + len(FACTOR_INDICES))),
+            min(get_batch_worker_count("factor_workers", _FACTOR_WORKERS_DEFAULT), max(1, _n + len(FACTOR_INDICES))),
             thread_name_prefix="orch_factor",
         ) as _pool:
             bar_futs = {
@@ -169,7 +174,7 @@ def compute_factor_exposure_data(
                 try:
                     _bars = _fut.result()
                 except Exception:  # noqa: BLE001 — 单品种 K 线失败不阻断同类其余品种，但要留痕
-                    logger.debug("[factor] 持仓 K 线获取失败：%s %s", h.code, h.name, exc_info=True)
+                    logger.info("[factor] 持仓 K 线获取失败：%s %s", h.code, h.name, exc_info=True)
                     _bars = None
                 if _bars:
                     holdings_bars[h.code] = {"shares": float(h.shares), "bars": _bars}
@@ -177,7 +182,7 @@ def compute_factor_exposure_data(
                 try:
                     factor_klines[f] = _fut.result() or []
                 except Exception:  # noqa: BLE001 — 因子空拉取计入 excluded 并降级判据，缺日志会看不出是异常还是真无数据
-                    logger.debug("[factor] 因子指数 K 线获取失败：%s", f, exc_info=True)
+                    logger.info("[factor] 因子指数 K 线获取失败：%s", f, exc_info=True)
                     factor_klines[f] = []
 
         portfolio_returns = asif_portfolio_daily_returns(holdings_bars)
@@ -298,7 +303,7 @@ def compute_industry_beta_data(
 
         with worker_pool(
             "batch:orch_ind",
-            min(get_batch_worker_count("factor_workers", 6), max(1, _n)),
+            min(get_batch_worker_count("factor_workers", _FACTOR_WORKERS_DEFAULT), max(1, _n)),
             thread_name_prefix="orch_ind",
         ) as _pool:
             _futs = {
@@ -312,7 +317,7 @@ def compute_industry_beta_data(
                 try:
                     _bars = _fut.result()
                 except Exception:  # noqa: BLE001 — 单品种失败不阻断其余，留痕以便区分「无数据」与「取数异常」
-                    logger.debug("[industry_beta] 持仓 K 线获取失败：%s %s", h.code, h.name, exc_info=True)
+                    logger.info("[industry_beta] 持仓 K 线获取失败：%s %s", h.code, h.name, exc_info=True)
                     _bars = None
                 if _bars:
                     holdings_bars[h.code] = {"shares": float(h.shares), "bars": _bars}
@@ -327,7 +332,7 @@ def compute_industry_beta_data(
         if mapped_industries:
             with worker_pool(
                 "batch:orch_ind_idx",
-                min(4, get_batch_worker_count("factor_workers", 6)),
+                min(4, get_batch_worker_count("factor_workers", _FACTOR_WORKERS_DEFAULT)),
                 thread_name_prefix="orch_ind_idx",
             ) as _pool:
                 _futs = {
@@ -341,7 +346,7 @@ def compute_industry_beta_data(
                     try:
                         industry_klines[i] = _fut.result() or []
                     except Exception:  # noqa: BLE001 — 行业指数失败计入「无数据」，留痕区分异常与真无数据
-                        logger.debug("[industry_beta] 行业指数 K 线获取失败：%s", i, exc_info=True)
+                        logger.info("[industry_beta] 行业指数 K 线获取失败：%s", i, exc_info=True)
                         industry_klines[i] = []
 
         # ── 5. 纯计算：逐行业一元 OLS（复用 style_factor_regression 机制） ──

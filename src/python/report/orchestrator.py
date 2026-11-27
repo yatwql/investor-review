@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 
 from src.python.report.progress import ProgressReporter
@@ -41,7 +42,7 @@ from ._orchestrator_data import (  # noqa: F401
 
 from src.python.config import resolve_output_dir
 
-logger = __import__("logging").getLogger("invest")
+logger = logging.getLogger("invest")
 
 
 # ── 数据结构 ───────────────────────────────────────────────

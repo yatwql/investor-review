@@ -89,7 +89,9 @@ def build_evolution_stats(root: Path, runner: Any = None) -> dict[str, int]:
         "def_test_lines": def_test,
         "def_test_strict": def_test_strict,
         "repo_files": len(paths),
-        "repo_lines": sum(lines[p] for p in paths),
+        # 工作区缺失（未提交的删除/尚未检出的跟踪文件）不进 lines：按 lines 里实际读到的路径求和，
+        # 缺失条数只经 missing 上报，两条口径各走各的
+        "repo_lines": sum(lines[p] for p in paths if p in lines),
         "missing": len(missing),
     }
 

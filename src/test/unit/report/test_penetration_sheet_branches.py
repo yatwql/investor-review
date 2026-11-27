@@ -158,6 +158,16 @@ class TestDataStatus:
             quiet_tracker.record.assert_not_called()
             quiet_tracker.reset.assert_called_once_with("penetration_industry")
 
+    def test_unknown_industry_status_is_not_treated_as_healthy(self, caplog):
+        """缺键或取值非法 → 未分类：既不登记降级也不复位计数（缺键不得静默算健康）。"""
+        for result in (_penetration_result(), _penetration_result(industry_status="bogus")):
+            tracker = Mock()
+            with patch.object(ps, "_tracker", return_value=tracker), caplog.at_level("WARNING"):
+                assert ps.build_penetration_data_status(result) == {}
+            tracker.record.assert_not_called()
+            tracker.reset.assert_not_called()
+        assert any("未分类" in rec.message for rec in caplog.records)
+
 
 class TestIndustryCounterHygiene:
     """预期行为与非预期行为交替时，历史失败计数不得污染下一次判定。"""

@@ -10,6 +10,8 @@
 
 from __future__ import annotations
 
+import logging
+
 
 from src.python.report._report_output import (  # noqa: F401  # 产物落盘子模块（消费方在本门面，patch 点不变）
     _generate_full_excel_report,
@@ -41,4 +43,4 @@ from ._generation_full import (  # noqa: F401
     _generate_report_full,
 )
 
-logger = __import__("logging").getLogger("invest")
+logger = logging.getLogger("invest")

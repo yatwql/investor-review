@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable, Collection
 from concurrent.futures import Future, ThreadPoolExecutor
 
@@ -20,7 +21,7 @@ from src.python.report.progress import ProgressReporter
 if TYPE_CHECKING:
     from src.python.core.perf import PhaseBreakdownRecorder
 
-logger = __import__("logging").getLogger("invest")
+logger = logging.getLogger("invest")
 
 
 def _report_llm_module_results(
@@ -51,7 +52,6 @@ def _report_llm_module_results(
         reporter.info(f"{name}：已跳过（菜单 S 可切换）")
     for name in failed:
         reporter.add_error(f"{name}：内容生成失败（已降级使用占位文本）")
-        reporter.warn(f"{name}：内容生成失败（已降级使用占位文本）")
 
     if ok_count > 0 and not failed:
         tag = "缓存" if all(cached_flags) else "LLM"
@@ -184,7 +184,6 @@ def _collect_news_future_result(fut: Future, reporter: ProgressReporter) -> tupl
         return news_data, news_llm_meta, news_ok
     except Exception:  # noqa: BLE001 — 新闻源处第三方边界，异常即空新闻集（报告其余部分照常生成）
         reporter.add_error("新闻获取异常（详情请查看日志文件 logs/app.log）")
-        reporter.warn("新闻获取异常（详情请查看日志）")
         return [], {}, False
 
 
