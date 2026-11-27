@@ -6,7 +6,7 @@
 
 ---
 
-## [0.18.8-dev] - 开发中（未发布）
+## [0.19.0-dev] - 开发中（未发布）
 
 ### 修复
 - **测试冗余检查入口收薄（rf-1254）**：`scripts/check-test-redundancy.py` 不再为 `load_script` 直调面 re-export 内部符号（13 块 / 52 个，其中 14 个有真实引用、其余删除），测试改为直接导入 `_test_redundancy.*`；入口只保留 `main()` 实际使用的编排面，`兼容 load_script 直调面` 注释归零，`F401` 信号恢复有效
