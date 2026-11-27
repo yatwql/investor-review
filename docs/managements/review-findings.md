@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.18.8-dev
-> **编号源**：`rf-next = 1236`（新增问题提出后更新为 +1；已用最大 rf-1235，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1254`（新增问题提出后更新为 +1；已用最大 rf-1253，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -18,6 +18,13 @@
 
 | # | 问题 | 修复方向 |
 | --- | --- | --- |
+| rf-1253 | `report/_llm_news.py:173-174` 同一失败既 `add_error` 又 `error` 上屏（语义分工与上条不同，未并入） | 先定「汇总记录 vs 即时上屏」边界再决定是否合并 |
+| rf-1252 | `report/_report_generation.py` 等 128 行巨型函数未拆分（本次未动） | 与门面收拢一并做，避免两次改同一处 |
+| rf-1251 | `pyproject.toml` 对 `src/python/report/_report_generation.py` 关掉 F821（唯一被豁免的生产文件） | 去掉函数内延迟导入或改 `TYPE_CHECKING` 后恢复 F821 |
+| rf-1250 | 生产入口为测试 patch 保留未使用 import（`scripts/check-test-redundancy.py` 的 `ast`、`release.py` 的 `os`，含整文件 F401 豁免） | 把 patch 点改到真实调用模块后删兼容 import 与豁免 |
+| rf-1249 | 同一 `BLE001` 并存两种标注形态（`# noqa: BLE001` 与散文「有意宽捕获」），散文形态无机检；`core/doctor.py` 12 处逐字重复同一降级理由注释 | 统一形态并加守卫；重复理由抽为模块级常量注释 |
+| rf-1248 | 4 处 `float(safe_num(...))  # type: ignore[arg-type]`（`safe_num` 可返回 None，靠 `default=0.0` 巧合自保） | 归一到 `core/num_utils.finite_or` 单源，去掉 4 处 type-ignore |
+| rf-1247 | `scripts/_screenshots/tui_frame.py` 跨包读私有 `config._config_defaults._CONFIG_PATH_OVERRIDE`（`check-import-surface` 的 `PY_ROOT` 只扫 `src/python`，scripts 侧无兜底） | 在 `config` 包补公开 `get/restore_config_path_override()`，脚本改用公开面并把 scripts 纳入导入面受检域 |
 
 ### P3 — 持续监控：兼容残留
 
@@ -64,6 +71,16 @@
 | # | 问题 | 修复方向 |
 |---|------|----------|
 | **rf-1235** | 展示脚本取帧泄漏配置路径覆写：`scripts/_screenshots/tui_frame.py` 的 `capture_frame` 以 `get_config_path()`（有效路径）作还原值，原进程「无覆写」时该值即 `_CONFIG_FILE`，`finally` 里再 `set_config_path_override` 回写便把「覆写=默认路径」永久钉在进程上；同源的 `src/test/_path_isolation.py` 未清覆写则让上一条用例（如取帧）遗留的演示路径盖掉本轮隔离路径，跨用例配置串读。两处都缺会红的回归用例 | 还原改用**原覆写值** `_config_defaults._CONFIG_PATH_OVERRIDE`（None 即还原 None，直接回写），进入与还原各清一次配置缓存，私有的 `_clear_config_cache` 换成公开 `invalidate_config_cache`；补两条会红的回归用例（无前置覆写的真取帧结束后覆写仍为 None、隔离 seed 清掉泄漏覆写） |
+| **rf-1245** | `tui/handlers_switch.py` 同一查找逻辑三份内联实现、赋值通道 `parse_switch_override` 解析两次、一处 `[!]` 提示缺配色 | 抽 `_find_switch_item_by_key()` 共用、解析只做一次、按 DESIGN-TUI 补齐颜色角色，并引入 `SwitchItem` 类型别名 |
+| **rf-1244** | `report/penetration*.py` 的 `industry_status` 为裸字符串状态机，缺键默认值为「健康」 | 改显式常量集合，缺键显式归入「未知」而非静默算健康 |
+| **rf-1243** | `report/_report_factor_metrics.py` 的 `factor_workers` 默认值 3 处硬编码 6 | 收敛为单源常量（取自配置默认值表），三处引用该常量 |
+| **rf-1242** | 4 处 `logger.debug` 与「要留痕」注释矛盾（DEBUG 不进默认 INFO 的 app.log） | 级别对齐为 INFO；`providers/cninfo` 的「留痕」指负缓存机制、非级别要求，保留 |
+| **rf-1241** | `report/_llm_news.py` 两处对同一消息 `add_error` + `warn` 双发 | 保留跨通道恒可见的 `add_error`，删 `warn`；断言改指保留的那一路 |
+| **rf-1240** | 5 处 `__import__("logging").getLogger()` 无理由动态导入 | 模块顶部 `import logging`，logger 名不变 |
+| **rf-1239** | `report/pipeline_data_builder.py` 对未注册 pipeline_data 键「告警即自动登记」进模块级集合，与数据契约「违反则不通过」不符且键宇宙两份事实位 | 三个注入路径一律不登记（`frozenset` 使 `.add` 结构上不可能），未知键告警指向附录 H；`_validate_keys` 形参改 `AbstractSet` |
+| **rf-1238** | 报告生成门面把同一组符号 `# noqa: F401` 复述三遍；其中一处 patch 打在从未被调用的绑定上（死 patch） | 权威 re-export 收拢到 `_report_generation`，`_generation_shared` 整块删除、`_generation_full` 仅留实际调用依赖；死 patch 改指真实调用点 |
+| **rf-1237** | LLM 模块键元组在 10+ 处各抄一份且成员已不一致（4 元素 vs 5 元素），新增模块会静默漏入质量评分/模块明细 | 新建 `llm/module_registry.py` 单源（产出序 / 后缀集合 / 并行子集 + 排除理由），11 处调用点改派生；`core`/`config` 因分层不改，由守卫用例锁定等值 |
+| **rf-1236** | `scripts/_release/_evolution.py` 在 `git ls-files` 含工作区缺失文件时 `sum(lines[p] for p in paths)` 抛 KeyError，崩在缺失清单打印之前 | 求和跳过未读入路径，`missing` 语义不变；补回归用例（缺失文件下命令存活且计数正确） |
 | **rf-1234** | 用例名与体内验证行为不对应 10 处（去重口径/排序/并发/符号链接/上限配置等） | 名字与体内行为取同一口径：按名字补齐断言或按行为命名；已落 8 处，其余目标文件在仓库中不存在 |
 | **rf-1233** | 弱断言 14 处（截断未验收缩、入参回显、硬边界值、任意单元格命中、写死条数等） | 取可区分的期望值（截断前后集合、显式档位差、具体单元格定位）与结构关系断言；已落 7 处，其余目标文件不存在 |
 | **rf-1232** | 跨文件语义重复 13 组（行情/缓存矩阵/限速/进度器/凭证矩阵等） | 保留双方但一侧承担该模块独有差异断言（矩阵轮次、来源、非零退出码、缺条目各报一条）；已落 9 组 |
