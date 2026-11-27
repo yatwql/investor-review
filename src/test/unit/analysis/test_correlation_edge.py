@@ -195,7 +195,6 @@ class TestExtremeValues:
     def test_one_constant_one_varying(self):
         """一序列常数、另一变化 → (0, 1.0) 不显著，绝不硬算。"""
         n = 70
-        _dates(n)
         x = [0.01] * n
         y = [0.02 * i for i in range(1, n + 1)]
         r, p = _pearson_pvalue(x, y)
@@ -256,10 +255,10 @@ def test_rolling_exact_min_samples_boundary():
 
     dates = _dates(_min)
     seq = [{"date": d, "return": (i % 7 - 3) / 1000.0} for i, d in enumerate(dates)]
-    exact = compute_rolling_correlations({"a": seq, "b": list(reversed(seq)) and seq})
-    # 恰好达标的最小结构：至少一个端点
-    if exact["available"]:
-        assert exact["portfolio"]["60"], "恰好 MIN_SAMPLES 期应产出至少一个端点"
+    exact = compute_rolling_correlations({"a": seq, "b": seq})
+    # 恰好达标的最小结构：必须可用且至少一个端点（不得条件式跳过）
+    assert exact["available"] is True, "恰好 MIN_SAMPLES 期应可算"
+    assert exact["portfolio"]["60"], "恰好 MIN_SAMPLES 期应产出至少一个端点"
 
     short = compute_rolling_correlations(
         {"a": seq[:-1], "b": [dict(r) for r in seq[:-1]]},

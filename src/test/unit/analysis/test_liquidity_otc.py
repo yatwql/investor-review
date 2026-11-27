@@ -66,6 +66,7 @@ class TestLiquidityOTCConfig:
 
         limits = {"000001": 2_000_000, "001111": 2_000_000}
         result = check_liquidity(self._otc_data(), 1_500_000, redemption_limits=limits)
+        assert result, "OTC 数据非空时须返回条目（否则下面的循环空转）"
         for r in result:
             assert r["type"] == "otc"
             assert r["liquidation_days"] < 1.0
@@ -76,6 +77,7 @@ class TestLiquidityOTCConfig:
         from src.python.analysis.liquidity import check_liquidity
 
         result = check_liquidity(self._otc_data(), 1_500_000)
+        assert result, "OTC 数据非空时须返回条目（否则下面的循环空转）"
         for r in result:
             assert r["type"] == "otc"
             assert r["liquidation_days"] == 3.0

@@ -221,7 +221,7 @@ def run_whatif_simulation(
                 effective_date=effective_date,
                 session_cache=None,
             )
-        except Exception as exc:  # 有意宽捕获：回测失败降级，不阻塞主报告
+        except Exception as exc:  # 回测失败降级，不阻塞主报告（异常已 logger.exception 记账，故无 suppression 抑制）
             logger.exception("时序回测计算异常（生效日 %s）", effective_date)
             backtest = {
                 "available": False,

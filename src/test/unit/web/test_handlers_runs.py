@@ -91,11 +91,12 @@ class TestShortCacheConcurrency:
         """多线程并发写缓存 dict（盲写不崩、终态单一）。"""
         from src.python.web import handlers as h
 
-        def worker(_idx: int) -> None:
+        def worker(idx: int) -> None:
             for _ in range(50):
                 with h._render_cache_lock:
-                    h._history_cache["ts"] = time.time()
-                    h._history_cache["data"] = [1, 2, 3]
+                    # ts 与 data 同锁写入且各线程写可区分值：终态必须自洽
+                    h._history_cache["ts"] = float(idx)
+                    h._history_cache["data"] = [idx, idx, idx]
 
         with patch.dict(h._history_cache, {"ts": 0.0, "data": None}):
             threads = [threading.Thread(target=worker, args=(i,)) for i in range(8)]
@@ -103,7 +104,7 @@ class TestShortCacheConcurrency:
                 t.start()
             for t in threads:
                 t.join()
-            assert h._history_cache["data"] == [1, 2, 3]
+            assert h._history_cache["data"] == [int(h._history_cache["ts"])] * 3, "ts 与 data 须同锁写入，终态自洽"
         h._history_cache["ts"] = 0.0
         h._history_cache["data"] = None
 

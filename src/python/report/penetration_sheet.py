@@ -31,7 +31,7 @@ from src.python.report.excel_writer import (
     write_title_row,
 )
 from src.python.report.market_value import DetailRow
-from src.python.report.penetration import compute_penetration_top10
+from src.python.report.penetration import IndustryStatus, compute_penetration_top10
 from src.python.report.styles import FMT_MONEY, FMT_PERCENT
 
 logger = logging.getLogger("invest")
@@ -212,9 +212,15 @@ def build_penetration_data_status(
     """
     status: DataStatus = {}
 
-    # 行业分类（T3，push2）——按 `industry_status` 枚举一次分流
-    industry_status = result.get("industry_status", "ok")
-    if industry_status in ("empty", "unreachable"):
+    # 占位回退（穿透模块缺失时调用方传空 dict）不参与判定：空 dict 里没有
+    # industry_status 可判，落入「未分类/非法」分支会把文档化的占位回退误报成
+    # 生产者缺字段；盈利预测/分红取数也未经本函数触发，无可登记项。
+    if not result:
+        return {}
+
+    # 行业分类（T3，push2）——按 :class:`IndustryStatus` 枚举一次分流；缺键即未分类，不当健康
+    industry_status = result.get("industry_status", IndustryStatus.UNKNOWN)
+    if industry_status in (IndustryStatus.EMPTY, IndustryStatus.UNREACHABLE):
         # 行业缓存按股票代码存储，取第一个可用代码检查缓存新鲜度
         _first_code = next(
             (_code for _entry in result.get("top10", []) for _code in (_entry.get("codes") or [])),
@@ -236,12 +242,21 @@ def build_penetration_data_status(
                 tier="T3",
                 message=STATUS_MESSAGES["industry_unavailable"],
             )
-    else:
+    elif industry_status in (IndustryStatus.OK, IndustryStatus.NO_A_SHARE):
         # ok / no_a_share 都不登记降级；但都要清一次本域遗留失败计数：
         # 本域计数是跨报告累积的（T3 空数据阈值 3 次），预期行为（全为非 A 股）
         # 与非预期行为交替出现时，历史计数不得污染下一次判定——否则上一轮的
         # empty 会让之后一次 empty 提前触发「行业分类不可用」。
         _tracker().reset("penetration_industry")
+    else:
+        # 未分类/取值非法：既不知是否健康、也不知是否预期行为——不登记降级也不复位计数，
+        # 只留一条告警（复位会把未知当成健康，登记降级则会把生产者缺字段误报成取数失败）。
+        # 文案取枚举值（`%r` 会把 ``<IndustryStatus.UNKNOWN: 'unknown'>`` 原样印进日志）；
+        # 非法值可能不是枚举，故取值回退到原对象。
+        logger.warning(
+            "[penetration] industry_status 未分类或非法（%s），不参与降级判定",
+            getattr(industry_status, "value", industry_status),
+        )
 
     # 盈利预测（T4，akshare）
     if not profit_success:

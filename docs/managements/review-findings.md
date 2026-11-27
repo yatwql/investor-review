@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
-> 文档版本：0.18.7
-> **编号源**：`rf-next = 1224`（新增问题提出后更新为 +1；已用最大 rf-1223，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> 文档版本：0.19.0
+> **编号源**：`rf-next = 1255`（新增问题提出后更新为 +1；已用最大 rf-1254，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -40,7 +40,7 @@
 | 文件 | 现状与拆分方向 |
 |------|----------------|
 | `src/python/core/perf.py` 797 行 | 采集器与台账落盘可拆（`perf` 采集 / `perf_history` 读写两文件） |
-| `src/python/core/doctor.py` 789 行 | 检查项按域分文件（环境 / 配置 / 数据源 / 报告产物），入口只留编排 |
+| `src/python/core/doctor.py` 793 行 | 检查项按域分文件（环境 / 配置 / 数据源 / 报告产物），入口只留编排 |
 | `src/python/llm/fact_checker/_numerical.py` 764 行 | 数值校验按规则族拆（金额 / 比率 / 计数），共享解析原语上提包内 `_common` |
 | `src/python/tui/handlers_config.py` 743 行 | 配置面板按域拆（内容选项 / 全局设置 / 目录与文件名） |
 | `scripts/_doc_drift/_format.py` 742 行 | 格式化规则按文档类型拆（章节 / 表格 / 树 / 统计） |
@@ -57,13 +57,14 @@
 
 ## 已解决问题
 
-### 开发期已修复（0.18.7-dev）
+### 开发期已修复（0.19.0-dev）
 
 > 本表为本开发周期已修条目的**摘要行**（详情见 `changelog.md` 对应段）；发布时由 `release.py prepare` 的 archive 步原表搬入版本归档并在此留占位。
 
-（本版开发期已修复项已随 v0.18.7 发布迁入归档档案）
+（本版开发期已修复项已随 v0.19.0 发布迁入归档档案）
 
 ### 归档档案
+- [`archived_review-findings.0.19.x.md`](../archive/v0.19.x/archived_review-findings.0.19.x.md) — v0.19.x（2026-11-27 ~ 2026-11-27）
 - [`archived_review-findings.0.18.x.md`](../archive/v0.18.x/archived_review-findings.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-26）
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-10）
 - [`archived_review-findings.0.16.x.md`](../archive/v0.16.x/archived_review-findings.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-11-03）

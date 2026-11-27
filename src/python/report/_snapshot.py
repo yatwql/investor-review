@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-
+import logging
 from typing import TYPE_CHECKING
 
 from src.python.core.detail_view import detail_value
@@ -15,7 +15,7 @@ from src.python.config import get_default
 if TYPE_CHECKING:
     from src.python.schemas.history import SnapshotData
 
-logger = __import__("logging").getLogger("invest")
+logger = logging.getLogger("invest")
 
 
 def _baseline_labels(ts: str) -> tuple[str, str]:

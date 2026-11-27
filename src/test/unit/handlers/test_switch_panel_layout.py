@@ -297,11 +297,19 @@ class TestRepaintAndHelpVisible:
         mock_apply.assert_not_called()
 
     def test_wide_question_mark_repaints_without_stale_hint(self):
-        """宽终端 `?3` 说明：随后正常重绘，且不出现「状态已更新」误导提示。"""
         text = self._run(120, ("?3", "0"))
         assert text.count("┌──") == 2, "宽档只读查询后照常重绘面板"
         assert "状态已更新" not in text, "只读查询不得暗示状态被修改"
         assert "出厂默认" in text
+
+    def test_key_column_toggle_hint_follows_tier(self):
+        """`k` 按档位分流：宽档已直显键名列 → 给「无需 k 切换」提示，窄档切换显隐而不报提示。"""
+        wide = re.sub(r"\x1b\[[0-9;]*m", "", self._run(140, ("k", "0")))
+        narrow = re.sub(r"\x1b\[[0-9;]*m", "", self._run(40, ("k", "0")))
+
+        assert "无需 k 切换" in wide, "宽档按键不得静默失效（必须告知本档已直显键名列）"
+        assert "无需 k 切换" not in narrow, "窄档 `k` 是实际生效的切换，不应报「无需」提示"
+        assert "deterministic_signal" in wide, "宽档原本就直显键名列"
 
 
 class TestStatusColoring:

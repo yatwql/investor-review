@@ -9,7 +9,6 @@ from __future__ import annotations
 import os
 import tempfile
 import unittest
-from unittest.mock import patch
 
 import pytest
 from src.python.core.constants import PROJECT_ROOT
@@ -25,14 +24,24 @@ class TestFirstRunGuidance(unittest.TestCase):
     """配置缺失时的引导行为测试。"""
 
     def setUp(self):
+        import src.python.config as cfg
+
         self.tmp = tempfile.TemporaryDirectory()
         self._orig_config = None
+        # 覆写优先于 _CONFIG_FILE：上一条用例若遗留覆写，本类对 _CONFIG_FILE 的重定向就会失效
+        self._orig_override = cfg.get_config_path_override()
+        cfg.clear_config_path_override()
+        cfg._core._clear_config_cache()
 
     def tearDown(self):
-        if self._orig_config is not None:
-            import src.python.config as cfg
+        import src.python.config as cfg
 
+        if self._orig_config is not None:
             cfg._config_defaults._CONFIG_FILE = self._orig_config
+        if self._orig_override is None:
+            cfg.clear_config_path_override()
+        else:
+            cfg.set_config_path_override(self._orig_override)
         self.tmp.cleanup()
 
     def test_missing_config_shows_guidance(self):
@@ -67,15 +76,16 @@ class TestFirstRunGuidance(unittest.TestCase):
         with open(cfg._config_defaults._CONFIG_FILE, "w", encoding="utf-8") as f:
             f.write("{invalid}")
         cfg._core._clear_config_cache()
-        with patch("logging.Logger.warning") as mock_warn:
+        # 用 assertLogs 而非 patch(logging.Logger.warning)：后者依赖实际 logger 类型，
+        # 同进程内若有用例换过 logger 类（如 TUI 的适配器）就会拦截不到真实告警。
+        with self.assertLogs("invest", level="WARNING") as captured:
             result = cfg.get_config()
-            self.assertEqual(result["holdings_dir"], _ABS_HOLDINGS_DIR)
-            mock_warn.assert_called()
-            warning_text = str(mock_warn.call_args[0][0])
-            self.assertTrue(
-                "配置" in warning_text or "config" in warning_text.lower(),
-                f"警告消息应提及配置: {warning_text}",
-            )
+        self.assertEqual(result["holdings_dir"], _ABS_HOLDINGS_DIR)
+        warning_text = " ".join(captured.output)
+        self.assertTrue(
+            "配置" in warning_text or "config" in warning_text.lower(),
+            f"警告消息应提及配置: {warning_text}",
+        )
 
     def test_first_run_menu_options_available(self):
         """首次运行时菜单 [C]/[F] 配置选项应可用。"""

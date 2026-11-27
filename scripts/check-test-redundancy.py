@@ -62,7 +62,6 @@
 from __future__ import annotations
 
 import argparse
-import ast  # noqa: F401 — 测试按 redundancy.ast 打桩（与原单文件行为一致）
 import os
 import sys
 
@@ -72,98 +71,10 @@ if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
 # 九类检查已按 finding 分类拆到 scripts/_test_redundancy/（各检查一个模块，共用
-# _common 的 AST 原语，runner 负责编排）；入口只保留 CLI 与兼容 re-export，
-# 使 load_script 的既有直调面（run_checks / check_* / cases_in_module …）不变。
-from _test_redundancy._common import (  # noqa: F401 — 兼容 load_script 直调面
-    TestCase,
-    _iter_test_files,
-    _strip_docstring,
-    _dump,
-    _class_attr_binding,
-    _method_body_hash,
-    _self_attrs,
-    _call_name,
-    _assertion_in,
-    _same_scope_helpers,
-    _assertions,
-    _patch_targets,
-    _called_names,
-    _mock_return_literals,
-    _asserted_literals,
-    cases_in_module,
-    _TEST_ROOT,
-    _LIVE_DIR,
-    _MOCK_ASSERT,
-    _PYTEST_ASSERT,
-    _SUT_ATTRS,
-)
-
-from _test_redundancy.cases import (  # noqa: F401 — 兼容 load_script 直调面
-    check_dead_tests,
-    check_assertion_free,
-)
-
-from _test_redundancy.duplicates import (  # noqa: F401 — 兼容 load_script 直调面
-    body_signature,
-    _group_duplicate_entries,
-    check_duplicate_bodies,
-)
-
-from _test_redundancy.similar import (  # noqa: F401 — 兼容 load_script 直调面
-    _Skeletonizer,
-    _skeleton_hash,
-    audit_similar_bodies,
-)
-
-from _test_redundancy.self_fulfilling import (  # noqa: F401 — 兼容 load_script 直调面
-    check_self_fulfilling,
-)
-
-from _test_redundancy.hardcoded import (  # noqa: F401 — 兼容 load_script 直调面
-    check_hardcoded_evolving_totals,
-)
-
-from _test_redundancy.trivial import (  # noqa: F401 — 兼容 load_script 直调面
-    check_trivially_true,
-)
-
-from _test_redundancy.weak_mock import (  # noqa: F401 — 兼容 load_script 直调面
-    _is_mock_name,
-    check_weak_mock_assertions,
-)
-
-from _test_redundancy.date_bombs import (  # noqa: F401 — 兼容 load_script 直调面
-    LEDGER_DATE_CALLS,
-    check_ledger_absolute_dates,
-)
-
-from _test_redundancy.dead_fixtures import (  # noqa: F401 — 兼容 load_script 直调面
-    _fixture_exposed_name,
-    check_dead_fixtures,
-)
-
-from _test_redundancy.facts_cache import (  # noqa: F401 — 兼容 load_script 直调面
-    _facts_cache_path,
-    _cache_version,
-    _file_signature,
-    _load_facts_cache,
-    _save_facts_cache,
-    _file_facts,
-    _collect_facts,
-    _CACHE_ENV,
-    _CACHE_FILE,
-)
-
-from _test_redundancy.markers import (  # noqa: F401 — 兼容 load_script 直调面
-    EXPECTED_DIR_MARKERS,
-    KNOWN_MARKERS,
-    check_file,
-    check_marker_compliance,
-)
-
-from _test_redundancy.runner import (  # 兼容 load_script 直调面
-    run_checks,
-)
+# _common 的 AST 原语，runner 负责编排）；入口只导入 CLI 自身编排用到的符号，
+# 检查/审计函数由测试直接从实现包导入，不再经入口 re-export。
+from _test_redundancy.runner import run_checks
+from _test_redundancy.similar import audit_similar_bodies
 
 from _shared.checklib import add_common_args, report
 

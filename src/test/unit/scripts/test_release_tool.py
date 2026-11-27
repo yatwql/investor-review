@@ -503,6 +503,22 @@ class TestEvolutionCommand:
         # verify（含 doc-drift crosscheck 单测）会因统计过期而红
         assert any(any("check-doc-drift.py" in p for p in c) and any("--sync" in p for p in c) for c in runner.calls)
 
+    def test_missing_worktree_file_keeps_command_alive(self, rel, tmp_path, capsys):
+        """`git ls-files` 含工作区丢失文件（未提交的删除）时，统计不得 KeyError 崩掉。
+
+        回归点：逐文件行数只对有读到的路径求和，缺失条数单走 `missing`；二者混算会在
+        缺失文件上抛 KeyError，使 `cmd_evolution` 整个子命令崩掉（且 `[!] N 个缺失` 分支永不触达）。
+        """
+        fx = _ToolRepoFixture(rel, tmp_path)
+        runner = FakeRunner(responses=[(["git", "ls-files"], (0, "docs/managements/folders.md\nsrc/gone.py\n", ""))])
+        rc = rel.cmd_evolution(ns(release=False), runner=runner)
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "1 个跟踪文件在工作区缺失" in out, "缺失文件须计数上报，不得静默略过"
+        import datetime as dt
+
+        assert f"本次重跑时的工作区 · {dt.date.today().isoformat()}" in fx.FOLDERS_FILE.read_text(encoding="utf-8")
+
 
 # ─────────────────────────── prepare / publish / devbump ───────────────────────────
 

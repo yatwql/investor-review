@@ -348,14 +348,14 @@ class TestReportLlmModuleResults:
         assert len(ok_calls) == 1
 
     def test_all_none(self):
-        """全部为 None 时不抛异常。"""
+        """全部为 None 时不抛异常，且失败经 `add_error` 记入运行汇总（用户可见的唯一一路）。"""
         reporter = MagicMock()
         _report_llm_module_results(
             (None, None, None, None),
             (False, False, False, False),
             reporter,
         )
-        reporter.warn.assert_called()
+        reporter.add_error.assert_called()
 
 
 @pytest.mark.unit

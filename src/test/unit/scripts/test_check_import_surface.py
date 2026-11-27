@@ -25,6 +25,7 @@ def test_real_repo_has_no_import_surface_findings(surface):
         "compat-comment",
         "private-all",
         "cross-private",
+        "cross-private-scripts",
         "dynamic-target",
         "layer-inversion",
         "exception-table",
@@ -58,6 +59,58 @@ def test_cross_package_private_import_is_detected(surface, tmp_path):
     (root / "b" / "mod.py").write_text("from src.python.a._x import value\n", encoding="utf-8")
     findings = surface.scan_cross_private(root)
     assert any("[cross-private]" in finding and "src.python.a._x" in finding for finding in findings)
+
+
+class TestScriptsCrossPrivate:
+    """`scripts/` 侧私有模块导入：口径同 `src/python` 的 cross-private（只判模块面）。"""
+
+    @pytest.fixture(name="roots")
+    def _roots(self, tmp_path):
+        py_root = tmp_path / "py"
+        pkg = py_root / "pkg"
+        pkg.mkdir(parents=True)
+        (pkg / "__init__.py").write_text("", encoding="utf-8")
+        (pkg / "_impl.py").write_text("X = 1\n", encoding="utf-8")
+        (pkg / "public.py").write_text("Y = 1\n", encoding="utf-8")
+        scripts_root = tmp_path / "scripts"
+        scripts_root.mkdir()
+        return py_root, scripts_root
+
+    def test_private_module_import_in_script_is_reported(self, surface, roots):
+        py_root, scripts_root = roots
+        (scripts_root / "shot.py").write_text("from src.python.pkg._impl import X\n", encoding="utf-8")
+        findings = surface.scan_cross_private_scripts(py_root, None, scripts_root)
+        assert any("[cross-private-scripts]" in f and "src.python.pkg._impl" in f for f in findings)
+
+    def test_package_facade_private_submodule_is_reported(self, surface, roots):
+        """`from src.python.pkg import _impl`（从包门面取私有子模块）同判。"""
+        py_root, scripts_root = roots
+        (scripts_root / "shot.py").write_text("from src.python.pkg import _impl\n", encoding="utf-8")
+        findings = surface.scan_cross_private_scripts(py_root, None, scripts_root)
+        assert any("src.python.pkg._impl" in f for f in findings)
+
+    def test_public_module_private_symbol_and_shared_import_allowed(self, surface, roots):
+        """公开模块的私有**符号**导入与 `scripts` 内部互引均不在本规则内。"""
+        py_root, scripts_root = roots
+        (scripts_root / "shot.py").write_text(
+            "from src.python.pkg.public import _Y\nfrom _shared.checklib import rel\nfrom src.python.pkg import public\n",
+            encoding="utf-8",
+        )
+        assert surface.scan_cross_private_scripts(py_root, None, scripts_root) == []
+
+    def test_excepted_script_private_import_is_suppressed(self, surface, monkeypatch, tmp_path, roots):
+        py_root, scripts_root = roots
+        script = scripts_root / "shot.py"
+        script.write_text("from src.python.pkg._impl import X\n", encoding="utf-8")
+        entry = {
+            **_EXCEPTION_ENTRY,
+            "path": surface.rel(script),
+            "name": "src.python.pkg._impl",
+        }
+        _use_exception_table(surface, monkeypatch, tmp_path, {"cross-private-scripts": [entry]})
+        exceptions = surface._load_exceptions()
+        assert surface.scan_cross_private_scripts(py_root, exceptions, scripts_root) == []
+        assert surface.audit_exceptions(exceptions) == []
 
 
 def test_dynamic_import_targets_exist():

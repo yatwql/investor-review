@@ -29,7 +29,6 @@ bench/collect/sync、publish 的 P1 verify）追加写入 `logs/release.jsonl`�
 from __future__ import annotations
 
 import argparse
-import os  # noqa: F401 — 测试以 `rel.os.cpu_count` 重定向并行度探测
 import sys
 from pathlib import Path
 from types import SimpleNamespace

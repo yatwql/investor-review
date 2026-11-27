@@ -28,15 +28,12 @@ from src.python.report._report_output import (  # 产物落盘子模块（消费
     _generate_full_html_report,
 )
 
-# ── 子模块 re-export ────────────────────────────────────
-from src.python.report._chart_dataset_factory import _build_chart_datasets_for_report  # noqa: F401
+# ── 子模块依赖（本文件实际调用的工序；re-export 统一收口在 `_report_generation` 门面） ──
 from src.python.report._full_risk_metrics import _prepare_full_risk_metrics
 from src.python.report._report_health import _collect_health_checks, _spawn_health_checks
 from src.python.report.run_integrity import bind_health, bind_perf
 from src.python.report._generation_shared import _record_llm_context
-from src.python.report._report_helpers import (  # noqa: F401
-    _action_holdings_details,
-    _compute_details,
+from src.python.report._report_helpers import (
     _inject_evolution_data,
     _inject_snapshot_diff_data,
     _validate_pipeline_snapshot,

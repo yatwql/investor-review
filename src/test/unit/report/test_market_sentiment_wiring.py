@@ -247,7 +247,8 @@ class TestFullPathInjection:
 
         seen: dict = {}
         monkeypatch.setattr("src.python.config.features.is_feature_enabled", lambda *a, **k: False)
-        monkeypatch.setattr(rg, "_build_chart_datasets_for_report", lambda *a, **k: {})
+        # 图表数据集装配的实际调用点在 `_report_output`：patch 必须落在该模块才生效
+        monkeypatch.setattr("src.python.report._report_output._build_chart_datasets_for_report", lambda *a, **k: {})
         monkeypatch.setattr(
             "src.python.report.html_writer.write_html_report",
             lambda *a, **k: seen.update(k) or str(tmp_path / "report.html"),

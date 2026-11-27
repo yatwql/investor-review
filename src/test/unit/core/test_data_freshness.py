@@ -342,9 +342,7 @@ class TestHeaderFreshness:
         summary = header_freshness("2026-10-21", config={}, calendar=self._CAL)
         assert summary is not None
         # 以测试当天为界取日历尾部；只要日期早于「前一交易日」才偏旧
-        assert summary["stale"] is (
-            summary["prev_trading_day"] is not None and "2026-10-21" < summary["prev_trading_day"]
-        )
+        assert summary["stale"] is False, "T-1 数据不早于前一交易日，不得标偏旧"
 
     def test_older_than_prev_trading_day_is_stale(self):
         from src.python.core.data_freshness import header_freshness

@@ -96,6 +96,42 @@ class TestSinaKlineParser:
 
 @pytest.mark.unit
 @pytest.mark.unit_providers
+class TestUnifiedFloatConversion:
+    """四个 ``float(safe_num(...))`` 转换点归一到 ``core.num_utils.finite_or`` 后逐点等价。
+
+    归一不改语义：None / 空串 / 非数字 / NaN / ±inf 一律 0.0，合法数值原样返回。
+    本用例只锁**行为**（转换点各自返回什么），不绑实现（是否真走 `finite_or` 由
+    「全仓仅 `num_utils` 保留一处 ``# type: ignore[arg-type]``」的静态事实约束）。
+    """
+
+    def test_conversion_sites_agree_on_dirty_and_valid_values(self):
+        conversions = (
+            ("providers.utils.safe_float", _utils.safe_float),
+            ("tencent._parse_float", tencent._parse_float),
+            ("tencent._parse_float_field", tencent._parse_float_field),
+            ("sina_kline._parse_sina_kline_float", sina_kline._parse_sina_kline_float),
+        )
+        cases = (
+            (None, 0.0),
+            ("", 0.0),
+            ("N/A", 0.0),
+            ("nan", 0.0),
+            ("inf", 0.0),
+            (float("nan"), 0.0),
+            (float("inf"), 0.0),
+            (float("-inf"), 0.0),
+            ("12.5", 12.5),
+        )
+        for name, convert in conversions:
+            for raw, expected in cases:
+                value = convert(raw)  # pyright: ignore[reportArgumentType]  # 故意传脏类型：宽容归一是被测行为
+                assert isinstance(value, float), f"{name} 应返回 float"
+                assert value == pytest.approx(expected), f"{name}({raw!r})"
+                assert math.isfinite(value), f"{name}({raw!r}) 泄漏了非有限值"
+
+
+@pytest.mark.unit
+@pytest.mark.unit_providers
 class TestEastmoneyIndustryParser:
     """东方财富行业扩展估值字段。"""
 

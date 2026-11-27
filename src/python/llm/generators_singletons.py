@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -33,7 +34,7 @@ from src.python.llm.prompts import (
 )
 from src.python.llm.skeleton import generate_llm_module
 
-logger = __import__("logging").getLogger("invest")
+logger = logging.getLogger("invest")
 
 __all__ = [
     "generate_global_macro",

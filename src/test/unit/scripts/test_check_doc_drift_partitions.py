@@ -40,14 +40,19 @@ class TestArchiveIndex:
         assert any("archived_changelog.0.10.x.md" in f and "缺少" in f for f in findings)
 
     def test_reports_missing_index_entry(self, drift, tmp_path, monkeypatch, drift_parts):
-        """索引缺失某归档文件 → 报 finding（正向）。"""
+        """索引缺失多个归档文件 → 逐条报出（不只报第一条）。"""
         doc = drift._MANAGEMENTS / "changelog.md"
         broken = tmp_path / "changelog.md"
         broken.write_text(
-            doc.read_text(encoding="utf-8").replace("archived_changelog.0.10.x.md", "（已删）"), encoding="utf-8"
+            doc.read_text(encoding="utf-8")
+            .replace("archived_changelog.0.10.x.md", "（已删）")
+            .replace("archived_changelog.0.11.x.md", "（已删）"),
+            encoding="utf-8",
         )
         monkeypatch.setattr(drift_parts._ledger, "_ARCHIVE_INDEX_PAIRS", ((broken, "archived_changelog."),))
-        assert any("缺少" in f for f in drift.check_archive_index())
+        findings = drift.check_archive_index()
+        assert any("archived_changelog.0.10.x.md" in f for f in findings)
+        assert any("archived_changelog.0.11.x.md" in f for f in findings)
 
     def test_reports_ghost_index_entry(self, drift, tmp_path, monkeypatch, drift_parts):
         """索引引用了不存在的归档文件 → 报 finding（反向）。"""

@@ -19,6 +19,8 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+from src.python.llm.module_registry import LLM_MODULE_ORDER
+
 __all__ = [
     "FORCEABLE_LLM_MODULES",
     "resolve_force_scope",
@@ -26,16 +28,13 @@ __all__ = [
 ]
 
 # 可强刷模块键（有序，与四并行 + 新闻关联 + 串行后置的调度顺序一致）。
-# 新增 LLM 强刷粒度在此登记；键必须与 core/registry.py 的 settings_suffix 一致。
-FORCEABLE_LLM_MODULES: tuple[str, ...] = (
-    "global_macro",
-    "expert_review",
-    "health_check",
-    "penetration_deep",
-    "news_correlation",
-    "self_review",
-    "holding_change",
-)
+# 报告侧五模块取自 `llm/module_registry.py` 单源；末尾两键不属报告章节：
+#   - self_review    —— 生成后自检（读四模块正文，无独立章节/页签）
+#   - holding_change —— 持仓变动复盘归因（无独立章节/页签）
+# 两者不纳入 ``LLM_MODULE_SUFFIXES``：凡按四元组位置对齐、按章节枚举或需独立
+# 正文/占位/评级的调用点都不应把它们算进来。
+_POST_ANALYSIS_MODULES: tuple[str, ...] = ("self_review", "holding_change")
+FORCEABLE_LLM_MODULES: tuple[str, ...] = (*LLM_MODULE_ORDER, *_POST_ANALYSIS_MODULES)
 
 
 def resolve_force_scope(force_all: bool, modules: Iterable[str] | None = None) -> frozenset[str]:

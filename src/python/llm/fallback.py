@@ -17,6 +17,7 @@ import logging
 from datetime import datetime
 
 from src.python.llm.failure_reasons import FAIL_REASON_DISABLED, LLM_MODULE_FAILURE
+from src.python.llm.module_registry import PARALLEL_MODULE_ORDER
 
 logger = logging.getLogger("invest")
 
@@ -53,7 +54,11 @@ _PLACEHOLDER_TEXT: dict[str, str] = {
     ),
 }
 
-_MODULE_KEYS = ("global_macro", "expert_review", "health_check", "penetration_deep")
+_MODULE_KEYS = PARALLEL_MODULE_ORDER
+"""占位模板覆盖的四并行模块（单源：`llm/module_registry.py`）。
+
+news_correlation 不列于此：它的关键词模式无 LLM 也出章，不存在「全失败占位」。
+"""
 
 # 占位文本的稳定签名 —— 上面全部模板均含该片段。内容侧识别降级占位
 # （如 LLM 输出质量分级）依赖此常量，模板改动时签名须同步。

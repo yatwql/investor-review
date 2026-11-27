@@ -1,6 +1,6 @@
 # 投资复盘助手 — 实现计划
 
-> 文档版本：0.18.7
+> 文档版本：0.19.0
 > **编号源**：`plan-next = 266`（新增计划项取此编号，完成后更新为 +1；已用最大 plan-265，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 
 ---
@@ -121,6 +121,7 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 
 ## 归档
 
+- [`archived_plan.0.19.x.md`](../archive/v0.19.x/archived_plan.0.19.x.md) — v0.19.x（2026-11-27 ~ 2026-11-27）
 - [`archived_plan.0.18.x.md`](../archive/v0.18.x/archived_plan.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-12）
 - [`archived_plan.0.17.x.md`](../archive/v0.17.x/archived_plan.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-08）
 - [`archived_plan.0.16.x.md`](../archive/v0.16.x/archived_plan.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-11-03）

@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import logging
 import sys
 from types import SimpleNamespace
 from typing import cast
@@ -346,3 +347,45 @@ class TestFactorOrchestrationFetchFailures:
         assert result is not None
         assert result["available"] is True, "指数 K 线取不到只计入「无数据」，不得拖坡整张子表"
         assert result["exposure"] == {"银行": 0.6}
+
+
+class TestHoldingBarsFailureDedupe:
+    """持仓 K 线取数异常的留痕纪律：热点默认值取自默认值表、同品种同异常只留一条 traceback。"""
+
+    def test_factor_workers_default_is_int_from_config_defaults(self):
+        """`batch.factor_workers` 的默认值真身必须是 int（`cast(int, ...)` 不校验，缺键即静默降级）。"""
+        from src.python.config import get_default
+
+        value = get_default("batch.factor_workers")
+        assert isinstance(value, int) and not isinstance(value, bool), (
+            f"batch.factor_workers 默认值须为 int（实得 {type(value).__name__}）——强转不报错，只会在取数排队时静默降级"
+        )
+        assert rfm._FACTOR_WORKERS_DEFAULT == value, "热点默认值须逐字取自默认值表，不在各调用点另写字面量"
+
+    def test_same_symbol_and_exception_keeps_one_traceback(self, monkeypatch, caplog):
+        """同一品种同一异常在「风格因子 / 行业 Beta」两段各报一次 → 只留一条带 traceback 的记录。"""
+        from src.python.core import log_dedupe
+
+        log_dedupe.reset()
+        _enable(monkeypatch)
+        _stub_compute_layer(monkeypatch)
+
+        def _boom(_code, _name, _days):
+            raise RuntimeError("K 线源断连")
+
+        monkeypatch.setattr(rfm, "_fetch_holding_bars", _boom)
+        monkeypatch.setattr(ib, "compute_industry_exposure", lambda cap: {"available": True, "exposure": {"银行": 0.6}})
+        monkeypatch.setattr(sfr, "asif_portfolio_daily_returns", lambda bars: {})
+
+        holdings = [_holding("600519")]
+        with caplog.at_level(logging.DEBUG, logger="invest"):
+            rfm.compute_factor_exposure_data(holdings, {}, _reporter())
+            rfm.compute_industry_beta_data(holdings, [], {}, _reporter())
+
+        records = [rec for rec in caplog.records if "持仓 K 线获取失败" in rec.getMessage()]
+        with_traceback = [rec for rec in records if rec.exc_info is not None]
+        folded = [rec for rec in records if "已折叠" in rec.getMessage()]
+
+        assert len(with_traceback) == 1, f"同品种同异常重复记了多份 traceback：{[r.getMessage() for r in records]}"
+        assert with_traceback[0].levelno == logging.INFO, "首次失败仍须按 INFO 上屏（异常与「真无数据」可区分）"
+        assert len(folded) == 1, "第二段（行业 Beta）的重复须走折叠通道而非静默消失"

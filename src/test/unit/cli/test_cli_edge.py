@@ -36,6 +36,7 @@ class TestCliEdge:
                 return_value=(mock_holdings, [], []),
             ),
             patch("src.python.report.orchestrator.generate_report") as mock_gen,
+            patch("builtins.input") as mock_input,
         ):
             from src.python.cli.cli import _handle_report
 
@@ -44,7 +45,7 @@ class TestCliEdge:
 
         # 验证 orchestrator.generate_report 被调用而非 input()
         mock_gen.assert_called_once()
-        assert "input" not in str(mock_gen.call_args)
+        mock_input.assert_not_called()
 
     @pytest.mark.edge
     def test_no_input_in_cache_path(self):
@@ -57,14 +58,16 @@ class TestCliEdge:
         with (
             patch("src.python.cli._handlers._cli_read_holdings", return_value=[MagicMock()]),
             patch("src.python.cache.operations.update_basic_cache", return_value=mock_result),
+            patch("builtins.input") as mock_input,
         ):
             code = _handle_cache_update("basic", {}, MagicMock())
 
         assert code == _EXIT_SUCCESS
+        mock_input.assert_not_called()
 
     @pytest.mark.edge
-    def test_holdings_not_found_exit_severe(self, caplog):
-        """持仓文件不存在时 → _EXIT_SEVERE。"""
+    def test_holdings_not_found_returns_none(self, caplog):
+        """持仓文件不存在 → 读取返回 None（不抛）。"""
         caplog.set_level(10)
 
         config = {"holdings_dir": "/tmp", "holdings_filename": "nonexistent.xlsx"}
@@ -72,16 +75,16 @@ class TestCliEdge:
         assert result is None
 
     @pytest.mark.edge
-    def test_holdings_dir_is_none(self):
-        """holdings_dir 缺失时使用默认值。"""
+    def test_missing_holdings_dir_returns_none(self):
+        """配置缺 holdings_dir → 走默认路径，仍无文件则返回 None。"""
         # 使用不存在的路径但 holdings_dir 取默认值
         with patch("src.python.cli._handlers.os.path.exists", return_value=False):
             result = _cli_read_holdings({})
         assert result is None
 
     @pytest.mark.edge
-    def test_multi_holdings_auto_select(self, tmp_path, caplog):
-        """多个 xlsx 文件时自动选第一个（最新修改的）。"""
+    def test_multi_holdings_unreadable_returns_none(self, tmp_path, caplog):
+        """多个 xlsx 且内容不可解析 → 读取返回 None（不挑错文件硬读）。"""
         caplog.set_level(10)
 
         # 创建临时持仓目录和文件

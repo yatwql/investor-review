@@ -396,7 +396,7 @@ class TestFinancialReportProbes:
         assert "未解析到 orgId" in message
 
     def test_missing_credential_marks_skip_without_probing(self, monkeypatch):
-        """缺 key 的源产出 ⏭️ 跳过态，且**不发起探测**（配置级问题不是源故障）。"""
+        """缺 key 的源产出 ⏭️ 跳过态：不发起探测，汇总单列且不让体检失败退出。"""
         probed: list[int] = []
 
         def _probe():
@@ -407,10 +407,9 @@ class TestFinancialReportProbes:
         monkeypatch.setattr(cs, "missing_credential", lambda sid: object() if sid == "datasink" else None)
         monkeypatch.setattr(cs, "credential_hint", lambda _spec: "缺凭据：请设置 DATASINK_API_KEY")
 
-        results = cs.run_health_checks(max_timeout=2.0)
+        text, exit_code = cs.collect_check_sources_report(max_timeout=2.0)
 
         assert probed == []
-        assert len(results) == 1
-        assert results[0]["skipped"] is True
-        assert results[0]["ok"] is False
-        assert "DATASINK_API_KEY" in results[0]["message"]
+        assert f"{cs._SKIP} 1" in text, "跳过项应在汇总行单列，不计入失败"
+        assert "DATASINK_API_KEY" in text
+        assert exit_code == 0, "缺凭据属配置级问题，不得让体检以失败退出"

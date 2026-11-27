@@ -107,13 +107,13 @@ class TestExcelEvolutionSheet(unittest.TestCase):
         self.assertFalse(any("账户配置流" in v for v in flat))
 
     def test_hhi_dash_when_no_valid_weight(self):
-        """某期无有效权重 → HHI 记 "-"。"""
+        """某期无有效权重 → HHI 表中该期记 "-"（定位到 HHI 行逐期比对）。"""
         data = _evolution_data()
         data["hhi"] = [0.52, None, 0.38]
         ws = self._write(data)
-        flat = self._flat(ws)
-        self.assertIn("0.5200", flat)
-        self.assertIn("-", flat)
+        rows = self._all_text(ws)
+        hhi_row = next(r for r in rows if r and r[0] == "HHI 集中度")
+        self.assertEqual(hhi_row[1:4], ["0.5200", "-", "0.3800"])
 
     def test_unavailable_placeholder(self):
         """available=False（快照不足）→ 占位文本。"""

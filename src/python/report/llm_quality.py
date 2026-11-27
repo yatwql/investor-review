@@ -37,6 +37,7 @@ from dataclasses import dataclass
 from src.python.core.registry import get_llm_module_name
 from src.python.llm.api_base import TRUNCATION_MARKER
 from src.python.llm.fallback import is_placeholder_content
+from src.python.llm.module_registry import PARALLEL_MODULE_ORDER
 from src.python.report.llm_content import strip_html
 from src.python.report.progress import ProgressReporter
 
@@ -45,8 +46,9 @@ logger = logging.getLogger("invest")
 # 开关名（注册于 src/python/config/features.py）
 _FEATURE_FLAG = "module_quality_gate"
 
-# 承载评级的模块顺序，与 llm_content 四元组位置一一对应
-_MODULE_KEYS = ("global_macro", "expert_review", "health_check", "penetration_deep")
+# 承载评级的模块顺序，与 llm_content 四元组位置一一对应（单一事实位：
+# `llm/module_registry.py`；新闻关联无独立正文可评级，不在四并行模块内）
+_MODULE_KEYS: tuple[str, ...] = PARALLEL_MODULE_ORDER
 
 # ── 评级常量 ────────────────────────────────────────────────
 

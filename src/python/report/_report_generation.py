@@ -10,6 +10,8 @@
 
 from __future__ import annotations
 
+import logging
+
 
 from src.python.report._report_output import (  # noqa: F401  # 产物落盘子模块（消费方在本门面，patch 点不变）
     _generate_full_excel_report,
@@ -19,15 +21,6 @@ from src.python.report._report_output import (  # noqa: F401  # 产物落盘子�
 # ── 子模块 re-export ────────────────────────────────────
 from src.python.report._chart_dataset_factory import _build_chart_datasets_for_report  # noqa: F401
 from src.python.report._full_risk_metrics import _prepare_full_risk_metrics  # noqa: F401
-from src.python.report._report_health import _collect_health_checks, _spawn_health_checks  # noqa: F401
-from src.python.report._report_helpers import (  # noqa: F401
-    _action_holdings_details,
-    _compute_details,
-    _inject_evolution_data,
-    _inject_snapshot_diff_data,
-    _validate_pipeline_snapshot,
-    _validate_prep_completeness,
-)
 
 from ._generation_shared import (  # noqa: F401
     _record_llm_context,
@@ -41,4 +34,4 @@ from ._generation_full import (  # noqa: F401
     _generate_report_full,
 )
 
-logger = __import__("logging").getLogger("invest")
+logger = logging.getLogger("invest")

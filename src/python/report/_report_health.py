@@ -2,7 +2,8 @@
 
 承载数据源健康检查的后台并行启动与结果收集持久化（与主管线并行，不阻塞报告生成）。
 
-由 `_report_generation.py`（聚合门面）re-export 对外提供。
+消费方按需直接导入本模块（`_generation_both.py` / `_generation_full.py` / `orchestrator.py` /
+`run_integrity.py`），聚合门面不再代转。
 """
 
 from __future__ import annotations

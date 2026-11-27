@@ -7,6 +7,9 @@
   compat-comment 兼容注释      `兼容既有导入面` 等四类关键词出现在 `src/python/`
   private-all 公共 __all__  包 `__init__.py` 的 `__all__` 含 `_` 私有名
   cross-private 跨包私有导入  跨包 `from src.python.<pkg>._x import ...`（同包与测试私有导入除外）
+  cross-private-scripts        `scripts/` 侧导入 `src/python` 的私有模块（口径同上：只判模块面；
+                            `scripts` 内部互引不受限，典型违规：脚本读 config 的私有模块
+                            去改模块全局）
   dynamic-target 动态导入字面量 `importlib.import_module("...")` 的直接字符串目标不可解析
   layer-inversion 分层越界      `core` 函数内反向依赖 `fetcher`/`providers`/…（探针面，逐处登记）；
                             `analysis` 层（纯计算）import `report/` 或 `llm/`（须改由 `core/` 提供共用面）
@@ -43,6 +46,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _shared.checklib import REPO_ROOT, add_common_args, rel, report
 
 PY_ROOT = REPO_ROOT / "src" / "python"
+SCRIPTS_ROOT = REPO_ROOT / "scripts"
 EXCEPTIONS_FILE = Path(__file__).resolve().parent / "_import_surface_exceptions.json"
 COMPAT_MARKERS = ("兼容既有导入面", "兼容既有引用", "公开别名", "私有名保留")
 
@@ -191,6 +195,52 @@ def scan_cross_private(root: Path = PY_ROOT, exceptions: dict[str, set[tuple[str
     return findings
 
 
+def scan_cross_private_scripts(
+    root: Path = PY_ROOT,
+    exceptions: dict[str, set[tuple[str, str]]] | None = None,
+    scripts_root: Path = SCRIPTS_ROOT,
+) -> list[str]:
+    """cross-private-scripts：`scripts/` 侧不得导入 `src/python` 的私有模块。
+
+    口径与 `src/python` 侧 `cross-private` 一致——只判**私有模块**（目标模块路径最后
+    一段以下划线开头），公开模块的私有**符号**导入不在本规则内（同源理由：符号级
+    展开会把例外表逼成逐符号登记，而分层/所有权看的是模块依赖面）。
+    `from src.python.config import _config_defaults` 这类「从包门面直接取私有子模块」
+    按解析结果同判（该名确实对应一个模块且其末段私有）。`scripts` 内部互引
+    （`_shared/` 等）不受限：受判目标只有 `src.python.*`。
+    """
+    exceptions = exceptions or {}
+    production = set(_module_files(root))
+    findings: list[str] = []
+    for path in sorted(scripts_root.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            targets: list[str] = []
+            lineno = 0
+            if isinstance(node, ast.ImportFrom) and node.module:
+                lineno = node.lineno
+                if node.module == "src.python" or node.module.startswith("src.python."):
+                    targets.append(node.module)
+                    # 包门面取私有子模块的形态（`from src.python.config import _x`）
+                    targets.extend(
+                        f"{node.module}.{alias.name}"
+                        for alias in node.names
+                        if alias.name != "*" and f"{node.module}.{alias.name}" in production
+                    )
+            elif isinstance(node, ast.Import):
+                lineno = node.lineno
+                targets.extend(alias.name for alias in node.names)
+            for target in targets:
+                if not (target == "src.python" or target.startswith("src.python.")):
+                    continue
+                if not target.split(".")[-1].startswith("_"):
+                    continue
+                if _excepted(exceptions, "cross-private-scripts", path, target):
+                    continue
+                findings.append(f"[cross-private-scripts] {rel(path)}:{lineno} 导入 src/python 私有模块 {target}")
+    return findings
+
+
 def scan_dynamic(root: Path = PY_ROOT, exceptions: dict[str, set[tuple[str, str]]] | None = None) -> list[str]:
     """dynamic-target：`import_module("字面量")` 的直接目标必须可解析（变量目标由 smoke 用例兜底）。"""
     exceptions = exceptions or {}
@@ -284,6 +334,7 @@ def collect(root: Path = PY_ROOT) -> tuple[list[str], dict[str, int]]:
         "compat-comment": scan_compat(root, exceptions),
         "private-all": scan_private_all(root, exceptions),
         "cross-private": scan_cross_private(root, exceptions),
+        "cross-private-scripts": scan_cross_private_scripts(root, exceptions),
         "dynamic-target": scan_dynamic(root, exceptions),
         "layer-inversion": scan_layer_inversion(root, exceptions),
     }
@@ -299,7 +350,7 @@ def main() -> int:
     args = parser.parse_args()
     findings, stats = collect()
     if args.verbose:
-        print(f"[..] 扫描 {rel(PY_ROOT)}，规则计数：{stats}")
+        print(f"[..] 扫描 {rel(PY_ROOT)} 与 {rel(SCRIPTS_ROOT)}，规则计数：{stats}")
     return report(
         findings,
         "[OK] 导入面契约通过（无兼容注释/私有 __all__/跨包私有导入/动态导入字面量问题）",

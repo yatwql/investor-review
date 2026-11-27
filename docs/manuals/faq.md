@@ -149,7 +149,7 @@ A: 不用。这些运行参数现在三个渠道都能改，且共用同一份�
 
 **Q: 怎么看最近几次数据源的降级/失败记录？**
 
-A: TUI 按 `[H]`、Web 看日志区的健康历史、CLI 跑 `python -m src.python.cli health-history`（可加 `--limit 30` 或 `--json`）。三条路径读的是同一份记录（每次报告生成后自动写入），能看到「哪一次、哪些源失败、降级原因」，比单次 `check-sources` 更适合排查偶发问题。
+A: TUI 按 `[H]`、Web 看日志区的健康历史、CLI 跑 `.venv/bin/python -m src.python.cli health-history`（可加 `--limit 30` 或 `--json`）。三条路径读的是同一份记录（每次报告生成后自动写入），能看到「哪一次、哪些源失败、降级原因」，比单次 `check-sources` 更适合排查偶发问题。
 
 **Q: 如何设置定时自动生成报告？**
 

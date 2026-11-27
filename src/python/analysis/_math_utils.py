@@ -228,21 +228,27 @@ def _beta_se(
     if n < _MIN_SAMPLE_DAYS + 2:
         return None
 
-    mean_pr = sum(pr) / n
-    mean_br = sum(br) / n
+    # 基准无波动时 Σ(x-x̄)² 恒为 0：按「极差为 0」判定，避免均值求和的
+    # 舍入残差（sum() 的累加策略随解释器版本变化）让零方差变成极小的
+    # 非零 ssx，从而算出天文数字的标准误。
+    if max(br) - min(br) == 0:
+        return None
+
+    # 求和一律用 math.fsum（正确舍入，跨解释器结果一致）
+    mean_pr = math.fsum(pr) / n
+    mean_br = math.fsum(br) / n
 
     # OLS: alpha = mean_pr - beta * mean_br
     alpha = mean_pr - beta * mean_br
 
     # MSE = Σ(y_i - ŷ_i)² / (n - 2)
-    sse = sum((pr[i] - (alpha + beta * br[i])) ** 2 for i in range(n))
+    sse = math.fsum((pr[i] - (alpha + beta * br[i])) ** 2 for i in range(n))
     mse = sse / (n - 2)
 
     # Σ(x_i - x̄)²
-    ssx = sum((br[i] - mean_br) ** 2 for i in range(n))
+    ssx = math.fsum((br[i] - mean_br) ** 2 for i in range(n))
 
-    if ssx == 0 or mse < 0:
-        return None
-
+    # ssx > 0 由上面的「极差非 0」早退保证（Popoviciu 不等式：ssx ≥ 极差²/2），
+    # mse 为平方和除以正数，故此处无需再兜底。
     se = math.sqrt(mse / ssx)
     return (se, n - 2)

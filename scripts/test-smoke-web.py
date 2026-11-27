@@ -111,8 +111,7 @@ def _fake_executor(output_dir: str):
 
 def _build_client(tmp_root: Path):
     """构造隔离的 Flask test_client：配置/上传目录重定向 + fake executor。"""
-    from src.python.config import _config_defaults
-    from src.python.config._core import invalidate_config_cache
+    from src.python.config import _config_defaults, invalidate_config_cache
     from src.python.web.app import create_app
     from src.python.web.runs import RunManager
 
@@ -407,8 +406,7 @@ def _check_config_edit(client: FlaskClient, results: list[dict]) -> None:
 
 def run_smoke() -> list[dict]:
     """执行全部 11 项冒烟检查，返回 [{name, ok, detail}]。"""
-    from src.python.config import _config_defaults
-    from src.python.config._core import invalidate_config_cache
+    from src.python.config import _config_defaults, invalidate_config_cache
     from src.python.web import upload
 
     # 保存并重定向上传目录 / 文件注册表 / config.json 路径 / _DEFAULT_CONFIG 覆盖

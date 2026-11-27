@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""TUI ``[S]`` 报告章节内容呈现面板：18 项五组（组序与编号取自功能开关注册表）。
+"""TUI ``[S]`` 报告章节内容呈现面板：14 项六组（组序与编号取自功能开关注册表）。
 
 ``[S]`` 只呈现 ``PANEL_GROUPS["[S]"]`` 的六组内容开关（持仓与交易 / 市场与估值 /
 基金与风格 / 事件与摘要 / 机制与质量 / 交互与追问）；LLM 章节与默认关闭的整章在 ``[C]``，
@@ -32,6 +32,7 @@ from src.python.tui.switch_panel import (
     inner_width,
     layout_tier,
     legend_lines,
+    render_titled_panel,
     terminal_columns,
     use_panel_box,
     wrap_hanging,
@@ -42,7 +43,16 @@ EXPERIMENT_MARK_COLUMNS = 2
 """行首实验项标记 ⚗ 的占位列宽（非实验项留同宽空白以对齐状态列）。"""
 
 
-def match_switch_item(token: str, items: list[tuple[int, str, str, bool]]) -> tuple[int, str, str, bool] | None:
+SwitchItem = tuple[int, str, str, bool]
+"""面板条目：``(编号, 键, 显示名, 当前状态)``。"""
+
+
+def _find_switch_item_by_key(items: list[SwitchItem], key: str) -> SwitchItem | None:
+    """按键名精确定位条目（赋值通道只认键名，不接受编号）。"""
+    return next((it for it in items if it[1] == key), None)
+
+
+def match_switch_item(token: str, items: list[SwitchItem]) -> SwitchItem | None:
     """按编号（纯数字）或条目键名在面板条目中定位一项。
 
     Args:
@@ -55,10 +65,10 @@ def match_switch_item(token: str, items: list[tuple[int, str, str, bool]]) -> tu
     token = token.strip()
     if token.isdigit():
         return next((it for it in items if it[0] == int(token)), None)
-    return next((it for it in items if it[1] == token), None)
+    return _find_switch_item_by_key(items, token)
 
 
-def show_switch_detail(choice: str, items: list[tuple[int, str, str, bool]]) -> None:
+def show_switch_detail(choice: str, items: list[SwitchItem]) -> None:
     """``? 编号或键名`` 上屏面板单项说明与当前值/默认值（只读信息查询，不写配置）。
 
     Args:
@@ -69,14 +79,14 @@ def show_switch_detail(choice: str, items: list[tuple[int, str, str, bool]]) -> 
     from src.python.core.experiment_stats import load_experiment_usage
 
     raw = choice.lstrip("?？").strip()  # 半角/全角问号均可作前缀
-    matched = [it for it in items if (it[0] == int(raw) if raw.isdigit() else it[1] == raw)]
-    if not matched:
+    target = match_switch_item(raw, items)
+    if target is None:
         if raw.isdigit():
             print(f"  {YELLOW}[!]{RESET} 无效编号")
         else:
             print(f"  {YELLOW}[!]{RESET} 请输入 ? 加编号或键名（如 ?3 或 ? report_qa）")
         return
-    _, key, name, curr = matched[0]
+    _, key, name, curr = target
     definition = feature_switch_registry[key]
     default = definition.default
     group_label = GROUP_LABELS.get(definition.group, definition.group)
@@ -194,9 +204,11 @@ def _render_switch_panel(
     elif use_panel_box(columns):
         print("\n".join(render_panel("配置报告章节内容呈现", panel_rows)))
     else:
-        header = truncate_display(f"章节内容（{len(tuples)} 项）", inner_width(columns) - 5)
-        print(style_heading(f"  ── {header} ──"))
-        print("\n".join(f"  {row}" if row else "" for row in panel_rows))
+        # 窄档不画盒线：标题行与逐行截断统一交给 `render_titled_panel`（面板输出不得手写
+        # `── … ──` 分隔符，且装饰列宽必须计入截断预算，否则越过「每行 ≤ 内宽」不变量）。
+        # 空串是窄档的分隔行占位 —— 按 None 传入，渲染成真空行而不是「两个空格」。
+        narrow_rows = [None if row == "" else row for row in panel_rows]
+        print("\n".join(render_titled_panel(f"章节内容（{len(tuples)} 项）", narrow_rows, columns=columns)))
     if state["repaint"]:
         for _line in wrap_hanging("  章节显隐（顶层 / LLM / 整章）在菜单 [C] 配置", inner_width(columns)):
             print(_line)
@@ -236,7 +248,7 @@ def _dispatch_switch_text(
             state["reveal_keys"] = not state["reveal_keys"]
             state["repaint"] = True  # 版面行数变化，需要重绘才能生效
         else:
-            emit("  [!] 当前终端宽度已直接显示键名列，无需 k 切换")
+            emit(f"  {YELLOW}[!]{RESET} 当前终端宽度已直接显示键名列，无需 k 切换")
         return
 
     # ── 写路径三通道：批量命令 / 赋值（CLI 同词表）/ 编号或键名直取 ──
@@ -269,19 +281,16 @@ def _dispatch_switch_text(
     assign_name, eq, _assign_val = raw.partition("=")
     assign_name = assign_name.strip()
     if eq:
-        item = next((it for it in tuples if it[1] == assign_name), None)
-        if item is None:
-            try:
-                parse_switch_override(raw)
-            except ValueError as e:
-                emit(f"  {YELLOW}[!]{RESET} {e}")
-            else:
-                emit(f"  {YELLOW}[!]{RESET} 未知条目「{assign_name}」")
-            return
+        # 解析只做一次：词表外的开关名/取值当场给出具体原因，再用同一查找函数定位条目
+        # （不可先查条目再重解一次——两次解析各自抱错，报错口径会随分支分叉）
         try:
             _parsed_flag, new_val = parse_switch_override(raw)
         except ValueError as e:
             emit(f"  {YELLOW}[!]{RESET} {e}")
+            return
+        item = _find_switch_item_by_key(tuples, assign_name)
+        if item is None:
+            emit(f"  {YELLOW}[!]{RESET} 未知条目「{assign_name}」")
             return
         apply_toggle(item[0], item[1], item[2], new_val)
         return

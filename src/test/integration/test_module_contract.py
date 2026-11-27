@@ -29,13 +29,11 @@ class TestModuleContractChain(unittest.TestCase):
     """
 
     def test_holding_dataclass_fields(self):
-        """Holding dataclass 字段类型契约。"""
-        h = Holding("证券", "贵州茅台", "600519", 100, 150.0)
-        self.assertIsInstance(h.account, str)
-        self.assertIsInstance(h.name, str)
-        self.assertIsInstance(h.code, str)
-        self.assertIsInstance(h.shares, (int, float))
-        self.assertIsInstance(h.cost_price, (int, float))
+        """Holding 字段声明契约（字段名与顺序），不依赖构造入参回显。"""
+        import dataclasses
+
+        names = [f.name for f in dataclasses.fields(Holding)]
+        assert names[:5] == ["account", "name", "code", "shares", "cost_price"]
 
     def test_holding_to_detail_row_contract(self):
         """Holding + MarketData → DetailRow 的类型转换契约。

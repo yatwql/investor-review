@@ -1,7 +1,8 @@
 """pipeline_data 组装构建器已知键注册契约测试。
 
 对应数据契约：所有 pipeline_data 顶层键必须先在已知键集合注册，
-否则 build()/merge_pipeline_data() 会记录「未注册键」警告并自动补注册。
+否则 build()/merge_pipeline_data() 只记录「未注册键」警告——**不**自动补注册
+（权威键集单源：运行时不得把未在附录 H 登记的键吸收进集合）。
 
 重点覆盖关键契约键（危机标注/尾部风险/快照差异/风险调整超额）：
   - crisis_annotation_data

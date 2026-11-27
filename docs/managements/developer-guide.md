@@ -1,6 +1,6 @@
 # 开发者指南
 
-> 文档版本：0.18.7
+> 文档版本：0.19.0
 
 ## 概述
 
@@ -927,7 +927,7 @@ mod = load_script("_test_runner/modes.py", module_name="modes_under_test")   # �
 3. **`changelog.md`** — 记录新增的测试数量和覆盖场景
 4. **`plan.md`** — 如果在迭代中新增的功能，更新对应条目的完成状态
 5. **`unit/conftest.py`** — 新增 `unit/` 下测试文件时确认 `pytestmark` 列表包含正确的 `unit_*` 子标记
-6. **`conftest.py` 隔离 fixture** — 新增模块级单例时加 autouse 复位 fixture（参照 `_auto_reset_last_reason` 习语，如 `_auto_reset_llm_failure_state`）；新增持久化状态文件/输出目录时在 `_isolate_sensitive_paths` 增加 `monkeypatch.setattr` 重定向——细则见 CLAUDE.md「新增测试隔离要求」，漏加会让用例随执行顺序漂移
+6. **`conftest.py` 隔离 fixture** — 新增模块级单例时加 autouse 复位 fixture（参照 `_auto_reset_last_reason` 习语，如 `_auto_reset_llm_failure_state`）；新增持久化状态文件/输出目录时在 `_isolate_sensitive_paths` 增加 `monkeypatch.setattr` 重定向——细则见 CLAUDE.md「新增测试隔离要求」，漏加会让用例随执行顺序漂移；**配置路径覆写须逐例清空**：`_CONFIG_PATH_OVERRIDE` 覆写优先于 `_CONFIG_FILE`，每条用例由 `seed_sensitive_path_isolation` 置 None（不清会串读上一条用例的临时配置，如截图取帧遗留的演示工作区路径）
 
 **新增后必须执行的验证**：
 
@@ -1059,6 +1059,8 @@ INVEST_CACHE_DIR=docs/tmp/screenshots/demo/data/cache \    # 缓存改落（不�
 | `ERROR` | 需要人工介入的缺陷——输出截断、挂载点异常、数据写盘失败 | 「LLM 输出被截断（建议增大 max_tokens_…）」 |
 
 > 判定实现：链路用「是否出现过 `TRANSPORT_FAILURE`」区分（`fetcher/chain.py`），不靠文案匹配。基准跑（`perf-test-report` 主动禁网）的确定性失败在连接级重试处按 DEBUG 记录，避免把人为断网堆成 WARNING。
+
+**逐项取数异常按 INFO 留痕，告警由聚合项承担**：逐品种取数的环节（因子/行业 Beta 的持仓 K 线获取）单只品种取数失败按 INFO 记一条带 traceback 的记录，同一品种同类异常用 `core.log_dedupe.log_throttled` 折叠（窗口内重复降到 DEBUG，下一次报告重新开始）；真实降级由聚合 WARNING 承担（「全部因子指数 K 线获取失败，章节降级」「有效因子不足 N」等）。逐项失败本身不是故障，记成 WARNING/ERROR 会让一次源侧抖动刷出上百行同级告警。
 
 **追踪类 DEBUG 的两条纪律**：① 同一状态不重复刷（市场时段判定按「结果变化」记，进程级去重）；② 同一 key 的命中/写入只记首见一次（其余由 `_stats` 命中率与报告「缓存命中率」行承担汇总），否则单周就能刷出万行。
 

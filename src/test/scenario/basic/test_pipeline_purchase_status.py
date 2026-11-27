@@ -102,7 +102,7 @@ class TestBothPathDegrade:
         config = {"output_dir": str(tmp_path / "reports")}
 
         with (
-            patch("src.python.report._report_generation._compute_details", return_value=[]),
+            patch("src.python.report._both_stages._compute_details", return_value=[]),
             patch("src.python.report._snapshot.capture_snapshot", return_value={}),
             patch("src.python.report._snapshot.fetch_history_data", return_value=None),
             patch("src.python.report.html_writer.write_html_report") as mock_html,

@@ -73,9 +73,8 @@ class TestDecisionEquivalence:
         """缓存包装与直算结果一致（避免缓存键/返回值污染判定）。"""
         a = "英国央行如期维持利率不变"
         b = "英国央行以6比3票数维持利率不变"
-        assert rules._ratio_ready(a) == rules._ratio_ready(a)
-        assert rules._ratio_of_norms(a, b) == pytest.approx(rules._ratio_of_norms(a, b), abs=1e-12)
         assert rules._extract_entity_bigrams_cached(a) == frozenset(rules._extract_entity_bigrams(a))
+        assert rules._extract_entity_bigrams_cached(b) == frozenset(rules._extract_entity_bigrams(b))
 
 
 class TestMultisetUpperBound:

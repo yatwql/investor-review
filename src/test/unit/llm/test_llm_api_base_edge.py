@@ -225,3 +225,37 @@ class TestCallLlmWithRetryEdge(unittest.TestCase):
         )
         self.assertEqual(result, "")
         self.assertIsNotNone(usage)
+
+
+class TestOpenaiTruncationEdge(unittest.TestCase):
+    """_check_openai_truncation — choices 结构异常的边缘场景。"""
+
+    def test_malformed_choices(self) -> None:
+        """choices 索引异常 → False。"""
+        from src.python.llm._api_responses import _check_openai_truncation
+
+        result = _check_openai_truncation({"choices": []}, 1000, "OpenAI")
+        self.assertFalse(result)
+
+    def test_missing_choices(self) -> None:
+        """data 无 choices → False。"""
+        from src.python.llm._api_responses import _check_openai_truncation
+
+        result = _check_openai_truncation({}, 1000, "OpenAI")
+        self.assertFalse(result)
+
+
+class TestSanitizeEndpointEdge(unittest.TestCase):
+    """_sanitize_endpoint — 空串 / 非 URL 的边缘场景。"""
+
+    def test_empty_endpoint(self) -> None:
+        """空字符串 → 'unknown'。"""
+        from src.python.llm.api_base import _sanitize_endpoint
+
+        self.assertEqual(_sanitize_endpoint(""), "unknown")
+
+    def test_invalid_url(self) -> None:
+        """非 URL 格式 → 'unknown'。"""
+        from src.python.llm.api_base import _sanitize_endpoint
+
+        self.assertEqual(_sanitize_endpoint("not-a-url"), "unknown")

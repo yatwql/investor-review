@@ -170,7 +170,7 @@ def retry_transient(
     for attempt in range(1, policy.attempts + 1):
         try:
             result = fn()
-        except BaseException as exc:  # 有意宽捕获：判据决定是否可重试，非瞬时异常原样抛出
+        except BaseException as exc:  # 宽捕获后交给判据：非瞬时异常原样上抛（不吞异常，故不挂 BLE001 抑制）
             if not judge(exc) or attempt >= policy.attempts:
                 raise
             delay = policy.delay_for(attempt)

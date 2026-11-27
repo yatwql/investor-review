@@ -16,9 +16,16 @@
 
 from __future__ import annotations
 
+import runpy
+import sys
 
 import pytest
-from src.test._script_loader import load_script
+from src.test._script_loader import SCRIPTS_DIR, load_script
+
+
+def sem_index_path():
+    """`scripts/` 目录（入口冒烟用）。"""
+    return SCRIPTS_DIR
 
 
 @pytest.fixture(scope="module")
@@ -263,3 +270,147 @@ class TestRealRepoSmoke:
         registry_source = sem_index._SECTION_REGISTRY_PY.read_text(encoding="utf-8")
         findings = sem_index.run_checks(doc_text, defaults_source, registry_source, sem_index._CODE_ROOT)
         assert findings == []
+
+
+# ═══ 解析/收集的降级分支 ═══
+
+
+class TestParseAndCollectDegrades:
+    """畸形输入下的降级：缺标记回空、权威源形态不符回空、不可读文件跳过。"""
+
+    def test_merged_keys_empty_without_markers(self, sem_index):
+        assert sem_index.parse_merged_sheet_keys("> **合并章代码标识符**：`only_outside`（区间外）\n") == []
+
+    def test_registry_value_not_list_returns_empty(self, sem_index):
+        assert sem_index.registry_section_keys('_REPORT_SECTION_DEFAULT = {"key": "summary"}\n') == []
+
+    def test_registry_skips_non_dict_elements(self, sem_index):
+        source = '_REPORT_SECTION_DEFAULT = ["not_a_dict", {"key": "summary"}]\n'
+        assert sem_index.registry_section_keys(source) == ["summary"]
+
+    def test_keeps_original_text_when_source_unparsable(self, sem_index):
+        source = "x = (\n# 未闭合括号：tokenize 中途报错\n"
+        assert sem_index._code_without_comments(source) == source, "语法异常文件须降级为原始文本（不中断检查）"
+
+    def test_collect_returns_empty_when_code_root_absent(self, sem_index, tmp_path):
+        assert sem_index.collect_code_texts(tmp_path / "absent") == []
+
+    def test_collect_skips_undecodable_file(self, sem_index, tmp_path):
+        (tmp_path / "good.py").write_text("x = 1\n", encoding="utf-8")
+        (tmp_path / "bad.py").write_bytes(b"\xff\xfe\x00broken")
+        collected = sem_index.collect_code_texts(tmp_path)
+        assert [path.name for path, _text in collected] == ["good.py"], "解码失败的文件整体跳过，不半途中断"
+
+
+# ═══ CLI 入口 ═══
+
+
+class TestCliEntry:
+    """`main()`：参数解析 → 结论缓存 → 校验/回写 → 退出码，路径全部指向临时输入。"""
+
+    @pytest.fixture(name="cli")
+    def _cli(self, sem_index, monkeypatch, tmp_path):
+        from types import SimpleNamespace
+
+        doc = tmp_path / "technical.md"
+        doc.write_text(_valid_doc(), encoding="utf-8")
+        features = tmp_path / "features.py"
+        features.write_text(_valid_features(), encoding="utf-8")
+        registry = tmp_path / "report_section_registry.py"
+        registry.write_text(_valid_registry(), encoding="utf-8")
+        code_root = tmp_path / "python"
+        code_root.mkdir()
+        calls: dict[str, list] = {"report": [], "saved": [], "loaded": []}
+
+        def _write_code(text: str) -> None:
+            (code_root / "a.py").write_text(text, encoding="utf-8")
+
+        monkeypatch.setattr(sem_index, "_TECHNICAL_MD", doc)
+        monkeypatch.setattr(sem_index, "_FEATURES_PY", features)
+        monkeypatch.setattr(sem_index, "_SECTION_REGISTRY_PY", registry)
+        monkeypatch.setattr(sem_index, "_CODE_ROOT", code_root)
+        monkeypatch.setattr(
+            sem_index,
+            "conclusion_cache_load",
+            lambda key, scripts, inputs: calls["loaded"].append((key, len(scripts), len(inputs))),
+        )
+        monkeypatch.setattr(
+            sem_index,
+            "conclusion_cache_save",
+            lambda key, _scripts, _inputs, payload: calls["saved"].append((key, payload)),
+        )
+
+        def _report(findings, ok_message, *, ci=False, fail_message=None, details=None):
+            calls["report"].append({"findings": findings, "ci": ci, "ok": ok_message, "fail": fail_message})
+            return 2 if findings else 0
+
+        monkeypatch.setattr(sem_index, "report", _report)
+        return SimpleNamespace(index=sem_index, calls=calls, code_root=code_root, doc=doc, write_code=_write_code)
+
+    def test_clean_run_reports_ok_and_saves_conclusion(self, cli, monkeypatch):
+        cli.write_code(
+            'def build_candidate_compare(): pass\nd = {"cost_lots": False}\ndef build_position_relationship(): pass\n'
+        )
+        monkeypatch.setattr(sys, "argv", ["check-semantic-index.py"])
+        with pytest.raises(SystemExit) as excinfo:
+            cli.index.main()
+        assert excinfo.value.code == 0
+        assert cli.calls["report"][0]["findings"] == []
+        assert cli.calls["report"][0]["ci"] is False
+        assert cli.calls["saved"] == [("semantic_index", {"findings": []})], "无 --ci 不回放，但结论照常回写"
+        assert cli.calls["loaded"] == [], "非 --ci 不读缓存"
+
+    def test_findings_drive_exit_code_two(self, cli, monkeypatch):
+        cli.write_code("x = 1\n")
+        monkeypatch.setattr(sys, "argv", ["check-semantic-index.py"])
+        with pytest.raises(SystemExit) as excinfo:
+            cli.index.main()
+        assert excinfo.value.code == 2
+        findings = cli.calls["report"][0]["findings"]
+        assert findings and all("无代码引用" in item for item in findings), "表内 slug 均无代码引用 → 僵尸条目"
+
+    def test_ci_cache_hit_replays_without_reading_inputs(self, cli, monkeypatch, tmp_path):
+        monkeypatch.setattr(cli.index, "conclusion_cache_load", lambda *_a, **_k: {"findings": ["缓存回放的旧结论"]})
+        monkeypatch.setattr(cli.index, "_TECHNICAL_MD", tmp_path / "absent.md")
+        monkeypatch.setattr(sys, "argv", ["check-semantic-index.py", "--ci"])
+        with pytest.raises(SystemExit) as excinfo:
+            cli.index.main()
+        assert excinfo.value.code == 2
+        assert cli.calls["report"][0]["findings"] == ["缓存回放的旧结论"]
+        assert cli.calls["report"][0]["ci"] is True
+        assert cli.calls["saved"] == [], "命中缓存不回写"
+
+    def test_ci_cache_miss_falls_through_to_checks(self, cli, monkeypatch):
+        cli.write_code(
+            'def build_candidate_compare(): pass\nd = {"cost_lots": False}\ndef build_position_relationship(): pass\n'
+        )
+        monkeypatch.setattr(sys, "argv", ["check-semantic-index.py", "--ci"])
+        with pytest.raises(SystemExit) as excinfo:
+            cli.index.main()
+        assert excinfo.value.code == 0
+        assert len(cli.calls["loaded"]) == 1
+        assert cli.calls["loaded"][0][0] == "semantic_index"
+        assert len(cli.calls["saved"]) == 1
+
+    def test_verbose_prints_parsed_keys(self, cli, monkeypatch, capsys):
+        cli.write_code(
+            'def build_candidate_compare(): pass\nd = {"cost_lots": False}\ndef build_position_relationship(): pass\n'
+        )
+        monkeypatch.setattr(sys, "argv", ["check-semantic-index.py", "-v"])
+        with pytest.raises(SystemExit):
+            cli.index.main()
+        out = capsys.readouterr().out
+        assert "表内 slug" in out and "candidate_compare" in out
+        assert "功能开关" in out and "cost_lots" in out
+        assert "合并章 sheet key" in out and "position_structure" in out
+        assert "registry 章节 key" in out and "summary" in out
+
+    def test_main_guard_exits_with_repo_verdict(self, monkeypatch, tmp_path):
+        """`if __name__ == "__main__"` 入口：跑真实仓库输入，结论经 sys.exit 传出。"""
+        monkeypatch.setenv("CHECK_CONCLUSION_CACHE_DIR", str(tmp_path))
+        monkeypatch.setattr(sys, "argv", ["check-semantic-index.py"])
+        if str(sem_index_path()) not in sys.path:
+            sys.path.insert(0, str(sem_index_path()))
+        with pytest.raises(SystemExit) as excinfo:
+            runpy.run_path(str(sem_index_path() / "check-semantic-index.py"), run_name="__main__")
+        assert excinfo.value.code == 0

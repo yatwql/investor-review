@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable, Collection
 from concurrent.futures import Future, ThreadPoolExecutor
 
@@ -20,7 +21,7 @@ from src.python.report.progress import ProgressReporter
 if TYPE_CHECKING:
     from src.python.core.perf import PhaseBreakdownRecorder
 
-logger = __import__("logging").getLogger("invest")
+logger = logging.getLogger("invest")
 
 
 def _report_llm_module_results(
@@ -30,16 +31,17 @@ def _report_llm_module_results(
 ) -> None:
     """统一的 LLM 模块结果报告逻辑。"""
     from src.python.llm import FAIL_REASON_DISABLED
+    from src.python.llm.module_registry import PARALLEL_MODULE_ORDER
     from src.python.llm.prompts import LLM_MODULE_FAILURE
     from src.python.core.registry import get_llm_module_name
     from src.python.report.llm_module_info import get_llm_module_failure_reason
 
-    _MODULE_KEYS = ("global_macro", "expert_review", "health_check", "penetration_deep")
     ok_count = 0
     disabled: list[str] = []
     failed: list[str] = []
 
-    for mk, r in zip(_MODULE_KEYS, results):
+    # 四并行模块的结果元组按位对齐（单源：`llm/module_registry.py`）
+    for mk, r in zip(PARALLEL_MODULE_ORDER, results):
         if r is not None:
             ok_count += 1
         elif get_llm_module_failure_reason(LLM_MODULE_FAILURE, mk) == FAIL_REASON_DISABLED:
@@ -51,7 +53,6 @@ def _report_llm_module_results(
         reporter.info(f"{name}：已跳过（菜单 S 可切换）")
     for name in failed:
         reporter.add_error(f"{name}：内容生成失败（已降级使用占位文本）")
-        reporter.warn(f"{name}：内容生成失败（已降级使用占位文本）")
 
     if ok_count > 0 and not failed:
         tag = "缓存" if all(cached_flags) else "LLM"
@@ -170,8 +171,9 @@ def _collect_llm_future_result(fut: Future, reporter: ProgressReporter) -> tuple
         debate_info = _result[8] if len(_result) > 8 else None
         return llm_content, debate_info
     except Exception:  # noqa: BLE001 — LLM 内容生成异常（详情请查看日志）
+        # 只记汇总错误、不即时上屏：兄弟路径（新闻获取）同样口径——`add_error` 既进
+        # TUI 收尾摘要（`print_error_summary`）又留 WARNING 日志，即时 `error` 行是重复。
         reporter.add_error("LLM 内容生成异常（详情请查看日志文件 logs/app.log）")
-        reporter.error("LLM 内容生成异常（详情请查看日志）")
         return (None, None, None, None), None
 
 
@@ -184,7 +186,6 @@ def _collect_news_future_result(fut: Future, reporter: ProgressReporter) -> tupl
         return news_data, news_llm_meta, news_ok
     except Exception:  # noqa: BLE001 — 新闻源处第三方边界，异常即空新闻集（报告其余部分照常生成）
         reporter.add_error("新闻获取异常（详情请查看日志文件 logs/app.log）")
-        reporter.warn("新闻获取异常（详情请查看日志）")
         return [], {}, False
 
 

@@ -1,5 +1,5 @@
 # 投资复盘助手 — 技术设计
-> 文档版本：0.18.7
+> 文档版本：0.19.0
 
 ## 目录
 
@@ -1663,7 +1663,7 @@ def _get_pool() -> ThreadPoolExecutor:
 
 `report/pipeline_data_builder.py` 集中组装传递给 LLM 的数据上下文 `pipeline_data`。包含 `build()`（A 通道：快照环比差异组装）和 `build_prep()`（B 通道：行情/持仓/指标数据组装）两个构造器，入口统一做类型断言（C19 约束）。
 
-`pipeline_data` 遵循 C19 Schema 契约：所有键必须在 pipeline_data Schema 定义集中存放处预定义类型、版本号和写入/消费模块后，才能在代码中使用该键（详见附录 H）。
+`pipeline_data` 遵循 C19 Schema 契约：权威键集是模块级不可变 `frozenset`（`_PIPELINE_DATA_KNOWN_KEYS` / `_PREP_KNOWN_KEYS`），**未知键不自动登记**——`build()` / `build_prep()` 经 `_validate_keys` 告警放行，`merge_pipeline_data()` 对未注册键同样只告警（集合永不增长）；键须先在附录 H 登记类型、版本号与写入/消费模块，才能在代码中使用（详见附录 H）。
 
 #### 三种报告路径
 
@@ -3144,6 +3144,7 @@ API 层         api.py        Provider 路由 + Multi-Provider Chain 遍历
                depth_profile.py     报告深度档位表（brief/standard/deep 唯一事实来源）
                force_scope.py       模块级强刷范围（可强刷键清单 + 粒度优先归一）
                fingerprint.py       缓存指纹计算（模块级见 module_fingerprint.py，C21 同源）
+               module_registry.py   LLM 模块键单一事实位（报告侧模块后缀全集/产出顺序/四并行派生）
                session.py           会话用量追踪
                cost_tracker.py      Token 预算管理
                pricing.py           费用估算（含 DeepSeek 峰谷定价）
@@ -3625,6 +3626,7 @@ make_http_client(timeout=10.0) → httpx.Client
 | `_factor_formulas` | 25 因子公式纯计算原语（技术族逐因子序列与基本面标量分发，无 I/O、不进报告层） | 风格与因子分析 | 数据获取 | 随 `factor_catalog` |
 | `holding_change_review` | 持仓变动复盘（快照事件级：差分事件清单 + 频率/结构/贡献分解 + 意图对账 + 账户结构重排标注 + LLM 归因） | 持仓变动复盘 | 报告输出 | 独立章节与回放开关 `holding_change_review`（默认关） |
 | `module_fingerprint` | LLM 模块缓存指纹唯一事实来源（预检侧与写侧同源） | LLM 生成 | LLM 生成 | 无（模块级） |
+| `module_registry` | LLM 模块键单一事实位（报告侧模块后缀全集/顺序 + 四并行派生；各调用点引用同一常量而非各持字面量，新增模块只改一处，顺序即结果元组位置契约） | LLM 生成 | LLM 生成 | 无（模块级） |
 | `decision_reflection` | 决策跨期反思闭环（登记决策 → 真实行情结算命中率 → 教训回灌专家复盘提示词） | 行动建议 | 监控 | 实验开关 `decision_reflection`（默认关） |
 | `decision_ledger` | 决策账本（append-only JSONL，pending/settled 折叠统计） | 行动建议 | 监控 | 随 `decision_reflection` |
 | `ledger_common` | 账本级共用原语（`feature_active` 开关收敛判定 / `now_iso` 秒级时间戳；决策账本与信号账本薄封装共用，改口径只动一处） | 行动建议 | 监控 | 已内置 |
@@ -3916,7 +3918,7 @@ web/ (Web 服务层，薄入口)
 | **C7** | **报告序号与显示名不可硬编码** — 报告的模块章节顺序/可见性由 `core/registry.py` 的 `_REPORT_SECTION_DEFAULT` 注册表驱动，页签显示名由同文件的派生视图 `_REPORT_SHEET_NAMES` 驱动（键集 = 章节注册表减 LLM 章差集 `_LLM_SHEET_NAME_KEYS`：非 LLM 章键值由注册表条目派生、LLM 章显示名显式登记，值同源由测试锁定，页签名一律经 `get_report_sheet_name()` 取用），均支持 `config.json` 自定义覆盖 | 硬编码序号使得用户无法通过配置调整报告章节顺序，且新增/删除模块时需要全局修改序号；显示名散落在写入层则重命名页签必须全局搜索，两处清单一旦不同步便出现「配置里叫一个名、页签上叫另一个名」 | 序号配置失效、用户自定义顺序不生效；页签显示名与注册表/配置脱节 | report/ 编排器与写入层（excel_generator.py、html_writer.py、fund_style_classify.py 等）；任何写入页签名的模块均须经 `get_report_sheet_name()`，不得直接写中文字面量 |
 | **C10** | **新闻召回策略可配置** — `per_source` 每源获取数量必须与 `news_top_count` 最终截取数量解耦，`per_source` 动态计算为 `max(500, news_top_count × 2)`（单源实现 `fetcher/news.py::news_fetch_limits`，调用方不得各自内联），不可写死 | 固定值会导致去重后候选新闻不足，最终截取数不满足用户配置 | 新闻候选不足、用户配置不生效 | `providers/news_aggregator.py` + `fetcher/news.py` |
 | **C14** | **渲染期数据不可写入模块级全局变量** — 所有渲染期数据（如 `section_visible_dict`）必须通过模板 `render()` 的 context 参数传递，不得写入 `_ENV.globals` 或模块级 dict | 模块级全局变量在并发/多次渲染场景下产生状态污染，且难以追踪数据流向 | 并发不安全、渲染状态污染、数据流向不可追踪 | report/html_writer.py、模板渲染相关模块 |
-| **C19** | **pipeline_data Schema 契约** — 所有 pipeline_data 键必须先在附录 H（pipeline_data Schema 定义）中预定义类型、可选性、写入/消费模块后，才能在代码中使用该键 | 无 schema 定义的键在管线中类型不匹配时引发难调试的 KeyError，且多人并行开发时互相不知道对方新增的键 | 违反时集成测试不通过 | report/orchestrator.py、所有向 pipeline_data 注入数据的模块 |
+| **C19** | **pipeline_data Schema 契约** — 权威键集是模块级不可变 `frozenset`（`report/pipeline_data_builder.py` 的 `_PIPELINE_DATA_KNOWN_KEYS` / `_PREP_KNOWN_KEYS`），未注册键**不自动登记**——`build()` / `build_prep()` / `merge_pipeline_data()` 三条注入路径都只告警放行、集合不增长；键必须先在附录 H（pipeline_data Schema 定义）中登记类型、可选性、写入/消费模块后才能在代码中使用 | 无 schema 定义的键在管线中类型不匹配时引发难调试的 KeyError，且多人并行开发时互相不知道对方新增的键 | 违反时集成测试不通过 | report/orchestrator.py、所有向 pipeline_data 注入数据的模块 |
 | **C20** | **HTML 图表图下说明强制** — HTML 报告中每张图表下方必须渲染图下说明（`.chart-caption`），明确标注该图表是什么、用途是什么；说明必须跟随对应图表 canvas 的渲染分支一同出现（图表有数据 → 说明出现，图表空数据 → 说明不出现） | 图表无说明时用户无法快速理解该图的含义与用途，可读性下降；屏幕阅读器等无障碍场景无法获得图表意图 | 代码评审不通过；图下说明缺失或与图表渲染分支不一致 | 模板 `report_template.html`（所有 chart canvas 渲染处，含净值/回撤/资产构成/行业分布/穿透 TOP10/量化指标 radar 共 6 处）、`chart-*` 前端图表模块 |
 | **C25** | **时间距离一律以交易日计** — 凡「距今多久」用于判定**数据新鲜度/停更/跳空/持仓期/观察期**的场景，一律以**交易日**计数，禁止用自然日差；交易日来源唯一为 `core/trading_calendar.py`（`count_trading_days_elapsed` / `get_last_trading_day` / `get_prev_trading_day`），各模块不得自建日历或另写自然日差。自然日差仅可用于本身就以自然日定义的量（如静默期天数、缓存 TTL） | 交易日与自然日在长假/周末处相差十数个自然日：按自然日差判定，长假前后的两个相邻交易日会被判为「延迟」「停更」「数据跳空」；在非交易日运行报告时，运行时刻与最近交易日天然相差一个自然日，会把正常的 T-1 净值误报为滞后 | 报告在长假后/非交易日运行即出现成批假告警（数据质量「延迟」、因子被误剔除、K 线被误判跳空、新仓观察期被误判已过），用户据假告警排查错误方向 | `core/trading_calendar.py`（唯一实现，`report/market_value.py` 按原公共名重新导出保持既有导入路径）、`fetcher/chain.py`（跳空判定）、`analysis/style_factor_regression.py`（停更因子剔除）、`analysis/rebalance.py`（新仓观察期）、`analysis/whatif_backtest.py`（回测窗口折算）、`core/data_freshness.py` 及其消费方（报告「数据质量」维度、提示词新鲜度基准） |
 | **C22** | **报告管线实验挂载点集中** — 接入报告管线的实验功能必须经 `report/_experimental_seams.py` 的挂载点函数接入，禁止在 `_generate_report_full` 内联 `try/except` 守护；所有挂载点共享同一契约「**实验功能自身的异常绝不中断报告主链路**」（降级为一条告警 + 一条异常日志），且**挂载点工序顺序固定**——结算先于 LLM 拉取、质量横幅晚于决策登记、信号沉淀晚于 LLM 生成、景气度框架诊断晚于基本面契约与历史走势就绪 | 守护判据复制即漂移：四处内联 try/except 时改一处必漏三处（与缓存指纹「读写两份拼接」同一病根）；顺序调换会使当次教训读不到新结算结果、横幅改写文本污染决策表解析、尾部风险等迟到键漏采 | 实验功能异常中断整条报告链路；实验结论静默失真（结算/沉淀漏采、解析污染）且无异常可循 | `report/_report_generation.py`（唯一调用点，仅按序调用挂载点）、`report/_experimental_seams.py`（唯一守护实现，四条挂载点在 `_generate_report_full` 工序内、`record_prosperity_diagnosis` 在两条 HTML 生成路径内）、所有向 `pipeline_data` 注入数据的实验功能 |
@@ -3964,6 +3966,8 @@ lint 基线为 `E4`/`E7`/`E9`/`F`/`RUF100` + `ARG` + `BLE001` + `ANN001`（`pypr
 | 宽异常捕获（`BLE001`，机检） | 降级边界（单源/单图/单项/单批失败不影响主链路）、观测旁路、第三方库边界、不得中断主流程的 `except Exception` | `# noqa: BLE001 — <失败后调用方看到什么、为什么不窄化>` | 在主链路上宽捕获掩盖缺陷；用 per-file-ignores 整目录豁免替代逐处理由；吞 `BaseException`（自检、测试收集、网络守卫兜底除外） |
 | 未用参数（`ARG`，机检） | 签名契约：回调、链层 `getattr` 调用、公开 API、测试桩须与对端签名一致 | `# noqa: ARG00x — <对齐的是哪一方签名>`（签名可控的内部助手则改名 `_x`，不留抑制） | 为消警告改名 `_x` 破坏对端契约；留无契约依据的死参数 |
 | 参数缺注解（`ANN001`，机检） | 生产域一律给出真实类型；容器/泛型写全（`list[str]`、`Callable[[str], None]`、`ProgressReporterProtocol`）；跨层引用走 `TYPE_CHECKING` 块避免运行期导入环；真开放域（框架约定的统一 handler 签名、无共同基类的结构化协议对象）按实际形态取最宽真实类型 | 用 `Any` 时必须写明「为何无法给真实类型」 | 公开函数缺注解；用 `Any` 顶替可推导的真实类型；为消警告改签名破坏对端契约 |
+
+**抑制形态单一**：`# noqa: BLE001 — <理由>` 是**唯一**可接受的宽捕获抑制形态。只写散文理由（「有意宽捕获：…」）而不挂 noqa 的形态对 ruff 无感——规则真命中时 CI 红在 BLE001，抑制空转时红在 RUF100——故由 `check-code-traces.py` 的 CAPTURE 支路（`_traces_code/broad_capture.py`）逐行报出；反向亦然：规则未命中的处（函数体已上抛 / 已 `logger.exception` 记账）**不得**挂 noqa（`RUF100` 判空转），只留理由注释。理由本身同样单源：同一降级理由在多处重复时抽为模块级口径注释（例：`core/doctor.py` 的「体检降级口径」），逐处只引一句短注释，不逐字复制。
 
 **收敛方向**：宽捕获密集处（如 `core/doctor.py` 的体检分组）优先收成「边界函数 + 显式结果类型」，把宽捕获收到一处；新增代码按上表交代，评审以「行内理由是否说清失败后果」为准。
 
@@ -4035,6 +4039,7 @@ lint 基线为 `E4`/`E7`/`E9`/`F`/`RUF100` + `ARG` + `BLE001` + `ANN001`（`pypr
 
 | 符号 / 公共面 | owner | 兼容/门面路径 | 主要消费方 | 处置 |
 |:--|:--|:--|:--|:--|
+| `get_config_path_override` / `clear_config_path_override` | `config/_config_defaults.py` | `config/__init__.py`（导出进 `__all__`） | scripts 截图取帧、测试隔离 | 公开入口：临时改配置路径的调用方按原覆写值还原（None 即 `clear`），不再读私有全局 |
 | `get_config` / `set_config` / 章节可见性 | `config/_core.py` | `config/__init__.py` | 全渠道 | 公开门面保留；私有缓存变量不再导出 |
 | `get_llm_config` / `validate_config` / LLM 默认值 | `config/_llm_settings.py`、`config/_validation.py`、`config/_llm_settings_defaults.py` | `config/__init__.py` | llm / web / tui / analysis | 公开函数保留；私有实现按域导入 |
 | `get_cache_path` / `get/set/clear` | `cache/_paths.py`、`cache/_store.py` | `cache/__init__.py` | core / 报告 / 渠道 | 仅公开入口跨包；`_io`/`_store` 私有 |
@@ -4089,7 +4094,7 @@ lint 基线为 `E4`/`E7`/`E9`/`F`/`RUF100` + `ARG` + `BLE001` + `ANN001`（`pypr
 
 **再导出面声明口径**：包级公共聚合面与脚本门面（`scripts/` 下测试按脚本名访问的`check-doc-drift.py`/`check-doc-traces.py`/`perf-history.py`/`release.py`/`test-perf-report.py`/`_traces_code/patterns.py`）的再导出一律用 `__all__` 声明（再导出即公开面，增删门面名只改一处）——多行 import 上的语句级 `# noqa: F401` 会被 `RUF100` 判空转；**`noqa: F401` 保留口径**：包级公共聚合面（`core/registry.py`、`llm/__init__.py`、`llm/fact_checker/__init__.py`）的公开 API 再导出；动态调度面（`providers/sina.py` 的 K 线函数供 chain 按 provider 名 `getattr`）；显式副作用/类型导入。新增 `noqa: F401` 须在行内写明理由；测试私有导入只允许指向 owner。**抑制只对启用规则生效**（`select` 含 `RUF100`，未启用规则上的抑制即判死）：已由 `__all__` 显式再导出、ruff 不再报 `F401` 的聚合面（如 `analysis/__init__.py`）不挂 noqa；同理宽捕获/未用参数/缺注解不用 noqa 兜，写说明注释（口径见 §8.7）。
 
-**机检**：`scripts/check-import-surface.py`（守护清单成员，规则 compat-comment / private-all / cross-private / dynamic-target / layer-inversion + exception-table）；包 `__all__` 私有名、兼容注释、跨包私有导入当前
+**机检**：`scripts/check-import-surface.py`（守护清单成员，规则 compat-comment / private-all / cross-private / cross-private-scripts / dynamic-target / layer-inversion + exception-table）；包 `__all__` 私有名、兼容注释、跨包私有导入（含 `scripts/` 侧导入 `src/python` 私有模块）当前
 
 ### 9.1 模块门面 re-export 面与退出条件
 

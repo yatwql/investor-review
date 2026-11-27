@@ -172,5 +172,79 @@
       "expiry": "2027-06-30",
       "replacement": "探针面收成 core 侧探针注册表，各通道追加注册探测函数"
     }
+  ],
+  "cross-private-scripts": [
+    {
+      "path": "scripts/_doc_drift/_format.py",
+      "name": "src.python.config._config_defaults",
+      "owner": "文档守护（doc-drift 默认值对拍）",
+      "reason": "漂移检查要把文档写死的默认值与出厂默认值逐字对拍，需要 `_DEFAULT_CONFIG` 全量表；config 公开面只有单键 `get_default`，无法枚举全表",
+      "expiry": "2027-06-30",
+      "replacement": "config 导出「出厂默认值只读快照」公开面后改为公开面（同期核掉该表引用）"
+    },
+    {
+      "path": "scripts/_doc_drift/_format.py",
+      "name": "src.python.config._llm_settings_defaults",
+      "owner": "文档守护（doc-drift 默认值对拍）",
+      "reason": "同上：LLM 设置出厂默认值需全量对拍，公开面只提供单键读取",
+      "expiry": "2027-06-30",
+      "replacement": "同 `_config_defaults` 条：默认值只读快照公开面落地后一并改"
+    },
+    {
+      "path": "scripts/_eval_factor_zoo/metrics.py",
+      "name": "src.python.analysis._factor_formulas",
+      "owner": "因子评测（factor zoo）",
+      "reason": "离线因子评测必须复用生产因子公式原语（对齐/收益/EM A/滚动 beta）才能与生产 IC 逐位一致，否则评测结论不适用于生产",
+      "expiry": "2027-06-30",
+      "replacement": "因子公式原语下沉为可公开复用的评测面后改引用公开面"
+    },
+    {
+      "path": "scripts/_eval_halluc_sampler/fact_check.py",
+      "name": "src.python.llm.fact_checker._runner",
+      "owner": "幻觉采样评测（halluc sampler）",
+      "reason": "采样器直接驱动事实核查 runner 并读取其内部结果结构，复用生产判定链路而非自建一套",
+      "expiry": "2027-06-30",
+      "replacement": "fact_checker 导出「评测驱动 + 结果结构」公开面后改为公开面"
+    },
+    {
+      "path": "scripts/_eval_halluc_sampler/fact_check.py",
+      "name": "src.python.llm.fact_checker._utils",
+      "owner": "幻觉采样评测（halluc sampler）",
+      "reason": "复用 `_strip_html` 等文本清洗原语，保证评测输入与生产核查输入同一口径",
+      "expiry": "2027-06-30",
+      "replacement": "清洗原语下沉 `core/` 公开面后改引用"
+    },
+    {
+      "path": "scripts/_eval_halluc_sampler/from_report.py",
+      "name": "src.python.llm.fact_checker._coverage",
+      "owner": "幻觉采样评测（halluc sampler）",
+      "reason": "采样需按覆盖率判定的内部集合跳过样本，与生产「哪些声明已覆盖」同口径",
+      "expiry": "2027-06-30",
+      "replacement": "覆盖率判定导出公开查询面后改引用"
+    },
+    {
+      "path": "scripts/_eval_halluc_sampler/from_report.py",
+      "name": "src.python.llm.fact_checker._utils",
+      "owner": "幻觉采样评测（halluc sampler）",
+      "reason": "复用 `_strip_html` 等文本清洗原语，保证评测输入与生产核查输入同一口径",
+      "expiry": "2027-06-30",
+      "replacement": "清洗原语下沉 `core/` 公开面后改引用"
+    },
+    {
+      "path": "scripts/_eval_halluc_sampler/holdings.py",
+      "name": "src.python.llm.fact_checker._utils",
+      "owner": "幻觉采样评测（halluc sampler）",
+      "reason": "复用持仓市值聚合原语（`_calc_portfolio_values`）构造评测输入，避免两套市值口径",
+      "expiry": "2027-06-30",
+      "replacement": "市值聚合原语下沉 `core/` 公开面后改引用"
+    },
+    {
+      "path": "scripts/test-smoke-web.py",
+      "name": "src.python.config._config_defaults",
+      "owner": "Web 冒烟（test-smoke-web）",
+      "reason": "冒烟需把 `_DEFAULT_CONFIG` 与 `_CONFIG_FILE` 重定向到临时目录（防污染真实 data/config/），公开面只提供配置**路径覆写**与单键读取，无法临时改默认值表与非覆写默认路径",
+      "expiry": "2027-06-30",
+      "replacement": "config 提供「默认值表/默认配置路径临时覆写」公开面（带还原语义）后改引用"
+    }
   ]
 }

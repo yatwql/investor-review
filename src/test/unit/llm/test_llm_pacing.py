@@ -262,12 +262,32 @@ class TestQuotaFailureReason:
 class TestConcurrencyHintPlacement:
     """429 诊断建议函数（_concurrency_hint）的归属与调用方文件行数硬上限。"""
 
-    def test_api_base_reuses_pacing_owned_hint(self):
-        """api_base 重试骨架用的 429 诊断建议必须是 pacing 持有的同一实现（防两处漂移）。"""
+    def test_api_base_reuses_pacing_owned_hint(self, monkeypatch, caplog):
+        """429 告警必须真正走 pacing 持有的诊断建议（改其实现即改告警文本，防两处漂移）。"""
+        import httpx
+
         import src.python.llm.api_base as api_base_mod
         from src.python.llm import pacing as pacing_mod
 
+        # 前提：api_base 引用的是 pacing 的同一实现（不是本地副本）
         assert api_base_mod._concurrency_hint is pacing_mod._concurrency_hint
+
+        resp = httpx.Response(429, json={}, request=httpx.Request("POST", "https://api.example.com/v1/chat"))
+        monkeypatch.setattr(api_base_mod, "post_with_deadline", lambda *a, **k: resp)
+        monkeypatch.setattr(api_base_mod, "_concurrency_hint", lambda _key="": "诊断建议哨兵")
+
+        with caplog.at_level("WARNING", logger="invest"):
+            kind, _info = api_base_mod._attempt_api_call(
+                client=None,
+                url="https://api.example.com/v1/chat",
+                headers={},
+                payload={},
+                timeout=1.0,
+                endpoint_key="provider_a",
+            )
+
+        assert kind == "quota"
+        assert "诊断建议哨兵" in caplog.text, "429 告警未复用 pacing 的诊断建议实现"
 
     def test_api_base_file_within_hard_line_limit(self):
         """api_base.py 单文件行数不得超过管理文档「文件过长」红线（硬上限 800 行）。"""

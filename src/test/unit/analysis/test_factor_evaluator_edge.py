@@ -27,7 +27,7 @@ class TestFactorEvaluatorEdge:
         )
         assert out["available"] is False
         assert out["computed"] == 0
-        assert len(out["factors"]) == len(out["factors"]) and out["factors"]
+        assert out["factors"], "冻结目录非空（条数由目录派生，不写死）"
         assert all(f["reason"] for f in out["factors"])
 
     def test_unknown_field_entry_reason(self):

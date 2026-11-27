@@ -25,6 +25,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from datetime import date, datetime
+from enum import StrEnum
 from typing import Any
 
 from src.python.core.code_utils import (
@@ -72,6 +73,21 @@ _FUND_TYPE_TAG: dict[str, str] = {
     BOND_FUND: "债券",
     ACTIVE_EQUITY: "权益",
 }
+
+
+class IndustryStatus(StrEnum):
+    """穿透行业分类获取结果的**唯一**表述（`industry_status` 字段取值域）。
+
+    消费方按枚举值分流，不得另立「成功标志 + 失败类型」双字段——同一事实两处表述
+    必然分叉。字段缺失或取值非法即 :attr:`UNKNOWN`（未分类），**不得**回落成
+    :attr:`OK`——那会把「生产者没写」静默算成健康。
+    """
+
+    OK = "ok"  # 取到行业分类数据
+    EMPTY = "empty"  # 有 A 股代码，但预取与补取全空
+    NO_A_SHARE = "no_a_share"  # 穿透资产全为非 A 股（预期行为）
+    UNREACHABLE = "unreachable"  # 取数异常（产出侧暂不写此值，消费侧仍受理）
+    UNKNOWN = "unknown"  # 未分类：字段缺失或取值非法
 
 
 # ═══════════════════════════════════════════════════════════
@@ -594,9 +610,9 @@ def _compute_penetration_top10_uncached(
             "industry_status": "ok" | "empty" | "no_a_share" | "unreachable",
         }
 
-    ``industry_status`` 是行业分类获取结果的**单一**表述：``ok``（取到数据）、
-    ``empty``（有 A 股代码但两段取数全空）、``no_a_share``（穿透资产全为非 A 股，
-    预期行为）、``unreachable``（取数异常，当前产出侧不写此值）。消费方按枚举值
+    ``industry_status`` 的取值域是 :class:`IndustryStatus`（单一表述）：``OK``（取到数据）、
+    ``EMPTY``（有 A 股代码但两段取数全空）、``NO_A_SHARE``（穿透资产全为非 A 股，
+    预期行为）、``UNREACHABLE``（取数异常，当前产出侧不写此值）。消费方按枚举值
     分流，不得另立「成功标志 + 失败类型」双字段——同一事实两处表述必然分叉。
     """
     classified, funds, direct_stocks, detail_map = _classify_and_group(holdings, details)
@@ -633,7 +649,7 @@ def _compute_penetration_top10_uncached(
     _merge_stock_layer(direct_stocks, detail_map, merged)
 
     # ── Phase 3: 行业分类（合并预取 + 补充剩余） ──
-    industry_status = "ok"
+    industry_status = IndustryStatus.OK
 
     all_codes: set[str] = set()
     for info in merged.values():
@@ -642,7 +658,7 @@ def _compute_penetration_top10_uncached(
 
     if not a_share_codes:
         # 无 A 股代码属**预期行为**：以独立枚举值表达，消费方无需另读失败标志
-        industry_status = "no_a_share"
+        industry_status = IndustryStatus.NO_A_SHARE
     else:
         prefetched: dict[str, dict] = {}
         if ind_future is not None:
@@ -667,7 +683,7 @@ def _compute_penetration_top10_uncached(
         # 没有任何行业数据被获取（预取与补取均为空：熔断短路或批量全败）
         if not prefetched and not remaining_data:
             logger.warning("[penetration] 行业分类数据为空（非关键）")
-            industry_status = "empty"
+            industry_status = IndustryStatus.EMPTY
 
     result = _build_penetration_result(
         merged,

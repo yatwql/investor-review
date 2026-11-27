@@ -12,11 +12,13 @@ import logging
 import time
 from collections.abc import Callable
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 from src.python.analysis.unavailable_contracts import factor_unavailable_result, industry_unavailable_result
+from src.python.config import get_default
 from src.python.core.code_utils import is_six_digit_code
 from src.python.core.concurrency import worker_pool
+from src.python.core.log_dedupe import log_throttled
 from src.python.core.perf import SLOW_SPAN_WARN_SECONDS
 from src.python.report.progress import ProgressReporter
 
@@ -27,6 +29,10 @@ logger = logging.getLogger("invest")
 #: 若无单路耗时与告警，事后只能看到「因子暴露 10.5s」这一个总数。
 #: 与落盘慢告警共用同一阈值源（core.perf），避免两处数字各改一半。
 _SLOW_FETCH_WARN_SECONDS = SLOW_SPAN_WARN_SECONDS
+
+#: 风格因子 / 行业 Beta 两段的并发热点默认值——单源取 config 默认值表 `batch.factor_workers`，
+#: 三个取数点共用本常量（同一热点在调用点各写一份字面量，改一处漏两处即静默不一致）。
+_FACTOR_WORKERS_DEFAULT: int = cast(int, get_default("batch.factor_workers"))
 
 
 def _timed_fetch(fn: Callable[..., Any], *args, label: str = "", **kwargs):
@@ -46,6 +52,26 @@ def _timed_fetch(fn: Callable[..., Any], *args, label: str = "", **kwargs):
 
 
 # ── 持仓历史 K 线路由 ──
+
+
+def _log_holding_bars_failure(stage: str, code: str, name: str, exc: BaseException) -> None:
+    """持仓 K 线取数异常留痕：同品种同异常只留一条带 traceback 的记录。
+
+    「风格因子」与「行业 Beta」两段各自对同一批持仓拉一次 K 线，同一次失败因此会被记
+    两遍 traceback（同一份堆栈，只差阶段前缀）。按 (品种, 异常类型) 折叠：窗口内首次带
+    traceback 上屏，重复降到 DEBUG；窗口外（下一次报告）照常重来。
+    """
+    if log_throttled(
+        logger,
+        f"holding_bars_fail:{code}:{type(exc).__name__}",
+        "[%s] 持仓 K 线获取失败：%s %s（%s: %s）",
+        stage,
+        code,
+        name,
+        type(exc).__name__,
+        exc,
+    ):
+        logger.info("[%s] 持仓 K 线获取失败（%s %s）", stage, code, name, exc_info=exc)
 
 
 def _fetch_holding_bars(code: str, name: str, days: int) -> list[dict] | None:
@@ -92,6 +118,123 @@ def _fetch_holding_bars(code: str, name: str, days: int) -> list[dict] | None:
 # ── 风格因子回归 编排 ──
 
 
+def _load_factor_regression_ops(
+    reporter: ProgressReporter,
+) -> tuple[Callable[..., list[dict]], int, Callable[..., list[dict] | None]] | None:
+    """延迟导入纯计算层（pandas/numpy 重依赖）与指数取数：缺失则降级，不阻塞主报告（§1.4.5）。
+
+    Returns:
+        (asif_portfolio_daily_returns, MIN_FACTORS, fetch_index_history)；依赖缺失时就地
+        留痕并向用户说明降级原因，返回 None 由调用方按数据源故障处理。
+    """
+    try:
+        from src.python.analysis.style_factor_regression import MIN_FACTORS, asif_portfolio_daily_returns
+        from src.python.fetcher.index import fetch_index_history
+    except ImportError as exc:
+        logger.warning("[factor] 风格因子回归依赖缺失（%s），章节降级为数据源暂不可用", exc)
+        reporter.warn("风格因子回归依赖缺失，章节降级")
+        return None
+    return asif_portfolio_daily_returns, MIN_FACTORS, fetch_index_history
+
+
+def _fetch_factor_inputs(
+    holdings: list, days: int, fetch_index_history: Callable[..., list[dict] | None]
+) -> tuple[dict[str, dict], dict[str, list[dict]]]:
+    """取数：持仓 K 线与因子指数 K 线同一池并发发出（两组互不依赖，墙钟取各自最慢值）。
+
+    两组原本分两个池串行：因子指数要等持仓 K 线全部回来才发，一路 9.4s 的慢请求就把整段
+    拖成 10s+（实测 因子暴露 10.48s，其中 9.4s 空白）；单路由 `_timed_fetch` 记耗时、超阈告警。
+    单路异常各自降级（持仓 K 线留痕、因子指数按空拉取计），不阻断同类其余品种。
+
+    Returns:
+        (持仓 K 线 {code: {shares, bars}}, 因子 K 线 {因子: bars})
+    """
+    from src.python.analysis.style_factor_regression import FACTOR_INDICES
+    from src.python.fetcher.batch import get_batch_worker_count
+
+    holdings_bars: dict[str, dict] = {}
+    factor_klines: dict[str, list[dict]] = {}
+    with worker_pool(
+        "batch:orch_factor",
+        min(
+            get_batch_worker_count("factor_workers", _FACTOR_WORKERS_DEFAULT),
+            max(1, len(holdings) + len(FACTOR_INDICES)),
+        ),
+        thread_name_prefix="orch_factor",
+    ) as _pool:
+        bar_futs = {
+            _pool.submit(
+                _timed_fetch, _fetch_holding_bars, h.code, h.name, days, label=f"持仓 K 线 {h.code} {h.name}"
+            ): h
+            for h in holdings
+        }
+        idx_futs = {
+            _pool.submit(_timed_fetch, fetch_index_history, code, days, label=f"因子指数 K 线 {f}"): f
+            for f, code in FACTOR_INDICES.items()
+        }
+        for _fut, h in bar_futs.items():
+            try:
+                _bars = _fut.result()
+            except Exception as exc:  # noqa: BLE001 — 单品种 K 线失败不阻断同类其余品种，但要留痕
+                _log_holding_bars_failure("factor", h.code, h.name, exc)
+                _bars = None
+            if _bars:
+                holdings_bars[h.code] = {"shares": float(h.shares), "bars": _bars}
+        for _fut, f in idx_futs.items():
+            try:
+                factor_klines[f] = _fut.result() or []
+            except Exception:  # noqa: BLE001 — 因子空拉取计入 excluded 并降级判据，缺日志会看不出是异常还是真无数据
+                logger.info("[factor] 因子指数 K 线获取失败：%s", f, exc_info=True)
+                factor_klines[f] = []
+    return holdings_bars, factor_klines
+
+
+def _fresh_factor_klines(
+    factor_klines: dict[str, list[dict]], today_str: str
+) -> tuple[dict[str, list[dict]], list[str]]:
+    """新鲜度剔除（停更）+ 空拉取剔除：返回（可用因子 K 线, 被剔除因子名）。"""
+    from src.python.analysis.style_factor_regression import filter_stale_factor_klines
+
+    empty_factors = [f for f, bars in factor_klines.items() if not bars]
+    fresh, stale = filter_stale_factor_klines({f: bars for f, bars in factor_klines.items() if bars}, today_str)
+    return fresh, sorted(set(empty_factors + stale))
+
+
+def _assemble_factor_exposure(
+    portfolio_returns: list[dict],
+    fresh: dict[str, list[dict]],
+    excluded: list[str],
+    days: int,
+    reporter: ProgressReporter,
+    fetch_index_history: Callable[..., list[dict] | None],
+) -> dict:
+    """因子收益序列 + 沪深300 基准 → 纯计算 OLS → 数据契约 dict（含剔除清单与进度上报）。"""
+    from src.python.analysis.style_factor_regression import (
+        BASELINE_INDEX,
+        DEFAULT_WINDOW,
+        MIN_SAMPLES,
+        compute_factor_exposure,
+        klines_to_returns,
+    )
+
+    factor_returns = {f: klines_to_returns(fresh[f]) for f in fresh}
+    baseline_returns = klines_to_returns(fetch_index_history(BASELINE_INDEX, days) or [])
+    result = compute_factor_exposure(
+        portfolio_returns,
+        factor_returns,
+        baseline_returns=baseline_returns or None,
+        window=DEFAULT_WINDOW,
+        min_samples=MIN_SAMPLES,
+    )
+    if excluded:
+        result["stale_factors"] = excluded
+    if result.get("available"):
+        reporter.ok("风格因子回归完成")
+    else:
+        reporter.warn(f"因子暴露数据不足（有效样本 {result.get('sample_count', 0)}）")
+    return result
+
+
 def compute_factor_exposure_data(
     holdings: list,
     config: dict,
@@ -115,108 +258,31 @@ def compute_factor_exposure_data(
 
     if not is_enable_fund_deep_analysis(config):
         return None
-
-    try:
-        from src.python.analysis.style_factor_regression import (
-            BASELINE_INDEX,
-            DEFAULT_WINDOW,
-            FACTOR_INDICES,
-            MIN_FACTORS,
-            MIN_SAMPLES,
-            asif_portfolio_daily_returns,
-            compute_factor_exposure,
-            filter_stale_factor_klines,
-            klines_to_returns,
-        )
-        from src.python.fetcher.index import fetch_index_history
-    except ImportError as exc:
-        # 纯计算层重依赖（pandas/numpy）缺失：该区块降级，不阻塞主报告（§1.4.5）
-        logger.warning("[factor] 风格因子回归依赖缺失（%s），章节降级为数据源暂不可用", exc)
-        reporter.warn("风格因子回归依赖缺失，章节降级")
+    ops = _load_factor_regression_ops(reporter)
+    if ops is None:
         return factor_unavailable_result("source_failed")
+    asif_portfolio_daily_returns, min_factors, fetch_index_history = ops
 
     today_str = datetime.now().strftime("%Y-%m-%d")
     # 90 条历史：预留对齐/dropna 头部损耗，保证 ≥window(60) 期有效样本
-    _days = 90
+    days = 90
 
     try:
-        # ── 1. 取数（两组互不依赖，同一池并发发出） ──
-        # 持仓 K 线与因子指数 K 线原本分两个池串行：因子指数要等持仓 K 线全部回来才发，
-        # 一路 9.4s 的慢请求就把整段拖成 10s+（实测 因子暴露 10.48s，其中 9.4s 空白）。
-        # 合并后两组的墙钟取各自最慢值，且单路由 `_timed_fetch` 记耗时、超阈告警。
         reporter.info("正在计算风格因子回归...")
-        holdings_bars: dict[str, dict] = {}
-        factor_klines: dict[str, list[dict]] = {}
-        _n = len(holdings)
-        from src.python.fetcher.batch import get_batch_worker_count
-
-        with worker_pool(
-            "batch:orch_factor",
-            min(get_batch_worker_count("factor_workers", 6), max(1, _n + len(FACTOR_INDICES))),
-            thread_name_prefix="orch_factor",
-        ) as _pool:
-            bar_futs = {
-                _pool.submit(
-                    _timed_fetch, _fetch_holding_bars, h.code, h.name, _days, label=f"持仓 K 线 {h.code} {h.name}"
-                ): h
-                for h in holdings
-            }
-            idx_futs = {
-                _pool.submit(_timed_fetch, fetch_index_history, code, _days, label=f"因子指数 K 线 {f}"): f
-                for f, code in FACTOR_INDICES.items()
-            }
-            for _fut, h in bar_futs.items():
-                try:
-                    _bars = _fut.result()
-                except Exception:  # noqa: BLE001 — 单品种 K 线失败不阻断同类其余品种，但要留痕
-                    logger.debug("[factor] 持仓 K 线获取失败：%s %s", h.code, h.name, exc_info=True)
-                    _bars = None
-                if _bars:
-                    holdings_bars[h.code] = {"shares": float(h.shares), "bars": _bars}
-            for _fut, f in idx_futs.items():
-                try:
-                    factor_klines[f] = _fut.result() or []
-                except Exception:  # noqa: BLE001 — 因子空拉取计入 excluded 并降级判据，缺日志会看不出是异常还是真无数据
-                    logger.debug("[factor] 因子指数 K 线获取失败：%s", f, exc_info=True)
-                    factor_klines[f] = []
-
+        holdings_bars, factor_klines = _fetch_factor_inputs(holdings, days, fetch_index_history)
         portfolio_returns = asif_portfolio_daily_returns(holdings_bars)
         if not portfolio_returns:
             logger.warning("[factor] 组合历史收益为空，因子暴露数据不足")
             return factor_unavailable_result("insufficient")
-
         # 数据源故障：全部因子拉取为空（区别于数据不足，§1.4.5 ②）
         if all(not bars for bars in factor_klines.values()):
             logger.warning("[factor] 全部因子指数 K 线获取失败，章节降级为数据源暂不可用")
             return factor_unavailable_result("source_failed")
-
-        # ── 3. 新鲜度剔除（停更）+ 空拉取剔除 ──
-        empty_factors = [f for f, bars in factor_klines.items() if not bars]
-        fresh, stale = filter_stale_factor_klines({f: bars for f, bars in factor_klines.items() if bars}, today_str)
-        excluded = sorted(set(empty_factors + stale))
-        if len(fresh) < MIN_FACTORS:
-            logger.warning("[factor] 有效因子不足 %d（剔除 %s），数据不足", MIN_FACTORS, excluded)
+        fresh, excluded = _fresh_factor_klines(factor_klines, today_str)
+        if len(fresh) < min_factors:
+            logger.warning("[factor] 有效因子不足 %d（剔除 %s），数据不足", min_factors, excluded)
             return factor_unavailable_result("insufficient", stale_factors=excluded)
-
-        # ── 4. 因子收益序列 + 沪深300 基准 ──
-        factor_returns = {f: klines_to_returns(fresh[f]) for f in fresh}
-        baseline_returns = klines_to_returns(fetch_index_history(BASELINE_INDEX, _days) or [])
-
-        # ── 5. 纯计算 OLS ──
-        result = compute_factor_exposure(
-            portfolio_returns,
-            factor_returns,
-            baseline_returns=baseline_returns or None,
-            window=DEFAULT_WINDOW,
-            min_samples=MIN_SAMPLES,
-        )
-        if excluded:
-            result["stale_factors"] = excluded
-        if result.get("available"):
-            reporter.ok("风格因子回归完成")
-        else:
-            reporter.warn(f"因子暴露数据不足（有效样本 {result.get('sample_count', 0)}）")
-        return result
+        return _assemble_factor_exposure(portfolio_returns, fresh, excluded, days, reporter, fetch_index_history)
     except Exception:
         logger.exception("[factor] 因子暴露计算异常，章节降级")
         return factor_unavailable_result("source_failed")
@@ -298,7 +364,7 @@ def compute_industry_beta_data(
 
         with worker_pool(
             "batch:orch_ind",
-            min(get_batch_worker_count("factor_workers", 6), max(1, _n)),
+            min(get_batch_worker_count("factor_workers", _FACTOR_WORKERS_DEFAULT), max(1, _n)),
             thread_name_prefix="orch_ind",
         ) as _pool:
             _futs = {
@@ -311,8 +377,8 @@ def compute_industry_beta_data(
                 h = _futs[_fut]
                 try:
                     _bars = _fut.result()
-                except Exception:  # noqa: BLE001 — 单品种失败不阻断其余，留痕以便区分「无数据」与「取数异常」
-                    logger.debug("[industry_beta] 持仓 K 线获取失败：%s %s", h.code, h.name, exc_info=True)
+                except Exception as exc:  # noqa: BLE001 — 单品种失败不阻断其余，留痕以便区分「无数据」与「取数异常」
+                    _log_holding_bars_failure("industry_beta", h.code, h.name, exc)
                     _bars = None
                 if _bars:
                     holdings_bars[h.code] = {"shares": float(h.shares), "bars": _bars}
@@ -327,7 +393,7 @@ def compute_industry_beta_data(
         if mapped_industries:
             with worker_pool(
                 "batch:orch_ind_idx",
-                min(4, get_batch_worker_count("factor_workers", 6)),
+                min(4, get_batch_worker_count("factor_workers", _FACTOR_WORKERS_DEFAULT)),
                 thread_name_prefix="orch_ind_idx",
             ) as _pool:
                 _futs = {
@@ -341,7 +407,7 @@ def compute_industry_beta_data(
                     try:
                         industry_klines[i] = _fut.result() or []
                     except Exception:  # noqa: BLE001 — 行业指数失败计入「无数据」，留痕区分异常与真无数据
-                        logger.debug("[industry_beta] 行业指数 K 线获取失败：%s", i, exc_info=True)
+                        logger.info("[industry_beta] 行业指数 K 线获取失败：%s", i, exc_info=True)
                         industry_klines[i] = []
 
         # ── 5. 纯计算：逐行业一元 OLS（复用 style_factor_regression 机制） ──
