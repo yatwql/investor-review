@@ -8,12 +8,13 @@
 
 from __future__ import annotations
 
+import runpy
 import subprocess
 import sys
 from types import SimpleNamespace
 
 import pytest
-from src.test._script_loader import load_script
+from src.test._script_loader import SCRIPTS_DIR, load_script
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_scripts]
 
@@ -205,3 +206,135 @@ class TestMainArgvDefault:
 
         assert order_script.main() == 0
         assert f"目标用例：{_TARGET}" in capsys.readouterr().out
+
+
+_TARGET_FILE = "src/test/a/test_target.py"
+
+
+def _install_runner(monkeypatch, mod, run) -> None:
+    """只替换 `subprocess.run`（用于收集失败/自定义应答，`_FakePytest` 覆盖不到的形态）。"""
+    monkeypatch.setattr(mod, "subprocess", SimpleNamespace(run=run, TimeoutExpired=subprocess.TimeoutExpired))
+
+
+class TestMainGates:
+    """入口各道门的拒绝路径：单跑门 → 收集 → 目标在列 → 候选 → 复现门 → 二分/精简预算。"""
+
+    def test_single_run_target_failure_exits_one(self, order_script, monkeypatch, capsys):
+        fake = _FakePytest(_collect_output(_FILES, _TARGET_FILE), lambda nodes: (1, _fail_line()))
+        _install(monkeypatch, order_script, fake)
+
+        assert order_script.main([_TARGET]) == 1
+        out = capsys.readouterr().out
+        assert "不是顺序依赖问题" in out
+        assert fake.commands and all("--collect-only" not in cmd for cmd in fake.commands), "单跑门即判死，不必收集"
+
+    def test_single_run_unrelated_failure_exits_two(self, order_script, monkeypatch, capsys):
+        fake = _FakePytest(
+            _collect_output(_FILES, _TARGET_FILE),
+            lambda nodes: (1, "FAILED src/test/a/test_1.py::test_x - boom\n1 failed"),
+        )
+        _install(monkeypatch, order_script, fake)
+
+        assert order_script.main([_TARGET]) == 2
+        assert "[ERR] 单跑出现无关失败或执行错误" in capsys.readouterr().out
+
+    @pytest.mark.parametrize(("code", "nodes"), [(1, ""), (0, "")])
+    def test_collection_failure_or_empty_exits_two(self, order_script, monkeypatch, capsys, code, nodes):
+        def _run(cmd, **_kwargs):
+            if "--collect-only" in cmd:
+                return subprocess.CompletedProcess(cmd, code, nodes, "collect error")
+            return subprocess.CompletedProcess(cmd, 0, "1 passed", "")
+
+        _install_runner(monkeypatch, order_script, _run)
+        assert order_script.main([_TARGET]) == 2
+        assert "收集失败" in capsys.readouterr().out
+
+    def test_target_file_absent_from_collection_exits_two(self, order_script, monkeypatch, capsys):
+        fake = _FakePytest(_collect_output(_FILES, "src/test/other/test_elsewhere.py"), lambda nodes: (0, ""))
+        _install(monkeypatch, order_script, fake)
+
+        assert order_script.main([_TARGET]) == 2
+        assert "目标文件不在收集结果中" in capsys.readouterr().out
+
+    def test_unknown_candidates_rejected(self, order_script, monkeypatch, capsys):
+        fake = _FakePytest(_collect_output(_FILES, _TARGET_FILE), lambda nodes: (0, ""))
+        _install(monkeypatch, order_script, fake)
+
+        assert order_script.main([_TARGET, "--candidates", "src/test/a/test_9.py"]) == 2
+        assert "候选文件不在收集结果中" in capsys.readouterr().out
+
+    def test_no_candidate_before_target_exits_two(self, order_script, monkeypatch, capsys):
+        fake = _FakePytest(_collect_output([], _TARGET_FILE), lambda nodes: (0, ""))
+        _install(monkeypatch, order_script, fake)
+
+        assert order_script.main([_TARGET]) == 2
+        assert "目标前无候选文件" in capsys.readouterr().out
+
+    def test_reproduction_gate_failure_exits_two(self, order_script, monkeypatch, capsys):
+        fake = _FakePytest(_collect_output(_FILES, _TARGET_FILE), lambda nodes: (0, "1 passed"))
+        _install(monkeypatch, order_script, fake)
+
+        assert order_script.main([_TARGET]) == 2
+        assert "无法复现" in capsys.readouterr().out
+
+    def test_run_budget_exhausted_before_minimisation_exits_two(self, order_script, monkeypatch, capsys):
+        """配对不成立要转精简时，剩余预算已耗尽须报上限而不是继续跑。"""
+
+        def plan(nodes):
+            files = [n for n in nodes if n.endswith(".py")]
+            return (1, _fail_line()) if len(files) >= 2 and _TARGET in nodes else (0, "")
+
+        fake = _FakePytest(_collect_output(_FILES, _TARGET_FILE), plan)
+        _install(monkeypatch, order_script, fake)
+
+        assert order_script.main([_TARGET, "--max-runs", "6"]) == 2
+        assert "无法进一步精简" in capsys.readouterr().out
+
+    def test_run_budget_reached_right_after_reproduction_gate(self, order_script, monkeypatch, capsys):
+        fake = _FakePytest(
+            _collect_output(_FILES, _TARGET_FILE),
+            lambda nodes: (1, _fail_line()) if len(nodes) > 1 else (0, "1 passed"),
+        )
+        _install(monkeypatch, order_script, fake)
+
+        assert order_script.main([_TARGET, "--max-runs", "2"]) == 2
+        assert "已达运行上限" in capsys.readouterr().out
+
+    def test_bisection_budget_exhaustion_reports_non_convergence(self, order_script, monkeypatch, capsys):
+        wide = [f"src/test/a/test_{i}.py" for i in range(1, 6)]
+
+        def plan(nodes):
+            files = [n for n in nodes if n.endswith(".py")]
+            return (1, _fail_line()) if len(files) >= 4 and _TARGET in nodes else (0, "")
+
+        fake = _FakePytest(_collect_output(wide, _TARGET_FILE), plan)
+        _install(monkeypatch, order_script, fake)
+
+        assert order_script.main([_TARGET, "--max-runs", "3"]) == 2
+        out = capsys.readouterr().out
+        assert "二分未收敛" in out
+        assert len(fake.pytest_calls()) <= 5, "预算见底后不得继续投喂子进程"
+
+    def test_minimised_subset_not_reproducible_exits_two(self, order_script, monkeypatch, capsys):
+        def plan(nodes):
+            files = [n for n in nodes if n.endswith(".py")]
+            return (1, _fail_line()) if len(files) >= 2 and _TARGET in nodes else (0, "")
+
+        fake = _FakePytest(_collect_output(_FILES, _TARGET_FILE), plan)
+        _install(monkeypatch, order_script, fake)
+        monkeypatch.setattr(order_script, "minimize_subset", lambda prefix, fails, budget=40: ["src/test/a/ghost.py"])
+
+        assert order_script.main([_TARGET]) == 2
+        assert "精简集合无法复现" in capsys.readouterr().out
+
+
+class TestMainGuard:
+    """`if __name__ == "__main__"` 入口：缺目标参数即按 argparse 契约退出 2（不起子进程）。"""
+
+    def test_main_guard_exits_two_without_target(self, monkeypatch):
+        if str(SCRIPTS_DIR) not in sys.path:
+            sys.path.insert(0, str(SCRIPTS_DIR))
+        monkeypatch.setattr(sys, "argv", [_SCRIPT])
+        with pytest.raises(SystemExit) as excinfo:
+            runpy.run_path(str(SCRIPTS_DIR / _SCRIPT), run_name="__main__")
+        assert excinfo.value.code == 2

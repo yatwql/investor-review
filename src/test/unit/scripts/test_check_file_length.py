@@ -16,11 +16,13 @@ over_limit_inventory / main，不运行真实 CLI 进程。
 
 from __future__ import annotations
 
+import runpy
+import subprocess
 import sys
 from pathlib import Path
 
 import pytest
-from src.test._script_loader import load_script
+from src.test._script_loader import SCRIPTS_DIR as _SCRIPTS_DIR, load_script
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]  # investor-review 仓库根目录
 
@@ -311,3 +313,105 @@ class TestRegistryDrift:
         monkeypatch.setattr(sys, "argv", ["check-file-length.py", "--ci"])
         assert length_script.main() == 2
         assert "big.py" in capsys.readouterr().out
+
+
+class TestUnreadableAndMissingInputs:
+    """读不到输入时的降级：空登记表、不可读文件跳过、不可读文档成 finding。"""
+
+    def test_parse_registry_without_p4_section_returns_empty(self, length_script, tmp_path):
+        assert length_script._parse_registry("# 标题\n\n## 已解决问题\n", tmp_path) == []
+
+    def test_registry_rows_empty_when_doc_missing(self, length_script, monkeypatch, tmp_path):
+        monkeypatch.setattr(length_script, "REGISTRY_DOC", tmp_path / "absent.md")
+        assert length_script.registry_rows(tmp_path) == []
+
+    def test_unreadable_registry_doc_reported(self, length_script, monkeypatch, tmp_path):
+        monkeypatch.setattr(length_script, "REGISTRY_DOC", tmp_path / "absent.md")
+        findings = length_script.check_registry_lines(tmp_path)
+        assert len(findings) == 1
+        assert "不可读" in findings[0]
+
+    def test_collect_skips_undecodable_py_file(self, length_script, tmp_path):
+        _make_file(tmp_path, "src/python/good.py", 5)
+        (tmp_path / "src" / "python" / "bad.py").write_bytes(b"\xff\xfe\x00broken")
+        records = length_script.collect_line_counts(tmp_path)
+        assert [Path(path).name for _kind, path, _lines in records] == ["good.py"]
+
+
+class TestChurnCounts:
+    """近 90 天改动次数：git 缺失/失败一律降级为空映射（best-effort）。"""
+
+    def test_counts_per_file_from_git_log(self, length_script, monkeypatch, tmp_path):
+        seen: dict[str, object] = {}
+
+        def _run(cmd, **kwargs):
+            seen["cmd"] = cmd
+            seen["cwd"] = kwargs["cwd"]
+            return subprocess.CompletedProcess(cmd, 0, stdout="src/python/a.py\n\nsrc/python/b.py\nsrc/python/a.py\n")
+
+        monkeypatch.setattr(length_script.subprocess, "run", _run)
+        counts = length_script.churn_counts(tmp_path)
+        assert counts["src/python/a.py"] == 2
+        assert counts["src/python/b.py"] == 1
+        assert seen["cmd"][:2] == ["git", "log"]
+        assert f"--since={length_script.CHURN_WINDOW_DAYS}.days" in seen["cmd"]
+        assert str(seen["cwd"]) == str(tmp_path)
+
+    def test_missing_git_binary_returns_empty(self, length_script, monkeypatch, tmp_path):
+        def _missing(cmd, **_kwargs):
+            raise FileNotFoundError("git 未安装")
+
+        monkeypatch.setattr(length_script.subprocess, "run", _missing)
+        assert length_script.churn_counts(tmp_path) == {}
+
+    def test_git_failure_returns_empty(self, length_script, monkeypatch, tmp_path):
+        monkeypatch.setattr(
+            length_script.subprocess,
+            "run",
+            lambda cmd, **_kwargs: subprocess.CompletedProcess(cmd, 128, stdout=""),
+        )
+        assert length_script.churn_counts(tmp_path) == {}, "非 git 目录（退出码非 0）不得报错"
+
+
+class TestMainVerbose:
+    """`-v` 直接把清单打到 stdout（域概览 / 优先级 / 登记表 / 豁免两栏）。"""
+
+    def test_verbose_prints_all_inventory_sections(self, length_script, monkeypatch, tmp_path, capsys):
+        warn = length_script._WARN_BY_KIND["脚本"]
+        big = _make_file(tmp_path, "scripts/big.py", warn + 1)  # churn 键须与记录同一路径形态
+        small = _make_file(tmp_path, "scripts/small.py", 10)
+        over_main = _make_file(tmp_path, "src/python/huge.py", length_script.MAIN_SOURCE_LIMIT + 1)
+        doc = _empty_registry(tmp_path)
+        doc.write_text(
+            doc.read_text(encoding="utf-8").replace(
+                "|---|---|\n", f"|---|---|\n| `scripts/big.py` {warn + 1} 行（登记线 700） | 拆分方向 |\n"
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(length_script, "REPO_ROOT", tmp_path)
+        monkeypatch.setattr(length_script, "REGISTRY_DOC", doc)
+        monkeypatch.setattr(
+            length_script,
+            "EXEMPTIONS",
+            {length_script.rel(over_main): "挂账说明", length_script.rel(small): "已拆分完成待移除"},
+        )
+        monkeypatch.setattr(length_script, "churn_counts", lambda _root: {length_script.rel(big): 4})
+        monkeypatch.setattr(sys, "argv", ["check-file-length.py", "-v", "--ci"])
+
+        assert length_script.main() == 0
+        out = capsys.readouterr().out
+        assert "检查域：" in out and "个 py 文件" in out
+        assert "scripts/big.py" in out and "[脚本]" in out
+        assert "拆分优先级" in out and "4 次" in out
+        assert "文件膨胀登记表" in out and "记 " + str(warn + 1) + " 行" in out
+        assert "[豁免]" in out and "huge.py" in out
+        assert "[可移除豁免]" in out and "small.py" in out
+
+    def test_main_guard_exits_with_repo_verdict(self, monkeypatch):
+        """`if __name__ == "__main__"` 入口：真实仓库输入，退出码经 sys.exit 传出。"""
+        monkeypatch.setattr(sys, "argv", ["check-file-length.py", "--ci"])
+        if str(_SCRIPTS_DIR) not in sys.path:
+            sys.path.insert(0, str(_SCRIPTS_DIR))
+        with pytest.raises(SystemExit) as excinfo:
+            runpy.run_path(str(_SCRIPTS_DIR / "check-file-length.py"), run_name="__main__")
+        assert excinfo.value.code == 0

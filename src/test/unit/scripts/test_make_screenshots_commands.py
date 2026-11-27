@@ -443,3 +443,286 @@ class TestWebShotResolution:
         monkeypatch.setattr(web.subprocess, "run", _timeout)
         assert web.run("http://127.0.0.1/x", tmp_path / "a.png") == 1
         assert "截图超时" in capsys.readouterr().out
+
+
+class TestScriptEntryCommands:
+    """`make-screenshots.py` 入口：子命令 → 子模块函数与参数装配。
+
+    子模块函数全部替身（不建演示工作区、不取帧、不起浏览器/服务进程），
+    断言的是分派映射、参数透传与退出码；依赖缺失的退出码由子模块自身产生，
+    入口只负责原样返回。
+    """
+
+    @pytest.fixture(name="entry")
+    def _entry(self, monkeypatch):
+        import importlib
+        from types import SimpleNamespace
+
+        saved_path = list(sys.path)
+        mod = load_script("make-screenshots.py", module_name="_make_screenshots_entry")
+        try:
+            # 入口脚本在导入期把 `scripts/` 塞进 sys.path；包引用借这一刻取到后即还原，
+            # 免得上屏脚本的路径自助修补外溢到其他测试文件。
+            screenshots_pkg = importlib.import_module("_screenshots")
+        finally:
+            sys.path[:] = saved_path
+        calls: dict[str, object] = {"assert": 0}
+
+        def _record(key, value):
+            calls[key] = value
+            return 0
+
+        demo = SimpleNamespace(
+            REPO_ROOT=Path("/repo"),
+            build=lambda: Path("/demo/screenshots/demo"),
+            run_report=lambda: 3,
+            demo_dir=lambda: Path("/demo"),
+            isolation_env=lambda demo: {"INVEST_PROJECT_ROOT": str(demo)},
+            assert_demo_holdings=lambda: calls.__setitem__("assert", calls["assert"] + 1),
+            capture_report_text=lambda: "采集到的报告输出",
+        )
+        tui = SimpleNamespace(
+            main=lambda argv: _record("tui_argv", argv),
+            render=lambda text, out: _record("render", (text, Path(out))),
+        )
+        web = SimpleNamespace(run=lambda url, out, **kwargs: _record("web", (url, Path(out), kwargs)))
+        xlsx = SimpleNamespace(
+            DEFAULT_MAX_ROWS=26,
+            render=lambda *args, **kwargs: _record("xlsx", (args, kwargs)),
+        )
+        monkeypatch.setattr(mod, "demo_workspace", demo)
+        monkeypatch.setattr(mod, "tui_frame", tui)
+        monkeypatch.setattr(mod, "web_shot", web)
+        monkeypatch.setattr(mod, "xlsx_frame", xlsx)
+        # `_cli` 在函数体内 `from _screenshots import tui_frame`：替身须打在包属性上
+        monkeypatch.setattr(screenshots_pkg, "tui_frame", tui)
+        return SimpleNamespace(mod=mod, calls=calls, demo=demo, tui=tui, web=web, xlsx=xlsx)
+
+    def test_demo_builds_workspace_and_reports_its_path(self, entry, capsys):
+        assert entry.mod.main(["demo"]) == 0
+        out = capsys.readouterr().out
+        assert "[OK] 演示工作区" in out
+        assert "/demo/screenshots/demo" in out
+
+    def test_report_asserts_demo_holdings_and_passes_through_exit_code(self, entry):
+        assert entry.mod.main(["report"]) == 3, "子模块退出码须原样返回"
+        assert entry.calls["assert"] == 1, "生成报告前必须过演示持仓护栏"
+
+    def test_tui_forwards_output_path_only_by_default(self, entry):
+        assert entry.mod.main(["tui", "out.png"]) == 0
+        assert entry.calls["tui_argv"] == ["out.png"], "未给可选参数时不应追加任何开关"
+
+    def test_tui_forwards_config_and_text_options(self, entry):
+        assert entry.mod.main(["tui", "out.png", "--config", "c.json", "--text", "f.txt"]) == 0
+        assert entry.calls["tui_argv"] == ["out.png", "--config", "c.json", "--text", "f.txt"]
+        assert entry.calls["assert"] == 1
+
+    def test_cli_renders_captured_report_text_by_default(self, entry):
+        assert entry.mod.main(["cli", "out.png"]) == 0
+        text, output = entry.calls["render"]
+        assert text == "采集到的报告输出\n", "采集文本末尾补换行再渲染"
+        assert output == Path("out.png")
+
+    def test_cli_text_file_replaces_capture(self, entry, tmp_path):
+        frame_text = tmp_path / "frame.txt"
+        frame_text.write_text("文件里的输出", encoding="utf-8")
+        assert entry.mod.main(["cli", "out.png", "--text", str(frame_text)]) == 0
+        text, _output = entry.calls["render"]
+        assert text == "文件里的输出\n", "--text 应跳过 PTY 采集"
+
+    def test_web_forwards_viewport_replace_and_chrome(self, entry):
+        code = entry.mod.main(
+            [
+                "web",
+                "http://127.0.0.1:8000/workbench",
+                "out.png",
+                "--scroll-y",
+                "120",
+                "--width",
+                "800",
+                "--height",
+                "600",
+                "--replace",
+                "原文=>替换",
+                "--chrome",
+                "/opt/chrome",
+            ]
+        )
+        assert code == 0
+        url, output, kwargs = entry.calls["web"]
+        assert (url, output) == ("http://127.0.0.1:8000/workbench", Path("out.png"))
+        assert kwargs["scroll_y"] == 120
+        assert (kwargs["width"], kwargs["height"]) == (800, 600)
+        assert kwargs["replace"] == "原文=>替换"
+        assert kwargs["chrome"] == "/opt/chrome"
+
+    def test_web_without_serve_demo_does_not_start_server(self, entry, monkeypatch):
+        def _unexpected(_url):
+            raise AssertionError("未给 --serve-demo 时不得自起服务")
+
+        monkeypatch.setattr(entry.mod, "_start_demo_server", _unexpected)
+        assert entry.mod.main(["web", "http://127.0.0.1:8000/", "out.png"]) == 0
+
+    def test_web_serve_demo_starts_server_then_stops_it(self, entry, monkeypatch):
+        class _Server:
+            def __init__(self):
+                self.calls = []
+
+            def terminate(self):
+                self.calls.append("terminate")
+
+            def wait(self, timeout=None):
+                self.calls.append(("wait", timeout))
+
+            def kill(self):
+                self.calls.append("kill")
+
+        server = _Server()
+        seen: dict[str, object] = {}
+
+        def _start(url):
+            seen["started"] = url
+            return server, "http://127.0.0.1:45678/workbench"
+
+        monkeypatch.setattr(entry.mod, "_start_demo_server", _start)
+        assert entry.mod.main(["web", "http://127.0.0.1:8000/workbench", "out.png", "--serve-demo"]) == 0
+        assert seen["started"] == "http://127.0.0.1:8000/workbench"
+        assert entry.calls["web"][0] == "http://127.0.0.1:45678/workbench", "截图目标须换成临时端口 URL"
+        assert server.calls[0] == "terminate" and server.calls[1] == ("wait", 10)
+
+    def test_web_serve_demo_kills_server_when_graceful_stop_fails(self, entry, monkeypatch):
+        class _Stubborn:
+            def __init__(self):
+                self.killed = 0
+
+            def terminate(self):
+                pass
+
+            def wait(self, timeout=None):
+                raise RuntimeError("等不到退出")
+
+            def kill(self):
+                self.killed += 1
+
+        server = _Stubborn()
+        monkeypatch.setattr(entry.mod, "_start_demo_server", lambda _url: (server, "http://127.0.0.1:1/x"))
+        assert entry.mod.main(["web", "http://127.0.0.1:8000/x", "out.png", "--serve-demo"]) == 0
+        assert server.killed == 1, "优雅收尾失败须强杀，不能漏进程"
+
+    def test_xlsx_forwards_workbook_and_layout(self, entry):
+        code = entry.mod.main(
+            ["xlsx", "r.xlsx", "out.png", "--sheet", "报告", "--rows", "10", "--cols", "5", "--chrome", "/opt/chrome"]
+        )
+        assert code == 0
+        args, kwargs = entry.calls["xlsx"]
+        assert args == (Path("r.xlsx"), Path("out.png"))
+        assert kwargs["sheet_name"] == "报告"
+        assert (kwargs["max_rows"], kwargs["max_cols"]) == (10, 5)
+        assert kwargs["chrome"] == "/opt/chrome"
+
+    def test_xlsx_defaults_rows_to_frame_module_limit(self, entry):
+        assert entry.mod.main(["xlsx", "r.xlsx", "out.png"]) == 0
+        _args, kwargs = entry.calls["xlsx"]
+        assert kwargs["max_rows"] == entry.xlsx.DEFAULT_MAX_ROWS
+        assert kwargs["max_cols"] is None, "缺省取该页全部列"
+
+    def test_missing_or_unknown_subcommand_exits_two(self, entry):
+        for argv in ([], ["nope"]):
+            with pytest.raises(SystemExit) as exc:
+                entry.mod.main(argv)
+            assert exc.value.code == 2, f"子命令错误须退出 2：{argv}"
+
+    def test_start_demo_server_wires_isolation_env_and_resolved_port(self, entry, monkeypatch):
+        import socket
+        import time
+        import urllib.request
+        from types import SimpleNamespace
+
+        seen: dict[str, object] = {}
+
+        class _Sock:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_exc):
+                return False
+
+            def bind(self, address):
+                seen["bind"] = address
+
+            def getsockname(self):
+                return ("127.0.0.1", 45678)
+
+        def _popen(cmd, **kwargs):
+            seen["popen"] = (cmd, kwargs)
+            return "SERVER"
+
+        def _urlopen(target, timeout):
+            seen["urlopen"] = (target, timeout)
+            return SimpleNamespace(read=lambda _n: b"ok")
+
+        monkeypatch.setattr(socket, "socket", lambda *a, **kw: _Sock())
+        monkeypatch.setattr(subprocess, "Popen", _popen)
+        monkeypatch.setattr(urllib.request, "urlopen", _urlopen)
+        monkeypatch.setattr(time, "sleep", lambda _s: seen.__setitem__("slept", True))
+
+        server, target = entry.mod._start_demo_server("http://127.0.0.1:8000/workbench#sec-x")
+
+        assert server == "SERVER"
+        assert target == "http://127.0.0.1:45678/workbench#sec-x", "只换 host:port，保留路径与锚点"
+        assert seen["bind"] == ("127.0.0.1", 0), "端口由内核分配，避免与占用端口冲突"
+        cmd, kwargs = seen["popen"]
+        assert cmd[1:] == ["-m", "src.python.web", "--port", "45678"]
+        assert kwargs["env"]["INVEST_PROJECT_ROOT"] == "/demo", "隔离环境须转发 INVEST_PROJECT_ROOT"
+        assert kwargs["env"]["PYTHONPATH"] == "/repo"
+        assert str(kwargs["cwd"]) == "/demo", "服务须跑在演示工作区"
+        assert seen["urlopen"] == (target, 1)
+        assert "slept" not in seen, "首次探测即通时不应进入退避等待"
+
+    def test_main_guard_runs_selected_subcommand(self, entry, monkeypatch):
+        import runpy
+
+        monkeypatch.setattr(sys, "argv", ["make-screenshots.py", "demo"])
+        with pytest.raises(SystemExit) as exc:
+            runpy.run_path(str(entry.mod.__file__), run_name="__main__")
+        assert exc.value.code == 0
+
+    def test_start_demo_server_retries_until_service_accepts(self, entry, monkeypatch):
+        """服务未起来时按 0.5s 间隔重探（最多 60 次），起来即返回。"""
+        import socket
+        import time
+        import urllib.request
+        from types import SimpleNamespace
+
+        attempts: list[str] = []
+        sleeps: list[float] = []
+
+        class _Sock:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_exc):
+                return False
+
+            def bind(self, _address):
+                pass
+
+            def getsockname(self):
+                return ("127.0.0.1", 45678)
+
+        def _urlopen(target, timeout):
+            attempts.append(target)
+            if len(attempts) < 3:
+                raise OSError("服务尚未监听")
+            return SimpleNamespace(read=lambda _n: b"ok")
+
+        monkeypatch.setattr(socket, "socket", lambda *a, **kw: _Sock())
+        monkeypatch.setattr(subprocess, "Popen", lambda cmd, **kw: "SERVER")
+        monkeypatch.setattr(urllib.request, "urlopen", _urlopen)
+        monkeypatch.setattr(time, "sleep", sleeps.append)
+
+        server, target = entry.mod._start_demo_server("http://127.0.0.1:8000/workbench")
+
+        assert server == "SERVER" and target == "http://127.0.0.1:45678/workbench"
+        assert attempts == [target] * 3, "每次重探打同一临时端口 URL"
+        assert sleeps == [0.5, 0.5], "两次失败各退避 0.5s 后第三次成功"

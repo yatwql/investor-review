@@ -7,10 +7,12 @@
 from __future__ import annotations
 
 import json
+import runpy
+import sys
 
 import pytest
 
-from src.test._script_loader import load_script
+from src.test._script_loader import SCRIPTS_DIR, load_script
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_scripts]
 
@@ -560,3 +562,87 @@ def test_render_markdown_contains_caveats_and_rows(tmp_path):
     assert "已知陷阱" in md
     assert "不得外推" in md
     assert "5 日" in md
+
+
+class TestCliEntry:
+    """`main()` 子命令分派：阶段 → 实现函数、参数透传、产物路径回显与退出码。
+
+    阶段实现全部替身（不取数、不写产物目录），断言的是分派映射与参数装配。
+    """
+
+    @pytest.fixture(name="cli")
+    def _cli(self, monkeypatch):
+        from types import SimpleNamespace
+
+        calls: dict[str, list] = {"stage": [], "summary": [], "outputs": []}
+        result = {"stage": "stub"}
+
+        def _stage(name):
+            def _run(**kwargs):
+                calls["stage"].append((name, kwargs))
+                return result
+
+            return _run
+
+        for stage_name in ("horizon", "factor_ic", "valuation", "discipline", "correlation"):
+            monkeypatch.setattr(mod, f"stage_{stage_name}", _stage(stage_name))
+        monkeypatch.setattr(mod, "_print_phase_summary", lambda res: calls["summary"].append(res))
+        monkeypatch.setattr(
+            mod,
+            "write_outputs",
+            lambda res, out: calls["outputs"].append((res, str(out))) or [f"{out}/a.md", f"{out}/b.json"],
+        )
+        return SimpleNamespace(mod=mod, calls=calls, result=result)
+
+    def test_all_runs_every_stage_in_declared_order(self, cli):
+        assert cli.mod.main(["all", "--days", "40", "--bench", "000300", "--ledger-dir", "led", "--out", "out"]) == 0
+        order = [name for name, _kwargs in cli.calls["stage"]]
+        assert order == ["horizon", "factor_ic", "valuation", "discipline", "correlation"]
+        assert cli.calls["stage"][0][1] == {"ledger_dir": "led", "days": 40, "bench_index": "000300"}
+        assert cli.calls["stage"][2][1] == {"ledger_dir": "led", "days": 40}, "valuation 不取基准参数"
+        assert cli.calls["summary"] == [cli.result] * len(order), "每阶段都要打摘要"
+        assert all(out == "out" for _res, out in cli.calls["outputs"])
+
+    def test_single_stage_runs_only_that_stage(self, cli):
+        assert cli.mod.main(["discipline"]) == 0
+        assert [name for name, _kwargs in cli.calls["stage"]] == ["discipline"]
+        assert cli.calls["stage"][0][1] == {
+            "ledger_dir": str(cli.mod.DEFAULT_LEDGER_DIR),
+            "days": cli.mod.DEFAULT_DAYS,
+        }
+
+    def test_stage_defaults_to_all(self, cli):
+        cli.mod.main([])
+        assert len(cli.calls["stage"]) == 5, "缺省 stage=all 跑全阶段"
+
+    def test_output_paths_echoed(self, cli, capsys):
+        cli.mod.main(["correlation"])
+        out = capsys.readouterr().out
+        assert "回测阶段 correlation" in out
+        assert "a.md" in out and "b.json" in out
+
+    def test_unknown_stage_exits_two(self, cli):
+        with pytest.raises(SystemExit) as excinfo:
+            cli.mod.main(["not-a-stage"])
+        assert excinfo.value.code == 2
+        assert cli.calls["stage"] == [], "参数校验失败不得进入任何阶段"
+
+    def test_main_guard_exits_with_stage_code(self, monkeypatch, tmp_path):
+        """`if __name__ == "__main__"` 入口（真实阶段实现，产物落临时目录）。"""
+        ledger = tmp_path / "ledger"
+        ledger.mkdir()
+        (ledger / "signal_ledger.jsonl").write_text("", encoding="utf-8")
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["eval-decision-quality.py", "valuation", "--ledger-dir", str(ledger), "--out", str(tmp_path / "out")],
+        )
+        # 入口导入期的路径自助修补只在路径缺席时生效：先摘掉，才能稳定走到该分支
+        saved_path = list(sys.path)
+        try:
+            sys.path[:] = [entry for entry in sys.path if entry not in (str(SCRIPTS_DIR), str(SCRIPTS_DIR.parent))]
+            with pytest.raises(SystemExit) as excinfo:
+                runpy.run_path(str(SCRIPTS_DIR / "eval-decision-quality.py"), run_name="__main__")
+        finally:
+            sys.path[:] = saved_path
+        assert excinfo.value.code == 0
