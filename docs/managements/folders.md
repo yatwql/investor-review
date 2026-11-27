@@ -18,9 +18,9 @@
 | 测试用例 | — | — | 17,677 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 15 | 7,086 | 含 README.md；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 14 | 6,849 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 223 | 75,790 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 14,906 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
-| ├ archive/ | 版本归档 | 200 | 59,172 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
+| 项目文档 | Markdown | 226 | 75,821 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 14,913 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| ├ archive/ | 版本归档 | 203 | 59,196 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 9 | ~1616 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + TUI 交互改进（议题 + 第一/二批实施方案） + PanWatch 借鉴分析（含评估政策单源化与 LLM 复盘契约两份设计） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
 
@@ -2266,10 +2266,14 @@ investor-review/
 │   │   │   │   ├── report-both-stage-contract.md          # both 报告路径：阶段表、start-stop 配对、生命周期、双产物成败隔离
 │   │   │   │   ├── generate-all-llm-stage-contract.md     # LLM 并行编排：返回位序、块实例身份、阶段顺序、失败隔离
 │   │   │   │   └── llm-dispatch-stage-contract.md         # LLM worker 派发：键集合、返回形状、并发闸门、辩论槽位替换
-│   │   └── v0.18.x/                         # v0.18.x 版本归档（changelog/plan/review-findings + 设计文档）
-│   │       ├── archived_changelog.0.18.x.md # 变更日志归档 v0.18.x
-│   │       ├── archived_plan.0.18.x.md      # 实现计划归档 v0.18.x
-│   │       └── archived_review-findings.0.18.x.md # 自审记录归档 v0.18.x
+│   │   ├── v0.18.x/                         # v0.18.x 版本归档（changelog/plan/review-findings + 设计文档）
+│   │   │   ├── archived_changelog.0.18.x.md # 变更日志归档 v0.18.x
+│   │   │   ├── archived_plan.0.18.x.md      # 实现计划归档 v0.18.x
+│   │   │   └── archived_review-findings.0.18.x.md # 自审记录归档 v0.18.x
+│   │   └── v0.19.x/                         # v0.19.x 版本归档（changelog/plan/review-findings + 设计文档）
+│   │       ├── archived_changelog.0.19.x.md # 变更日志归档 v0.19.x
+│   │       ├── archived_plan.0.19.x.md      # 实现计划归档 v0.19.x
+│   │       └── archived_review-findings.0.19.x.md # 自审记录归档 v0.19.x
 │   └── plan/                          #   在办设计文档（扁平存放，原型就近建子目录）
 │       ├── jev-news-judgment-evaluation.md # 判定通道迁移的对照评测方案（三方对照、语料冻结、预注册阈值）
 │       ├── jev-news-judgment-design.md # 判定通道接入设计（独立于对话链、模板理由、降级矩阵）

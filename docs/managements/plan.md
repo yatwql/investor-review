@@ -121,6 +121,7 @@ Web 工作台提供录入表单与保存确认，复用 `holdings_editor` / `nav
 
 ## 归档
 
+- [`archived_plan.0.19.x.md`](../archive/v0.19.x/archived_plan.0.19.x.md) — v0.19.x（2026-11-27 ~ 2026-11-27）
 - [`archived_plan.0.18.x.md`](../archive/v0.18.x/archived_plan.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-12）
 - [`archived_plan.0.17.x.md`](../archive/v0.17.x/archived_plan.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-08）
 - [`archived_plan.0.16.x.md`](../archive/v0.16.x/archived_plan.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-11-03）
