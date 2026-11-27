@@ -10,18 +10,35 @@
     缓存逻辑版本（脚本/_checklib/解释器）失效全量重算
   - 真实仓库冒烟：当前测试集无死用例 / 无断言 / 完全重复 / 自证用例
 
-测试通过脚本 import 方式直接复用分析函数，不运行真实 CLI。
+九类检查函数与 `_common` 原语直接从实现包 `scripts/_test_redundancy/*` 导入（入口不再
+为测试 re-export 这些符号）；只有 `run_checks` 编排面经 `load_script` 载入入口脚本调用。
+不运行真实 CLI。
 """
 
 from __future__ import annotations
 
 import ast
-import importlib
 import json
+import sys
 from pathlib import Path
 
 import pytest
 from src.test._script_loader import load_script
+
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+_SCRIPTS_DIR = _REPO_ROOT / "scripts"
+if str(_SCRIPTS_DIR) not in sys.path:
+    # 实现包内部是扁平 import（`_test_redundancy.*`），注入 scripts/ 才能加载
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+
+from _test_redundancy import _common  # noqa: E402
+from _test_redundancy.cases import check_assertion_free, check_dead_tests  # noqa: E402
+from _test_redundancy.date_bombs import check_ledger_absolute_dates  # noqa: E402
+from _test_redundancy.duplicates import body_signature, check_duplicate_bodies  # noqa: E402
+from _test_redundancy.facts_cache import _facts_cache_path  # noqa: E402
+from _test_redundancy.hardcoded import check_hardcoded_evolving_totals  # noqa: E402
+from _test_redundancy.self_fulfilling import check_self_fulfilling  # noqa: E402
+from _test_redundancy.similar import audit_similar_bodies  # noqa: E402
 
 
 pytestmark = [
@@ -32,61 +49,62 @@ pytestmark = [
 
 @pytest.fixture(scope="module")
 def redundancy():
+    """入口脚本实例：取其编排面 `run_checks`（真实仓库冒烟与缓存类用例走同一条编排）。"""
     return load_script("check-test-redundancy.py")
 
 
-def _cases(redundancy, src: str):
+def _cases(src: str):
     """把源码字符串编译为用例列表（测试用，避免落盘）。"""
     tree = ast.parse(src)
-    return redundancy.cases_in_module(Path("t.py"), tree)
+    return _common.cases_in_module(Path("t.py"), tree)
 
 
-def _no_findings(redundancy, src: str) -> None:
-    assert redundancy.check_assertion_free(_cases(redundancy, src)) == []
+def _no_findings(src: str) -> None:
+    assert check_assertion_free(_cases(src)) == []
 
 
 # ═══ 用例收集 ═══
 
 
 class TestCollection:
-    def test_collects_module_level_and_class_methods(self, redundancy):
+    def test_collects_module_level_and_class_methods(self):
         src = (
             "def test_top():\n    assert 1\n"
             "class TestX:\n"
             "    def test_in_class(self):\n        assert 1\n"
             "    def helper(self):\n        pass\n"
         )
-        cases = _cases(redundancy, src)
+        cases = _cases(src)
         assert [(c.class_name, c.name) for c in cases] == [("", "test_top"), ("TestX", "test_in_class")]
 
-    def test_ignores_non_test_functions(self, redundancy):
-        assert _cases(redundancy, "def helper():\n    assert 1\n") == []
+    def test_ignores_non_test_functions(self):
+        assert _cases("def helper():\n    assert 1\n") == []
 
 
 # ═══ 死用例 ═══
 
 
 class TestDeadTests:
-    def test_duplicate_name_in_same_class(self, redundancy):
+    def test_duplicate_name_in_same_class(self):
         src = "class TestX:\n    def test_a(self):\n        assert 1\n    def test_a(self):\n        assert 2\n"
-        cases = _cases(redundancy, src)
+        cases = _cases(src)
         modules = {Path("t.py"): ast.parse(src)}
-        findings = redundancy.check_dead_tests(cases, modules)
+        findings = check_dead_tests(cases, modules)
         assert len(findings) == 1 and "重复定义 2 次" in findings[0]
 
-    def test_test_method_in_non_test_class(self, redundancy):
+    def test_test_method_in_non_test_class(self):
         src = "class Helper:\n    def test_a(self):\n        assert 1\n"
-        findings = redundancy.check_dead_tests(_cases(redundancy, src), {Path("t.py"): ast.parse(src)})
+        findings = check_dead_tests(_cases(src), {Path("t.py"): ast.parse(src)})
         assert len(findings) == 1 and "不以 Test 开头" in findings[0]
 
-    def test_test_class_with_init(self, redundancy):
+    def test_test_class_with_init(self):
         src = "class TestX:\n    def __init__(self):\n        pass\n    def test_a(self):\n        assert 1\n"
-        findings = redundancy.check_dead_tests(_cases(redundancy, src), {Path("t.py"): ast.parse(src)})
+        findings = check_dead_tests(_cases(src), {Path("t.py"): ast.parse(src)})
         assert len(findings) == 1 and "__init__" in findings[0]
 
-    def test_healthy_module_passes(self, redundancy):
+    def test_healthy_module_passes(self):
         src = "class TestX:\n    def test_a(self):\n        assert 1\n    def test_b(self):\n        assert 2\n"
-        assert redundancy.check_dead_tests(_cases(redundancy, src), {Path("t.py"): ast.parse(src)}) == []
+        assert check_dead_tests(_cases(src), {Path("t.py"): ast.parse(src)}) == []
 
 
 # ═══ 无断言 ═══
@@ -105,14 +123,14 @@ class TestAssertionFree:
             "        mock_fn.assert_not_called()",
         ],
     )
-    def test_assertion_forms_accepted(self, redundancy, body):
-        _no_findings(redundancy, f"def test_a(x=None):\n{body}\n")
+    def test_assertion_forms_accepted(self, body):
+        _no_findings(f"def test_a(x=None):\n{body}\n")
 
-    def test_call_only_is_flagged(self, redundancy):
-        findings = redundancy.check_assertion_free(_cases(redundancy, "def test_a():\n    do_something()\n"))
+    def test_call_only_is_flagged(self):
+        findings = check_assertion_free(_cases("def test_a():\n    do_something()\n"))
         assert len(findings) == 1 and "无任何断言" in findings[0]
 
-    def test_helper_method_with_assertion_counts(self, redundancy):
+    def test_helper_method_with_assertion_counts(self):
         src = (
             "class TestX(unittest.TestCase):\n"
             "    def _assert_pairs(self, pairs):\n"
@@ -120,11 +138,11 @@ class TestAssertionFree:
             "    def test_a(self):\n"
             "        self._assert_pairs([])\n"
         )
-        _no_findings(redundancy, src)
+        _no_findings(src)
 
-    def test_helper_without_assertion_does_not_count(self, redundancy):
+    def test_helper_without_assertion_does_not_count(self):
         src = "class TestX:\n    def _build(self):\n        return 1\n    def test_a(self):\n        self._build()\n"
-        findings = redundancy.check_assertion_free(_cases(redundancy, src))
+        findings = check_assertion_free(_cases(src))
         assert len(findings) == 1
 
 
@@ -132,17 +150,17 @@ class TestAssertionFree:
 
 
 class TestDuplicates:
-    def test_identical_bodies_grouped(self, redundancy):
+    def test_identical_bodies_grouped(self):
         src = "def test_a():\n    assert f(1) == 2\ndef test_b():\n    assert f(1) == 2\n"
-        findings, skipped = redundancy.check_duplicate_bodies(_cases(redundancy, src))
+        findings, skipped = check_duplicate_bodies(_cases(src))
         assert len(findings) == 1 and "完全重复" in findings[0] and skipped == 0
 
-    def test_different_literal_not_grouped(self, redundancy):
+    def test_different_literal_not_grouped(self):
         src = "def test_a():\n    assert f(1) == 2\ndef test_b():\n    assert f(1) == 3\n"
-        findings, _ = redundancy.check_duplicate_bodies(_cases(redundancy, src))
+        findings, _ = check_duplicate_bodies(_cases(src))
         assert findings == []
 
-    def test_shared_helper_differs_by_binding_not_grouped(self, redundancy):
+    def test_shared_helper_differs_by_binding_not_grouped(self):
         """同名方法调用 self._call，但两个类的绑定不同 → 并行覆盖，不算重复。"""
         src = (
             "class TestA:\n"
@@ -152,22 +170,22 @@ class TestDuplicates:
             "    def _call(self, v):\n        return fn_b(v)\n"
             "    def test_x(self):\n        assert self._call('a') == 0.0\n"
         )
-        findings, skipped = redundancy.check_duplicate_bodies(_cases(redundancy, src))
+        findings, skipped = check_duplicate_bodies(_cases(src))
         assert findings == [] and skipped == 0
 
-    def test_unresolvable_self_indirection_skipped(self, redundancy):
+    def test_unresolvable_self_indirection_skipped(self):
         """self 间接调用既无类体/方法/setUp 绑定（如 mock fixture 注入）→ 跳过比对，不误报。"""
         src = (
             "class TestX:\n"
             "    def test_a(self):\n        assert self.r.run() == 1\n"
             "    def test_b(self):\n        assert self.r.run() == 1\n"
         )
-        cases = _cases(redundancy, src)
-        assert all(redundancy.body_signature(c) is None for c in cases)
-        findings, skipped = redundancy.check_duplicate_bodies(cases)
+        cases = _cases(src)
+        assert all(body_signature(c) is None for c in cases)
+        findings, skipped = check_duplicate_bodies(cases)
         assert findings == [] and skipped == 2
 
-    def test_setUp_binding_resolved_and_duplicates_detected(self, redundancy):
+    def test_setUp_binding_resolved_and_duplicates_detected(self):
         """self.<attr> 在 setUp 中赋值 → 绑定解析成功，同体用例报重复（不再跳过）。"""
         src = (
             "class TestX:\n"
@@ -175,12 +193,12 @@ class TestDuplicates:
             "    def test_a(self):\n        assert self.r.get_errors() == []\n"
             "    def test_b(self):\n        assert self.r.get_errors() == []\n"
         )
-        cases = _cases(redundancy, src)
-        assert all(redundancy.body_signature(c) is not None for c in cases)
-        findings, skipped = redundancy.check_duplicate_bodies(cases)
+        cases = _cases(src)
+        assert all(body_signature(c) is not None for c in cases)
+        findings, skipped = check_duplicate_bodies(cases)
         assert len(findings) == 1 and skipped == 0
 
-    def test_setUp_different_binding_not_grouped(self, redundancy):
+    def test_setUp_different_binding_not_grouped(self):
         """同名 setUp 赋值但构造不同 → 绑定不同，并行覆盖不算重复。"""
         src = (
             "class TestA:\n"
@@ -190,10 +208,10 @@ class TestDuplicates:
             "    def setUp(self):\n        self.r = BetaReporter()\n"
             "    def test_x(self):\n        assert self.r.get_errors() == []\n"
         )
-        findings, skipped = redundancy.check_duplicate_bodies(_cases(redundancy, src))
+        findings, skipped = check_duplicate_bodies(_cases(src))
         assert findings == [] and skipped == 0
 
-    def test_branch_method_body_hash_duplicates_detected(self, redundancy):
+    def test_branch_method_body_hash_duplicates_detected(self):
         """无单一 return 的分支型 helper → 方法体哈希绑定，同体同实现用例报重复。"""
         src = (
             "class TestX:\n"
@@ -201,12 +219,12 @@ class TestDuplicates:
             "    def test_a(self):\n        assert self._run(1) == 1\n"
             "    def test_b(self):\n        assert self._run(1) == 1\n"
         )
-        cases = _cases(redundancy, src)
-        assert all(redundancy.body_signature(c) is not None for c in cases)
-        findings, skipped = redundancy.check_duplicate_bodies(cases)
+        cases = _cases(src)
+        assert all(body_signature(c) is not None for c in cases)
+        findings, skipped = check_duplicate_bodies(cases)
         assert len(findings) == 1 and skipped == 0
 
-    def test_branch_method_different_body_not_grouped(self, redundancy):
+    def test_branch_method_different_body_not_grouped(self):
         """同名分支型 helper 但方法体不同 → 方法体哈希不同，并行覆盖不算重复。"""
         src = (
             "class TestA:\n"
@@ -216,7 +234,7 @@ class TestDuplicates:
             "    def _run(self, v):\n        if v:\n            return 9\n        return 8\n"
             "    def test_x(self):\n        assert self._run(1) == 1\n"
         )
-        findings, skipped = redundancy.check_duplicate_bodies(_cases(redundancy, src))
+        findings, skipped = check_duplicate_bodies(_cases(src))
         assert findings == [] and skipped == 0
 
 
@@ -224,7 +242,7 @@ class TestDuplicates:
 
 
 class TestSelfFulfilling:
-    def test_patch_sut_then_assert_own_return(self, redundancy):
+    def test_patch_sut_then_assert_own_return(self):
         src = (
             "from unittest.mock import patch\n"
             "@patch('mod.get_ttl')\n"
@@ -232,10 +250,10 @@ class TestSelfFulfilling:
             "    mock_ttl.return_value = 120\n"
             "    assert get_ttl('k') == 120\n"
         )
-        findings = redundancy.check_self_fulfilling(_cases(redundancy, src))
+        findings = check_self_fulfilling(_cases(src))
         assert len(findings) == 1 and "断言恒真" in findings[0]
 
-    def test_patch_sut_but_assert_other_value_not_flagged(self, redundancy):
+    def test_patch_sut_but_assert_other_value_not_flagged(self):
         src = (
             "from unittest.mock import patch\n"
             "@patch('mod.get_ttl')\n"
@@ -243,9 +261,9 @@ class TestSelfFulfilling:
             "    mock_ttl.return_value = 120\n"
             "    assert get_ttl('k') == 999\n"
         )
-        assert redundancy.check_self_fulfilling(_cases(redundancy, src)) == []
+        assert check_self_fulfilling(_cases(src)) == []
 
-    def test_patch_dependency_not_flagged(self, redundancy):
+    def test_patch_dependency_not_flagged(self):
         """patch 的是依赖、断言的是真实返回值 → 正常。"""
         src = (
             "from unittest.mock import patch\n"
@@ -253,7 +271,7 @@ class TestSelfFulfilling:
             "def test_a(mock_open):\n"
             "    assert get_ttl('price') == 120\n"
         )
-        assert redundancy.check_self_fulfilling(_cases(redundancy, src)) == []
+        assert check_self_fulfilling(_cases(src)) == []
 
 
 # ═══ 硬编码「会演进的总数」（E）═══
@@ -262,37 +280,37 @@ class TestSelfFulfilling:
 class TestHardcodedEvolvingTotals:
     """E 类：把可增长集合的条数写死进断言 → 良性变更（新增条目）也会把测试打红。"""
 
-    def _findings(self, redundancy, src: str, path: str = "src/test/unit/scripts/test_x.py"):
+    def _findings(self, src: str, path: str = "src/test/unit/scripts/test_x.py"):
         tree = ast.parse(src)
-        cases = redundancy.cases_in_module(Path(path), tree)
-        return redundancy.check_hardcoded_evolving_totals(cases)
+        cases = _common.cases_in_module(Path(path), tree)
+        return check_hardcoded_evolving_totals(cases)
 
-    def test_flags_hardcoded_requirement_total(self, redundancy):
+    def test_flags_hardcoded_requirement_total(self):
         src = "def test_a(req_ids):\n    req_ids = load()\n    assert len(req_ids) == 276\n"
-        findings = self._findings(redundancy, src)
+        findings = self._findings(src)
         assert len(findings) == 1 and "硬编码会演进的总数" in findings[0]
 
-    def test_flags_hardcoded_section_total(self, redundancy):
+    def test_flags_hardcoded_section_total(self):
         """实参名含语义关键词（sections）时报告——与真实缺陷写法一致。"""
         src = "def test_a(sections):\n    assert len(sections) == 17\n"
-        assert self._findings(redundancy, src)
+        assert self._findings(src)
 
-    def test_ignores_small_totals(self, redundancy):
+    def test_ignores_small_totals(self):
         """小数字（<= 3）常为有意断言，不报。"""
         src = "def test_a(xs):\n    assert len(xs) == 2\n"
-        assert self._findings(redundancy, src) == []
+        assert self._findings(src) == []
 
-    def test_ignores_unrelated_len(self, redundancy):
+    def test_ignores_unrelated_len(self):
         """与可演进集合无关的 len 断言（如实参名无关键词且路径无提示）不报。"""
         src = "def test_a(values):\n    assert len(values) == 99\n"
-        assert self._findings(redundancy, src, path="src/test/unit/misc/test_y.py") == []
+        assert self._findings(src, path="src/test/unit/misc/test_y.py") == []
 
-    def test_path_hint_alone_is_enough(self, redundancy):
+    def test_path_hint_alone_is_enough(self):
         """路径含 requirement/registry 提示时，即使实参名无关键词也报（真实缺陷常如此）。"""
         src = "def test_a(reg):\n    assert len(reg) == 17\n"
-        assert self._findings(redundancy, src, path="src/test/unit/core/test_registry.py")
+        assert self._findings(src, path="src/test/unit/core/test_registry.py")
 
-    def test_ignores_structural_assertions(self, redundancy):
+    def test_ignores_structural_assertions(self):
         """结构关系断言（集合相等 / 子集 / 逐项遍历）不应被误报。"""
         src = (
             "def test_a(req_ids, mapped):\n"
@@ -300,12 +318,12 @@ class TestHardcodedEvolvingTotals:
             "    assert expected <= set(req_ids)\n"
             "    for x in req_ids:\n        assert x\n"
         )
-        assert self._findings(redundancy, src) == []
+        assert self._findings(src) == []
 
-    def test_ignores_non_assert_usage(self, redundancy):
+    def test_ignores_non_assert_usage(self):
         """非断言位置的长度比较（如日志/计算）不报。"""
         src = "def test_a(req_ids):\n    n = len(req_ids) == 276\n    assert n is not None\n"
-        assert self._findings(redundancy, src) == []
+        assert self._findings(src) == []
 
 
 # ═══ 真实仓库冒烟 ═══
@@ -352,13 +370,10 @@ class TestFactsCache:
         return calls
 
     @pytest.fixture()
-    def tmp_tree(self, redundancy, tmp_path, monkeypatch):
+    def tmp_tree(self, tmp_path, monkeypatch):
         root = tmp_path / "src" / "test"
         (root / "unit").mkdir(parents=True, exist_ok=True)
-        # 扫描根在实现模块，patch 须指向调用点；`_test_redundancy` 在 scripts/ 下、由
-        # load_script 注入 sys.path 后才可解析，故用运行时 import_module 而非静态 import。
-        _common = importlib.import_module("_test_redundancy._common")
-
+        # 扫描根在实现模块，patch 须指向调用点（`_test_redundancy._common` 的模块全局）
         monkeypatch.setattr(_common, "_TEST_ROOT", root)
         monkeypatch.setattr(_common, "_LIVE_DIR", root / "live")
         monkeypatch.setenv("TEST_REDUNDANCY_CACHE", str(tmp_path / "data/cache/facts.json"))
@@ -371,7 +386,7 @@ class TestFactsCache:
         )
         cold = redundancy.run_checks()
         assert any("完全重复" in f for f in cold[0])
-        assert redundancy._facts_cache_path().is_file(), "冷路径应回写缓存"
+        assert _facts_cache_path().is_file(), "冷路径应回写缓存"
         calls = self._track_parses(monkeypatch)
         warm = redundancy.run_checks()
         assert calls == [], "缓存命中仍触发解析（缓存未生效）"
@@ -402,7 +417,7 @@ class TestFactsCache:
         self._write(tmp_tree, "test_a.py", "def test_x():\n    assert 1\n")
         self._write(tmp_tree, "test_b.py", "def test_y():\n    assert 2\n")
         redundancy.run_checks()
-        cache_file = redundancy._facts_cache_path()
+        cache_file = _facts_cache_path()
         data = json.loads(cache_file.read_text(encoding="utf-8"))
         data["version"] = "stale-version"
         cache_file.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
@@ -411,22 +426,19 @@ class TestFactsCache:
         n_files = len(list(tmp_tree.rglob("test_*.py")))
         assert len(calls) == n_files, "逻辑版本失效应全量重解析"
 
-    def test_cache_path_isolated_from_real_repo(self, redundancy, tmp_tree):
+    def test_cache_path_isolated_from_real_repo(self, tmp_tree):
         """隔离：缓存路径必须被 TEST_REDUNDANCY_CACHE 重定向到 tmp_path（不碰真实 data/cache）。"""
-        cache_path = redundancy._facts_cache_path()
+        cache_path = _facts_cache_path()
         assert str(cache_path).startswith(str(tmp_tree.parents[1]))
 
 
 @pytest.fixture()
-def quality_tree(redundancy, tmp_path, monkeypatch):
+def quality_tree(tmp_path, monkeypatch):
     """新类公共树：与类内 tmp_tree 分名且构造顺序不同（避免被完全重复比对命中）。"""
     monkeypatch.setenv("TEST_REDUNDANCY_CACHE", str(tmp_path / "data" / "cache" / "facts.json"))
     root = tmp_path / "src" / "test"
     (root / "unit").mkdir(parents=True, exist_ok=True)
-    # 扫描根在实现模块，patch 须指向调用点（`_test_redundancy` 在 scripts/ 下，
-    # load_script 注入 sys.path 后才可解析 → 运行时 import_module）
-    _common = importlib.import_module("_test_redundancy._common")
-
+    # 扫描根在实现模块，patch 须指向调用点（`_test_redundancy._common` 的模块全局）
     monkeypatch.setattr(_common, "_TEST_ROOT", root)
     monkeypatch.setattr(_common, "_LIVE_DIR", root / "live")
     return root
@@ -520,32 +532,32 @@ class TestQualityChecksAndAudit:
         findings, _ = redundancy.run_checks()
         assert not [f for f in findings if "死 fixture" in f]
 
-    def test_audit_groups_cross_file_same_skeleton(self, redundancy, quality_tree):
+    def test_audit_groups_cross_file_same_skeleton(self, quality_tree):
         """两文件同名同骨架（仅字面量异）→ 骨架审计分组输出。"""
         _put(quality_tree, "test_a.py", "class TestA:\n    def test_same(self):\n        assert fetch(10) == 'X'\n")
         _put(quality_tree, "test_b.py", "class TestB:\n    def test_same(self):\n        assert fetch(20) == 'Y'\n")
-        lines, stats = redundancy.audit_similar_bodies()
+        lines, stats = audit_similar_bodies()
         assert stats["groups"] == 1
         assert any("test_same" in line for line in lines)
 
-    def test_audit_hides_intra_file_groups_by_default(self, redundancy, quality_tree):
+    def test_audit_hides_intra_file_groups_by_default(self, quality_tree):
         """同文件跨类同名同骨架：默认不列（仅跨文件高信号），include_intra 后列出。"""
         _put(
             quality_tree,
             "test_a.py",
             "class TestA:\n    def test_same(self):\n        assert fetch(10) == 'X'\n\n\nclass TestB:\n    def test_same(self):\n        assert fetch(20) == 'Y'\n",
         )
-        default_lines, default_stats = redundancy.audit_similar_bodies()
+        default_lines, default_stats = audit_similar_bodies()
         assert default_stats["groups"] == 0
         assert default_stats["intra_groups_total"] >= 1
-        intra_lines, _ = redundancy.audit_similar_bodies(include_intra=True)
+        intra_lines, _ = audit_similar_bodies(include_intra=True)
         assert any("test_same" in line for line in intra_lines)
 
-    def test_audit_different_bodies_not_grouped(self, redundancy, quality_tree):
+    def test_audit_different_bodies_not_grouped(self, quality_tree):
         """不同骨架不组成同名同骨架组。"""
         _put(quality_tree, "test_a.py", "def test_one():\n    assert f(1) == 2\n")
         _put(quality_tree, "test_b.py", "def test_one():\n    assert g(1) + h(2) + k(3)\n")
-        lines, stats = redundancy.audit_similar_bodies()
+        lines, stats = audit_similar_bodies()
         assert stats["groups"] == 0
         assert lines == []
 
@@ -557,46 +569,46 @@ class TestLedgerDateBombs:
     """I 类：账本类调用的日期实参不得写死近期绝对日期（保留期像墙钟一样会走过它）。"""
 
     @staticmethod
-    def _find(redundancy, src: str) -> list[str]:
-        return redundancy.check_ledger_absolute_dates(ast.parse(src), Path("t.py"))
+    def _find(src: str) -> list[str]:
+        return check_ledger_absolute_dates(ast.parse(src), Path("t.py"))
 
-    def test_flags_absolute_report_date_in_ledger_call(self, redundancy):
+    def test_flags_absolute_report_date_in_ledger_call(self):
         src = 'def test_x():\n    dl.append_decision(code="600000", report_date="2026-09-01")\n'
-        findings = self._find(redundancy, src)
+        findings = self._find(src)
         assert len(findings) == 1
         assert "append_decision" in findings[0] and "2026-09-01" in findings[0]
 
-    def test_flags_module_level_date_constant_passed_through(self, redundancy):
+    def test_flags_module_level_date_constant_passed_through(self):
         """经过模块级常量转手的日期同样要报（常见写法：`_REP = "2026-08-20"`）。"""
         src = '_REP = "2026-08-20"\n\ndef test_x():\n    dl.append_decision(report_date=_REP)\n'
-        assert len(self._find(redundancy, src)) == 1
+        assert len(self._find(src)) == 1
 
-    def test_ignores_relative_dates(self, redundancy):
+    def test_ignores_relative_dates(self):
         src = (
             "from datetime import date, timedelta\n"
             "def _d(n):\n    return (date.today() - timedelta(days=30 - n)).isoformat()\n"
             "def test_x():\n    dl.append_decision(report_date=_d(0))\n"
         )
-        assert self._find(redundancy, src) == []
+        assert self._find(src) == []
 
-    def test_ignores_far_past_anchor(self, redundancy):
+    def test_ignores_far_past_anchor(self):
         """`2020-01-02` 语义是「必过期」，不会随墙钟腐化，不报。"""
         src = 'def test_x():\n    dl.append_decision(report_date="2020-01-02")\n'
-        assert self._find(redundancy, src) == []
+        assert self._find(src) == []
 
-    def test_ignores_non_ledger_calls(self, redundancy):
+    def test_ignores_non_ledger_calls(self):
         """普通调用（非账本写入/裁剪）的日期实参不在本类管辖范围。"""
         src = 'def test_x():\n    build_chart(title="x", date="2026-09-01")\n'
-        assert self._find(redundancy, src) == []
+        assert self._find(src) == []
 
-    def test_flags_ledger_write_wrapper_calls(self, redundancy):
+    def test_flags_ledger_write_wrapper_calls(self):
         """账本写入包装层（`register_action_decisions` / `register_llm_decisions`）同样受管。"""
         src = (
             "def test_x():\n"
             '    rec.register_action_decisions(ad, report_date="2026-09-01")\n'
             '    cap.register_llm_decisions(html, holdings, report_date="2026-10-17")\n'
         )
-        assert len(self._find(redundancy, src)) == 2
+        assert len(self._find(src)) == 2
 
     @pytest.mark.real_repo
     def test_real_repo_has_no_ledger_date_bombs(self, redundancy):
