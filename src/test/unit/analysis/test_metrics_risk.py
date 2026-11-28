@@ -133,6 +133,31 @@ class TestIndividualVolatility:
         custom = individual_volatility({"A": returns}, trading_days=100)["A"]
         assert custom == pytest.approx(daily * 10, rel=1e-6)
 
+    def test_exactly_min_sample_days_is_enough(self):
+        """样本数恰等于下限 20 → 照常计算（`<` 与 `<=` 的分界）。
+
+        `[0.01, -0.01]`×10 的均值为 0，样本方差 = 0.002/19，
+        日波动率 = sqrt(0.002/19)，手算后固化为字面量：
+        分母口径（n-1 而非 n+1）也在其中锁死。
+        """
+        returns = [0.01, -0.01] * 10
+        daily = individual_volatility({"A": returns}, annualize=False)["A"]
+        assert daily is not None, "20 个样本已达标，不应判数据不足"
+        assert daily == pytest.approx(0.01025978352085154, rel=1e-9)
+        annual = individual_volatility({"A": returns})["A"]
+        assert annual == pytest.approx(0.1628690142091911, rel=1e-9)
+
+    def test_variance_at_epsilon_boundary_is_computed_not_zeroed(self):
+        """样本方差恰等于 epsilon（1e-15）→ 按 sqrt 计算，而非报 0.0。
+
+        构造 `[a, -a] + [0]*19`（a = nextafter(1e-7)）使样本方差精确为 `1e-15`：
+        `variance < eps` 为假、`variance <= eps` 为真，恰等边界区分两个算子。
+        """
+        a = math.nextafter(1e-7, 1.0)
+        daily = individual_volatility({"A": [a, -a] + [0.0] * 19}, annualize=False)["A"]
+        assert daily == pytest.approx(math.sqrt(1e-15), rel=1e-9)
+        assert daily != 0.0
+
 
 class TestPortfolioBeta:
     def test_insufficient_samples_return_none(self):
@@ -155,6 +180,29 @@ class TestPortfolioBeta:
         port = [0.0] * 2 + [value * 2 for value in bench]
         assert portfolio_beta(port, bench) == pytest.approx(2.0, abs=1e-9)
 
+    def test_exactly_min_sample_days_on_both_sides(self):
+        """两侧长度恰等于下限 20 → 计算 Beta（`<` 与 `<=` 的分界，两侧各一条）。"""
+        bench = [0.01, -0.01] * 10
+        port = [value * 2 for value in bench]
+        assert portfolio_beta(port, bench) == pytest.approx(2.0, abs=1e-9)
+        assert portfolio_beta(bench, port) == pytest.approx(0.5, abs=1e-9)
+
+    def test_only_one_side_short_returns_none(self):
+        """只有一侧不足 20 日 → 仍返回 None（不是「两侧都不足」才返回）。"""
+        bench = [0.01, -0.02, 0.015, -0.005, 0.02, -0.01] * 4
+        assert portfolio_beta([0.01, -0.01] * 2 + [0.005], bench) is None
+        assert portfolio_beta(bench, [0.01, -0.01] * 2 + [0.005]) is None
+
+    def test_centered_beta_ignores_mean_level(self):
+        """基准均值非零时，组合 = 2×基准 + 0.5 仍得 Beta = 2。
+
+        锁住协方差口径：均值中心化（两侧各减自己的均值）与 (n-1) 分母任一被改，
+        平移不变性即失效——均值项会跟着「水平」偏移，Beta 随之偏离 2。
+        """
+        bench = [0.01, 0.012, 0.008, 0.011, 0.009, 0.013] * 4
+        port = [value * 2 + 0.5 for value in bench]
+        assert portfolio_beta(port, bench) == pytest.approx(2.0, rel=1e-9)
+
 
 class TestPortfolioBetaAnalysis:
     def test_insufficient_samples_return_none(self):
@@ -175,3 +223,68 @@ class TestPortfolioBetaAnalysis:
         assert result is not None
         assert result["beta"] == pytest.approx(2.0, abs=1e-9)
         assert result["p_value"] == 0.0
+
+    def test_sample_too_short_for_standard_error_reports_point_estimate_only(self):
+        """20 日（点估计够、标准误自由度不够）→ 返回点估计 + 区间字段 None。
+
+        不得整份结果退化为 None：调用方需要 beta 才能继续，只应降级区间与检验字段。
+        """
+        bench = [0.01, -0.01] * 10
+        noise = [0.02, -0.015, 0.018, -0.022, 0.019, -0.017, 0.021, -0.023, 0.016, -0.019] * 2
+        port = [value * 1.2 + delta for value, delta in zip(bench, noise)]
+
+        result = portfolio_beta_analysis(port, bench)
+        assert result is not None
+        assert result["beta"] == pytest.approx(3.1, abs=1e-9)
+        assert result["ci_lower"] is None
+        assert result["ci_upper"] is None
+        assert result["reliable"] is False
+        assert result["df"] == 0
+
+    def test_t_stat_and_p_value_match_hand_computed_values(self):
+        """点估计 1.695、df 22 的含噪序列 → t 统计量与双侧 p 值为定值。
+
+        t = beta / se（除号），p = 2×P(T<=-|t|)（乘 2 的双侧换算）：
+        除号被换成乘、或双侧乘 2 被换成除 2，两个量级都会成倍偏离。
+        p 值极小，故 `approx` 的绝对容差必须显式归零（默认 1e-12 会把
+        4e-26 与 1.6e-25 这类差异当成零，断言退化为恒真）。
+        """
+        bench = [0.01, -0.01, 0.012, -0.008] * 6
+        noise = [0.006, -0.005, 0.004, -0.007, 0.005, -0.003] * 4
+        port = [value * 1.2 + delta for value, delta in zip(bench, noise)]
+
+        result = portfolio_beta_analysis(port, bench)
+        assert result is not None
+        assert result["t_stat"] == pytest.approx(57.75129555197038, rel=1e-9)
+        assert result["p_value"] == pytest.approx(1.614308306842165e-25, rel=1e-6, abs=0.0)
+
+    def test_noisy_estimate_widens_interval_and_flags_unreliable(self):
+        """残差远大于基准波动 → 置信区间宽度 > 1.5 → reliable 为 False。
+
+        宽度按 `(上界 - 下界)` 算：界限任一被换成恒 0、`<=` 判据被换成 `or`，
+        「太宽不可靠」的标记都会恒真。
+        """
+        bench = [0.002, -0.002] * 12
+        noise = [0.05, -0.02, 0.04, -0.06, 0.03, -0.05] * 4
+        port = [value * 1.2 + delta for value, delta in zip(bench, noise)]
+
+        result = portfolio_beta_analysis(port, bench)
+        assert result is not None
+        assert result["ci_upper"] - result["ci_lower"] > 1.5
+        assert result["reliable"] is False
+
+    def test_interval_width_exactly_threshold_is_reliable(self, monkeypatch):
+        """区间宽度恰为 1.5 → 仍判可靠（`<=` 与 `<` 的分界）。
+
+        se 与 t 临界值钉成 (0.5, 1.5)，beta = 1 → 半宽 0.75，宽度精确 1.5。
+        """
+        from src.python.analysis import metrics_risk
+
+        bench = [0.01, -0.01] * 10
+        monkeypatch.setattr(metrics_risk, "_beta_se", lambda *args, **kwargs: (0.5, 22))
+        monkeypatch.setattr(metrics_risk, "_t_critical_95", lambda df: 1.5)
+
+        result = metrics_risk.portfolio_beta_analysis(bench, bench)
+        assert result is not None
+        assert result["ci_upper"] - result["ci_lower"] == pytest.approx(1.5, abs=1e-12)
+        assert result["reliable"] is True

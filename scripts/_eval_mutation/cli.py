@@ -348,7 +348,12 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         default=DEFAULT_SLICE_TIMEOUT,
         help="单切片总时限（秒，默认 1800；到点即停，未执行的不计入分母）",
     )
-    parser.add_argument("--jobs", type=int, default=DEFAULT_JOBS, help="并行度（默认 1 串行；>1 时按文件互斥）")
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=DEFAULT_JOBS,
+        help="并行度（默认 1 串行；>1 时按文件互斥。注意：同一导入面内的模块并行会互相污染判读，权威值用 1）",
+    )
     parser.add_argument("--json", action="store_true", help="输出机读结果")
     return parser.parse_args(argv)
 
@@ -393,6 +398,11 @@ def main(argv: list[str] | None = None) -> int:
         print("[..] 先提交或 `git stash` 后再跑；确认无误时可在干净副本上评测")
         return 2
 
+    if args.jobs > 1 and not (args.ci or args.json):
+        print(
+            "[!] --jobs>1 只按文件互斥：同一切片内的模块若共享导入面（门面聚合子模块），"
+            "并行变异会互相污染判读（实测曾把等价变异误报为 killed），权威值请用 --jobs 1"
+        )
     try:
         results: list[TargetResult] = []
         for target in targets:
