@@ -329,7 +329,7 @@ class _ChaptersPanel:
             if not entries:
                 continue
             enabled_count = sum(1 for e in entries if self.status(e))
-            heading = f"── {BLOCK_LABELS[block]}（{enabled_count}/{len(entries)} 开）"
+            heading = f"{BLOCK_LABELS[block]}（{enabled_count}/{len(entries)} 开）"
             rows.extend(group_heading(heading, inner_width(columns), prefix=""))
             for entry in entries:
                 number = chapter_number(entry.key)

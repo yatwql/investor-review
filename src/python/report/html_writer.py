@@ -150,9 +150,6 @@ HTML_POST_STAGES: tuple[tuple[str, Callable[[dict], None]], ...] = (
     ("落盘", lambda state: state.update(path=_save_html_report(state["html"] or "", *state["save_args"]))),
 )
 
-#: 匿名化清扫所需的当轮上下文（holdings 与代码显示映射）；由 write_html_report 每轮写入。
-_MASK_CTX: dict[str, Any] = {}
-
 
 def _mask_report_text(state: dict) -> str:
     """产物文本清扫（匿名化）：字段层未覆盖的派生面在最终 HTML 文本统一真名→代号。
@@ -173,8 +170,9 @@ def _mask_report_text(state: dict) -> str:
     mode = get_anonymization_mode()
     if mode == "off":
         return html
-    holdings = _MASK_CTX.get("holdings") or []
-    code_map = _MASK_CTX.get("code_map") or {}
+    mask_ctx = state.get("mask_ctx") or {}
+    holdings = mask_ctx.get("holdings") or []
+    code_map = mask_ctx.get("code_map") or {}
     html = mask_display_text(html, build_report_alias_map(holdings, mode, include_codes=False))
     # mask_code_text 的返回类型是 str | None（无替换时不保证原样）；落盘前统一收窄
     return mask_code_text(html, code_map) or ""
@@ -713,9 +711,9 @@ def write_html_report(
     _mark("模板渲染")
 
     # 后处理三段（资产内嵌 → 匿名化 → 落盘）按表执行：阶段名是 perf 细分口径的单一来源
-    _MASK_CTX["holdings"] = holdings
-    _MASK_CTX["code_map"] = _code_display_map
     _post_state: dict = {
+        # 渲染期上下文随本轮状态传递，不落模块级全局（架构约束：渲染期数据不得写模块级 dict）
+        "mask_ctx": {"holdings": holdings, "code_map": _code_display_map},
         "html": html,
         "path": None,
         "save_args": (output_dir, bindings.total_mv, bindings.total_profit, prog),

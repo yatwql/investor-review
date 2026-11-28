@@ -120,28 +120,24 @@ class TestStatusObservation:
 
 
 class TestWarnCaptionCascade:
-    """警报字幕层叠：`t-warn` 修饰类必须以复合选择器定义，否则被灰字压住。"""
+    """空态与状态着色分工：空态保持中性观感，状态由 `data-status` 组件承载。"""
 
-    def test_warn_modifier_uses_compound_selector(self) -> None:
-        """`.empty-section.t-warn`（2 类）胜过 `.empty-section` 的 `color: var(--text-muted)`。"""
+    def test_empty_state_keeps_neutral_look(self) -> None:
+        """空态基底必须是中性灰字（设计契约：空态不染状态色）。"""
         css = read_template_text()
         idx = css.find(".empty-section {")
         assert idx > 0, "缺 .empty-section 基底定义（本契约前提）"
-        assert "color: var(--text-muted)" in css[idx : css.find("}", idx)], (
-            "基底灰字口径变了，复合选择器的层叠必要性前提不再成立"
-        )
-        assert ".empty-section.t-warn { color: var(--warn-text); }" in css, (
-            "警报字幕须用 2 类复合选择器；改成单类 `.t-warn` 会被后声明的 .empty-section 灰字覆盖"
-        )
+        body = css[idx : css.find("}", idx)]
+        assert "color: var(--text-muted)" in body
+        assert ".empty-section.t-warn" not in css, "空态不得再叠加状态色修饰类（状态由 data-status 承载）"
 
-    def test_summary_warn_caption_no_inline_color(self) -> None:
-        """行情全不可用提示块：走 t-warn 类，不再内联 color（仅留 background/border-color）。"""
+    def test_summary_warn_caption_uses_status_component(self) -> None:
+        """行情全不可用提示块：走 `data-status-warn` 组件，无内联颜色表达式。"""
         text = (_TMPL / "partials/summary_section.html").read_text(encoding="utf-8")
-        line = next(
-            ln for ln in text.splitlines() if "行情数据全部不可用" in ln or 'class="empty-section t-warn"' in ln
-        )
-        assert 'class="empty-section t-warn"' in text, "提示块缺 t-warn 类"
-        assert "color: var(--warn-text)" not in line, "内联 color 应已收口到 .empty-section.t-warn"
+        block = next(ln for ln in text.splitlines() if "行情数据全部不可用" in ln or "data-status-warn" in ln)
+        assert "data-status-warn" in text, "提示块须走 data-status 组件（状态 → 观感单一出口）"
+        assert "style=" not in block, "不得在 style 属性内拼颜色（设计契约 DON'T）"
+        assert "empty-section" not in block, "状态提示不是空态，不得复用 empty-section 中性样式"
 
 
 class TestDesignAlignment:
