@@ -10,7 +10,7 @@ from dataclasses import dataclass
 
 import re
 
-from src.python.llm.fact_checker import _coverage
+import src.python.llm.fact_checker._coverage as _coverage
 from src.python.llm.fact_checker._constants import (
     _ATTACHED_SUBJECT_MAX_DIST,
     _DEFAULT_TOLERANCE_PCT,

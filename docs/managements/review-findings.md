@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.19.2-dev
-> **编号源**：`rf-next = 1268`（新增问题提出后更新为 +1；已用最大 rf-1267，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1269`（新增问题提出后更新为 +1；已用最大 rf-1268，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -66,6 +66,10 @@
 ### 开发期已修复（0.19.2-dev）
 
 > 本表为本开发周期已修条目的**摘要行**（详情见 `changelog.md` 对应段）；发布时由 `release.py prepare` 的 archive 步原表搬入版本归档并在此留占位。
+
+| # | 问题 | 修复方向 |
+| --- | --- | --- |
+| **rf-1268** | 两个包的门面与其子模块在**顶层**互相导入（`config` 门面 ↔ `_core`/`_llm_settings`，`llm/fact_checker` 门面 ↔ `_numerical`）：导入能否成功取决于包初始化走到第几行，调换 `__init__` 里顶层导入的顺序或新增一行就可能变成 `ImportError`，且报错点与病因相距很远 | 子模块侧改用 `import 包.子模块 as 名` 直取子模块（不经包门面转手），环消除；新增 `src/test/unit/core/test_import_cycles.py` 以顶层导入图的强连通分量为守卫，防再次引入 |
 
 ### 归档档案
 - [`archived_review-findings.0.19.x.md`](../archive/v0.19.x/archived_review-findings.0.19.x.md) — v0.19.x（2026-11-27 ~ 2026-11-28）
