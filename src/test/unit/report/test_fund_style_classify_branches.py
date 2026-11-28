@@ -24,6 +24,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.python.report import fund_style_classify as fsc
+from src.python.fetcher import fund_style_extended as fse
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report, pytest.mark.usefixtures("offline_external_sources")]
 
@@ -66,7 +67,7 @@ class TestPush2ExtendedDegrade:
 
         monkeypatch.setattr("src.python.fetcher.industry.fetch_industry_data_cached", _boom)
 
-        assert fsc._push2_extended("600519") is None
+        assert fse.push2_extended("600519") is None
 
 
 class TestTencentExtendedDegrade:
@@ -78,7 +79,7 @@ class TestTencentExtendedDegrade:
             lambda code, name="": {"market_cap": 0, "pe": -3.0},
         )
 
-        assert fsc._tencent_extended("600519", "贵州茅台") is None
+        assert fse.tencent_extended("600519", "贵州茅台") is None
 
     def test_fetch_exception_records_provider_failure(self, monkeypatch):
         def _boom(_code, _name=""):
@@ -88,7 +89,7 @@ class TestTencentExtendedDegrade:
         monkeypatch.setattr("src.python.fetcher.price.fetch_market_data", _boom)
         monkeypatch.setattr("src.python.core.provider_registry.get_registry", lambda: reg)
 
-        assert fsc._tencent_extended("600519", "贵州茅台") is None
+        assert fse.tencent_extended("600519", "贵州茅台") is None
         reg.record_failure.assert_called_once_with("tencent_style", "extended:600519")
 
 
@@ -121,7 +122,7 @@ class TestBatchTencentExtended:
     """批量腾讯预取的输入与单路异常口径。"""
 
     def test_empty_codes_yields_no_result(self):
-        assert fsc._batch_tencent_extended([]) == {}
+        assert fse.batch_tencent_extended([]) == {}
 
     def test_single_route_failure_keeps_other_results(self, monkeypatch):
         payload = {"600519": {"market_cap": 1e11}, "000858": {"pe": 15.0}}
@@ -131,9 +132,9 @@ class TestBatchTencentExtended:
                 raise RuntimeError("route boom")
             return payload[code]
 
-        monkeypatch.setattr(fsc, "_tencent_extended", _fetch)
+        monkeypatch.setattr(fse, "tencent_extended", _fetch)
 
-        assert fsc._batch_tencent_extended(["600519", "000858"]) == {"600519": payload["600519"]}
+        assert fse.batch_tencent_extended(["600519", "000858"]) == {"600519": payload["600519"]}
 
 
 class TestPrefetchSkipsCached:
@@ -144,9 +145,9 @@ class TestPrefetchSkipsCached:
 
         get_registry().session_cache_set("extended", "600519", {"market_cap": 1e11})
         probe = MagicMock(return_value={"market_cap": 1e11})
-        monkeypatch.setattr(fsc, "_push2_extended", probe)
+        monkeypatch.setattr(fse, "push2_extended", probe)
 
-        fsc._prefetch_extended_data(
+        fse.prefetch_extended_data(
             [{"name": "贵州茅台", "code": "600519", "ratio": 10.0}],
             get_registry(),
         )
@@ -160,7 +161,7 @@ class TestStockStyleWeights:
     def test_non_positive_ratio_holding_is_skipped(self, monkeypatch):
         from src.python.core.provider_registry import get_registry
 
-        monkeypatch.setattr(fsc, "_push2_extended", lambda code: {"market_cap": 1e11, "pe": 25.0})
+        monkeypatch.setattr(fse, "push2_extended", lambda code: {"market_cap": 1e11, "pe": 25.0})
 
         styles, size_weights, style_weights, total_weight, has_estimated = fsc._classify_stock_styles(
             [

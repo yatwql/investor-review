@@ -269,3 +269,43 @@ class TestSinaParallelism:
         mock_fetch.return_value = [{"title": "same", "url": "http://same"}]
         result = news_sources._fetch_from_sina(num=150)
         assert len(result) == 1, "跨分类重复 URL 合并后只保留一条"
+
+
+class TestSourceFailurePropagates:
+    """单源传输失败必须冒成异常，不能静默返回空列表。
+
+    回归背景：provider 的契约是「失败返回空列表」，聚合层只看返回值时，DNS 失败 /
+    连不上与「源侧当日确实没有新闻」无法区分——健康矩阵把失败源记成「成功 0 条」，
+    provider 日志还打印「获取成功」。这里锁定「有失败原因 → 抛 NewsSourceUnavailable」。
+    """
+
+    def test_transport_failure_raises_with_label_and_reason(self):
+        from src.python.providers.utils import set_last_reason
+
+        def _fail(*_args, **_kwargs):
+            set_last_reason("请求失败: Name or service not known")
+            return []
+
+        with patch("src.python.providers.wallstreetcn_news.fetch_news", _fail):
+            with pytest.raises(news_sources.NewsSourceUnavailable) as exc:
+                news_sources._fetch_from_wallstreetcn(10)
+
+        message = str(exc.value)
+        assert "华尔街见闻" in message, "异常须带源标签，聚合层据此上屏"
+        assert "Name or service not known" in message, "异常须带 provider 写入的失败原因"
+
+    def test_empty_without_reason_is_not_a_failure(self):
+        """源侧确实没有新条目（无失败原因）→ 照常返回空列表，不误判为故障。"""
+        with patch("src.python.providers.cls_news.fetch_news", lambda num=50: []):
+            assert news_sources._fetch_from_cls(10) == []
+
+    def test_all_sina_categories_failing_raises(self, monkeypatch):
+        def _fail(**_kwargs):
+            from src.python.providers.utils import set_last_reason
+
+            set_last_reason("超时")
+            return []
+
+        monkeypatch.setattr("src.python.providers.sina_news.fetch_news", _fail)
+        with pytest.raises(news_sources.NewsSourceUnavailable):
+            news_sources._fetch_from_sina(num=150)

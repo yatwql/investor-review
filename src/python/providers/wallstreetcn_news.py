@@ -14,6 +14,7 @@ import httpx
 
 from src.python.core.http_client import make_http_client
 from src.python.providers.utils import ts_to_str
+from src.python.providers.utils import set_last_reason
 
 logger = logging.getLogger("invest")
 
@@ -120,12 +121,15 @@ def fetch_news(num: int = 50) -> list[dict[str, Any]]:
                 data = resp.json()
         except httpx.TimeoutException:
             logger.warning("WallStreetCN 新闻 API 超时")
+            set_last_reason("超时")
             break
         except httpx.RequestError as e:
             logger.warning("WallStreetCN 新闻 API 请求失败: %s", e)
+            set_last_reason(f"请求失败: {e}")
             break
         except ValueError as e:
             logger.warning("WallStreetCN 新闻 API 响应 JSON 解析失败: %s", e)
+            set_last_reason(f"响应非 JSON: {e}")
             break
 
         raw_items = data.get("data", {}).get("items")

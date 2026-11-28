@@ -15,6 +15,7 @@ from typing import Any
 import httpx
 
 from src.python.core.http_client import make_http_client
+from src.python.providers.utils import set_last_reason
 
 logger = logging.getLogger("invest")
 
@@ -104,11 +105,14 @@ def fetch_news(num: int = 50) -> list[dict[str, Any]]:
         except (httpx.TimeoutException, httpx.RequestError, httpx.HTTPStatusError) as e:
             if not all_items:
                 logger.warning("东方财富新闻 API 请求失败: %s", e)
+                set_last_reason(f"请求失败: {e}")
             else:
                 logger.warning("东方财富新闻翻页失败 (已收 %d 条): %s", len(all_items), e)
             break
         except ValueError as e:
             logger.warning("东方财富新闻 API 返回非 JSON 数据: %s", e)
+            if not all_items:
+                set_last_reason(f"响应非 JSON: {e}")
             break
 
         # 响应结构：{code: 0|1, message: "...", data: {fastNewsList: [...]}}

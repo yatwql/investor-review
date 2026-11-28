@@ -14,6 +14,7 @@ import httpx
 
 from src.python.core.http_client import make_http_client
 from src.python.providers.utils import ts_to_str
+from src.python.providers.utils import set_last_reason
 
 logger = logging.getLogger("invest")
 
@@ -104,18 +105,22 @@ def fetch_news(
             data = resp.json()
     except httpx.TimeoutException:
         logger.warning("Sina 新闻 API 超时 (lid=%s)", lid)
+        set_last_reason("超时")
         return []
     except httpx.RequestError as e:
         logger.warning("Sina 新闻 API 请求失败: %s", e)
+        set_last_reason(f"请求失败: {e}")
         return []
     except ValueError as e:
         logger.warning("Sina 新闻 API 响应 JSON 解析失败: %s", e)
+        set_last_reason(f"响应非 JSON: {e}")
         return []
 
     # 提取 result.data 列表
     result = data.get("result")
     if not isinstance(result, dict):
         logger.warning("Sina 新闻 API 响应缺少 result 字段")
+        set_last_reason("响应缺少 result 字段")
         return []
 
     raw_items = result.get("data")

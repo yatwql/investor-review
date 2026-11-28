@@ -442,20 +442,20 @@ class TestRefreshExtendedCache(unittest.TestCase):
 
         return _refresh_extended_cache(holdings)
 
-    @patch("src.python.report.fund_style_classify._prefetch_extended_data")
+    @patch("src.python.fetcher.fund_style_extended.prefetch_extended_data")
     def test_a_share_codes(self, mock_prefetch):
         """A 股代码 → 调用预取并返回去重代码数。"""
         holdings = [self._make_holding("600900", "长江电力"), self._make_holding("000001", "平安银行")]
         self.assertEqual(self._call(holdings), 2)
         mock_prefetch.assert_called_once()
 
-    @patch("src.python.report.fund_style_classify._prefetch_extended_data")
+    @patch("src.python.fetcher.fund_style_extended.prefetch_extended_data")
     def test_dedup(self, mock_prefetch):
         """同一代码出现两次 → 去重后返回 1。"""
         holdings = [self._make_holding("600900"), self._make_holding("600900")]
         self.assertEqual(self._call(holdings), 1)
 
-    @patch("src.python.report.fund_style_classify._prefetch_extended_data")
+    @patch("src.python.fetcher.fund_style_extended.prefetch_extended_data")
     def test_no_a_share(self, mock_prefetch):
         """无 A 股（基金/港股）→ 返回 0 且不调用预取。"""
         holdings = [self._make_holding("161725"), self._make_holding("00700")]

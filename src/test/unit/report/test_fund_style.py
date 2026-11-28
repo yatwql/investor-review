@@ -301,7 +301,7 @@ class TestGetIndustryAvgPe(unittest.TestCase):
         # 排序 PE: [10, 20, 30, 40] → 中位数 = (20+30)/2 = 25.0
         self.assertAlmostEqual(result.get("600519", 0), 25.0, places=4)
 
-    @patch("src.python.report.fund_style_classify._push2_extended")
+    @patch("src.python.fetcher.fund_style_extended.push2_extended")
     @patch("src.python.fetcher.industry.fetch_industry_data")
     def test_single_fetch_per_code(self, mock_fetch_ind, mock_push2):
         """回归：行业归属与 PE 同源于一次请求，不得为取 PE 二次请求。
@@ -358,8 +358,8 @@ class TestClassifyFundStyle(unittest.TestCase):
         self.assertEqual(result["style"], "--")
 
     @patch("src.python.fetcher.industry.fetch_industry_data")
-    @patch("src.python.report.fund_style_classify._tencent_extended")
-    @patch("src.python.report.fund_style_classify._push2_extended")
+    @patch("src.python.fetcher.fund_style_extended.tencent_extended")
+    @patch("src.python.fetcher.fund_style_extended.push2_extended")
     def test_no_push2_fallback_code(self, mock_push2, mock_tencent, mock_fetch_ind):
         """push2 不可用 → 代码段降级"""
         mock_push2.return_value = None
@@ -372,8 +372,8 @@ class TestClassifyFundStyle(unittest.TestCase):
         self.assertTrue(result["is_estimated"])
 
     @patch("src.python.fetcher.industry.fetch_industry_data")
-    @patch("src.python.report.fund_style_classify._tencent_extended")
-    @patch("src.python.report.fund_style_classify._push2_extended")
+    @patch("src.python.fetcher.fund_style_extended.tencent_extended")
+    @patch("src.python.fetcher.fund_style_extended.push2_extended")
     def test_push2_fallback_to_tencent(self, mock_push2, mock_tencent, mock_fetch_ind):
         """push2 不可用，Tencent 可用 → 使用 Tencent 数据"""
         mock_push2.return_value = None
@@ -386,7 +386,7 @@ class TestClassifyFundStyle(unittest.TestCase):
         self.assertFalse(result["is_estimated"])
 
     @patch("src.python.fetcher.industry.fetch_industry_data")
-    @patch("src.python.report.fund_style_classify._push2_extended")
+    @patch("src.python.fetcher.fund_style_extended.push2_extended")
     def test_with_push2_data(self, mock_push2, mock_fetch_ind):
         """push2 可用 → 精确风格"""
         mock_push2.return_value = {"market_cap": 1000e8, "pe": 25.0}
@@ -397,8 +397,8 @@ class TestClassifyFundStyle(unittest.TestCase):
         self.assertFalse(result["is_estimated"])
 
     @patch("src.python.fetcher.industry.fetch_industry_data")
-    @patch("src.python.report.fund_style_classify._tencent_extended")
-    @patch("src.python.report.fund_style_classify._push2_extended")
+    @patch("src.python.fetcher.fund_style_extended.tencent_extended")
+    @patch("src.python.fetcher.fund_style_extended.push2_extended")
     def test_industry_avg_affects_style(self, mock_push2, mock_tencent, mock_fetch_ind):
         """行业平均 PE 影响风格判定 — 同一行业不同PE→价值/成长区分"""
         mock_tencent.return_value = None
@@ -432,7 +432,7 @@ class TestClassifyFundStyle(unittest.TestCase):
         self.assertFalse(details["000858"]["is_estimated"])
 
     @patch("src.python.fetcher.industry.fetch_industry_data")
-    @patch("src.python.report.fund_style_classify._push2_extended")
+    @patch("src.python.fetcher.fund_style_extended.push2_extended")
     def test_weighted_style(self, mock_push2, mock_fetch_ind):
         """多只持仓加权 → 按权重最大的 size 和 style 输出"""
         mock_fetch_ind.return_value = None
@@ -464,8 +464,8 @@ class TestAnalyzeStyleForAllFunds(unittest.TestCase):
     """analyze_style_for_all_funds：全流程集成"""
 
     @patch("src.python.fetcher.industry.fetch_industry_data")
-    @patch("src.python.report.fund_style_classify._tencent_extended")
-    @patch("src.python.report.fund_style_classify._push2_extended")
+    @patch("src.python.fetcher.fund_style_extended.tencent_extended")
+    @patch("src.python.fetcher.fund_style_extended.push2_extended")
     @patch("src.python.report.fund_style_report._load_snapshot")
     def test_first_run_all_baseline(self, mock_load, mock_push2, mock_tencent, mock_fetch_ind):
         """首次运行 → 全部基准确立中"""
@@ -485,7 +485,7 @@ class TestAnalyzeStyleForAllFunds(unittest.TestCase):
         self.assertEqual(result["results"][0]["drift_level"], "基准确立中")
 
     @patch("src.python.fetcher.industry.fetch_industry_data")
-    @patch("src.python.report.fund_style_classify._push2_extended")
+    @patch("src.python.fetcher.fund_style_extended.push2_extended")
     @patch("src.python.report.fund_style_report._load_snapshot")
     def test_drift_detected(self, mock_load, mock_push2, mock_fetch_ind):
         """有快照且风格变化 → 漂移检测"""
@@ -514,7 +514,7 @@ class TestAnalyzeStyleForAllFunds(unittest.TestCase):
         self.assertEqual(result["results"], [])
 
     @patch("src.python.fetcher.industry.fetch_industry_data")
-    @patch("src.python.report.fund_style_classify._push2_extended")
+    @patch("src.python.fetcher.fund_style_extended.push2_extended")
     @patch("src.python.report.fund_style_report._load_snapshot")
     def test_remark_carries_report_period(self, mock_load, mock_push2, mock_fetch_ind):
         """备注含报告期——风格判定基于该期快照，跨年报告期的「无漂移」不足信。"""
@@ -537,7 +537,7 @@ class TestAnalyzeStyleForAllFunds(unittest.TestCase):
         self.assertIn(period, r["remark"])
 
     @patch("src.python.fetcher.industry.fetch_industry_data")
-    @patch("src.python.report.fund_style_classify._push2_extended")
+    @patch("src.python.fetcher.fund_style_extended.push2_extended")
     @patch("src.python.report.fund_style_report._load_snapshot")
     def test_remark_marks_stale_report_period(self, mock_load, mock_push2, mock_fetch_ind):
         """报告期陈旧 → 备注显式标注（保留该基金，只作提示）。"""
@@ -559,7 +559,7 @@ class TestAnalyzeStyleForAllFunds(unittest.TestCase):
         self.assertIn("陈旧", r["remark"])
 
     @patch("src.python.fetcher.industry.fetch_industry_data")
-    @patch("src.python.report.fund_style_classify._push2_extended")
+    @patch("src.python.fetcher.fund_style_extended.push2_extended")
     @patch("src.python.report.fund_style_report._load_snapshot")
     def test_unknown_period_not_flagged_stale(self, mock_load, mock_push2, mock_fetch_ind):
         """无报告期信息 → 显示「未知」且不判陈旧（数据缺失不同于数据陈旧）。"""
@@ -610,7 +610,10 @@ class TestExtendedCacheSharing(unittest.TestCase):
         mock_fetch_ind.return_value = {"industry": "白酒", "pe": 25.0, "market_cap": 1e11}
         mock_tencent_api.return_value = None  # 不应被调用
 
-        from src.python.report.fund_style_classify import _push2_extended, _tencent_extended
+        from src.python.fetcher.fund_style_extended import (
+            push2_extended as _push2_extended,
+            tencent_extended as _tencent_extended,
+        )
 
         # 第一次调用：经行业请求取数，写入缓存
         result1 = _push2_extended("600519")
@@ -638,7 +641,10 @@ class TestExtendedCacheSharing(unittest.TestCase):
         # Tencent 返回 market_cap 单位为亿，函数内部乘以 1e8 转为元
         mock_tencent_api.return_value = {"market_cap": 2000.0, "pe": 30.0}
 
-        from src.python.report.fund_style_classify import _push2_extended, _tencent_extended
+        from src.python.fetcher.fund_style_extended import (
+            push2_extended as _push2_extended,
+            tencent_extended as _tencent_extended,
+        )
 
         # 第一次调用：tencent API 被调用，写入缓存（2000亿 → 2e11 元）
         result1 = _tencent_extended("600519")
@@ -664,12 +670,12 @@ class TestExtendedCacheSharing(unittest.TestCase):
             "000858": {"industry": "白酒", "pe": 15.0, "market_cap": 5e10},
         }.get(c)
 
-        from src.python.report.fund_style_classify import _push2_extended
+        from src.python.fetcher.fund_style_extended import push2_extended as _push2_extended
 
         _push2_extended("600519")
         _push2_extended("000858")
 
-        from src.python.report.fund_style_classify import _tencent_extended
+        from src.python.fetcher.fund_style_extended import tencent_extended as _tencent_extended
 
         r1 = _tencent_extended("600519")
         assert r1 is not None
@@ -698,7 +704,7 @@ class TestPush2ExtendedSessionCache(unittest.TestCase):
     @patch("src.python.fetcher.industry.fetch_industry_data")
     def test_unavailable_probed_once_per_run(self, mock_fetch_ind):
         mock_fetch_ind.return_value = None
-        from src.python.report.fund_style_classify import _push2_extended
+        from src.python.fetcher.fund_style_extended import push2_extended as _push2_extended
 
         assert _push2_extended("005827") is None
         assert _push2_extended("005827") is None

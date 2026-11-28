@@ -14,6 +14,7 @@ import httpx
 
 from src.python.core.http_client import make_http_client
 from src.python.providers.utils import ts_to_str
+from src.python.providers.utils import set_last_reason
 
 logger = logging.getLogger("invest")
 
@@ -88,12 +89,15 @@ def fetch_news(num: int = 50) -> list[dict[str, Any]]:
             data = resp.json()
     except httpx.TimeoutException:
         logger.warning("财联社新闻 API 超时")
+        set_last_reason("超时")
         return []
     except httpx.RequestError as e:
         logger.warning("财联社新闻 API 请求失败: %s", e)
+        set_last_reason(f"请求失败: {e}")
         return []
     except ValueError as e:
         logger.warning("财联社新闻 API 响应 JSON 解析失败: %s", e)
+        set_last_reason(f"响应非 JSON: {e}")
         return []
 
     # 提取 data.roll_data
@@ -102,8 +106,10 @@ def fetch_news(num: int = 50) -> list[dict[str, Any]]:
         errno = data.get("errno", "")
         if errno == "10012":
             logger.warning("财联社新闻 API 需要签名鉴权（errno=10012），当前不可用")
+            set_last_reason("需要签名鉴权（errno=10012）")
         else:
             logger.warning("财联社新闻 API 响应缺少 data 字段 (errno=%s)", errno)
+            set_last_reason(f"响应缺少 data 字段 (errno={errno})")
         return []
 
     raw_items = outer_data.get("roll_data")

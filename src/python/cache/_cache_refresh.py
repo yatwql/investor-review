@@ -235,7 +235,7 @@ def _refresh_extended_cache(holdings: list) -> int:
     """
     from src.python.core.code_utils import is_a_share_stock
     from src.python.core.provider_registry import get_registry
-    from src.python.report.fund_style_classify import _prefetch_extended_data
+    from src.python.fetcher.fund_style_extended import prefetch_extended_data
 
     a_share_codes = [
         h.code.strip() for h in holdings if h.code and h.code.strip() and is_a_share_stock(h.name, h.code.strip())
@@ -244,7 +244,7 @@ def _refresh_extended_cache(holdings: list) -> int:
     if not unique:
         return 0
     holdings_dicts = [{"code": h.code, "name": h.name} for h in holdings]
-    _prefetch_extended_data(holdings_dicts, get_registry())
+    prefetch_extended_data(holdings_dicts, get_registry())
     return len(unique)
 
 

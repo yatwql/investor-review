@@ -374,3 +374,19 @@ class TestFetchNewsPaging(unittest.TestCase):
         assert "重复条目" not in titles and "新闻50" in titles
         assert "新条目" in titles
         assert len(result) == 101
+
+
+class TestTransportFailureReason:
+    """传输级失败须写入失败原因（供上游判定「源不可用」而非「成功 0 条」）。"""
+
+    def test_request_error_sets_last_reason(self):
+        import httpx
+
+        from src.python.providers.utils import take_last_reason
+
+        take_last_reason()  # 清掉同线程残值
+        with patch("src.python.providers.wallstreetcn_news.make_http_client") as mock_client:
+            mock_client.return_value.__enter__.return_value.get.side_effect = httpx.RequestError("dns down")
+            assert fetch_news(10) == []
+
+        assert "dns down" in take_last_reason(), "连接级失败必须留下可读原因"

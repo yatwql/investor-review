@@ -452,6 +452,12 @@ _CACHE_ONLY_REGISTRY: tuple[DataModuleDef, ...] = (
         cache_ttl=6 * 3600,
     ),
     DataModuleDef(
+        "财报索引确定性缺失",
+        "report_index_miss",
+        cache_prefixes=("report_index_miss_",),
+        cache_ttl=6 * 3600,
+    ),
+    DataModuleDef(
         "基金季报空季度",
         "hold_qmiss",
         cache_prefixes=("hold_qmiss_",),

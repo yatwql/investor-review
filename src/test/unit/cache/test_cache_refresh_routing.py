@@ -53,7 +53,7 @@ class TestCacheRefreshRouting:
         """扩展数据预取的 A 股计数排除场外基金（002943 不计入）。"""
         from src.python.cache._cache_refresh import _refresh_extended_cache
 
-        with patch("src.python.report.fund_style_classify._prefetch_extended_data"):
+        with patch("src.python.fetcher.fund_style_extended.prefetch_extended_data"):
             count = _refresh_extended_cache(_HOLDINGS)
 
         assert count == 1

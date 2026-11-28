@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.19.2-dev
-> **编号源**：`rf-next = 1276`（新增问题提出后更新为 +1；已用最大 rf-1275，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1277`（新增问题提出后更新为 +1；已用最大 rf-1276，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -52,7 +52,7 @@
 | `scripts/_doc_drift/_format.py` 742 行 | 格式化规则按文档类型拆（章节 / 表格 / 树 / 统计） |
 | `src/python/core/degradation.py` 768 行 | 状态词与事件模型、登记面与持久化可拆两文件 |
 | `src/python/report/action_sheet.py` 754 行 | 行动页签内各块（建议表 / 判断依据 / 决策书 / 复盘）拆子模块 |
-| `src/python/fetcher/financial_report.py` 725 行 | 按「索引 / 正文 / 全文定位」三阶下沉 |
+| `src/python/fetcher/financial_report.py` 745 行 | 按「索引 / 正文 / 全文定位」三阶下沉 |
 | `src/python/providers/akshare_extras.py` 721 行 | 按接口族拆（指数 / 行业 / 分红 / 盈利预测） |
 | `src/python/core/provider_registry.py` 710 行 | 熔断与会话缓存各自独立文件 |
 | `src/python/llm/skeleton.py` 909 行 | 模板数据与渲染逻辑可下沉 `llm/skeleton_*`（骨架模板 / 占位渲染） |
@@ -74,6 +74,8 @@
 | **rf-1271** | 分层越界存量项（7 行）：纯解析/派生原语（费率表模型、三张报表派生、财务指标全文解析、回撤事件下限常量）居 `analysis/`，`fetcher/`、`providers/`、`config/`、`report/` 四处为复用同一口径而反向依赖纯计算层 | 四个纯计算模块整块下沉 `core/`（只依赖 `core`/`schemas`，零上层耦合），全仓引用改指 core；其用例随模块归位 `unit/core`；分层例外表与 `technical.md` 存量例外表各减 7 行；分层守卫用例的示例目标改为仍在 `analysis/` 的模块 |
 | **rf-1272** | 分层越界存量项（2 行）：配置层反向依赖 LLM 实现——`config/_llm_providers.py` 写盘后直接调 `llm.pacing.register_policies`，`config/_validation_llm.py` 从 `llm.depth_profile` 取深度档常量（常量真值本就在 `core/constants.py`） | 前者改为「配置只发信号」：写盘递增 `get_providers_revision()` 修订序号，`llm/pacing.py` 惰性装载时按序号变化自行重载（分层单向）；后者直接改从 `core/constants.py` 取常量。分层例外表与存量例外表各减 2 行 |
 | **rf-1273** | 分层越界存量项：行业/概念关键词扩展（含取数）居 `report/news_correlation.py`，缓存预热为复用同一口径而反向依赖报告层 | 原语迁入 `fetcher/news.py::expand_industry_keywords`（与新闻聚合同层，取数归取数层）；预热与报告两侧改引 fetcher；纯函数的 5 条用例随迁 `unit/fetcher`；分层例外表与存量例外表各减 1 行 |
+| **rf-1274** | 新闻源传输级失败被记成「成功 0 条」（实测华尔街见闻连续两天 DNS 失败仍显示正常）：provider 契约是「失败返回空列表」，聚合层只看返回值无法区分「网络失败」与「源侧确实没有新闻」，健康矩阵与 `get_last_source_status()` 同时失真，provider 还打印「获取成功」 | provider 在传输/解析/鉴权失败分支经 `providers.utils.set_last_reason` 落可读原因；取数包装层（`news_sources._fetch_from_*`）把「空结果 + 有原因」转成 `NewsSourceUnavailable` 抛出，聚合层既有 `except` 分支即登记「失败(<原因>)」；新增 4 条回归用例（含新浪多分类线程内原因回传） |
+| **rf-1275** | 财报索引「各源均无该标的」未入负缓存，每轮重探：实测 16 个代码 × 2~4 源全部预期缺失，单轮财报摘要阶段 50.9s（占数据准备 65%）几乎全是纯等待 | 新增负缓存 `report_index_miss_`（6h，注册表 + 数据源文档 + `technical.md` 同源登记）：仅当主备两源都答「无该标的」且**无传输级失败**时写入，传输级失败照旧不入缓存；新增 2 条回归用例（第二轮即命中负缓存、探源次数保持 1 / 传输级失败不入缓存） |
 | **rf-1268** | 两个包的门面与其子模块在**顶层**互相导入（`config` 门面 ↔ `_core`/`_llm_settings`，`llm/fact_checker` 门面 ↔ `_numerical`）：导入能否成功取决于包初始化走到第几行，调换 `__init__` 里顶层导入的顺序或新增一行就可能变成 `ImportError`，且报错点与病因相距很远 | 子模块侧改用 `import 包.子模块 as 名` 直取子模块（不经包门面转手），环消除；新增 `src/test/unit/core/test_import_cycles.py` 以顶层导入图的强连通分量为守卫，防再次引入 |
 
 ### 归档档案
