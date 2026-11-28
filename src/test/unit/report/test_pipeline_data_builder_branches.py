@@ -115,6 +115,17 @@ class TestBuildPrep:
         assert prep["total_mv"] == "not-a-number"
         assert "prep.total_mv" in caplog.text
 
+    def test_non_empty_collections_pass_through(self):
+        """缺省回退只在入参为「空」时生效：非空的指数/持仓明细必须原样透传
+        （`or {}` / `or []` 写成 `and` 会把非空入参静默替换成空值，报告随即丢整块数据）。"""
+        us_indices = {"标普500": {"price": 5123.4}}
+        holdings_details = [{"name": "沪深300ETF", "shares": 1000, "cost": 3.9}]
+
+        prep = pdb.build_prep(us_indices=us_indices, holdings_details=holdings_details)
+
+        assert prep["us_indices"] == us_indices
+        assert prep["holdings_details"] == holdings_details
+
 
 class TestMergePipelineData:
     def test_none_without_extra_returns_none(self):
@@ -140,6 +151,21 @@ class TestMergePipelineData:
 
         assert merged["snapshot_diff_data"] == {"new": 2}
         assert base["snapshot_diff_data"] == {"old": 1}, "不得就地修改调用方的 dict"
+
+    def test_override_is_logged_only_for_existing_keys(self, caplog):
+        """「覆盖已有键」的 DEBUG 只在键真已存在时记：新增键走不到覆盖路径。"""
+        base = {"diff": None, "snapshot_diff_data": {"old": 1}}
+
+        with caplog.at_level(logging.DEBUG, logger="invest"):
+            pdb.merge_pipeline_data(base, snapshot_diff_data={"new": 2})
+
+        assert "snapshot_diff_data" in caplog.text
+
+        caplog.clear()
+        with caplog.at_level(logging.DEBUG, logger="invest"):
+            pdb.merge_pipeline_data({"diff": None}, probe_fresh_key=1)
+
+        assert "覆盖已有键" not in caplog.text, "新增键不是覆盖，不该记覆盖日志"
 
     def test_unregistered_merge_key_warns_without_registering(self, caplog):
         base = {"diff": None, "data_degradation": []}

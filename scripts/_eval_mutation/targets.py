@@ -76,6 +76,21 @@ TARGETS: tuple[MutationTarget, ...] = (
         rationale="缓存 TTL 与原子写：边界比较（> / >=）与布尔取反决定过期与覆盖语义，最易漏测",
     ),
     MutationTarget(
+        name="report-pipeline-data",
+        paths=("src/python/report/pipeline_data_builder.py",),
+        tests=(
+            "src/test/unit/report/test_pipeline_data_builder.py",
+            "src/test/unit/report/test_pipeline_data_builder_branches.py",
+        ),
+        rationale="报告数据契约（C19）：未注册键 / 缺键 / 占位语义错了会静默污染 Excel 与 HTML 两处呈现",
+    ),
+    MutationTarget(
+        name="analysis-factor-formulas",
+        paths=("src/python/analysis/_factor_formulas.py",),
+        tests=("src/test/unit/analysis/",),
+        rationale="因子公式纯算术：算术替换与返回值替换最能暴露「只查范围不查值」的断言",
+    ),
+    MutationTarget(
         name="core-dates",
         paths=("src/python/core/dates.py",),
         tests=("src/test/unit/core/test_dates.py",),
