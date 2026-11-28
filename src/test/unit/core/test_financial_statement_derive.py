@@ -11,9 +11,9 @@ from __future__ import annotations
 
 import pytest
 
-from src.python.analysis.financial_statement_derive import derive_indicator_records
+from src.python.core.financial_statement_derive import derive_indicator_records
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_analysis]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_core]
 
 #: 长江电力 2026 半年报 / 2026 一季报 / 2025 半年报（实测值，亿元级真实量纲）
 _MS_2026Q2 = 1782748800000  # 2026-06-30

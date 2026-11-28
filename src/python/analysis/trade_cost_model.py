@@ -31,7 +31,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from src.python.analysis.fee_schedule_model import (
+from src.python.core.fee_schedule_model import (
     SRC_CONFIG,
     SRC_F10,
     SRC_TABLE_SINGLE,

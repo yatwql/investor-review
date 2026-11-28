@@ -26,7 +26,7 @@ from src.python.config import _validation_llm as llm_validation
 from src.python.config import _validation_scalars as scalars
 from src.python.config import _validation_sections as sections
 from src.python.core.constants import PROJECT_ROOT
-from src.python.analysis.drawdown_events import MIN_SPAN
+from src.python.core.drawdown_events import MIN_SPAN
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_config]
 
@@ -581,7 +581,7 @@ class TestValidateConfigEntryPoint(unittest.TestCase):
         n = val.validate_config(config)
         self.assertEqual(n, 0)
 
-    def test_none_config_fallsback(self):
+    def test_none_config_fallback(self):
         """config=None 时调用 get_config() 获取配置。"""
         with patch("src.python.config._core.get_config") as mock_get:
             mock_get.return_value = {}

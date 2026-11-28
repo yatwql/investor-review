@@ -75,7 +75,7 @@ class TestBuildPanelDegrade:
 
     def test_default_trading_day_counter_is_used(self, monkeypatch):
         import src.python.core.trading_calendar as cal
-        from src.python.analysis.fee_schedule_model import parse_redemption_fee_schedule
+        from src.python.core.fee_schedule_model import parse_redemption_fee_schedule
         from src.python.schemas.history import AccountSnapshot, SnapshotData, SnapshotHolding
 
         calls: list[tuple[str, str]] = []

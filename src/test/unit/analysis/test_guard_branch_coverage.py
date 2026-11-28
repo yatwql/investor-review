@@ -18,11 +18,14 @@ from __future__ import annotations
 
 import pytest
 
+from src.python.core import (
+    financial_indicator_extract as fie,
+    financial_statement_derive as fsd,
+)
+
 from src.python.analysis import (
     correlation,
     drawdown_warning,
-    financial_indicator_extract as fie,
-    financial_statement_derive as fsd,
     industry_beta,
     market_sentiment,
     metrics_returns,

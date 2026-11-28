@@ -13,7 +13,7 @@ import re
 
 from src.python.core.code_utils import is_six_digit_code
 from src.python.core.registry import get_report_section_keys
-from src.python.analysis.drawdown_events import MIN_SPAN
+from src.python.core.drawdown_events import MIN_SPAN
 
 logger = logging.getLogger("invest")
 
@@ -42,7 +42,7 @@ def _validate_fund_fee_fallback(config: dict, issues: int) -> int:
     fb, issues = _section(config, "fund_fee_fallback", dict, "费率兑底将被忽略", issues)
     if fb is _MISSING:
         return issues
-    from src.python.analysis.fee_schedule_model import build_config_fee_schedules
+    from src.python.core.fee_schedule_model import build_config_fee_schedules
 
     for code, entry in fb.items():
         if not (isinstance(code, str) and is_six_digit_code(code)):

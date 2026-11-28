@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.python.analysis.fee_schedule_model import (
+from src.python.core.fee_schedule_model import (
     build_config_fee_schedules,
     parse_purchase_fee_schedule,
     parse_redemption_fee_schedule,
@@ -23,7 +23,7 @@ from src.python.analysis.fee_schedule_model import (
     select_redemption_tier,
 )
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_analysis]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_core]
 
 
 class TestLabelBoundsRejection:

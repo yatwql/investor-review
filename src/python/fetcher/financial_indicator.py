@@ -148,7 +148,7 @@ def fetch_hithink_indicator_series(code: str, limit: int = DEFAULT_PERIODS) -> l
     与 :func:`fetch_latest_indicator`（链路单期）互补：三张报表各一次请求即得近若干期，
     使趋势/质量档在同源序列上仍可计算。任一报表缺失即返回空列表，由链路继续降级。
     """
-    from src.python.analysis.financial_statement_derive import derive_indicator_records
+    from src.python.core.financial_statement_derive import derive_indicator_records
     from src.python.providers import hithink
 
     symbol = hithink.to_thscode(code)
