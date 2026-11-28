@@ -29,22 +29,6 @@
       "replacement": "同 history_snapshot 原语下沉后改为引用 core"
     },
     {
-      "path": "src/python/analysis/prosperity_framework.py",
-      "name": "src.python.report.penetration",
-      "owner": "analysis（景气度框架）",
-      "reason": "景气度评分需复用穿透分类结果（基金→底层资产映射），该分类现耦合在 report/penetration",
-      "expiry": "2027-06-30",
-      "replacement": "把穿透的纯分类计算（不含 IO/渲染）下沉 analysis，report 侧改为消费"
-    },
-    {
-      "path": "src/python/analysis/prosperity_inputs.py",
-      "name": "src.python.report.penetration",
-      "owner": "analysis（景气度输入）",
-      "reason": "同上：输入装配复用穿透分类结果",
-      "expiry": "2027-06-30",
-      "replacement": "同上（穿透纯计算下沉后一并改引用）"
-    },
-    {
       "path": "src/python/fetcher/fund_fee.py",
       "name": "src.python.analysis.fee_schedule_model",
       "owner": "fetcher（基金费率）",

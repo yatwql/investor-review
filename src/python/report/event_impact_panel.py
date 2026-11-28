@@ -123,7 +123,7 @@ def _build_keyword_index(holdings: list[Any], penetrated_assets: list[dict] | No
     仅收录名称+代码双维判定为 A 股的直接持仓与穿透 A 股代码；基金等无日频股票
     行情的品种不入索引（其命中计入 unmatched，不硬算）。
     """
-    from src.python.report.penetration import classify_sector, sector_keywords
+    from src.python.core.sector import classify_sector, sector_keywords
 
     lookup: dict[str, list[tuple[str, str]]] = {}
     sector_kw = sector_keywords()

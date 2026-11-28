@@ -1,8 +1,6 @@
 """穿透计算分支契约测试。
 
 锁住的契约：
-  - 行业关键词表读盘失败（缺文件 / 损坏 JSON）时降级为空表，不抛出
-  - 空名称 → 板块判定返回 "--"
   - 基金层合并跳过无名称的成分项（不产生空键标的）
   - 直接持股合并进已有标的时复用同一标的并追加来源与市值
   - 行业分类数据按代码写入 sector_api / sector / concepts
@@ -30,23 +28,6 @@ def _holding(name: str, code: str, *, account: str = "证券") -> Holding:
 
 def _detail(code: str, name: str = "贵州茅台", market_value: float = 1000.0) -> DetailRow:
     return DetailRow(account="证券", name=name, code=code, market_value=market_value, cost=market_value)
-
-
-class TestSectorKeywordTable:
-    """行业关键词表的加载降级。"""
-
-    def test_missing_file_yields_empty_table(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(penetration, "_SECTOR_KEYWORDS_FILE", str(tmp_path / "absent.json"))
-        assert penetration._load_sector_keywords() == {}
-
-    def test_corrupt_file_yields_empty_table(self, tmp_path, monkeypatch):
-        broken = tmp_path / "sector_keywords.json"
-        broken.write_text("{not-json", encoding="utf-8")
-        monkeypatch.setattr(penetration, "_SECTOR_KEYWORDS_FILE", str(broken))
-        assert penetration._load_sector_keywords() == {}
-
-    def test_blank_name_classified_as_unknown_sector(self):
-        assert penetration.classify_sector("") == "--"
 
 
 class TestFundLayerMerge:

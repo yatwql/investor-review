@@ -4063,8 +4063,6 @@ lint 基线为 `E4`/`E7`/`E9`/`F`/`RUF100` + `ARG` + `BLE001` + `ANN001`（`pypr
 | `analysis/holding_change_events.py` | `report.history_snapshot` | 读历史快照 JSON 的读取/去重原语在 report/history_snapshot.py，事件推断需按同一口径读快照 | 抽出 core 级快照读取原语（读取 + 去重 + 归一化），report 侧只保留区块装配 |
 | `analysis/portfolio_evolution.py` | `report.history_snapshot` | 同上：演进趋势聚合直接复用 report 侧快照读取原语，避免两套读盘口径 | 同 history_snapshot 原语下沉后改为引用 core |
 | `analysis/snapshot_diff.py` | `report.history_snapshot` | 同上：差异计算按 report 侧同一份快照读取实现取数 | 同 history_snapshot 原语下沉后改为引用 core |
-| `analysis/prosperity_framework.py` | `report.penetration` | 景气度评分需复用穿透分类结果（基金→底层资产映射），该分类现耦合在 report/penetration | 把穿透的纯分类计算（不含 IO/渲染）下沉 analysis，report 侧改为消费 |
-| `analysis/prosperity_inputs.py` | `report.penetration` | 同上：输入装配复用穿透分类结果 | 同上（穿透纯计算下沉后一并改引用） |
 | `fetcher/fund_fee.py`<br>`providers/tiantian_purchase.py` | `analysis.fee_schedule_model` | 解析/派生原语现居 analysis 侧，取数适配器需复用同一口径 | 把纯解析/派生原语下沉 core（如 core/fee_schedule.py、core/financial_derive.py），analysis 与 fetcher 共同消费 |
 | `fetcher/financial_indicator.py`<br>`fetcher/financial_indicator_adapters.py` | `analysis.financial_statement_derive` | 解析/派生原语现居 analysis 侧，取数适配器需复用同一口径 | 把纯解析/派生原语下沉 core（如 core/fee_schedule.py、core/financial_derive.py），analysis 与 fetcher 共同消费 |
 | `fetcher/financial_indicator_adapters.py` | `analysis.financial_indicator_extract` | 解析/派生原语现居 analysis 侧，取数适配器需复用同一口径 | 把纯解析/派生原语下沉 core（如 core/fee_schedule.py、core/financial_derive.py），analysis 与 fetcher 共同消费 |
