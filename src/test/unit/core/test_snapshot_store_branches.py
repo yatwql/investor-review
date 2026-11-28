@@ -1,4 +1,4 @@
-"""快照持久化（`report/history_snapshot.py`）故障与空态分支契约测试。
+"""快照持久化（`report/snapshot_store.py`）故障与空态分支契约测试。
 
 锁住的契约：
   - 快照目录创建失败抛 OSError 且带目标路径（定位权限/路径问题不靠猜）
@@ -9,7 +9,7 @@
   - 目录列举异常降级为空列表；读取不存在的快照文件返回 None
 
 运行：
-  .venv/bin/python -m pytest src/test/unit/report/test_history_snapshot_branches.py -v
+  .venv/bin/python -m pytest src/test/unit/core/test_snapshot_store_branches.py -v
 """
 
 from __future__ import annotations
@@ -19,9 +19,9 @@ import time
 
 import pytest
 
-from src.python.report import history_snapshot as hs
+from src.python.core import snapshot_store as hs
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_core]
 
 
 def _touch_snapshot(directory: str, name: str, mtime_age_days: float = 0.0) -> str:

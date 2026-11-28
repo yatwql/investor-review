@@ -20,7 +20,7 @@ from __future__ import annotations
 import pytest
 
 from src.python.analysis.snapshot_diff import build_snapshot_diff
-from src.python.report.history_snapshot import save
+from src.python.core.snapshot_store import save
 from src.python.schemas.history import AccountSnapshot, SnapshotData, SnapshotHolding
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_analysis, pytest.mark.usefixtures("offline_external_sources")]

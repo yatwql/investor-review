@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
 > 文档版本：0.19.2-dev
-> **编号源**：`rf-next = 1269`（新增问题提出后更新为 +1；已用最大 rf-1268，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> **编号源**：`rf-next = 1271`（新增问题提出后更新为 +1；已用最大 rf-1270，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -69,6 +69,8 @@
 
 | # | 问题 | 修复方向 |
 | --- | --- | --- |
+| **rf-1269** | 分层越界存量项：板块分类原语（行业关键词表 + 名称→板块判定）居 `report/penetration.py`，纯计算层 `analysis/`（景气度评分与输入装配）只能反向依赖报告层 | 原语整块下沉 `core/sector.py`（关键词表加载/降级/只读访问/热重载 + `classify_sector`），report 与 analysis 双侧改为消费 core；分层例外表与文档表同步删除 2 行 |
+| **rf-1270** | 分层越界存量项：持仓快照存储（保存/加载/列表/清理 + 命名空间隔离）整体居 `report/history_snapshot.py`，`analysis/` 三处与 `web/`、`scripts/` 均为读快照而反向依赖报告层 | 整模块迁至 `core/snapshot_store.py`（只依赖 core 与 schemas，无报告侧耦合），全仓引用改指 core；纯存储用例随模块归位 `unit/core` 并按模块改名；分层例外表与文档表同步删除 3 行 |
 | **rf-1268** | 两个包的门面与其子模块在**顶层**互相导入（`config` 门面 ↔ `_core`/`_llm_settings`，`llm/fact_checker` 门面 ↔ `_numerical`）：导入能否成功取决于包初始化走到第几行，调换 `__init__` 里顶层导入的顺序或新增一行就可能变成 `ImportError`，且报错点与病因相距很远 | 子模块侧改用 `import 包.子模块 as 名` 直取子模块（不经包门面转手），环消除；新增 `src/test/unit/core/test_import_cycles.py` 以顶层导入图的强连通分量为守卫，防再次引入 |
 
 ### 归档档案

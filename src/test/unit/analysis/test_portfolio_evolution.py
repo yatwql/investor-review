@@ -23,7 +23,7 @@ from src.python.analysis.portfolio_evolution import (
     _holding_weight,
     build_evolution_data,
 )
-from src.python.report.history_snapshot import save
+from src.python.core.snapshot_store import save
 from src.python.schemas.history import AccountSnapshot, SnapshotData, SnapshotHolding
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_analysis]

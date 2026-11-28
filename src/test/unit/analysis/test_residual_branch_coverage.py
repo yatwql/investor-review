@@ -24,7 +24,7 @@ from src.python.analysis import (
     rebalance_advisor,
 )
 from src.python.analysis.event_window_impact import compute_event_impact
-from src.python.report.history_snapshot import save
+from src.python.core.snapshot_store import save
 from src.python.schemas.history import AccountSnapshot, SnapshotData, SnapshotHolding
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_analysis]
@@ -231,8 +231,8 @@ def test_snapshot_diff_skips_baseline_equal_to_latest(monkeypatch):
         total_pnl=0.0,
         timestamp="20260105T150000",
     )
-    monkeypatch.setattr("src.python.report.history_snapshot.load_all", lambda _ns=None: [snap, snap])
-    monkeypatch.setattr("src.python.report.history_snapshot.load_comparison_baseline", lambda *_a: snap)
+    monkeypatch.setattr("src.python.core.snapshot_store.load_all", lambda _ns=None: [snap, snap])
+    monkeypatch.setattr("src.python.core.snapshot_store.load_comparison_baseline", lambda *_a: snap)
 
     result = snapshot_diff.build_snapshot_diff(min_snapshots=1)
 

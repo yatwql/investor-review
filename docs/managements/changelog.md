@@ -11,6 +11,10 @@
 ### 修复
 - **包门面与子模块的顶层导入环（rf-1268）**：`config` 门面 ↔ `_core`/`_llm_settings`、`llm/fact_checker` 门面 ↔ `_numerical` 两处顶层互相导入，导入成功与否取决于包初始化执行到第几行——调整 `__init__` 顶层导入顺序即可变成 `ImportError`，且报错点与病因相距很远。子模块侧改为 `import 包.子模块 as 名` 直接引子模块，环消除；新增 `src/test/unit/core/test_import_cycles.py` 守卫（按顶层导入图求强连通分量，函数内延迟导入不算——那是刻意打断环的手段），已验证旧形态会被判红
 
+### 变更
+- **板块分类原语下沉 `core/sector.py`（rf-1269）**：行业关键词表加载（缺文件/损坏降级）、只读访问器、热重载与「名称 → 板块」判定整块移出报告层，`report/` 与 `analysis/` 两侧共同消费 core——纯计算层不再反向依赖报告层；分层例外表与 `technical.md` 的存量例外表各减 2 行
+- **持仓快照存储下沉 `core/snapshot_store.py`（rf-1270）**：保存/加载/列表/清理与命名空间隔离整体迁入 core（只依赖 `core` 与 `schemas`，零报告侧耦合），`analysis/` 三处、`web/`、`scripts/` 的读快照路径改指 core；纯存储用例按被测模块归位 `unit/core` 并按新模块名重命名；分层例外表与存量例外表各减 3 行
+
 ### 测试
 - **新增顶层导入环守卫**：`src/test/unit/core/test_import_cycles.py` 两条用例（全图无环 + 包门面与子模块不互导），只断言结构关系，拆包/新增模块自动跟随
 

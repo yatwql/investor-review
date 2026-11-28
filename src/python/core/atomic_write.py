@@ -33,7 +33,7 @@
     core/jsonl_store.py                  → prefix=".jsonl_"     tag="jsonl"
                                             （news_dedup 经 append_jsonl_atomic_many 走此入口）
     core/provider_registry.py            → 熔断状态
-    report/history_snapshot.py           → 持仓快照
+    core/snapshot_store.py               → 持仓快照
     config/features.py                   → 功能开关覆写
     analysis/_silence.py                 → 静默期状态
     analysis/circuit_breaker_wrapper.py  → 指标断路状态

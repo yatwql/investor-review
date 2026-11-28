@@ -52,7 +52,7 @@ def is_unmodeled_cost_code(name: str, code: str) -> bool:
 def _load_snapshots() -> list[Any]:
     """本机持仓快照历史（批次重放输入）；加载失败 → 空列表（卖出腿费率判未知）。"""
     try:
-        from src.python.report.history_snapshot import load_all
+        from src.python.core.snapshot_store import load_all
 
         return load_all()
     except Exception:  # noqa: BLE001 — 快照缺失/损坏不得阻断面板（仅兜 Exception）

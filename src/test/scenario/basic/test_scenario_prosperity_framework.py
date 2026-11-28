@@ -87,7 +87,7 @@ class TestProsperityFrameworkPipeline:
         monkeypatch.setattr("src.python.config.features.is_feature_enabled", lambda _k: enabled)
         monkeypatch.setattr("src.python.analysis.liquidity.check_liquidity", lambda *_a, **_k: [])
         monkeypatch.setattr(
-            "src.python.report.history_snapshot.load_all",
+            "src.python.core.snapshot_store.load_all",
             lambda *_a, **_k: _snapshots() if snapshots is None else snapshots,
         )
 

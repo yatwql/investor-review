@@ -21,12 +21,12 @@ import os
 import pytest
 
 import src.python.core.constants as core_constants
-from src.python.report.history_snapshot import load_comparison_baseline, save
+from src.python.core.snapshot_store import load_comparison_baseline, save
 from src.python.schemas.history import AccountSnapshot, SnapshotData, SnapshotHolding
 
 pytestmark = [
     pytest.mark.unit,
-    pytest.mark.unit_report,
+    pytest.mark.unit_core,
     pytest.mark.edge,
     pytest.mark.usefixtures("offline_external_sources"),
 ]

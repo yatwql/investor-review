@@ -5,30 +5,6 @@
   "dynamic-target": [],
   "layer-inversion": [
     {
-      "path": "src/python/analysis/holding_change_events.py",
-      "name": "src.python.report.history_snapshot",
-      "owner": "analysis（持仓变动事件）",
-      "reason": "读历史快照 JSON 的读取/去重原语在 report/history_snapshot.py，事件推断需按同一口径读快照",
-      "expiry": "2027-06-30",
-      "replacement": "抽出 core 级快照读取原语（读取 + 去重 + 归一化），report 侧只保留区块装配"
-    },
-    {
-      "path": "src/python/analysis/portfolio_evolution.py",
-      "name": "src.python.report.history_snapshot",
-      "owner": "analysis（组合演进）",
-      "reason": "同上：演进趋势聚合直接复用 report 侧快照读取原语，避免两套读盘口径",
-      "expiry": "2027-06-30",
-      "replacement": "同 history_snapshot 原语下沉后改为引用 core"
-    },
-    {
-      "path": "src/python/analysis/snapshot_diff.py",
-      "name": "src.python.report.history_snapshot",
-      "owner": "analysis（快照差异）",
-      "reason": "同上：差异计算按 report 侧同一份快照读取实现取数",
-      "expiry": "2027-06-30",
-      "replacement": "同 history_snapshot 原语下沉后改为引用 core"
-    },
-    {
       "path": "src/python/fetcher/fund_fee.py",
       "name": "src.python.analysis.fee_schedule_model",
       "owner": "fetcher（基金费率）",

@@ -184,7 +184,7 @@ def build_holding_change_events(
     Returns:
         同 `extract_change_events` 契约
     """
-    from src.python.report.history_snapshot import load_all
+    from src.python.core.snapshot_store import load_all
 
     return extract_change_events(load_all(snapshot_namespace), min_periods=min_periods)
 

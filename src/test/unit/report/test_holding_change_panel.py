@@ -35,7 +35,7 @@ from src.python.report.holding_change_panel import (
     build_holding_change_view,
     write_holding_change_sheet,
 )
-from src.python.report.history_snapshot import save
+from src.python.core.snapshot_store import save
 from src.python.schemas.history import AccountSnapshot, SnapshotData, SnapshotHolding
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report, pytest.mark.usefixtures("offline_external_sources")]
@@ -160,7 +160,7 @@ class TestBuildContract:
         _save_four_periods()
         import os
 
-        from src.python.report.history_snapshot import _list_snapshot_files
+        from src.python.core.snapshot_store import _list_snapshot_files
 
         def _mtimes() -> dict[str, float]:
             return {f: os.path.getmtime(f) for f in _list_snapshot_files()}

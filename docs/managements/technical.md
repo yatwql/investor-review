@@ -2081,7 +2081,7 @@ get_combined_timeseries()
 
 **Excel 渲染**：`portfolio_history_drawdown`（组合历史走势与回撤）页签分「走势表 + 回撤矩阵 + 危机区间标注 + 月度收益日历 + 风险调整超额」五区块——走势表每基准一列（归一化值）+ 指标汇总矩阵（累计收益/最大回撤/年化波动率/起止日，仅一份），回撤矩阵为独立回撤事件明细（含恢复耗时）+ 尾部风险统计（VaR(95/99)/最大单日跌幅/最长连续下跌/最大跌幅后恢复五行，百分比按 FMT_PERCENT 存小数，样本不足写「样本不足」占位），危机区间标注为静态日期表（2015 股灾/2018 贸易摩擦/2020 疫情/2022 调整/2025 关税冲击，`CRISIS_INTERVALS` 单一来源）+ 区间统计——回放态（开关 `crisis_replay`）升级为双层列（组合区间收益/指数区间收益/指数区间最大回撤，组合窗内才算组合层，窗外行状态标「组合窗口外」），月度收益日历为年 × 月红绿格（正值红字/负值绿字，`return_pct/100` 配 FMT_PERCENT）+ 口径与胜亏平统计说明行（数据源 `history_data.monthly_returns`，as-if 口径、双口径并排预留），风险调整超额块（开关 `risk_adjusted_excess`）为基准 IR/TE/年化超额 + 12/24 月胜率 + 完整月数表 + 滚动 250 日超额序列 + 口径说明行，样本不足逐项落「数据不足」占位、整块不随开关写。
 
-#### 持仓快照存储与清理（history_snapshot.py）
+#### 持仓快照存储与清理（core/snapshot_store.py）
 
 ```
 save():
@@ -3804,7 +3804,7 @@ report/orchestrator.py (报告编排层)
   → report/market_value.py (行情获取)
   → fetcher/index.py (指数)
   → report/penetration.py (资产穿透)
-  → report/history_snapshot.py (持仓快照)
+  → core/snapshot_store.py (持仓快照)
   → report/portfolio_history.py (历史走势)
   → report/news_correlation.py (新闻关联)
   → llm/generators_orchestrator.py (LLM 编排)
@@ -4013,7 +4013,7 @@ lint 基线为 `E4`/`E7`/`E9`/`F`/`RUF100` + `ARG` + `BLE001` + `ANN001`（`pypr
 | `report/excel_writer.py:98` | `%Y%m%d` | `continue` 跳过该目录 | try 体内含 `rmtree`/日志，非纯解析 |
 | `report/fund_manager_analysis.py:130` | `%Y-%m-%d` | 三个 `changed_*` 置 `True` | 失败语义是**默认态赋值**（保守判「有变化」） |
 | `report/fund_manager_analysis.py:152` | `%Y-%m-%d` | `pass`（保留已算标记） | 失败即静默续算，返回 `None` 无意义 |
-| `report/history_snapshot.py:223` | `%Y%m%dT%H%M%S` | `None` | 格式集合与三组均不同（紧凑时间戳） |
+| `core/snapshot_store.py:223` | `%Y%m%dT%H%M%S` | `None` | 格式集合与三组均不同（紧凑时间戳） |
 | `report/holding_change_panel.py:543` | 双前缀（8 位紧凑 / ISO 前 10 位） | `None` | 内部分支双格式，非单一格式集合 |
 | `report/holdings_freshness.py:42` | 多格式（`_DATE_FORMATS`） | 试下一格式 | 多格式链，契约明示「宁可放弃也不误判陈旧」 |
 | `report/market_value.py:275,276` | `%Y-%m-%d` | `pass` 续算 | 失败后继续走后续价格类型判定，非返回值 |
@@ -4060,9 +4060,6 @@ lint 基线为 `E4`/`E7`/`E9`/`F`/`RUF100` + `ARG` + `BLE001` + `ANN001`（`pypr
 
 | 违规文件 | 被依赖的上层模块 | 暂不下沉的理由 | 收敛方向 |
 |:---|:---|:---|:---|
-| `analysis/holding_change_events.py` | `report.history_snapshot` | 读历史快照 JSON 的读取/去重原语在 report/history_snapshot.py，事件推断需按同一口径读快照 | 抽出 core 级快照读取原语（读取 + 去重 + 归一化），report 侧只保留区块装配 |
-| `analysis/portfolio_evolution.py` | `report.history_snapshot` | 同上：演进趋势聚合直接复用 report 侧快照读取原语，避免两套读盘口径 | 同 history_snapshot 原语下沉后改为引用 core |
-| `analysis/snapshot_diff.py` | `report.history_snapshot` | 同上：差异计算按 report 侧同一份快照读取实现取数 | 同 history_snapshot 原语下沉后改为引用 core |
 | `fetcher/fund_fee.py`<br>`providers/tiantian_purchase.py` | `analysis.fee_schedule_model` | 解析/派生原语现居 analysis 侧，取数适配器需复用同一口径 | 把纯解析/派生原语下沉 core（如 core/fee_schedule.py、core/financial_derive.py），analysis 与 fetcher 共同消费 |
 | `fetcher/financial_indicator.py`<br>`fetcher/financial_indicator_adapters.py` | `analysis.financial_statement_derive` | 解析/派生原语现居 analysis 侧，取数适配器需复用同一口径 | 把纯解析/派生原语下沉 core（如 core/fee_schedule.py、core/financial_derive.py），analysis 与 fetcher 共同消费 |
 | `fetcher/financial_indicator_adapters.py` | `analysis.financial_indicator_extract` | 解析/派生原语现居 analysis 侧，取数适配器需复用同一口径 | 把纯解析/派生原语下沉 core（如 core/fee_schedule.py、core/financial_derive.py），analysis 与 fetcher 共同消费 |

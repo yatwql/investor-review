@@ -131,7 +131,7 @@ def build_evolution_data(
           - top_holdings: [{code, name, weights:[各期占比%], present_count}] 按末期权重降序
           - reason: available=False 时的降级原因
     """
-    from src.python.report.history_snapshot import load_all
+    from src.python.core.snapshot_store import load_all
 
     raw = load_all(snapshot_namespace)
     snapshots = _dedup_by_date(raw)

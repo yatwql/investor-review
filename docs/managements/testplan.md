@@ -549,10 +549,10 @@
 | R-EVO-02 | `src/test/unit/analysis/test_portfolio_evolution.py` | 批 4 |
 | R-EVO-03 | `src/test/unit/report/test_evolution_sheet.py` + `src/test/unit/report/test_evolution_html.py` | 批 4 |
 | R-EVO-04 | `src/test/unit/config/test_features.py` + `src/test/unit/report/test_section_visibility.py` | 批 4 |
-| R-SNP-01 | `src/test/unit/report/test_history_snapshot_namespace.py` + `src/test/unit/report/test_snapshot_baseline.py` + `src/test/unit/report/test_snapshot_baseline_edge.py` | 批 4 |
-| R-SNP-02 | `src/test/unit/handlers/test_handlers_cache.py` + `src/test/unit/report/test_history_snapshot_namespace.py` | 批 4 |
-| R-SNP-03 | `src/test/unit/report/test_history_snapshot_namespace.py` | 批 4 |
-| R-SNP-04 | `src/test/unit/report/test_history_snapshot_namespace.py` | 批 4 |
+| R-SNP-01 | `src/test/unit/core/test_snapshot_store_namespace.py` + `src/test/unit/core/test_snapshot_store_baseline.py` + `src/test/unit/core/test_snapshot_store_baseline_edge.py` | 批 4 |
+| R-SNP-02 | `src/test/unit/handlers/test_handlers_cache.py` + `src/test/unit/core/test_snapshot_store_namespace.py` | 批 4 |
+| R-SNP-03 | `src/test/unit/core/test_snapshot_store_namespace.py` | 批 4 |
+| R-SNP-04 | `src/test/unit/core/test_snapshot_store_namespace.py` | 批 4 |
 | R-SNP-05 | `src/test/unit/analysis/test_snapshot_diff.py` + `src/test/unit/report/test_excel_report_structure.py` + `src/test/unit/llm/test_llm_prompt_builders.py` | 批 4 |
 | R-SNP-06 | `src/test/unit/analysis/test_snapshot_diff_edge.py` | 批 4 |
 | R-CFL-01 | `src/test/unit/analysis/test_cost_flow.py` | 批 4 |

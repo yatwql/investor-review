@@ -18,8 +18,8 @@
 | 测试用例 | — | — | 18,009 个 | `pytest --collect-only` 统计（`scripts/test-collect-coverage.py` 实时收集快照，不含 opt-in live 套件） |
 | 用户文档 | Markdown | 15 | 7,086 | 含 README.md；行数为 README + manuals 之和 |
 | ├ manuals/ | 用户手册分册 | 14 | 6,849 | 配置/faq/快速上手/TUI/CLI/Web 三种模式指南等 |
-| 项目文档 | Markdown | 226 | 76,092 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
-| ├ managements/ | 管理文档 | 13 | 15,090 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
+| 项目文档 | Markdown | 226 | 76,095 | 含 CLAUDE.md；md 口径为 CLAUDE.md + `managements/` + `plan/` + 版本归档之和（分项见下方三行），py/txt 不计行 |
+| ├ managements/ | 管理文档 | 13 | 15,093 | 变更日志/目录树/测试计划/技术设计/开发者指南等 |
 | ├ archive/ | 版本归档 | 203 | 59,290 | 各版本 changelog/plan/review-findings 与设计文档归档（含 Vibe-Trading/gs-quant/TradingAgents 借鉴批候选研究、基金申购限购三份设计与 LLM 成本调节/自检/源指定设计） |
 | ├ plan/ | 中间设计文件 | 9 | ~1616 | 在办设计文档（扁平存放）：Jev 新闻关联判定（对照评测 + 类型化通道设计）+ 决策跨期反思闭环设计 + TUI 交互改进（议题 + 第一/二批实施方案） + PanWatch 借鉴分析（含评估政策单源化与 LLM 复盘契约两份设计） |
 | └ tmp/ | 临时文件 | — | — | 调试产物、迁移暂存（git 忽略，不计入统计） |
@@ -404,7 +404,6 @@ investor-review/
 │   │   │   ├── portfolio_history_drawdown_sheet.py # 组合历史走势与回撤 Excel 页签（一章五区块：走势表 + 回撤矩阵 + 危机区间标注 + 月度收益日历 + 风险调整超额）
 │   │   │   ├── position_structure_sheet.py # 持仓结构与集中度 Excel 页签（一章三区块：重合度 + 相关性 + 集中度）
 │   │   │   ├── _history_quality.py   #   历史走势数据质量校验
-│   │   │   ├── history_snapshot.py   #   持仓快照管理（保留 180 天）
 │   │   │   ├── holdings_freshness.py #   基金持仓报告期时效判定（完整季度数口径 + 陈旧阈值）
 │   │   │   ├── _snapshot.py          #   快照与历史数据（持仓快照/环比差异/组合历史走势）
 │   │   │   ├── summary_highlights.py #   摘要区本期要点派生（快照 diff 单源 → 指标环比行 + 关键变化 Top N，开关 summary_highlights）
@@ -504,6 +503,7 @@ investor-review/
 │   │   │   ├── trading_calendar.py   #   交易日历原语（唯一实现：交易日判定/最近及前一交易日/交易日区间计数，akshare 日历缓存；各层共用，report/market_value.py re-export 兼容面）
 │   │   │   ├── text_safety.py        #   文本安全边界（孤立代理项净化：合法代理对折叠、孤立项→U+FFFD；LLM 请求/响应与用户问题统一过关）
 │   │   │   ├── sector.py             #   板块分类原语（行业关键词表单源加载/名称→板块判定/热重载，report 穿透与 analysis 景气度共用）
+│   │   │   ├── snapshot_store.py     #   持仓快照持久化（保存/加载/列表/清理 + 命名空间隔离 + 保留期与数量裁剪，report/web/analysis 共用）
 │   │   │   ├── reader.py             #   持仓 xlsx 文件读取
 │   │   │   ├── computation_registry.py #   计算模块注册表（纯计算/分析模块元信息，registry.py re-export 保持访问面）
 │   │   │   ├── concurrency.py        #   进程级并发预算（多池共享天花板：建池分配/缩池告警/perf 计数）
@@ -887,6 +887,11 @@ investor-review/
 │       │   │   ├── test_cross_layer_constants.py # 跨层常量单源守卫（退出码/东方财富端点/年化交易日/份额容差）
 │       │   │   ├── test_import_cycles.py    #   顶层导入环守卫（全图强连通分量无环 + 包门面与子模块不互导）
 │       │   │   ├── test_sector.py           #   板块分类原语（关键词表缺文件/损坏降级、命中与未命中、访问器副本隔离、热重载）
+│       │   │   ├── test_snapshot_store_branches.py # 快照持久化故障与空态（目录建失败/原子写失败/保留期与数量兜底删除/列举降级）
+│       │   │   ├── test_snapshot_store_namespace.py      #   快照命名空间读写隔离测试
+│       │   │   ├── test_snapshot_store_namespace_edge.py #   快照命名空间边缘场景（非法段/路径穿越拒绝）
+│       │   │   ├── test_snapshot_store_baseline.py #   环比比对基线（跳过同一交易日/取最近异日快照）
+│       │   │   ├── test_snapshot_store_baseline_edge.py # 比对基线边缘场景
 │       │   │   ├── test_provider_registry.py #   数据源注册中心测试
 │       │   │   ├── test_registry_breaker_state_faults.py #   熔断状态加载容错（状态文件损坏/条目过期/未注册 Provider）、链式冷却恢复、文件缓存回退与日期失配标记
 │       │   │   ├── test_reader.py           #   持仓文件读取测试
@@ -1267,15 +1272,10 @@ investor-review/
 │       │   │   ├── test_fund_performance_branches.py # 基金业绩页签分支（评级深绿标色/排名全失败降级/候选比较子表四种标注行）
 │       │   │   ├── test_fund_style.py             #   基金风格判定测试
 │       │   │   ├── test_fund_style_classify_branches.py # 基金风格判定降级（无市值代码段估算/扩展取数异常/行业 PE 降级/批量预取单路异常）
-│       │   │   ├── test_history_snapshot_branches.py # 快照持久化故障与空态（目录建失败/原子写失败/保留期与数量兜底删除/列举降级）
-│       │   │   ├── test_history_snapshot_namespace.py      #   历史快照命名空间测试
-│       │   │   ├── test_history_snapshot_namespace_edge.py #   历史快照命名空间边缘场景
 │       │   │   ├── test_holdings_freshness.py      #   持仓报告期时效判定测试（写法兼容/季度数边界/阈值）
 │       │   │   ├── test_snapshot_namespace_consumers.py    #   快照命名空间消费方测试
 │       │   │   ├── test_snapshot_source_guard.py #   持仓源守卫（正式源判定/非正式源不落盘不比对/正式源行为不变/命名空间域不受限）
 │       │   │   ├── test_snapshot_source_guard_edge.py #   持仓源守卫边缘（解析异常 fail-closed/缺省回退/全局配置）
-│       │   │   ├── test_snapshot_baseline.py   #   环比比对基线（跨交易日选择/同日跳过/回退最新/域隔离/diff 透传）
-│       │   │   ├── test_snapshot_baseline_edge.py #   比对基线边缘（周末/盘前归属/节假日日历/损坏顺延/坏时间戳跳过）
 │       │   │   ├── test_style_factor_sheet.py     #   风格与因子分析页签呈现（一章三区块：风格表+因子回归+行业 Beta）
 │       │   │   ├── test_correlation_html.py       #   持仓关系矩阵章节（相关性/重合度区块）HTML 呈现
 │       │   │   ├── test_position_structure_sheet.py # 持仓结构与集中度页签（三区块 + 合并等价 + OR 可见性）

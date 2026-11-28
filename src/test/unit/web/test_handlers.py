@@ -349,7 +349,7 @@ class TestInputModeDispatch:
     @patch("src.python.report.orchestrator.generate_report")
     def test_trial_default_snapshot_web(self, mock_gen, tmp_path):
         """试算默认：上传→run（不带 mode）→ 快照落 web/，主目录零新增，temp 清理。"""
-        import src.python.report.history_snapshot as hs
+        import src.python.core.snapshot_store as hs
 
         mock_gen.side_effect = self._capture_side_effect
         result = upload.save_upload(BytesIO(_make_holdings_xlsx()), "持仓.xlsx")
@@ -374,7 +374,7 @@ class TestInputModeDispatch:
         # 持仓源守卫按真实 data/holdings/ 判定；本用例以 tmp 隔离目录模拟正式
         # 持仓目录，显式声明正式源以验证 web 正式模式的共享快照接线
         monkeypatch.setattr("src.python.config.is_formal_holdings_source", lambda _cfg=None: True)
-        import src.python.report.history_snapshot as hs
+        import src.python.core.snapshot_store as hs
 
         mock_gen.side_effect = self._capture_side_effect
         formal_path = os.path.join(holdings_path_isolated["holdings_dir"], holdings_path_isolated["holdings_filename"])
@@ -410,7 +410,7 @@ class TestInputModeDispatch:
         # 持仓源守卫按真实 data/holdings/ 判定；本用例以 tmp 隔离目录模拟正式
         # 持仓目录，显式声明正式源以验证 web 正式模式的共享快照接线
         monkeypatch.setattr("src.python.config.is_formal_holdings_source", lambda _cfg=None: True)
-        import src.python.report.history_snapshot as hs
+        import src.python.core.snapshot_store as hs
 
         mock_gen.side_effect = self._capture_side_effect
         formal_dir = holdings_path_isolated["holdings_dir"]

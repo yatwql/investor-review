@@ -126,9 +126,9 @@ class TestCaptureSnapshotSourceGuard:
         }
         reporter = MagicMock()
         with (
-            patch("src.python.report.history_snapshot.save") as mock_save,
-            patch("src.python.report.history_snapshot.load_comparison_baseline") as mock_load,
-            patch("src.python.report.history_snapshot.prune") as mock_prune,
+            patch("src.python.core.snapshot_store.save") as mock_save,
+            patch("src.python.core.snapshot_store.load_comparison_baseline") as mock_load,
+            patch("src.python.core.snapshot_store.prune") as mock_prune,
         ):
             result = capture_snapshot([_holding()], [_detail()], config, reporter)
         assert result is None, "非正式源不得产出环比数据（同首次运行口径）"
@@ -145,9 +145,9 @@ class TestCaptureSnapshotSourceGuard:
         config = {"history": {"snapshot_retention_days": 60, "snapshot_max_count": 365}}
         reporter = MagicMock()
         with (
-            patch("src.python.report.history_snapshot.load_comparison_baseline", return_value=None) as mock_load,
-            patch("src.python.report.history_snapshot.save") as mock_save,
-            patch("src.python.report.history_snapshot.prune") as mock_prune,
+            patch("src.python.core.snapshot_store.load_comparison_baseline", return_value=None) as mock_load,
+            patch("src.python.core.snapshot_store.save") as mock_save,
+            patch("src.python.core.snapshot_store.prune") as mock_prune,
         ):
             result = capture_snapshot([_holding()], [_detail()], config, reporter)
         mock_load.assert_called_once()
@@ -164,9 +164,9 @@ class TestCaptureSnapshotSourceGuard:
         config = {"history": {"snapshot_retention_days": 60, "snapshot_max_count": 365}}
         reporter = MagicMock()
         with (
-            patch("src.python.report.history_snapshot.load_comparison_baseline", return_value=_old_snapshot()),
-            patch("src.python.report.history_snapshot.save") as mock_save,
-            patch("src.python.report.history_snapshot.prune"),
+            patch("src.python.core.snapshot_store.load_comparison_baseline", return_value=_old_snapshot()),
+            patch("src.python.core.snapshot_store.save") as mock_save,
+            patch("src.python.core.snapshot_store.prune"),
         ):
             result = capture_snapshot([_holding()], [_detail(mv=1200.0)], config, reporter)
         assert result is not None
@@ -185,9 +185,9 @@ class TestCaptureSnapshotSourceGuard:
         }
         reporter = MagicMock()
         with (
-            patch("src.python.report.history_snapshot.load_comparison_baseline", return_value=None),
-            patch("src.python.report.history_snapshot.save") as mock_save,
-            patch("src.python.report.history_snapshot.prune") as mock_prune,
+            patch("src.python.core.snapshot_store.load_comparison_baseline", return_value=None),
+            patch("src.python.core.snapshot_store.save") as mock_save,
+            patch("src.python.core.snapshot_store.prune") as mock_prune,
         ):
             capture_snapshot([_holding()], [_detail()], config, reporter, snapshot_namespace="web")
         mock_save.assert_called_once()

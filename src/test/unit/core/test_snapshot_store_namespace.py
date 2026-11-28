@@ -17,10 +17,10 @@ import os
 
 import pytest
 
-from src.python.report import history_snapshot as hs
+from src.python.core import snapshot_store as hs
 from src.python.schemas.history import AccountSnapshot, SnapshotData, SnapshotHolding
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_core]
 
 
 def _holding(code: str, name: str, mv: float, cost: float) -> SnapshotHolding:

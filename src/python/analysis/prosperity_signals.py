@@ -35,7 +35,7 @@ def _snapshot_holding_codes(snap: Any) -> set[str]:
     """从一期快照中提取持仓代码集合。
 
     快照唯一形态是 `accounts[*].holdings[*].code`（`schemas/history.SnapshotData`，
-    来源 `history_snapshot.load_all()`）；为便于注入，dict 形态同样只认
+    来源 `snapshot_store.load_all()`）；为便于注入，dict 形态同样只认
     `{"accounts": [{"holdings": [...]}]}`，不接受把持仓摊在顶层的其它写法。
 
     任何字段缺失/类型异常一律按「无该字段」处理（返回值可能为空集），
