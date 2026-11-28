@@ -51,6 +51,8 @@ _POLICY_LOCK = threading.Lock()
 #: 本线程门禁等待累加器（见 pop_thread_pacing_wait）
 _TLS = threading.local()
 _LOADED = False
+#: 装载时的线路配置修订序号（`config.get_providers_revision()`）；写盘后序号变化即重载
+_LOADED_REVISION: int | None = None
 
 
 class PacingPolicy:
@@ -122,18 +124,31 @@ def register_policies(providers: list[dict[str, Any]] | None) -> None:
         _POLICIES.clear()
         _POLICIES.update(parsed)
         _LOADED = True
+        global _LOADED_REVISION
+        _LOADED_REVISION = _providers_revision()
     if parsed:
         logger.info("[llm/pacing] 已装载端点节流策略: %s", {k: repr(v) for k, v in parsed.items()})
 
 
-def _ensure_loaded() -> None:
-    """惰性装载（供未显式调用 register_policies 的入口，如单测/脚本）。
+def _providers_revision() -> int | None:
+    """线路配置修订序号（配置层不可用时返回 None，按「无变化」处理）。"""
+    try:
+        from src.python.config import get_providers_revision
 
-    策略与 ``_provider_list`` 同源：生产路径在 ``get_llm_config`` 组装时已调用
-    :func:`register_policies`，此处只兑底未经过配置加载的入口，故直接读同一份
-    ``_provider_list``（引用不存在的访问器会 ImportError → 静默按无约束处理）。
+        return int(get_providers_revision())
+    except Exception:  # noqa: BLE001 — 配置层不可用不应影响节流主链路
+        return None
+
+
+def _ensure_loaded() -> None:
+    """惰性装载 / 按需重载（单测与脚本从不显式调 `register_policies` 时走这里）。
+
+    策略与 ``_provider_list`` 同源：此处读同一份 ``_provider_list``（引用不存在的
+    访问器会 ImportError → 静默按无约束处理）。配置写盘会递增修订序号，序号变化即
+    重载，故配置层无需反向调用本模块（分层单向）。
     """
-    if _LOADED:
+    revision = _providers_revision()
+    if _LOADED and revision == _LOADED_REVISION:
         return
     try:
         from src.python.config import get_llm_config

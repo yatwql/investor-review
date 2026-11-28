@@ -55,6 +55,7 @@ from src.python.config._llm_providers import (
     _get_llm_key_path as get_llm_key_path,
     _load_llm_providers as load_llm_providers,
     get_llm_providers,
+    get_providers_revision,
     order_providers_by_chain,
     write_llm_providers,
 )
@@ -136,6 +137,7 @@ __all__ = [
     # LLM 配置
     "get_llm_config",
     "get_llm_providers",
+    "get_providers_revision",
     "write_llm_providers",
     "get_llm_settings_path",
     "read_llm_settings_file",

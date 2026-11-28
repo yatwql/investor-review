@@ -30,6 +30,15 @@ _CHAIN_LABEL_RE = re.compile(r"^(\s*//\s*)(主|备|辅|次)(\s*[：:])")
 
 _VALID_STRATEGIES = frozenset({"priority", "weighted", "cost_first", "fallback_only"})
 
+#: 线路配置修订序号：每次 ``write_llm_providers`` 递增一次。上层（`llm/pacing.py`）以它
+#: 作为「策略需要重载」的判据，配置层只发信号、不直接调用 LLM 侧实现（分层单向）。
+_PROVIDERS_REVISION = 0
+
+
+def get_providers_revision() -> int:
+    """当前线路配置修订序号（写盘即 +1，进程内单调递增）。"""
+    return _PROVIDERS_REVISION
+
 
 def _get_llm_providers_path() -> str:
     """返回 llm_providers.json 路径（优先读取 config.json 配置）。"""
@@ -324,12 +333,6 @@ def _inject_provider_chain_data(config: dict) -> dict:
     provider_list = _parse_providers_list(raw_providers)
     config["_provider_list"] = provider_list
 
-    # 端点级节流/并发策略：由 provider 条目自带的 pacing 段驱动（配置为唯一事实来源）。
-    # 无声明 → 无约束（行为与未引入本机制时逐字节一致）。
-    from src.python.llm.pacing import register_policies
-
-    register_policies(provider_list)
-
     # strategy
     strategy = raw_providers.get("strategy", _DEFAULT_LLM_PROVIDERS["strategy"])
     if strategy not in _VALID_STRATEGIES:
@@ -478,6 +481,9 @@ def write_llm_providers(config: dict, path: str) -> None:
         os.chmod(path, 0o600)
     except OSError:
         pass  # Windows 可能不支持完整 chmod，忽略
+
+    global _PROVIDERS_REVISION
+    _PROVIDERS_REVISION += 1
 
     # 写后立即失效 LLM 合并缓存：同进程内状态行/[S]/[C]/运行时链序下一次
     # get_llm_config() 即重读三文件，不依赖 mtime 判据追赶（等长改写时判据可能无感）。

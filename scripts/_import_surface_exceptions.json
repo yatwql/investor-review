@@ -29,22 +29,6 @@
       "replacement": "市值核算与价格类型判定下沉 core（交易日原语已下沉，剩余为市值派生）"
     },
     {
-      "path": "src/python/config/_llm_providers.py",
-      "name": "src.python.llm.pacing",
-      "owner": "config（LLM 线路配置）",
-      "reason": "线路配置落盘后需即时注册端点节流策略",
-      "expiry": "2027-06-30",
-      "replacement": "LLM 侧提供注册回调，config 只发配置事件（不直接调 llm）"
-    },
-    {
-      "path": "src/python/config/_validation_llm.py",
-      "name": "src.python.llm.depth_profile",
-      "owner": "config（LLM 参数校验）",
-      "reason": "思考档位枚举与默认值由 llm 侧单一真源提供",
-      "expiry": "2027-06-30",
-      "replacement": "档位枚举下沉 core/config 注册表（llm 反向引用）"
-    },
-    {
       "path": "src/python/core/check_sources.py",
       "name": "src.python.fetcher.report_adapters",
       "owner": "core（数据源健康检查）",

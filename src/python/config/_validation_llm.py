@@ -15,7 +15,7 @@ def _validate_llm_report_depth(config: dict, issues: int) -> int:
     raw = config.get("llm_report_depth")
     if raw is None:
         return issues
-    from src.python.llm.depth_profile import REPORT_DEPTH_DEFAULT, REPORT_DEPTH_LEVELS
+    from src.python.core.constants import REPORT_DEPTH_DEFAULT, REPORT_DEPTH_LEVELS
 
     valid = isinstance(raw, str) and raw.strip().lower() in REPORT_DEPTH_LEVELS
     if not valid:

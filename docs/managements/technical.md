@@ -4064,8 +4064,6 @@ lint 基线为 `E4`/`E7`/`E9`/`F`/`RUF100` + `ARG` + `BLE001` + `ANN001`（`pypr
 | `cache/_cache_refresh.py` | `report.fund_style_classify` | 基金风格扩展数据预取复用报告侧装配 | 风格扩展取数原语下沉 core/fetcher，报告只做装配 |
 | `cache/operations.py` | `report.market_value` | 刷新后判定交易日与市值构成需复用报告侧市值核算原语 | 市值核算与价格类型判定下沉 core（交易日原语已下沉，剩余为市值派生） |
 | `core/check_sources.py` | `fetcher.report_adapters`<br>`providers.cninfo`<br>`providers.utils`<br>`providers.akshare_extras` | 数据源健康检查须在链外直呼各源实现才测得到真实连通性（链路自带重试/降级），且探针要按源侧口径区分「负缓存跳过」与「本轮真失败」 | 探针面收成 core 侧探针注册表（各取数层追加注册探测函数），失败原因与负缓存判定原语下沉 core |
-| `config/_llm_providers.py` | `llm.pacing` | 线路配置落盘后需即时注册端点节流策略 | LLM 侧提供注册回调，config 只发配置事件（不直接调 llm） |
-| `config/_validation_llm.py` | `llm.depth_profile` | 思考档位枚举与默认值由 llm 侧单一真源提供 | 档位枚举下沉 core/config 注册表（llm 反向引用） |
 
 > 另：`core/check_sources.py` 直连 `providers/`/`fetcher/` 属**探针模块职责**（连通性检查必须在链外直呼各源），
 > 形态上是 `core` 行的函数内反向依赖：**允许但必须逐处登记**例外表（`owner`/`reason`/`expiry`/`replacement`），
