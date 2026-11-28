@@ -1,5 +1,5 @@
 # 投资复盘助手 - 自我审查问题记录
-> 文档版本：0.19.1-dev
+> 文档版本：0.19.1
 > **编号源**：`rf-next = 1262`（新增问题提出后更新为 +1；已用最大 rf-1261，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
@@ -61,18 +61,10 @@
 
 > 本表为本开发周期已修条目的**摘要行**（详情见 `changelog.md` 对应段）；发布时由 `release.py prepare` 的 archive 步原表搬入版本归档并在此留占位。
 
-| # | 问题 | 修复方向 |
-| --- | --- | --- |
-| **rf-1255** | 渲染期数据写入模块级 dict（图表数据与章节可见性经模块级状态传递，同一进程内二次渲染会读到上一轮上下文） | 全部改经 `render()` 的 context 传参；`_ENV.globals` 只保留导入期 fail-closed 设置 |
-| **rf-1256** | TUI `[R]` 面板分组标题自带分隔符，再被框架拼接一次后出现双重分隔（版式与设计契约提示三段式不符） | 标题文本去掉自带分隔符，由面板统一拼接 |
-| **rf-1257** | 空态文案套用状态色（零数据被染成告警色，与 `DESIGN.md` 空态口径不一致） | 空态取色改走 `data-status` 语义属性（品类色与告警色只在有数据时参与） |
-| **rf-1258** | 测试域 `F821`（未定义名）按文件豁免，豁免面盖住了 1 处真实未定义名；引号注解散落 | 取消 per-file-ignore，引号注解统一走 `TYPE_CHECKING` 导入块，清 5 条豁免 |
-| **rf-1259** | 事实缓存指纹夹具未显式 `encoding`，CI `portability` 严格档（`PYTHONWARNDEFAULTENCODING=1`）报隐式编码 | 夹具读写补显式 `encoding="utf-8"` |
-| **rf-1260** | 变异评测 JSON 汇总得分的测试期望值写死切片总数，新增切片即误红 | 期望值改由切片清单长度派生（结构关系断言） |
-| **rf-1261** | 变异评测入口为测试直调面 re-export 内部符号；各守卫脚本的例外表各写一套解析；事实缓存指纹未覆盖全部规则模块（107 小时审计 8 项 P2） | 入口收薄至编排面；例外表协议归一 `scripts/_shared/exceptions.py`；事实缓存指纹覆盖全部规则模块 |
+（本版开发期已修复项已随 v0.19.1 发布迁入归档档案）
 
 ### 归档档案
-- [`archived_review-findings.0.19.x.md`](../archive/v0.19.x/archived_review-findings.0.19.x.md) — v0.19.x（2026-11-27 ~ 2026-11-27）
+- [`archived_review-findings.0.19.x.md`](../archive/v0.19.x/archived_review-findings.0.19.x.md) — v0.19.x（2026-11-27 ~ 2026-11-28）
 - [`archived_review-findings.0.18.x.md`](../archive/v0.18.x/archived_review-findings.0.18.x.md) — v0.18.x（2026-11-12 ~ 2026-11-26）
 - [`archived_review-findings.0.17.x.md`](../archive/v0.17.x/archived_review-findings.0.17.x.md) — v0.17.x（2026-11-04 ~ 2026-11-10）
 - [`archived_review-findings.0.16.x.md`](../archive/v0.16.x/archived_review-findings.0.16.x.md) — v0.16.x（2026-10-25 ~ 2026-11-03）
