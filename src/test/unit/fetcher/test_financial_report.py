@@ -774,3 +774,47 @@ class TestSectionPickingAndCandidateLadders:
         monkeypatch.setattr(fr.datasink, "missing_credential", lambda source_id: (source_id, sentinel))
 
         assert fr.datasink_credential_missing() == (fr.datasink.SOURCE_ID, sentinel)
+
+
+class TestIndexNegativeCache:
+    """「各源均无该标的索引」的确定性结论入负缓存，后续报告不再重探。
+
+    回归背景：16 个代码每轮都按 2~4 个源重探一遍，单轮财报摘要阶段 50~56s 里大部分
+    是这类纯等待（同结论跨报告稳定，只有新披露才会变）。
+    """
+
+    def test_second_call_skips_provider_probes(self, monkeypatch):
+        calls = {"datasink": 0, "cninfo": 0}
+
+        def _ds(*_a, **_kw):
+            calls["datasink"] += 1
+            return []
+
+        def _cn(*_a, **_kw):
+            calls["cninfo"] += 1
+            return []
+
+        monkeypatch.setattr(fr.datasink, "fetch_report_documents", _ds)
+        monkeypatch.setattr(fr.cninfo, "fetch_report_listings", _cn)
+
+        assert fr._fetch_index("395907.SZ") is None
+        assert fr._fetch_index("395907.SZ") is None
+
+        assert calls == {"datasink": 1, "cninfo": 1}, "第二轮须命中负缓存，不再探源"
+
+    def test_transport_failure_is_not_cached(self, monkeypatch):
+        import httpx
+
+        calls = {"count": 0}
+
+        def _boom(*_a, **_kw):
+            calls["count"] += 1
+            raise httpx.ConnectTimeout("handshake operation timed out")
+
+        monkeypatch.setattr(fr.datasink, "fetch_report_documents", _boom)
+        monkeypatch.setattr(fr.cninfo, "fetch_report_listings", lambda *_a, **_kw: [])
+
+        assert fr._fetch_index("817432.SZ") is None
+        assert fr._fetch_index("817432.SZ") is None
+
+        assert calls["count"] == 2, "传输级失败不得入负缓存（恢复期不能被延长）"

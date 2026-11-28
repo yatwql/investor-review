@@ -24,7 +24,7 @@ from src.python.analysis.holding_change_events import (
     build_holding_change_events,
     extract_change_events,
 )
-from src.python.report.history_snapshot import save
+from src.python.core.snapshot_store import save
 from src.python.schemas.history import AccountSnapshot, SnapshotData, SnapshotHolding
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_analysis]

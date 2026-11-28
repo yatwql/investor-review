@@ -65,7 +65,7 @@ class TestCostPanelDegradation:
         def _boom():
             raise RuntimeError("snapshot store unavailable")
 
-        monkeypatch.setattr("src.python.report.history_snapshot.load_all", _boom)
+        monkeypatch.setattr("src.python.core.snapshot_store.load_all", _boom)
         panel = _build(snapshots=None)
         assert panel["available"] is True
         assert panel["trade_cost"]["unknown_legs"] == 1

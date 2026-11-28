@@ -178,7 +178,7 @@ def seed_sensitive_path_isolation(monkeypatch, tmp_path, _doctor_probe_targets) 
         str(tmp_path / "data/history/snapshots"),
     )
     monkeypatch.setattr(
-        "src.python.report.history_snapshot.HISTORY_SNAPSHOT_DIR",
+        "src.python.core.snapshot_store.HISTORY_SNAPSHOT_DIR",
         str(tmp_path / "data/history/snapshots"),
     )
     # 新闻去重锚点文件隔离（data/calibration/dedup_anchors-YYYYMM.jsonl.gz —— 写侧

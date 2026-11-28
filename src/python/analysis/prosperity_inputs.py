@@ -162,7 +162,7 @@ def _sector_weight_items(
     Returns:
         (items, covered_pct, penetration_pct, fallback_pct, fallback_count)
     """
-    from src.python.report.penetration import classify_sector
+    from src.python.core.sector import classify_sector
 
     raw: list[tuple[str, float]] = []
     top10 = (penetration_data or {}).get("top10") or []

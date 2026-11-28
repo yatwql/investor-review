@@ -40,11 +40,17 @@ class TestStartReportRunFaults:
     @pytest.mark.parametrize("module_name,attr", _START_STEPS, ids=[f"{m.split('.')[-1]}.{a}" for m, a in _START_STEPS])
     def test_single_step_failure_does_not_raise(self, module_name, attr, monkeypatch):
         """任一步抛异常 → 边界照常返回基线 dict，报告链不受影响。"""
+        from src.python.llm.session import get_session_usage
+
         monkeypatch.setattr(importlib.import_module(module_name), attr, _boom)
 
         baseline = _run_scope.start_report_run()
 
         assert isinstance(baseline, dict)
+        if (module_name, attr) == ("src.python.llm.session", "get_session_usage"):
+            assert baseline == {}, "会话用量读不到时才退化为空基线"
+        else:
+            assert baseline == get_session_usage(), f"{attr} 故障泄漏到了用量基线"
 
     def test_usage_baseline_empty_when_session_read_fails(self, monkeypatch):
         """会话用量读不到时基线退化为空 dict（delta 随之为全量，与引入前行为一致）。"""

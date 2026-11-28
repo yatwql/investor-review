@@ -20,7 +20,7 @@ from openpyxl.styles import Alignment, Font
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
-from src.python.core.code_utils import is_a_share_stock, is_etf_by_name
+from src.python.core.code_utils import is_etf_by_name
 from src.python.core.models import Holding
 from src.python.core.registry import get_llm_module_name
 from src.python.core.degradation import STATUS_MESSAGES
@@ -266,57 +266,6 @@ def _format_enriched_keywords(enriched: list[dict]) -> str:
 # ── 核心函数 ──────────────────────────────────────────────────
 
 
-def _expand_industry_keywords(
-    holdings: list[Holding],
-    penetrated_assets: list[dict] | None,
-    keywords: list[str],
-) -> tuple[list[str], dict[str, dict], set[str]]:
-    """扩展关键词：获取行业/概念数据，将行业名和概念名追加为关键词。
-
-    Returns:
-        (expanded_keywords, industry_data, lightweight_kw)
-        lightweight_kw 为扩展中的行业/概念关键词集合（轻量级关键词），
-        用于下游判定是否需要至少 2 个匹配才视为关联。
-        行业数据获取失败时返回 (keywords, {}, set())。
-    """
-    industry_data: dict[str, dict] = {}
-    try:
-        all_codes: set[str] = set()
-        for h in holdings:
-            code = (h.code or "").strip()
-            # 只取 A 股个股（统一经 is_a_share_stock）：00 重叠区场外基金（如 002943
-            # 广发多因子）会取到同代码深市股票（宇晶股份）的行业/概念；ETF/港股等
-            # 非 A 股代码行业链路本就无法处理，也无需传入
-            if code and is_a_share_stock(h.name or "", code):
-                all_codes.add(code)
-        if penetrated_assets:
-            for asset in penetrated_assets:
-                for ac in asset.get("codes") or []:
-                    if ac and ac.strip():
-                        all_codes.add(ac.strip())
-
-        if all_codes:
-            from src.python.fetcher.industry import batch_fetch_industry_data as _batch_industry
-
-            industry_data = _batch_industry(list(all_codes))
-            if industry_data:
-                extra_kw: list[str] = []
-                for idata in industry_data.values():
-                    if idata.get("industry"):
-                        extra_kw.append(idata["industry"])
-                    extra_kw.extend(cname.strip() for cname in idata.get("concepts", []) if cname.strip())
-                if extra_kw:
-                    all_kw = list(set(keywords + extra_kw))
-                    all_kw.sort(key=lambda x: (-len(x), x))
-                    lightweight_kw = set(extra_kw) - set(keywords)
-                    new_count = len(lightweight_kw)
-                    logger.info("行业/概念关键词扩展: 行业/概念 %d 个 → 共 %d 个", new_count, len(all_kw))
-                    return all_kw, industry_data, lightweight_kw
-    except Exception as e:  # noqa: BLE001 — 行业/概念数据获取失败（非关键错误，继续）: %s
-        logger.warning("行业/概念数据获取失败（非关键错误，继续）: %s", e)
-    return keywords, industry_data, set()
-
-
 def _extract_active_sources(news_items: list[dict]) -> list[str]:
     """提取成功访问的数据源标签列表。"""
     active: list[str] = []
@@ -487,12 +436,17 @@ def build_news_data(
         }
         获取失败时 news_data 为 []。
     """
-    from src.python.fetcher.news import aggregate_news, build_holding_keywords, news_fetch_limits
+    from src.python.fetcher.news import (
+        aggregate_news,
+        build_holding_keywords,
+        expand_industry_keywords,
+        news_fetch_limits,
+    )
 
     keywords = build_holding_keywords(holdings, penetrated_assets=penetrated_assets)
     logger.info("%s关键词（含穿透）: %s", get_llm_module_name("news_correlation"), keywords)
 
-    keywords, industry_data, lightweight_kw = _expand_industry_keywords(holdings, penetrated_assets, keywords)
+    keywords, industry_data, lightweight_kw = expand_industry_keywords(holdings, penetrated_assets, keywords)
     top_n, per_source = news_fetch_limits(top_n)  # 抓取预算单源算式（取大值保证召回覆盖面）
     news_items = aggregate_news(
         keywords,

@@ -15,12 +15,12 @@ from __future__ import annotations
 
 import pytest
 
-from src.python.analysis.drawdown_events import (
+from src.python.core.drawdown_events import (
     compute_recovery_times,
     extract_drawdown_events,
 )
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_analysis, pytest.mark.edge]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_core, pytest.mark.edge]
 pytestmark.append(pytest.mark.usefixtures("offline_external_sources"))
 
 

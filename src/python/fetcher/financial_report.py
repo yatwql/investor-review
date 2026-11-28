@@ -62,6 +62,17 @@ DOC_MISS = NegativeCache(
 #: TTL 用注册表条目 `report_sections_miss`（6h，与同类「源侧确实没有」结论同源）。
 #: 传输级失败（超时/断连）**不入**负缓存：那可能只是瞬时不可用。
 SECTIONS_MISS_PREFIX = "report_sections_miss_"
+#: 「该标的在各源都没有财报索引」的确定性结论（主备两源都返回空且**无传输级失败**）。
+#: 实测 16 个代码每轮都按 2~4 个源重探一遍，单轮财报摘要阶段 50~56s 里大部分是这类
+#: 纯等待；结论跨报告稳定（新披露才有索引），故与章节清单同类按 6h 负缓存。
+#: 传输级失败（超时/断连/5xx/429）**不入**负缓存：那可能只是瞬时不可用。
+INDEX_MISS = NegativeCache(
+    "财报索引缺失（各源均无该标的）",
+    "report_index_miss_",
+    "report_index_miss",
+    hit_note="跳过索引探测与备源接管",
+)
+
 SECTIONS_MISS = NegativeCache(
     "章节清单不可得",
     SECTIONS_MISS_PREFIX,
@@ -283,6 +294,11 @@ def _fetch_index(symbol: str, doc_types: tuple[str, ...] = ()) -> list[dict[str,
         _mark_used(_index_source_of(cached))
         return cached if isinstance(cached, list) else None
 
+    miss_key = INDEX_MISS.key(symbol)
+    if INDEX_MISS.is_missing(miss_key):
+        logger.debug("[financial_report] %s 命中索引缺失负缓存，跳过索引探测与备源接管", symbol)
+        return None
+
     source = _SRC_INDEX_DATASINK
     primary_error = ""
     try:
@@ -301,6 +317,10 @@ def _fetch_index(symbol: str, doc_types: tuple[str, ...] = ()) -> list[dict[str,
     if not items:
         if primary_error:
             _record_index_failure(symbol, primary_error)
+        else:
+            # 主备两源都「没有该标的」且无传输级失败 → 确定性结论，入负缓存供后续报告直接跳过
+            INDEX_MISS.mark(miss_key, "各源均无该标的索引")
+            logger.debug("[financial_report] %s 索引确定性缺失，已进负缓存", symbol)
         return None
     wanted = {str(t).strip().lower() for t in (doc_types or ()) if str(t).strip()}
     picked = [i for i in items if not wanted or str(i.get("doc_type") or "").lower() in wanted]

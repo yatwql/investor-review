@@ -476,3 +476,30 @@ class TestCacheAndUnknownSourceBranches:
             na._log_source_timings({})
 
         assert not [r for r in caplog.records if "[news]" in r.getMessage()], "无耗时数据时不打观测行"
+
+
+class TestSourceFailureStatus:
+    """单源抛异常 → 该源状态记为「失败」，不得登记为「OK 0 条」。
+
+    回归背景：provider 传输级失败原样返回空列表时，聚合器按 `"OK"` 登记，
+    数据源健康矩阵与 `get_last_source_status()` 都显示正常（实测 DNS 失败的源
+    连续两天被记为「成功 0 条」）。
+    """
+
+    def test_raising_source_recorded_as_failure(self, monkeypatch):
+        from src.python.providers import news_aggregator as na
+        from src.python.providers.news_sources import NewsSourceUnavailable
+
+        def _boom(_per_source: int):
+            raise NewsSourceUnavailable("华尔街见闻 不可用：请求失败: Name or service not known")
+
+        monkeypatch.setitem(na._FETCH_MAP, "wallstreetcn", _boom)
+        monkeypatch.setitem(
+            na._FETCH_MAP, "cls", lambda n: [{"title": "t", "url": "http://u", "intro": "", "ctime": ""}]
+        )
+
+        _items, results = na._fetch_from_all_sources(["wallstreetcn", "cls"], 10)
+
+        assert results["wallstreetcn"][1] != "OK", "失败源不得记 OK"
+        assert "不可用" in results["wallstreetcn"][1]
+        assert results["cls"][1] == "OK", "其余源不受影响"

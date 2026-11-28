@@ -16,7 +16,8 @@ import tempfile
 import threading
 from typing import Any
 
-from src.python.config import _config_defaults, _llm_providers
+import src.python.config._config_defaults as _config_defaults
+import src.python.config._llm_providers as _llm_providers
 from src.python.core.json_comments import strip_json_comments
 from src.python.config._json_patch import (
     _find_top_level_value_span,

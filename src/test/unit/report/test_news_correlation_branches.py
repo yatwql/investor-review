@@ -1,7 +1,6 @@
 """新闻关联的边角分支（`report/news_correlation`）。
 
 锁四条与「口径可追溯」相关的路径：
-  - 行业/概念关键词扩展：取数失败必须回落原关键词（不能把新闻模块拖死）；
   - LLM 费用估算按归一后用量算（与页脚同源），无用量时写 `-`；
   - 新闻源状态取不到只降级为「无状态」，不影响匹配结果；
   - 页脚/着色：缓存命中带 Thinking 标注、费用与 Thinking 分项上屏、利好利空异色。
@@ -15,6 +14,7 @@ import pytest
 from openpyxl import Workbook
 
 from src.python.core.models import Holding
+from src.python.fetcher import news
 from src.python.report import news_correlation as nc
 
 pytestmark = [pytest.mark.unit, pytest.mark.unit_report]
@@ -27,58 +27,6 @@ _ITEM = {
     "media_name": "新浪",
     "matched_keywords": ["长江电力"],
 }
-
-
-class TestExpandIndustryKeywords:
-    def test_keywords_expanded_with_industry_and_concepts(self):
-        """行业名与概念名并入关键词，且行业/概念部分单独给出（下游据此放宽匹配门槛）。"""
-        holdings = [Holding(account="证券", name="长江电力", code="600900", shares=100, cost_price=10.0)]
-        industry = {
-            "600900": {"industry": "电力行业", "concepts": ["水电", " 绿电 "]},
-        }
-        with patch("src.python.fetcher.industry.batch_fetch_industry_data", return_value=industry):
-            keywords, data, lightweight = nc._expand_industry_keywords(holdings, [], ["长江电力"])
-
-        assert "电力行业" in keywords
-        assert "水电" in keywords
-        assert "绿电" in keywords, "概念名两侧空白须归一"
-        assert lightweight == {"电力行业", "水电", "绿电"}
-        assert data == industry
-
-    def test_keywords_sorted_by_length_desc(self):
-        """长词优先：保证「长江电力」不被短词先匹配走。"""
-        holdings = [Holding(account="证券", name="长江电力", code="600900", shares=100, cost_price=10.0)]
-        industry = {"600900": {"industry": "电力", "concepts": ["水力发电运营"]}}
-        with patch("src.python.fetcher.industry.batch_fetch_industry_data", return_value=industry):
-            keywords, _, _ = nc._expand_industry_keywords(holdings, [], ["长江电力"])
-
-        lengths = [len(k) for k in keywords]
-        assert lengths == sorted(lengths, reverse=True)
-
-    def test_fetch_failure_falls_back_to_original_keywords(self, caplog):
-        """行业取数异常 → 原关键词 + 空数据 + 警告（新闻匹配照常进行）。"""
-        holdings = [Holding(account="证券", name="长江电力", code="600900", shares=100, cost_price=10.0)]
-        with patch("src.python.fetcher.industry.batch_fetch_industry_data", side_effect=RuntimeError("probe")):
-            keywords, data, lightweight = nc._expand_industry_keywords(holdings, [], ["长江电力"])
-
-        assert keywords == ["长江电力"]
-        assert (data, lightweight) == ({}, set())
-        assert "行业/概念数据获取失败" in caplog.text
-
-    def test_no_a_share_codes_skips_fetch(self):
-        """无 A 股标的（纯 ETF/场外基金）→ 不发起行业取数。"""
-        holdings = [Holding(account="证券", name="某ETF", code="511880", shares=100, cost_price=10.0)]
-        fetch = MagicMock()
-        with patch("src.python.fetcher.industry.batch_fetch_industry_data", fetch):
-            keywords, data, lightweight = nc._expand_industry_keywords(holdings, [], ["某ETF"])
-
-        fetch.assert_not_called()
-        assert (keywords, data, lightweight) == (["某ETF"], {}, set())
-
-    def test_empty_industry_payload_keeps_keywords(self):
-        holdings = [Holding(account="证券", name="长江电力", code="600900", shares=100, cost_price=10.0)]
-        with patch("src.python.fetcher.industry.batch_fetch_industry_data", return_value={}):
-            assert nc._expand_industry_keywords(holdings, [], ["长江电力"]) == (["长江电力"], {}, set())
 
 
 class TestExtractActiveSources:
@@ -229,7 +177,7 @@ class TestPenetratedCodesExpansion:
         holdings = [Holding(account="证券", name="长江电力", code="600900", shares=100, cost_price=10.0)]
         fetch = MagicMock(return_value={"300274": {"industry": "光伏设备", "concepts": ["储能"]}})
         with patch("src.python.fetcher.industry.batch_fetch_industry_data", fetch):
-            keywords, _data, _light = nc._expand_industry_keywords(
+            keywords, _data, _light = news.expand_industry_keywords(
                 holdings, [{"name": "阳光电源", "codes": ["300274", "  "]}], ["长江电力"]
             )
 

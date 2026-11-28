@@ -362,7 +362,7 @@ def _isolate_state_writes() -> str:
     """
     from src.python.core import perf as _perf_state
     from src.python.core import provider_registry as _registry
-    from src.python.report import history_snapshot as _snapshot_store
+    from src.python.core import snapshot_store as _snapshot_store
 
     iso_dir = tempfile.mkdtemp(prefix="perf_bench_state_")
     _perf_state._PERF_HISTORY_FILE = os.path.join(iso_dir, "perf_history.jsonl")

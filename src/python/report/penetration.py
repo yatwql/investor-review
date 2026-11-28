@@ -20,10 +20,8 @@ Excel 写入函数见 :mod:`src.python.report.penetration_sheet`。
 
 from __future__ import annotations
 
-import json
 import logging
 import math
-import os
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from enum import StrEnum
@@ -40,10 +38,10 @@ from src.python.core.code_utils import (
     is_otc_fund_by_name,
     is_qdii_extended,
 )
-from src.python.core.constants import PROJECT_ROOT
 from src.python.fetcher.fund import fetch_fund_holdings_batch
 from src.python.fetcher.fund_manager import fetch_fund_manager
 from src.python.core.models import Holding
+from src.python.core.sector import classify_sector
 from src.python.report.holdings_freshness import (
     STALE_QUARTERS,
     complete_quarters_since,
@@ -165,65 +163,6 @@ def _fund_type_tag(ftype: str) -> str:
         短标签字符串，如 ``"QDII"`` / ``"ETF"`` / ``"联接"``
     """
     return _FUND_TYPE_TAG.get(ftype, "基金")
-
-
-# ═══════════════════════════════════════════════════════════
-#  板块分类
-# ═══════════════════════════════════════════════════════════
-
-# A 股板块关键词映射：按名称关键词匹配 → 板块
-# ── 第 2 层：内置知识库 ────────────────────────────────
-
-_SECTOR_KEYWORDS_FILE = os.path.join(PROJECT_ROOT, "data/knowledge/sector_keywords.json")
-
-
-def _load_sector_keywords() -> dict[str, str]:
-    """从 sector_keywords.json 加载行业关键词映射表。"""
-    if not os.path.exists(_SECTOR_KEYWORDS_FILE):
-        logger.warning("[穿透] 行业关键词文件 %s 不存在，使用空表", _SECTOR_KEYWORDS_FILE)
-        return {}
-    try:
-        with open(_SECTOR_KEYWORDS_FILE, encoding="utf-8") as f:
-            data: dict[str, str] = json.load(f)
-        logger.debug("[穿透] 已加载 %d 条行业关键词", len(data))
-        return data
-    except (json.JSONDecodeError, OSError) as e:
-        logger.warning("[穿透] 加载行业关键词文件失败: %s，使用空表", e)
-        return {}
-
-
-_SECTOR_KEYWORDS: dict[str, str] = _load_sector_keywords()
-
-
-def sector_keywords() -> dict[str, str]:
-    """行业关键词表只读副本（关键词 → 板块），供其他域复用同一份映射。
-
-    单源在 ``data/knowledge/sector_keywords.json``（本模块加载），事件窗等消费方
-    经本访问器取用，不各自读盘也不复制一份表，避免两处口径漂移。
-
-    Returns:
-        关键词 → 板块名（如 ``{"白酒": "消费", "芯片": "科技"}``）的浅拷贝。
-    """
-    return dict(_SECTOR_KEYWORDS)
-
-
-def classify_sector(name: str, _code: str = "") -> str:
-    """根据证券名称和代码判断所属板块。
-
-    Args:
-        name: 证券名称
-        code: 证券代码（备用，当前未使用）
-
-    Returns:
-        板块名称，如 "消费" / "科技" / "医药" / "新能源"，未知返回 "--"
-    """
-    if not name:
-        return "--"
-    clean = name.replace(" ", "").upper()
-    for keyword, sector in _SECTOR_KEYWORDS.items():
-        if keyword.upper() in clean:
-            return sector
-    return "--"
 
 
 def normalize_name(name: str) -> str:

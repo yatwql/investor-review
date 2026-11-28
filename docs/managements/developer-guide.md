@@ -1,6 +1,6 @@
 # 开发者指南
 
-> 文档版本：0.19.1
+> 文档版本：0.19.2
 
 ## 概述
 
@@ -1021,7 +1021,7 @@ INVEST_CACHE_DIR=docs/tmp/screenshots/demo/data/cache \    # 缓存改落（不�
 
 **日志路径的特殊性**：`core.logger` 在**模块导入期**就把 `INVEST_LOG_PATH` 解析成 `_LOG_FILE`，隔离必须在导入任何 `src.python` 模块之前完成（`test-perf-report.py::_isolate_log_writes` 因此放在 `run_perf_test` 首行）。
 
-两个易踩的技术细节：① **按值绑定的路径改不动**——`report/history_snapshot.py` 在导入时`from core.constants import HISTORY_SNAPSHOT_DIR`，改写 `core.constants` 的同名常量对它无效，必须改**持有该名字的模块属性**（同 `# 门面 re-export` 的坑）；② **路径隔离之外再加命名空间双保险**——快照支持 `namespace` 域（`save(sd, "bench")`），域内闭环、`load_all(None)` 读不到，目录隔离失效时仍有第二道闸。
+两个易踩的技术细节：① **按值绑定的路径改不动**——`core/snapshot_store.py` 在导入时`from core.constants import HISTORY_SNAPSHOT_DIR`，改写 `core.constants` 的同名常量对它无效，必须改**持有该名字的模块属性**（同 `# 门面 re-export` 的坑）；② **路径隔离之外再加命名空间双保险**——快照支持 `namespace` 域（`save(sd, "bench")`），域内闭环、`load_all(None)` 读不到，目录隔离失效时仍有第二道闸。
 
 不隔离的后果是**分析面**污染：演示持仓的告警（源侧名称对不上/缺凭据/陈旧锁）混进真实日志，按「读了哪个持仓文件」事后反推才能区分；演示取数结果与真实缓存互串还会让截图与真机不一致。`scripts/make-screenshots.py` 已自动注入这三个变量（`scripts/_screenshots/demo_workspace.py::isolation_env`）。
 

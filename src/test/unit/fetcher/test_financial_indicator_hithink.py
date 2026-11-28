@@ -145,11 +145,6 @@ class TestHithinkIndicatorAdapter:
 
 
 class TestChainOrderAndSeriesFallback:
-    def test_chain_order(self):
-        from src.python.fetcher.chain import _get_chain
-
-        assert _get_chain("financial_indicator") == ["akshare_financial", "datasink_indicator", "hithink"]
-
     def test_series_falls_back_to_hithink_when_primary_empty(self, monkeypatch):
         """主源无数据 → 官方报表派生多期序列，并打「本次使用」标记。"""
         from src.python.fetcher import financial_indicator as fi

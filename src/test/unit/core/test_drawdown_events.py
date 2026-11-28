@@ -14,12 +14,12 @@ from datetime import date, timedelta
 
 import pytest
 
-from src.python.analysis.drawdown_events import (
+from src.python.core.drawdown_events import (
     compute_recovery_times,
     extract_drawdown_events,
 )
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_analysis]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_core]
 pytestmark.append(pytest.mark.usefixtures("offline_external_sources"))
 
 

@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.python.analysis.fee_schedule_model import (
+from src.python.core.fee_schedule_model import (
     SRC_F10,
     build_single_purchase_schedule,
     parse_redemption_fee_schedule,

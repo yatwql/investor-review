@@ -349,9 +349,9 @@ def compute_prosperity_framework_data(
 
     snapshots = None
     try:
-        from src.python.report import history_snapshot
+        from src.python.core import snapshot_store
 
-        snapshots = history_snapshot.load_all() or None
+        snapshots = snapshot_store.load_all() or None
     except Exception:  # noqa: BLE001 — [prosperity_framework] 历史快照不可用，换手代理标记未验证
         logger.debug("[prosperity_framework] 历史快照不可用，换手代理标记未验证", exc_info=True)
 

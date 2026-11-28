@@ -21,7 +21,7 @@ from src.python.report.holding_change_panel import (
     build_holding_change_view,
     write_holding_change_sheet,
 )
-from src.python.report.history_snapshot import save
+from src.python.core.snapshot_store import save
 from src.python.schemas.history import AccountSnapshot, SnapshotData, SnapshotHolding
 
 pytestmark = [

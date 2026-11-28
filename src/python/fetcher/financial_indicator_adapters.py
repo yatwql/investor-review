@@ -18,8 +18,8 @@ from __future__ import annotations
 import logging
 from typing import Any, ClassVar
 
-from src.python.analysis.financial_indicator_extract import extract_indicators
-from src.python.analysis.financial_statement_derive import derive_indicator_records
+from src.python.core.financial_indicator_extract import extract_indicators
+from src.python.core.financial_statement_derive import derive_indicator_records
 from src.python.core.code_symbols import to_fmp_symbol
 from src.python.fetcher import financial_report
 from src.python.fetcher.source_adapter import SourceAdapter, register_adapter
@@ -94,7 +94,7 @@ class HithinkIndicatorAdapter(SourceAdapter):
     """同花顺官方合并报表派生指标（第三链路；需凭据）。
 
     抓取三张合并报表（利润表 / 资产负债表 / 现金流量表，各一次请求即得**多期**），
-    由 :func:`analysis.financial_statement_derive.derive_indicator_records` 纯派生为标准
+    由 :func:`core.financial_statement_derive.derive_indicator_records` 纯派生为标准
     字段记录。口径与主源对齐（比率小数、金额元），差异仅在 ROE（期末口径 vs 加权）
     与 `bvps`（官方不给总股本 → 恒缺失）；同源序列内可比。
     """

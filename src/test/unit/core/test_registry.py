@@ -736,6 +736,7 @@ class TestCacheOnlyDebateRegistry:
         "report_symbol_miss",
         "report_sections_miss",
         "report_sections_backoff",
+        "report_index_miss",
         "hold_qmiss",
         "idx_hist_miss",
         "idx_hist_backoff",

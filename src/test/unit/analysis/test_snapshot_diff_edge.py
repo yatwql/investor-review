@@ -19,7 +19,7 @@ import pytest
 
 from src.python.analysis.snapshot_diff import build_snapshot_diff
 import src.python.core.constants as core_constants
-from src.python.report.history_snapshot import save
+from src.python.core.snapshot_store import save
 from src.python.schemas.history import AccountSnapshot, SnapshotData, SnapshotHolding
 
 pytestmark = [

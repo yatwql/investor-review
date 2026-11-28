@@ -30,7 +30,7 @@ from src.python.core.code_utils import (
     is_otc_fund_by_name,
     is_qdii_extended,
 )
-from src.python.analysis.drawdown_events import (
+from src.python.core.drawdown_events import (
     MIN_SPAN,
     compute_recovery_times,
     extract_drawdown_events,

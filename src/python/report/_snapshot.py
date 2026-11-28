@@ -28,7 +28,7 @@ def _baseline_labels(ts: str) -> tuple[str, str]:
     展示层按缺席降级（不写标注行）。
     """
     from src.python.core.trading_calendar import trading_day_as_of
-    from src.python.report.history_snapshot import _parse_snapshot_timestamp
+    from src.python.core.snapshot_store import _parse_snapshot_timestamp
 
     dt = _parse_snapshot_timestamp(ts or "")
     if dt is None:
@@ -128,7 +128,7 @@ def capture_snapshot(
 
     from src.python.fetcher.history_diff import HistoryDiff
     from src.python.core.degradation import get_tracker as _get_degradation_tracker
-    from src.python.report.history_snapshot import load_comparison_baseline, save
+    from src.python.core.snapshot_store import load_comparison_baseline, save
     from src.python.schemas.history import (
         AccountSnapshot,
         SnapshotData,
@@ -167,7 +167,7 @@ def capture_snapshot(
         _diff = HistoryDiff.compute(_snapshot, _old)
         save(_snapshot, snapshot_namespace)
         from src.python.core.constants import HISTORY_SNAPSHOT_MAX_COUNT, HISTORY_SNAPSHOT_RETENTION_DAYS
-        from src.python.report.history_snapshot import prune as _prune_snapshots
+        from src.python.core.snapshot_store import prune as _prune_snapshots
 
         _history_cfg = (config or {}).get("history", {})
         _prune_snapshots(

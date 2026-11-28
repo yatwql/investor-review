@@ -180,21 +180,25 @@ def _get_news_top_count() -> int:
 def _refresh_news_cache(holdings: list) -> int:
     """刷新财经新闻缓存：持仓关键词 → 聚合新闻（写入 news_ 前缀缓存）。
 
-    与报告生成共用 build_holding_keywords + _expand_industry_keywords 管线，
+    与报告生成共用 build_holding_keywords + expand_industry_keywords 管线，
     保证缓存键一致、后续报告生成命中缓存。
 
     Returns:
         成功关联的新闻条数；无持仓或关键词为空时返回 0。
     """
-    from src.python.fetcher.news import aggregate_news, build_holding_keywords, news_fetch_limits
-    from src.python.report.news_correlation import _expand_industry_keywords
+    from src.python.fetcher.news import (
+        aggregate_news,
+        build_holding_keywords,
+        expand_industry_keywords,
+        news_fetch_limits,
+    )
 
     if not holdings:
         return 0
     keywords = build_holding_keywords(holdings, penetrated_assets=None)
     if not keywords:
         return 0
-    keywords, _industry_data, lightweight_kw = _expand_industry_keywords(holdings, None, keywords)
+    keywords, _industry_data, lightweight_kw = expand_industry_keywords(holdings, None, keywords)
     top_n, per_source = news_fetch_limits(_get_news_top_count())  # 抓取预算单源算式
     news_items = aggregate_news(
         keywords,
@@ -231,7 +235,7 @@ def _refresh_extended_cache(holdings: list) -> int:
     """
     from src.python.core.code_utils import is_a_share_stock
     from src.python.core.provider_registry import get_registry
-    from src.python.report.fund_style_classify import _prefetch_extended_data
+    from src.python.fetcher.fund_style_extended import prefetch_extended_data
 
     a_share_codes = [
         h.code.strip() for h in holdings if h.code and h.code.strip() and is_a_share_stock(h.name, h.code.strip())
@@ -240,7 +244,7 @@ def _refresh_extended_cache(holdings: list) -> int:
     if not unique:
         return 0
     holdings_dicts = [{"code": h.code, "name": h.name} for h in holdings]
-    _prefetch_extended_data(holdings_dicts, get_registry())
+    prefetch_extended_data(holdings_dicts, get_registry())
     return len(unique)
 
 

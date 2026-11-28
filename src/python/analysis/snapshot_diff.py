@@ -65,7 +65,7 @@ def build_snapshot_diff(
           - summary: 变化摘要文本（渲染层直接展示）
           - reason: available=False 时的降级原因
     """
-    from src.python.report.history_snapshot import load_all, load_comparison_baseline
+    from src.python.core.snapshot_store import load_all, load_comparison_baseline
 
     raw = load_all(snapshot_namespace)
     raw_count = len(raw)

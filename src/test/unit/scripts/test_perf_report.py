@@ -228,7 +228,7 @@ class TestOfflineStubs:
         """基准不得写真实 perf 历史/健康快照/熔断状态/持仓快照（防污染统计与真实运行）。"""
         from src.python.core import perf as perf_mod
         from src.python.core import provider_registry as registry_mod
-        from src.python.report import history_snapshot as snapshot_mod
+        from src.python.core import snapshot_store as snapshot_mod
 
         orig = (
             perf_mod._PERF_HISTORY_FILE,
@@ -257,7 +257,7 @@ class TestOfflineStubs:
 
     def test_bench_snapshot_lands_in_isolated_dir_not_shared_history(self, perf_test_report, tmp_path):
         """回归：基准跑完不向真实快照目录新增文件（隔离失效即在写入时暴露）。"""
-        from src.python.report import history_snapshot as snapshot_mod
+        from src.python.core import snapshot_store as snapshot_mod
 
         real_dir = tmp_path / "real_history"
         real_dir.mkdir()
@@ -274,7 +274,7 @@ class TestOfflineStubs:
 
     def test_bench_namespace_is_invisible_to_shared_series(self, perf_test_report, tmp_path):
         """双保险：即便目录隔离失效，命名空间域内的快照也不进共享序列（`_dedup_by_date` 不吃）。"""
-        from src.python.report import history_snapshot as snapshot_mod
+        from src.python.core import snapshot_store as snapshot_mod
 
         orig_dir = snapshot_mod.HISTORY_SNAPSHOT_DIR
         try:

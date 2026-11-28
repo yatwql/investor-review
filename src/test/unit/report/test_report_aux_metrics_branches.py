@@ -167,7 +167,7 @@ class TestProsperityFrameworkDegrade:
 
         monkeypatch.setattr("src.python.config.features.is_feature_enabled", lambda _key: True)
         monkeypatch.setattr("src.python.analysis.liquidity.check_liquidity", lambda *_a, **_k: [])
-        monkeypatch.setattr("src.python.report.history_snapshot.load_all", lambda *_a, **_k: [])
+        monkeypatch.setattr("src.python.core.snapshot_store.load_all", lambda *_a, **_k: [])
         monkeypatch.setattr("src.python.analysis.prosperity_framework.build_prosperity_framework_data", _build)
         return captured
 
@@ -189,7 +189,7 @@ class TestProsperityFrameworkDegrade:
         def _boom(*_a, **_k):
             raise RuntimeError("snapshot boom")
 
-        monkeypatch.setattr("src.python.report.history_snapshot.load_all", _boom)
+        monkeypatch.setattr("src.python.core.snapshot_store.load_all", _boom)
 
         aux.compute_prosperity_framework_data([], _details(), {}, {})
 

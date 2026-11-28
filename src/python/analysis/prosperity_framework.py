@@ -91,7 +91,7 @@ def _holdings_view(
     limit: int = 20,
     estimated_codes: set[str] | None = None,
 ) -> list[dict[str, Any]]:
-    from src.python.report.penetration import classify_sector
+    from src.python.core.sector import classify_sector
 
     total = sum(finite_or(getattr(d, "market_value", 0.0)) for d in holdings_details)
     ordered = sorted(holdings_details, key=lambda d: finite_or(getattr(d, "market_value", 0.0)), reverse=True)

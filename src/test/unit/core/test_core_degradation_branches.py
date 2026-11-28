@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import os
+import threading
 from pathlib import Path
 
 import pytest
@@ -82,11 +83,21 @@ class TestHealthCheckBudgetZero:
     """max_timeout=0：预算在首轮等待前即耗尽，仍要返回（不卡死）。"""
 
     def test_zero_budget_returns_without_blocking(self, monkeypatch):
-        monkeypatch.setattr(cs, "_checks", [("src_a", "用途", "测试", lambda: (cs._OK, 1.0, "ok"))])
+        release = threading.Event()
+
+        def _pending_check():
+            release.wait()  # 永不置位：模拟挂起的数据源探针
+            return cs._OK, 1.0, "ok"
+
+        monkeypatch.setattr(cs, "_checks", [("src_a", "src_a", "测试", _pending_check)])
 
         results = cs.run_health_checks(max_timeout=0.0)
+        release.set()
 
-        assert isinstance(results, list)
+        # 预算 0s：不等挂起探针，直接按未完成项落「超时」占位项返回
+        assert [item["name"] for item in results] == ["src_a"]
+        assert results[0]["ok"] is False
+        assert results[0]["message"].startswith("超时"), results[0]
 
 
 class TestDecisionHeaderParsing:

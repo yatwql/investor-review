@@ -20,9 +20,9 @@ import os
 import threading
 from typing import Any
 
-from src.python.config import _llm_providers
+import src.python.config._llm_providers as _llm_providers
 from src.python.core.json_comments import strip_json_comments
-from src.python.config import _llm_schema
+import src.python.config._llm_schema as _llm_schema
 from src.python.config._llm_settings_defaults import (
     _DEFAULT_LLM_SETTINGS,
     _DEFAULTS_NESTED,

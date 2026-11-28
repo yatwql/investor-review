@@ -146,7 +146,7 @@ def _fee_percent(text: str) -> float | None:
     单档来源复用 ``trade_cost_model.parse_fee_percent`` 单源（含 ≥100% 拒绝）——
     ``0.00%`` 合法返回 0.0（**已知 0**，与未知 None 严格区分）。
     """
-    from src.python.analysis.fee_schedule_model import parse_fee_percent
+    from src.python.core.fee_schedule_model import parse_fee_percent
 
     return parse_fee_percent(text)
 

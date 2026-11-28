@@ -30,7 +30,7 @@ from src.python.cache import get_cache_hit_rate
 from src.python.core.constants import APP_NAME, APP_VERSION
 from src.python.core.models import Holding
 from src.python.core.registry import get_llm_module_names, get_report_section_order
-from src.python.analysis.drawdown_events import MIN_SPAN as DRAW_DOWN_MIN_SPAN
+from src.python.core.drawdown_events import MIN_SPAN as DRAW_DOWN_MIN_SPAN
 from src.python.report.progress import ProgressReporter, SilentProgressReporter
 
 # ── 子模块 re-export ────────────────────────────────────

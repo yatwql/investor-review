@@ -250,7 +250,7 @@ class TestResilienceIsolation:
 
         monkeypatch.setattr("src.python.config.features.is_feature_enabled", lambda _k: True)
         monkeypatch.setattr("src.python.analysis.liquidity.check_liquidity", lambda *_a, **_k: [])
-        monkeypatch.setattr("src.python.report.history_snapshot.load_all", lambda *_a, **_k: [object(), object()])
+        monkeypatch.setattr("src.python.core.snapshot_store.load_all", lambda *_a, **_k: [object(), object()])
         out = _report_aux_metrics.compute_prosperity_framework_data([], _details(), {}, {}, None)
         assert out is not None and out["available"] is True
         assert out["turnover_proxy_pct"] is None
@@ -289,7 +289,7 @@ class TestResilienceIsolation:
         monkeypatch.setattr("src.python.config.features.is_feature_enabled", lambda _k: True)
         monkeypatch.setattr("src.python.analysis.liquidity.check_liquidity", lambda *_a, **_k: [])
         monkeypatch.setattr(
-            "src.python.report.history_snapshot.load_all",
+            "src.python.core.snapshot_store.load_all",
             lambda *_a, **_k: [_snap(["600519", "300308"]), _snap(["600519", "601398"])],
         )
         out = _report_aux_metrics.compute_prosperity_framework_data([], _details(), {}, {}, None)

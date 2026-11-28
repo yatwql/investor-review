@@ -9,10 +9,13 @@
 当前封装函数：
   - aggregate_news — 多源新闻获取聚合
   - build_holding_keywords — 持仓关键词构建
+  - expand_industry_keywords — 行业/概念关键词扩展（含轻量关键词集合）
   - get_last_source_status — 各新闻源状态查询
 """
 
 from __future__ import annotations
+
+import logging
 
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
@@ -20,6 +23,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from src.python.core.perf import PhaseBreakdownRecorder
 
+from src.python.core.code_utils import is_a_share_stock
 from src.python.core.models import Holding
 from src.python.providers.news_aggregator import (
     aggregate_news as _aggregate_news,
@@ -29,9 +33,12 @@ from src.python.providers.news_aggregator import (
 )
 from src.python.providers.news_keywords import build_holding_keywords as _build_holding_keywords
 
+logger = logging.getLogger("invest")
+
 __all__ = [
     "aggregate_news",
     "build_holding_keywords",
+    "expand_industry_keywords",
     "get_last_source_status",
 ]
 
@@ -89,6 +96,59 @@ def build_holding_keywords(
         关键词列表
     """
     return _build_holding_keywords(holdings, penetrated_assets=penetrated_assets, max_keywords=max_keywords)
+
+
+def expand_industry_keywords(
+    holdings: list[Holding],
+    penetrated_assets: list[dict] | None,
+    keywords: list[str],
+) -> tuple[list[str], dict[str, dict], set[str]]:
+    """扩展关键词：取行业/概念数据，把行业名与概念名并入关键词。
+
+    关键词扩展要打行业链路（取数），故与新闻聚合同居取数层：报告侧只消费结果，
+    缓存预热复用同一份实现，两侧不各写一套口径。
+
+    Returns:
+        ``(expanded_keywords, industry_data, lightweight_kw)``。
+        ``lightweight_kw`` 为扩展出的行业/概念关键词集合（下游据此要求至少 2 个匹配
+        才算关联）。行业取数失败时返回 ``(keywords, {}, set())``。
+    """
+    industry_data: dict[str, dict] = {}
+    try:
+        all_codes: set[str] = set()
+        for h in holdings:
+            code = (h.code or "").strip()
+            # 只取 A 股个股（统一经 is_a_share_stock）：00 重叠区场外基金（如 002943
+            # 广发多因子）会取到同代码深市股票（宇晶股份）的行业/概念；ETF/港股等
+            # 非 A 股代码行业链路本就无法处理，也无需传入
+            if code and is_a_share_stock(h.name or "", code):
+                all_codes.add(code)
+        if penetrated_assets:
+            for asset in penetrated_assets:
+                for ac in asset.get("codes") or []:
+                    if ac and ac.strip():
+                        all_codes.add(ac.strip())
+
+        if all_codes:
+            from src.python.fetcher.industry import batch_fetch_industry_data as _batch_industry
+
+            industry_data = _batch_industry(list(all_codes))
+            if industry_data:
+                extra_kw: list[str] = []
+                for idata in industry_data.values():
+                    if idata.get("industry"):
+                        extra_kw.append(idata["industry"])
+                    extra_kw.extend(cname.strip() for cname in idata.get("concepts", []) if cname.strip())
+                if extra_kw:
+                    all_kw = list(set(keywords + extra_kw))
+                    all_kw.sort(key=lambda x: (-len(x), x))
+                    lightweight_kw = set(extra_kw) - set(keywords)
+                    new_count = len(lightweight_kw)
+                    logger.info("行业/概念关键词扩展: 行业/概念 %d 个 → 共 %d 个", new_count, len(all_kw))
+                    return all_kw, industry_data, lightweight_kw
+    except Exception as e:  # noqa: BLE001 — 行业/概念数据获取失败（非关键错误，继续）: %s
+        logger.warning("行业/概念数据获取失败（非关键错误，继续）: %s", e)
+    return keywords, industry_data, set()
 
 
 def get_last_source_status() -> dict[str, dict]:

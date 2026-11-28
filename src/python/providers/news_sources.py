@@ -16,7 +16,30 @@ from typing import Any
 
 import httpx
 
+from src.python.providers.utils import clear_last_reason, take_last_reason
+
 logger = logging.getLogger("invest")
+
+
+class NewsSourceUnavailable(RuntimeError):
+    """单个新闻源整体不可用（传输级失败/响应结构不认）。
+
+    为什么要显式抛：provider 的契约是「失败返回空列表」，聚合层若只看返回值，
+    网络失败与「源侧当日确实没有新闻」无法区分——健康矩阵会把逐个失败源记成
+    「成功 0 条」。这里由取数包装层把 provider 写入的失败原因转成异常，聚合层
+    的既有 ``except`` 分支即按「失败(<原因>)」登记，矩阵与日志口径随之正确。
+    """
+
+
+def _require_or_empty(label: str, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """空结果 + 有失败原因 → 抛 :class:`NewsSourceUnavailable`；否则原样返回。"""
+    reason = take_last_reason()
+    if items:
+        return items
+    if reason:
+        raise NewsSourceUnavailable(f"{label} 不可用：{reason}")
+    return items
+
 
 # ── 新闻来源注册（静态元数据，不含开关状态） ─────────────────
 
@@ -63,11 +86,16 @@ def _fetch_from_sina(num: int) -> list[dict[str, Any]]:
         logger.warning("新浪财经模块不可用")
         return []
 
+    clear_last_reason()
     lids = ["2516", "2509", "2510"]  # 财经要闻, 国内财经, 国际财经
     per_category = max(1, num // len(lids))
     per_page = 50  # API 每页上限
     deadline = time.monotonic() + _SINA_SOURCE_BUDGET
     exhausted = threading.Event()
+
+    #: 分类线程写入的失败原因（线程局部量取自 worker 线程，须在这里收集回主线程）
+    category_reasons: list[str] = []
+    reasons_lock = threading.Lock()
 
     def _fetch_category(lid: str, target: int) -> list[dict[str, Any]]:
         """单个分类内翻页；分类内先按 URL 去重（无新增即止，避免死循环）。"""
@@ -81,6 +109,10 @@ def _fetch_from_sina(num: int) -> list[dict[str, Any]]:
                 break
             need = min(per_page, target - len(fetched))
             items = sina_fetch(lid=lid, num=need, page=page, timeout=_sina_request_timeout(remaining))
+            reason = take_last_reason()
+            if reason:
+                with reasons_lock:
+                    category_reasons.append(reason)
             if not items:
                 break
             added = 0
@@ -126,6 +158,9 @@ def _fetch_from_sina(num: int) -> list[dict[str, Any]]:
             len(all_items),
         )
     logger.info("新浪财经: 获取 %d 条 (去重后)", len(all_items))
+    if not all_items and category_reasons:
+        # 分类线程内的失败原因由本线程收集后统一抛出（聚合层据此登记「失败」）
+        raise NewsSourceUnavailable(f"新浪财经 不可用：{category_reasons[0]}")
     return all_items
 
 
@@ -137,9 +172,10 @@ def _fetch_from_eastmoney(num: int) -> list[dict[str, Any]]:
         logger.warning("东方财富模块不可用")
         return []
 
+    clear_last_reason()
     items = em_fetch(num=num)
     logger.info("东方财富: 获取 %d 条", len(items))
-    return items
+    return _require_or_empty("东方财富", items)
 
 
 def _fetch_from_cls(num: int) -> list[dict[str, Any]]:
@@ -150,9 +186,10 @@ def _fetch_from_cls(num: int) -> list[dict[str, Any]]:
         logger.warning("财联社模块不可用")
         return []
 
+    clear_last_reason()
     items = cls_fetch(num=num)
     logger.info("财联社: 获取 %d 条", len(items))
-    return items
+    return _require_or_empty("财联社", items)
 
 
 def _fetch_from_wallstreetcn(num: int) -> list[dict[str, Any]]:
@@ -163,9 +200,10 @@ def _fetch_from_wallstreetcn(num: int) -> list[dict[str, Any]]:
         logger.warning("华尔街见闻模块不可用")
         return []
 
+    clear_last_reason()
     items = wsc_fetch(num=num)
     logger.info("华尔街见闻: 获取 %d 条", len(items))
-    return items
+    return _require_or_empty("华尔街见闻", items)
 
 
 def _fetch_from_akshare(num: int) -> list[dict[str, Any]]:
@@ -176,9 +214,10 @@ def _fetch_from_akshare(num: int) -> list[dict[str, Any]]:
         logger.warning("akshare 模块不可用")
         return []
 
+    clear_last_reason()
     items = ak_fetch(num=num)
     logger.info("akshare 新闻: 获取 %d 条", len(items))
-    return items
+    return _require_or_empty("财新网 / CCTV", items)
 
 
 _FETCH_MAP: dict[str, Callable] = {

@@ -47,10 +47,10 @@ class TestCaptureSnapshot:
         config = {"history": {"snapshot_retention_days": 60, "snapshot_max_count": 365}}
 
         with (
-            patch("src.python.report.history_snapshot.load_comparison_baseline", return_value=None),
-            patch("src.python.report.history_snapshot.save") as mock_save,
+            patch("src.python.core.snapshot_store.load_comparison_baseline", return_value=None),
+            patch("src.python.core.snapshot_store.save") as mock_save,
             patch("src.python.fetcher.history_diff.HistoryDiff") as mock_hd,
-            patch("src.python.report.history_snapshot.prune"),
+            patch("src.python.core.snapshot_store.prune"),
         ):
             mock_diff = MagicMock()
             mock_diff.is_first_check = True
@@ -87,10 +87,10 @@ class TestCaptureSnapshot:
         config = {"history": {"snapshot_retention_days": 60, "snapshot_max_count": 365}}
 
         with (
-            patch("src.python.report.history_snapshot.load_comparison_baseline", return_value=None),
-            patch("src.python.report.history_snapshot.save") as mock_save,
+            patch("src.python.core.snapshot_store.load_comparison_baseline", return_value=None),
+            patch("src.python.core.snapshot_store.save") as mock_save,
             patch("src.python.fetcher.history_diff.HistoryDiff") as mock_hd,
-            patch("src.python.report.history_snapshot.prune"),
+            patch("src.python.core.snapshot_store.prune"),
         ):
             mock_diff = MagicMock()
             mock_diff.is_first_check = True
@@ -121,10 +121,10 @@ class TestCaptureSnapshot:
         config = {"history": {"snapshot_retention_days": 60, "snapshot_max_count": 365}}
 
         with (
-            patch("src.python.report.history_snapshot.load_comparison_baseline", return_value=None),
-            patch("src.python.report.history_snapshot.save") as mock_save,
+            patch("src.python.core.snapshot_store.load_comparison_baseline", return_value=None),
+            patch("src.python.core.snapshot_store.save") as mock_save,
             patch("src.python.fetcher.history_diff.HistoryDiff") as mock_hd,
-            patch("src.python.report.history_snapshot.prune"),
+            patch("src.python.core.snapshot_store.prune"),
         ):
             mock_diff = MagicMock()
             mock_diff.is_first_check = True
@@ -172,10 +172,10 @@ class TestCaptureSnapshot:
         mock_diff.decreased = []
 
         with (
-            patch("src.python.report.history_snapshot.load_comparison_baseline", return_value=MagicMock()),
-            patch("src.python.report.history_snapshot.save"),
+            patch("src.python.core.snapshot_store.load_comparison_baseline", return_value=MagicMock()),
+            patch("src.python.core.snapshot_store.save"),
             patch("src.python.fetcher.history_diff.HistoryDiff") as mock_hd_cls,
-            patch("src.python.report.history_snapshot.prune"),
+            patch("src.python.core.snapshot_store.prune"),
         ):
             mock_hd_cls.compute.return_value = mock_diff
 
@@ -199,10 +199,10 @@ class TestCaptureSnapshot:
         config = {"history": {"snapshot_retention_days": 99, "snapshot_max_count": 200}}
 
         with (
-            patch("src.python.report.history_snapshot.load_comparison_baseline", return_value=None),
-            patch("src.python.report.history_snapshot.save"),
+            patch("src.python.core.snapshot_store.load_comparison_baseline", return_value=None),
+            patch("src.python.core.snapshot_store.save"),
             patch("src.python.fetcher.history_diff.HistoryDiff") as mock_hd,
-            patch("src.python.report.history_snapshot.prune") as mock_prune,
+            patch("src.python.core.snapshot_store.prune") as mock_prune,
         ):
             mock_diff = MagicMock()
             mock_diff.is_first_check = True
@@ -237,10 +237,10 @@ class TestCaptureSnapshot:
         mock_diff.decreased = []
 
         with (
-            patch("src.python.report.history_snapshot.load_comparison_baseline", return_value=MagicMock()),
-            patch("src.python.report.history_snapshot.save"),
+            patch("src.python.core.snapshot_store.load_comparison_baseline", return_value=MagicMock()),
+            patch("src.python.core.snapshot_store.save"),
             patch("src.python.fetcher.history_diff.HistoryDiff") as mock_hd_cls,
-            patch("src.python.report.history_snapshot.prune"),
+            patch("src.python.core.snapshot_store.prune"),
         ):
             mock_hd_cls.compute.return_value = mock_diff
 
@@ -262,10 +262,10 @@ class TestCaptureSnapshot:
         config = {"history": {"snapshot_retention_days": 60, "snapshot_max_count": 365}}
 
         with (
-            patch("src.python.report.history_snapshot.load_comparison_baseline", return_value=None),
-            patch("src.python.report.history_snapshot.save"),
+            patch("src.python.core.snapshot_store.load_comparison_baseline", return_value=None),
+            patch("src.python.core.snapshot_store.save"),
             patch("src.python.fetcher.history_diff.HistoryDiff") as mock_hd,
-            patch("src.python.report.history_snapshot.prune"),
+            patch("src.python.core.snapshot_store.prune"),
         ):
             mock_diff = MagicMock()
             mock_diff.is_first_check = True
@@ -287,10 +287,10 @@ class TestCaptureSnapshot:
         config = {"history": {"snapshot_retention_days": 60, "snapshot_max_count": 365}}
 
         with (
-            patch("src.python.report.history_snapshot.load_comparison_baseline", side_effect=ValueError("测试异常")),
-            patch("src.python.report.history_snapshot.save"),
+            patch("src.python.core.snapshot_store.load_comparison_baseline", side_effect=ValueError("测试异常")),
+            patch("src.python.core.snapshot_store.save"),
             patch("src.python.fetcher.history_diff.HistoryDiff"),
-            patch("src.python.report.history_snapshot.prune"),
+            patch("src.python.core.snapshot_store.prune"),
         ):
             result = capture_snapshot(
                 [self._make_mock_holding()],

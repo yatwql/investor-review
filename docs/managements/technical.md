@@ -1,5 +1,5 @@
 # 投资复盘助手 — 技术设计
-> 文档版本：0.19.1
+> 文档版本：0.19.2
 
 ## 目录
 
@@ -1394,7 +1394,7 @@ get_ttl(data_type)
 
 **负缓存单一样板**：确定性缺失与传输级短退避（标的正文缺失 / 章节清单不可得 / 该文档无该章节 / provider 404 探测 / 基金季报空季度 / 指数历史全链空 / 基金经理主页空与不可达——完整清单见 §缓存域注册表与 `datasource.md` 负缓存表）统一经 `cache/_negative.py::NegativeCache` 登记——调用点只声明「标签 + 键前缀 + TTL 类型」，锁/命中计数/汇总文案由该类统一承接，`cache.negative_cache_entries()` 给出可枚举清单、`nonzero_summaries()` 直接产出报告级汇总行（新增一类负缓存不再复制一份 lock+counter+reset 样板）。
 
-**负缓存同源**：缺失探测类负缓存（`datasink_probe_miss_` 12h、`report_symbol_miss_` 6h、`report_sections_miss_` 6h、`hold_qmiss_` 6h、`idx_hist_miss_` 12h、`idx_hist_backoff_` 1h、`fmgr_miss_` 12h、`fmgr_backoff_` 1h）登记为正式缓存类型，读侧 TTL、`cleanup_expired` 判定、`cache_ttl` 覆盖与文档表格共用同一注册表条目（未登记时会被按未注册默认 24h 判定，滞留更久且配置不可见）。
+**负缓存同源**：缺失探测类负缓存（`datasink_probe_miss_` 12h、`report_symbol_miss_` 6h、`report_sections_miss_` 6h、`report_index_miss_` 6h、`hold_qmiss_` 6h、`idx_hist_miss_` 12h、`idx_hist_backoff_` 1h、`fmgr_miss_` 12h、`fmgr_backoff_` 1h）登记为正式缓存类型，读侧 TTL、`cleanup_expired` 判定、`cache_ttl` 覆盖与文档表格共用同一注册表条目（未登记时会被按未注册默认 24h 判定，滞留更久且配置不可见）。
 
 ### 3.3 原子写入与并发安全
 
@@ -2081,7 +2081,7 @@ get_combined_timeseries()
 
 **Excel 渲染**：`portfolio_history_drawdown`（组合历史走势与回撤）页签分「走势表 + 回撤矩阵 + 危机区间标注 + 月度收益日历 + 风险调整超额」五区块——走势表每基准一列（归一化值）+ 指标汇总矩阵（累计收益/最大回撤/年化波动率/起止日，仅一份），回撤矩阵为独立回撤事件明细（含恢复耗时）+ 尾部风险统计（VaR(95/99)/最大单日跌幅/最长连续下跌/最大跌幅后恢复五行，百分比按 FMT_PERCENT 存小数，样本不足写「样本不足」占位），危机区间标注为静态日期表（2015 股灾/2018 贸易摩擦/2020 疫情/2022 调整/2025 关税冲击，`CRISIS_INTERVALS` 单一来源）+ 区间统计——回放态（开关 `crisis_replay`）升级为双层列（组合区间收益/指数区间收益/指数区间最大回撤，组合窗内才算组合层，窗外行状态标「组合窗口外」），月度收益日历为年 × 月红绿格（正值红字/负值绿字，`return_pct/100` 配 FMT_PERCENT）+ 口径与胜亏平统计说明行（数据源 `history_data.monthly_returns`，as-if 口径、双口径并排预留），风险调整超额块（开关 `risk_adjusted_excess`）为基准 IR/TE/年化超额 + 12/24 月胜率 + 完整月数表 + 滚动 250 日超额序列 + 口径说明行，样本不足逐项落「数据不足」占位、整块不随开关写。
 
-#### 持仓快照存储与清理（history_snapshot.py）
+#### 持仓快照存储与清理（core/snapshot_store.py）
 
 ```
 save():
@@ -3804,7 +3804,7 @@ report/orchestrator.py (报告编排层)
   → report/market_value.py (行情获取)
   → fetcher/index.py (指数)
   → report/penetration.py (资产穿透)
-  → report/history_snapshot.py (持仓快照)
+  → core/snapshot_store.py (持仓快照)
   → report/portfolio_history.py (历史走势)
   → report/news_correlation.py (新闻关联)
   → llm/generators_orchestrator.py (LLM 编排)
@@ -3995,7 +3995,7 @@ lint 基线为 `E4`/`E7`/`E9`/`F`/`RUF100` + `ARG` + `BLE001` + `ANN001`（`pypr
 |:--|:--|:--|:--|
 | `analysis/_silence.py:99` | `%Y-%m-%d` → `date` | 记入 `expired_codes` + `continue` | 失败即「判定过期」的副作用，非取值语义 |
 | `analysis/event_window_impact.py:59` | `%Y-%m-%d` + `timedelta` 运算 | `False` | 返回类型为 `bool`（「非交易日」），且 try 体内含算术 |
-| `analysis/financial_statement_derive.py:75` | `%Y-%m-%d` → `.month` | `""` | 空串哨兵（非 `None`），返回 `int` 月份 |
+| `core/financial_statement_derive.py:75` | `%Y-%m-%d` → `.month` | `""` | 空串哨兵（非 `None`），返回 `int` 月份 |
 | `analysis/whatif_backtest.py:63` | `%Y-%m-%d` → `.date()` | `None` | 成功路径返回 `date`（非 `datetime`），调用方还要 `effective_date` 原值 |
 | `config/_validation_scalars.py:249` | `date.fromisoformat` | 不返回：`logger.warning` + `issues += 1` | 校验器副作用语义，需带字段名告警 |
 | `core/data_freshness.py:86` | `%Y-%m-%d` | `None` | 成功路径返回**入参原串**（`str`），返回类型不同 |
@@ -4013,7 +4013,7 @@ lint 基线为 `E4`/`E7`/`E9`/`F`/`RUF100` + `ARG` + `BLE001` + `ANN001`（`pypr
 | `report/excel_writer.py:98` | `%Y%m%d` | `continue` 跳过该目录 | try 体内含 `rmtree`/日志，非纯解析 |
 | `report/fund_manager_analysis.py:130` | `%Y-%m-%d` | 三个 `changed_*` 置 `True` | 失败语义是**默认态赋值**（保守判「有变化」） |
 | `report/fund_manager_analysis.py:152` | `%Y-%m-%d` | `pass`（保留已算标记） | 失败即静默续算，返回 `None` 无意义 |
-| `report/history_snapshot.py:223` | `%Y%m%dT%H%M%S` | `None` | 格式集合与三组均不同（紧凑时间戳） |
+| `core/snapshot_store.py:223` | `%Y%m%dT%H%M%S` | `None` | 格式集合与三组均不同（紧凑时间戳） |
 | `report/holding_change_panel.py:543` | 双前缀（8 位紧凑 / ISO 前 10 位） | `None` | 内部分支双格式，非单一格式集合 |
 | `report/holdings_freshness.py:42` | 多格式（`_DATE_FORMATS`） | 试下一格式 | 多格式链，契约明示「宁可放弃也不误判陈旧」 |
 | `report/market_value.py:275,276` | `%Y-%m-%d` | `pass` 续算 | 失败后继续走后续价格类型判定，非返回值 |
@@ -4060,22 +4060,9 @@ lint 基线为 `E4`/`E7`/`E9`/`F`/`RUF100` + `ARG` + `BLE001` + `ANN001`（`pypr
 
 | 违规文件 | 被依赖的上层模块 | 暂不下沉的理由 | 收敛方向 |
 |:---|:---|:---|:---|
-| `analysis/holding_change_events.py` | `report.history_snapshot` | 读历史快照 JSON 的读取/去重原语在 report/history_snapshot.py，事件推断需按同一口径读快照 | 抽出 core 级快照读取原语（读取 + 去重 + 归一化），report 侧只保留区块装配 |
-| `analysis/portfolio_evolution.py` | `report.history_snapshot` | 同上：演进趋势聚合直接复用 report 侧快照读取原语，避免两套读盘口径 | 同 history_snapshot 原语下沉后改为引用 core |
-| `analysis/snapshot_diff.py` | `report.history_snapshot` | 同上：差异计算按 report 侧同一份快照读取实现取数 | 同 history_snapshot 原语下沉后改为引用 core |
-| `analysis/prosperity_framework.py` | `report.penetration` | 景气度评分需复用穿透分类结果（基金→底层资产映射），该分类现耦合在 report/penetration | 把穿透的纯分类计算（不含 IO/渲染）下沉 analysis，report 侧改为消费 |
-| `analysis/prosperity_inputs.py` | `report.penetration` | 同上：输入装配复用穿透分类结果 | 同上（穿透纯计算下沉后一并改引用） |
-| `fetcher/fund_fee.py`<br>`providers/tiantian_purchase.py` | `analysis.fee_schedule_model` | 解析/派生原语现居 analysis 侧，取数适配器需复用同一口径 | 把纯解析/派生原语下沉 core（如 core/fee_schedule.py、core/financial_derive.py），analysis 与 fetcher 共同消费 |
-| `fetcher/financial_indicator.py`<br>`fetcher/financial_indicator_adapters.py` | `analysis.financial_statement_derive` | 解析/派生原语现居 analysis 侧，取数适配器需复用同一口径 | 把纯解析/派生原语下沉 core（如 core/fee_schedule.py、core/financial_derive.py），analysis 与 fetcher 共同消费 |
-| `fetcher/financial_indicator_adapters.py` | `analysis.financial_indicator_extract` | 解析/派生原语现居 analysis 侧，取数适配器需复用同一口径 | 把纯解析/派生原语下沉 core（如 core/fee_schedule.py、core/financial_derive.py），analysis 与 fetcher 共同消费 |
-| `cache/_cache_refresh.py` | `report.news_correlation` | 新闻预热复用报告侧行业关键词扩展（同一口径），实现居 report | 把行业关键词扩展下沉 core（如 core/news_keywords.py），预热与报告共同消费 |
 | `cache/_cache_refresh.py` | `report.fund_style_classify` | 基金风格扩展数据预取复用报告侧装配 | 风格扩展取数原语下沉 core/fetcher，报告只做装配 |
 | `cache/operations.py` | `report.market_value` | 刷新后判定交易日与市值构成需复用报告侧市值核算原语 | 市值核算与价格类型判定下沉 core（交易日原语已下沉，剩余为市值派生） |
 | `core/check_sources.py` | `fetcher.report_adapters`<br>`providers.cninfo`<br>`providers.utils`<br>`providers.akshare_extras` | 数据源健康检查须在链外直呼各源实现才测得到真实连通性（链路自带重试/降级），且探针要按源侧口径区分「负缓存跳过」与「本轮真失败」 | 探针面收成 core 侧探针注册表（各取数层追加注册探测函数），失败原因与负缓存判定原语下沉 core |
-| `config/_llm_providers.py` | `llm.pacing` | 线路配置落盘后需即时注册端点节流策略 | LLM 侧提供注册回调，config 只发配置事件（不直接调 llm） |
-| `config/_validation_llm.py` | `llm.depth_profile` | 思考档位枚举与默认值由 llm 侧单一真源提供 | 档位枚举下沉 core/config 注册表（llm 反向引用） |
-| `config/_validation_sections.py` | `analysis.drawdown_events` | 回撤窗口下限绑定分析层最少交易日常量 | 把 MIN_SPAN 常量下沉 core/constants（分析层再导出） |
-| `config/_validation_sections.py` | `analysis.fee_schedule_model` | 费率表校验复用分析层费率阶梯建模（同一口径） | 费率阶梯纯解析下沉 core/fee_schedule，分析与配置共同消费 |
 
 > 另：`core/check_sources.py` 直连 `providers/`/`fetcher/` 属**探针模块职责**（连通性检查必须在链外直呼各源），
 > 形态上是 `core` 行的函数内反向依赖：**允许但必须逐处登记**例外表（`owner`/`reason`/`expiry`/`replacement`），
@@ -4250,7 +4237,7 @@ lint 基线为 `E4`/`E7`/`E9`/`F`/`RUF100` + `ARG` + `BLE001` + `ANN001`（`pypr
 
 > `financial_report_digest_data`（持仓个股财报摘要，C19 契约，5 键）：`{"available": bool, "reason": str, "rows": list[dict], "failures": list[dict], "entry_count": int}`。`rows` 每项含 `code`/`name`/`symbol`/`report_period`/`doc_type`（中文标签）/`title`/`announcement_date`/`summary`/`source`/`adjunct_url`；`failures` 每项含 `code`/`name`/`reason`。对持仓 + 穿透中的 A 股标的，取最新年报（无年报退半年报）的目标章节正文并按 `datasink.max_chars` 截断，由 `report/financial_report_digest.py::build_financial_report_digest` 装配（数据源 `providers/datasink.py`，取数编排 `fetcher/financial_report.py`）。功能开关 `stock_fundamentals` 默认关（关闭 → None → 区块不写）；缺凭据/无 A 股标的/全部无覆盖 → `available=False` 降级。合规：`source` 为披露平台归属，渲染层须保留。C7 注册：该契约并入合并章 `fundamental_snapshot` 的 `data_flag_any`（无独立 type）。消费方：Excel `report/fundamental_snapshot_sheet.py::_write_digest_block` 与 HTML `partials/fundamental_snapshot_section.html`（区块二）。
 >
-> `financial_indicator_data`（财务指标，C19 契约，5 键）：`{"available": bool, "reason": str, "rows": list[dict], "failures": list[dict], "entry_count": int}`。`rows` 每项含 `code`/`name`/`report_period`/`doc_type`/`doc_type_label`/`source_api`/`source`/`revenue`/`net_profit`/`revenue_yoy`/`net_profit_yoy`/`gross_margin`/`roe`/`debt_ratio`/`operating_cash_flow`/`eps`/`bvps`/`pe`/`pb`/`quality_grade`/`quality_score`/`trend`/`series`/`period_count`；`failures` 每项含 `code`/`name`/`reason`。对持仓 + 穿透中的 A 股标的取多期指标（`fetcher/financial_indicator.py`：主源 akshare 一次调用得多期；主源不可用时先由**同花顺官方合并报表派生多期**（`analysis/financial_statement_derive.py`，三张报表各一次请求即得多期），再退化为链路单期记录），由 `analysis/financial_indicator.py::quality_grade`/`trend_label`/`current_valuation` 派生质量档（ROE/毛利率/资产负债率/经营现金流对净利覆盖 四维均值启发式，**非投资建议、非评级**，阈值不区分行业）、年度趋势（相邻年报营收与净利）与当前 PE/PB（**官方 TTM/MRQ 口径优先**：数据源提供 `pe_ttm`/`pb_mrq` 时直接采用；缺失才回退「现价 ÷ 该报告期每股收益/每股净资产」，亏损或净资产非正留空——自算口径在半年报/季报上会明显虚高，两者混用会误导估值判断），由 `report/financial_indicator.py::build_financial_indicator` 装配（现价来自行情明细，经 `fetcher/financial_indicator.py::collect_price_map`）。功能开关 `stock_fundamentals` 默认关（关闭 → None → 区块不写）；无 A 股标的/数据源不可用 → `available=False` 降级。历史 PE/PB 分位（TTM 口径）属后续阶段，本章只给当前值。C7 注册：该契约并入合并章 `fundamental_snapshot` 的 `data_flag_any`（无独立 type）。消费方：Excel `report/fundamental_snapshot_sheet.py::_write_indicator_block` 与 HTML `partials/fundamental_snapshot_section.html`（区块一）。
+> `financial_indicator_data`（财务指标，C19 契约，5 键）：`{"available": bool, "reason": str, "rows": list[dict], "failures": list[dict], "entry_count": int}`。`rows` 每项含 `code`/`name`/`report_period`/`doc_type`/`doc_type_label`/`source_api`/`source`/`revenue`/`net_profit`/`revenue_yoy`/`net_profit_yoy`/`gross_margin`/`roe`/`debt_ratio`/`operating_cash_flow`/`eps`/`bvps`/`pe`/`pb`/`quality_grade`/`quality_score`/`trend`/`series`/`period_count`；`failures` 每项含 `code`/`name`/`reason`。对持仓 + 穿透中的 A 股标的取多期指标（`fetcher/financial_indicator.py`：主源 akshare 一次调用得多期；主源不可用时先由**同花顺官方合并报表派生多期**（`core/financial_statement_derive.py`，三张报表各一次请求即得多期），再退化为链路单期记录），由 `analysis/financial_indicator.py::quality_grade`/`trend_label`/`current_valuation` 派生质量档（ROE/毛利率/资产负债率/经营现金流对净利覆盖 四维均值启发式，**非投资建议、非评级**，阈值不区分行业）、年度趋势（相邻年报营收与净利）与当前 PE/PB（**官方 TTM/MRQ 口径优先**：数据源提供 `pe_ttm`/`pb_mrq` 时直接采用；缺失才回退「现价 ÷ 该报告期每股收益/每股净资产」，亏损或净资产非正留空——自算口径在半年报/季报上会明显虚高，两者混用会误导估值判断），由 `report/financial_indicator.py::build_financial_indicator` 装配（现价来自行情明细，经 `fetcher/financial_indicator.py::collect_price_map`）。功能开关 `stock_fundamentals` 默认关（关闭 → None → 区块不写）；无 A 股标的/数据源不可用 → `available=False` 降级。历史 PE/PB 分位（TTM 口径）属后续阶段，本章只给当前值。C7 注册：该契约并入合并章 `fundamental_snapshot` 的 `data_flag_any`（无独立 type）。消费方：Excel `report/fundamental_snapshot_sheet.py::_write_indicator_block` 与 HTML `partials/fundamental_snapshot_section.html`（区块一）。
 
 > `purchase_status_data`（申购限购状态，C19 契约，7 键）：`{"available": bool, "reason": str\|None, "rows": dict, "fetched_at": str\|None, "source": str\|None, "constraint_block": str, "restricted_index": dict}`。`constraint_block` 为构建期渲染的申购限购约束块（`purchase_status.py::build_purchase_constraint_block` 单源：准入四条任一不过 → `""`；行序 = 持仓明细顺序、字段值与单元格同源；`holdings_details` 缺省不传 → `""`——both/basic/What-if 取契约路径块恒空零开销），消费方为 LLM 分析章提示词（`generate_all_llm` 从 `pipeline_data` 提取同一实例 → `llm/prompts_tables.py::_build_prompt_appendix` 统一附录第 4 段，`skeleton` 单点注入，口径类块进提示词即进指纹；新闻批量路径由 `_llm_news.py::_fetch_llm_and_news` 同源读取交 `generators_news` 批量 hooks 的提示词与缓存指纹）。`restricted_index` 为受限标的预格式化索引（code → status/limit/limit_text/next_open_text/level，由 `purchase_status.py::build_restricted_index` 经 `_filter_restricted_rows` 单源筛选与格式化、`report/orchestrator.py` 编排层注入；准入不满足 → `{}`，消费方按缺席回退；What-if 路径经 `whatif_operations._purchase_restricted_index` 单点就地构建同名索引）。`rows` 为 `{代码: {purchase_status, redemption_status, next_open_date, daily_limit, min_purchase}}`（0 元/缺失限额在解析层已单点转 `daily_limit=None` → 展示「限额未知」）；由 `fetcher/fund_purchase.py::fetch_fund_purchase_status_cached` 取天天基金全量表（Provider Chain + 形状/值域准入 + 会话复用），`report/purchase_status.py::build_purchase_status_data` 装配。功能开关 `fund_purchase_limit` 默认开（关闭 → None → 列隐藏）；全链失败 → `available=False` 静默隐列（不阻断主链路）。时效分档由 `purchase_status.py::stale_level` 按交易日历计（≤3 正常 / 4~7 展示并标数据陈旧 / >7 显示「—」，宁缺毋错，长假不计入）。单元格文案、口径脚注、列可见判据均单源于 `report/purchase_status.py`（Excel 与 HTML 共用，不发散）。消费方：HTML `report_template.html` 持仓市值明细与持仓分类表条件列（同一 `purchase_status_display` 上下文——cells/level/footnote——明细行取 cells 映射、小计/总计空 td）与 Excel `report/holdings_detail_sheet.py`（市值明细与分类汇总两区块末列追加——明细行渲染、小计/总计留空——+ 区块①下方口径脚注，该行位于两区块之间覆盖两块）；What-if 目标持仓受限提示（`analysis/whatif.py::build_whatif_data` 的 `restricted_index` 形参 → 契约条件键 `feasibility` → Excel 持仓变动明细尾部区块 + HTML⑦申购受限提示节）。
 

@@ -37,6 +37,7 @@ provider 条目自带 ``pacing`` 段，缺省即表示「无额外约束」（�
 from __future__ import annotations
 
 import logging
+import math
 import threading
 import time
 from typing import Any
@@ -51,6 +52,25 @@ _POLICY_LOCK = threading.Lock()
 #: 本线程门禁等待累加器（见 pop_thread_pacing_wait）
 _TLS = threading.local()
 _LOADED = False
+#: 装载时的线路配置修订序号（`config.get_providers_revision()`）；写盘后序号变化即重载
+_LOADED_REVISION: int | None = None
+
+
+def _as_float(value: Any, default: float = 0.0) -> float:
+    """尽力把入参转成有限浮点；不可转/非有限一律给 default（不抛）。"""
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return default
+    return num if math.isfinite(num) else default
+
+
+def _as_int(value: Any, default: int = 0) -> int:
+    """尽力把入参转成整数；不可转一律给 default（不抛）。"""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
 
 class PacingPolicy:
@@ -59,9 +79,9 @@ class PacingPolicy:
     __slots__ = ("min_interval", "jitter", "max_concurrency")
 
     def __init__(self, min_interval: float = 0.0, jitter: float = 0.0, max_concurrency: int = 0) -> None:
-        self.min_interval = max(0.0, float(min_interval))
-        self.jitter = min(1.0, max(0.0, float(jitter)))
-        self.max_concurrency = max(0, int(max_concurrency))
+        self.min_interval = max(0.0, _as_float(min_interval))
+        self.jitter = min(1.0, max(0.0, _as_float(jitter)))
+        self.max_concurrency = max(0, _as_int(max_concurrency))
 
     @property
     def is_noop(self) -> bool:
@@ -122,18 +142,31 @@ def register_policies(providers: list[dict[str, Any]] | None) -> None:
         _POLICIES.clear()
         _POLICIES.update(parsed)
         _LOADED = True
+        global _LOADED_REVISION
+        _LOADED_REVISION = _providers_revision()
     if parsed:
         logger.info("[llm/pacing] 已装载端点节流策略: %s", {k: repr(v) for k, v in parsed.items()})
 
 
-def _ensure_loaded() -> None:
-    """惰性装载（供未显式调用 register_policies 的入口，如单测/脚本）。
+def _providers_revision() -> int | None:
+    """线路配置修订序号（配置层不可用时返回 None，按「无变化」处理）。"""
+    try:
+        from src.python.config import get_providers_revision
 
-    策略与 ``_provider_list`` 同源：生产路径在 ``get_llm_config`` 组装时已调用
-    :func:`register_policies`，此处只兑底未经过配置加载的入口，故直接读同一份
-    ``_provider_list``（引用不存在的访问器会 ImportError → 静默按无约束处理）。
+        return int(get_providers_revision())
+    except Exception:  # noqa: BLE001 — 配置层不可用不应影响节流主链路
+        return None
+
+
+def _ensure_loaded() -> None:
+    """惰性装载 / 按需重载（单测与脚本从不显式调 `register_policies` 时走这里）。
+
+    策略与 ``_provider_list`` 同源：此处读同一份 ``_provider_list``（引用不存在的
+    访问器会 ImportError → 静默按无约束处理）。配置写盘会递增修订序号，序号变化即
+    重载，故配置层无需反向调用本模块（分层单向）。
     """
-    if _LOADED:
+    revision = _providers_revision()
+    if _LOADED and revision == _LOADED_REVISION:
         return
     try:
         from src.python.config import get_llm_config

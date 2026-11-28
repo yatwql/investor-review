@@ -119,9 +119,15 @@ class TestCopyFileAtomicFailures:
 # ── 熔断状态委派 / 代码分档 ───────────────────────────
 
 
-def test_circuit_breaker_status_returns_mapping():
-    assert isinstance(circuit_breaker.get_provider_breaker_status(), dict)
-    assert isinstance(circuit_breaker.get_llm_endpoint_status(), dict)
+def test_circuit_breaker_status_returns_mapping(monkeypatch):
+    provider_sentinel = {"provider_x": {"available": True, "tier": "A", "consecutive_failures": 0}}
+    llm_sentinel = {"llm.example.com": {"circuit_broken": False, "consecutive_failures": 0}}
+    monkeypatch.setattr(circuit_breaker.gateway, "_get_provider_status", lambda: provider_sentinel)
+    monkeypatch.setattr(circuit_breaker.gateway, "_get_llm_status", lambda: llm_sentinel)
+
+    # 契约是「委派给 gateway」，故断言拿到的就是 gateway 的报告而非新造的映射
+    assert circuit_breaker.get_provider_breaker_status() is provider_sentinel
+    assert circuit_breaker.get_llm_endpoint_status() is llm_sentinel
 
 
 def test_market_cap_prefix_buckets():

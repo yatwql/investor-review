@@ -200,7 +200,7 @@ def test_layer_inversion_detected(surface, tmp_path):
     )
     (root / "analysis" / "a2.py").write_text("import src.python.llm.skeleton\n", encoding="utf-8")
     (root / "fetcher" / "f1.py").write_text(
-        "from src.python.analysis.fee_schedule_model import parse_fee_percent\n", encoding="utf-8"
+        "from src.python.analysis.correlation import compute_rolling_correlations\n", encoding="utf-8"
     )
     (root / "providers" / "p1.py").write_text(
         "from src.python.report.data_status import mark_data_used\n", encoding="utf-8"
@@ -213,17 +213,17 @@ def test_layer_inversion_detected(surface, tmp_path):
         "from src.python.report.market_value import classify_holdings\n", encoding="utf-8"
     )
     (root / "config" / "g1.py").write_text(
-        "from src.python.analysis.drawdown_events import MIN_SPAN\n", encoding="utf-8"
+        "from src.python.analysis.metrics import compute_all_metrics\n", encoding="utf-8"
     )
     findings = surface.scan_layer_inversion(root)
     assert any("[layer-inversion]" in f and "a1.py" in f and "report.data_status" in f for f in findings)
     assert any("[layer-inversion]" in f and "a2.py" in f and "llm.skeleton" in f for f in findings)
-    assert any("[layer-inversion]" in f and "f1.py" in f and "analysis.fee_schedule_model" in f for f in findings)
+    assert any("[layer-inversion]" in f and "f1.py" in f and "analysis.correlation" in f for f in findings)
     assert any("[layer-inversion]" in f and "p1.py" in f and "report.data_status" in f for f in findings)
     assert any("[layer-inversion]" in f and "r1.py" in f and "tui.live_status" in f for f in findings)
     assert any("[layer-inversion]" in f and "l1.py" in f and "web.progress" in f for f in findings)
     assert any("[layer-inversion]" in f and "c1.py" in f and "report.market_value" in f for f in findings)
-    assert any("[layer-inversion]" in f and "g1.py" in f and "analysis.drawdown_events" in f for f in findings)
+    assert any("[layer-inversion]" in f and "g1.py" in f and "analysis.metrics" in f for f in findings)
 
 
 def test_layer_inversion_core_import_allowed(surface, tmp_path):
@@ -245,17 +245,17 @@ def test_layer_inversion_exception_suppresses_and_is_used(surface, monkeypatch, 
     (root / "fetcher").mkdir(parents=True)
     (root / "analysis").mkdir(parents=True)
     target = root / "fetcher" / "mod.py"
-    target.write_text("from src.python.analysis.fee_schedule_model import parse_fee_percent\n", encoding="utf-8")
+    target.write_text("from src.python.analysis.correlation import compute_rolling_correlations\n", encoding="utf-8")
     monkeypatch.setattr(surface, "rel", lambda path: "fetcher/mod.py")
     exc = surface.ExceptionTable(
         surface.EXCEPTIONS_FILE,
         surface.table_spec("import-surface").rules,
         {
             "layer-inversion": [
-                {"path": "fetcher/mod.py", "name": "src.python.analysis.fee_schedule_model"},
+                {"path": "fetcher/mod.py", "name": "src.python.analysis.correlation"},
             ]
         },
     )
     assert surface.scan_layer_inversion(root) != []
     assert surface.scan_layer_inversion(root, exc) == []
-    assert ("layer-inversion", "fetcher/mod.py", "src.python.analysis.fee_schedule_model") in exc.used
+    assert ("layer-inversion", "fetcher/mod.py", "src.python.analysis.correlation") in exc.used

@@ -19,10 +19,10 @@ from __future__ import annotations
 
 import pytest
 
-from src.python.report.history_snapshot import load_comparison_baseline, save
+from src.python.core.snapshot_store import load_comparison_baseline, save
 from src.python.schemas.history import AccountSnapshot, SnapshotData, SnapshotHolding
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_report, pytest.mark.usefixtures("offline_external_sources")]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_core, pytest.mark.usefixtures("offline_external_sources")]
 
 
 def _save(ts: str, mv: float = 1000.0, namespace: str | None = None) -> None:

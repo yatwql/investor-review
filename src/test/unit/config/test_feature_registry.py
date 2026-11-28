@@ -10,7 +10,6 @@ from __future__ import annotations
 import pytest
 
 from src.python.config._feature_registry import (
-    _FEATURE_FLAGS_DEFAULT,
     DOMAIN_LABELS,
     DOMAIN_ORDER,
     GROUP_DOMAIN,
@@ -32,15 +31,16 @@ class TestGroupAndDomainTables:
     def test_group_order_covers_every_label(self):
         assert set(GROUP_ORDER) == set(GROUP_LABELS)
 
-    def test_domain_order_covers_every_label(self):
+    def test_domain_order_covers_every_label_and_hints_are_known(self):
+        """域序即域标签全集，且 Web 域提示词只引用已声明域。"""
+        from src.python.config._feature_registry import DOMAIN_HINTS
+
         assert set(DOMAIN_ORDER) == set(DOMAIN_LABELS)
+        assert set(DOMAIN_HINTS) <= set(DOMAIN_ORDER)
 
     def test_every_group_maps_to_a_known_domain(self):
-        assert set(GROUP_DOMAIN) <= set(GROUP_LABELS)
+        assert set(GROUP_DOMAIN) == set(GROUP_ORDER)
         assert set(GROUP_DOMAIN.values()) <= set(DOMAIN_LABELS)
-
-    def test_every_switch_belongs_to_a_declared_group(self):
-        assert {definition.group for definition in feature_switch_registry.values()} <= set(GROUP_LABELS)
 
 
 class TestPanelDerivation:
@@ -103,11 +103,3 @@ class TestExperimentalLifecycle:
         for flag, definition in feature_switch_registry.items():
             assert is_experimental_switch(flag) is definition.experimental
         assert is_experimental_switch("不存在的开关") is False
-
-
-class TestDefaultsSingleSource:
-    def test_default_map_mirrors_registry_defaults(self):
-        """默认值只写一处：映射表必须与注册表逐项一致（漂移即默认值双源）。"""
-        assert _FEATURE_FLAGS_DEFAULT == {
-            flag: definition.default for flag, definition in feature_switch_registry.items()
-        }

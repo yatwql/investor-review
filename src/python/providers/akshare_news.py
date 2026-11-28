@@ -15,6 +15,7 @@ import logging
 
 from src.python.core.akshare_compat import resolve
 from src.python.core.constants import BEIJING_TZ
+from src.python.providers.utils import set_last_reason
 from datetime import datetime
 from typing import Any
 
@@ -46,6 +47,7 @@ def _fetch_from_caixin(num: int = 100) -> list[dict[str, Any]]:
         df = ak.stock_news_main_cx()
     except Exception as e:  # noqa: BLE001 — 财新新闻 (akshare) 获取失败: %s
         logger.warning("财新新闻 (akshare) 获取失败: %s", e)
+        set_last_reason(f"财新渠道失败: {e}")
         return []
 
     if df is None or df.empty:
@@ -126,6 +128,7 @@ def _fetch_cctv_news(date_str: str | None = None) -> list[dict[str, Any]]:
         df: Any = resolve(ak, "news_cctv")(date=date_str)
     except Exception as e:  # noqa: BLE001 — CCTV 新闻 (akshare) 获取失败: %s
         logger.warning("CCTV 新闻 (akshare) 获取失败: %s", e)
+        set_last_reason(f"CCTV 渠道失败: {e}")
         return []
 
     if df is None or df.empty:

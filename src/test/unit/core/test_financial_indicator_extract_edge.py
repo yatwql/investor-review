@@ -11,9 +11,9 @@ from __future__ import annotations
 
 import pytest
 
-from src.python.analysis.financial_indicator_extract import extract_indicators
+from src.python.core.financial_indicator_extract import extract_indicators
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_analysis, pytest.mark.edge]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_core, pytest.mark.edge]
 
 
 def _synthetic(rows: str, unit: str = "单位：元币种：人民币") -> str:

@@ -20,7 +20,7 @@ from unittest.mock import MagicMock, patch
 
 from src.python.analysis.portfolio_evolution import build_evolution_data
 from src.python.analysis.snapshot_diff import build_snapshot_diff
-from src.python.report import history_snapshot as hs
+from src.python.core import snapshot_store as hs
 from src.python.report._snapshot import capture_snapshot
 from src.python.report.orchestrator import generate_report
 from src.python.schemas.history import AccountSnapshot, SnapshotData, SnapshotHolding
@@ -115,10 +115,10 @@ class TestCaptureSnapshotNamespace:
         reporter = MagicMock()
         config = {"history": {"snapshot_retention_days": 99, "snapshot_max_count": 200}}
         with (
-            patch("src.python.report.history_snapshot.load_comparison_baseline", return_value=None),
-            patch("src.python.report.history_snapshot.save"),
+            patch("src.python.core.snapshot_store.load_comparison_baseline", return_value=None),
+            patch("src.python.core.snapshot_store.save"),
             patch("src.python.fetcher.history_diff.HistoryDiff") as mock_hd,
-            patch("src.python.report.history_snapshot.prune") as mock_prune,
+            patch("src.python.core.snapshot_store.prune") as mock_prune,
         ):
             mock_hd.compute.return_value = MagicMock(is_first_check=True)
             capture_snapshot(

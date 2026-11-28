@@ -26,7 +26,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from src.python.analysis.fee_schedule_model import (
+from src.python.core.fee_schedule_model import (
     SRC_F10,
     SRC_TABLE_SINGLE,
     build_config_fee_schedules,

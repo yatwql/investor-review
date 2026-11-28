@@ -16,10 +16,10 @@ from pathlib import Path
 
 import pytest
 
-from src.python.analysis.financial_indicator_extract import PARSED_FIELDS, extract_indicators
+from src.python.core.financial_indicator_extract import PARSED_FIELDS, extract_indicators
 from src.python.schemas.datasource_fields import FinancialIndicatorFields
 
-pytestmark = [pytest.mark.unit, pytest.mark.unit_analysis]
+pytestmark = [pytest.mark.unit, pytest.mark.unit_core]
 
 _FIXTURE = Path(__file__).resolve().parents[2] / "data" / "fixtures" / "datasink_indicator_section_600900.md"
 

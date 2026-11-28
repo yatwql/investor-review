@@ -1,6 +1,6 @@
 # 投资复盘助手 - 自我审查问题记录
-> 文档版本：0.19.1
-> **编号源**：`rf-next = 1262`（新增问题提出后更新为 +1；已用最大 rf-1261，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
+> 文档版本：0.19.2
+> **编号源**：`rf-next = 1279`（新增问题提出后更新为 +1；已用最大 rf-1278，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
 ## 当前待处理问题
@@ -18,6 +18,12 @@
 
 | # | 问题 | 修复方向 |
 | --- | --- | --- |
+| **rf-1262** | `analysis/schedule_replay.py::run_schedule_replay` 单函数 323 行：规则解析、逐日推演与结果汇总同处一体，分支密度高到改动无法局部验证 | 按「规则归一 / 逐日推演 / 结果汇总」三段下沉为同包私有辅助，主函数只留编排与返回契约 |
+| **rf-1263** | `cli/_parser.py::_build_parser` 277 行：全部命令与参数在同一函数内堆叠，新增子命令只能继续在长函数里追加 | 按命令簇（生成 / 配置 / 数据 / 评测）拆为每组一个注册函数，主函数顺序链式调用 |
+| **rf-1264** | `report/html_writer.py::_build_template_context` 247 行：模板上下文装配与各页签取数耦合，上下文键的归属不可一眼辨认 | 按页签拆上下文装配函数（行情 / 持仓 / 资金流 / LLM 分块），主函数只合并字典并补公共键 |
+| **rf-1265** | `report/excel_generator.py::generate_excel_report` 216 行：写盘流程与列宽/格式/数据源横跨同一函数 | 抽出「写表 / 格式 / 汇总页」三个私有阶段函数，主函数只串流程 |
+| **rf-1266** | `llm/generators.py::generate_debate_procon` 201 行：提示构造、并发控制与结果清洗同函数 | 拆为提示构造与结果归一两个辅助，并发编排留在主函数 |
+| **rf-1267** | `analysis/correlation.py::compute_rolling_correlations` 193 行：窗口切片、对齐与序列化输出混为一处（同长度的 `analysis/whatif.py::build_whatif_data` 随同批处理） | 拆为「窗口切分 / 对齐计算 / 输出组装」三段，公共对齐原语上提包内共享 |
 
 ### P3 — 持续监控：兼容残留
 
@@ -46,7 +52,7 @@
 | `scripts/_doc_drift/_format.py` 742 行 | 格式化规则按文档类型拆（章节 / 表格 / 树 / 统计） |
 | `src/python/core/degradation.py` 768 行 | 状态词与事件模型、登记面与持久化可拆两文件 |
 | `src/python/report/action_sheet.py` 754 行 | 行动页签内各块（建议表 / 判断依据 / 决策书 / 复盘）拆子模块 |
-| `src/python/fetcher/financial_report.py` 725 行 | 按「索引 / 正文 / 全文定位」三阶下沉 |
+| `src/python/fetcher/financial_report.py` 745 行 | 按「索引 / 正文 / 全文定位」三阶下沉 |
 | `src/python/providers/akshare_extras.py` 721 行 | 按接口族拆（指数 / 行业 / 分红 / 盈利预测） |
 | `src/python/core/provider_registry.py` 710 行 | 熔断与会话缓存各自独立文件 |
 | `src/python/llm/skeleton.py` 909 行 | 模板数据与渲染逻辑可下沉 `llm/skeleton_*`（骨架模板 / 占位渲染） |
@@ -57,11 +63,11 @@
 
 ## 已解决问题
 
-### 开发期已修复（0.19.1-dev）
+### 开发期已修复（0.19.2-dev）
 
 > 本表为本开发周期已修条目的**摘要行**（详情见 `changelog.md` 对应段）；发布时由 `release.py prepare` 的 archive 步原表搬入版本归档并在此留占位。
 
-（本版开发期已修复项已随 v0.19.1 发布迁入归档档案）
+（本版开发期已修复项已随 v0.19.2 发布迁入归档档案）
 
 ### 归档档案
 - [`archived_review-findings.0.19.x.md`](../archive/v0.19.x/archived_review-findings.0.19.x.md) — v0.19.x（2026-11-27 ~ 2026-11-28）

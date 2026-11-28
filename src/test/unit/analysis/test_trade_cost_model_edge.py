@@ -10,7 +10,7 @@ import math
 
 import pytest
 
-from src.python.analysis.fee_schedule_model import (
+from src.python.core.fee_schedule_model import (
     SRC_UNKNOWN,
     parse_purchase_fee_schedule,
     parse_redemption_fee_schedule,
