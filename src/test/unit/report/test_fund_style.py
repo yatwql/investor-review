@@ -179,7 +179,7 @@ class TestGridDistance(unittest.TestCase):
 class TestDriftLevel(unittest.TestCase):
     """_drift_level：漂移等级"""
 
-    def test_none(self):
+    def test_zero_drift_maps_to_none_level(self):
         self.assertEqual(_drift_level(0), "无")
 
     def test_mild(self):

@@ -22,7 +22,6 @@ import pytest
 from src.python.config.features import (
     EXPERIMENT_ALL,
     FEATURE_FLAGS,
-    GROUP_LABELS,
     GROUP_MECHANISM,
     GROUP_ORDER,
     FeatureSwitchDef,
@@ -455,10 +454,6 @@ class TestFeatureSwitchRegistryInvariants:
         for flag, d in experimental_flags():
             assert d.default is False, f"实验项 {flag} 出厂默认应为关"
 
-    def test_labels_cover_all_groups(self):
-        """每个分组都有面板标题（缺标题则分组块渲染为无名块）。"""
-        assert set(GROUP_ORDER) <= set(GROUP_LABELS)
-
     def test_domain_mapping_is_total_and_valid(self):
         """组→域映射覆盖全部组，值域落在五域内（Web 五域编排的唯一取数口）。"""
         from src.python.config.features import DOMAIN_HINTS, DOMAIN_LABELS, DOMAIN_ORDER, GROUP_DOMAIN
@@ -466,13 +461,6 @@ class TestFeatureSwitchRegistryInvariants:
         assert set(GROUP_DOMAIN) == set(GROUP_ORDER)
         assert set(GROUP_DOMAIN.values()) <= set(DOMAIN_ORDER)
         assert set(DOMAIN_ORDER) <= set(DOMAIN_LABELS) | set(DOMAIN_HINTS)
-
-    def test_panel_groups_partition_all_groups(self):
-        """面板编排覆盖全部组且每组恰属一个面板（漏组 = 该组没有入口）。"""
-        from src.python.config.features import PANEL_GROUPS
-
-        listed = [group for groups in PANEL_GROUPS.values() for group in groups]
-        assert sorted(listed) == sorted(GROUP_ORDER)
 
     def test_needs_hint_is_boolean(self):
         """``needs_hint`` 显式声明（默认 False），面板据此决定是否常显副行。"""

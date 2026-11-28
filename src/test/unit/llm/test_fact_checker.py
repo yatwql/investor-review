@@ -176,14 +176,14 @@ class TestCheckNumericalConsistency:
         assert checked >= 0
 
     def test_missing_market_value(self):
-        """市值缺失 — 不影响函数运行。"""
+        """市值缺失 → 收益率不可知，不得按 0 市值算成 -100% 去改写 LLM 的正确表述。"""
         holdings = [{"name": "测试", "code": "000001", "cost": 1000.0}]
         text = "累计收益率为 5.0%。"
         issues, checked, passed, corrections = check_numerical_consistency(text, holdings)
-        assert isinstance(issues, list)
-        assert isinstance(checked, int)
-        assert isinstance(passed, int)
-        assert isinstance(corrections, list)
+        assert checked == 1
+        assert issues == [], f"市值缺失被当成全亏：{issues}"
+        assert passed == checked
+        assert corrections == [], f"不得生成 -100% 的自动修正：{corrections}"
 
     def test_multiple_values_with_mixed_context(self, sample_holdings):
         """混合上下文中的多个百分比 — 只检收益相关的。"""

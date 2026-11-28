@@ -326,8 +326,8 @@ class TestGenerateDetails(unittest.TestCase):
     @patch("src.python.report.market_value.fetch_market_data")
     @patch("src.python.core.trading_calendar.get_last_trading_day")
     @patch("src.python.report.market_value.is_market_open")
-    def test_today_str_none(self, mock_open, mock_ltd, mock_fetch):
-        """today_str 为空（默认取当天）→ 不报错。"""
+    def test_empty_today_str_falls_back_to_today(self, mock_open, mock_ltd, mock_fetch):
+        """today_str 传空串（调用方未给日期）→ 内部回退当天，照常出明细。"""
         mock_open.return_value = False
         mock_ltd.return_value = "2026-06-26"
         mock_fetch.return_value = self.tencent_mock_data

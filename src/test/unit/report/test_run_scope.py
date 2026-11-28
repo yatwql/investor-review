@@ -108,10 +108,16 @@ class TestStartReportRun:
         assert go._LAST_FP_COMPONENTS == {"totals": "abc"}
 
     def test_failure_inside_scope_does_not_raise(self, monkeypatch):
+        from src.python.llm.session import get_session_usage
         from src.python.report import _run_scope
 
         monkeypatch.setattr(ds, "get_tracker", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
-        assert isinstance(_run_scope.start_report_run(), dict)
+
+        baseline = _run_scope.start_report_run()
+
+        assert isinstance(baseline, dict)
+        # 降级事件复位失败不得让用量基线退化（退化会报成"本轮全量"）
+        assert baseline == get_session_usage(), "get_tracker 故障泄漏到了用量基线"
 
 
 class TestUsageDelta:

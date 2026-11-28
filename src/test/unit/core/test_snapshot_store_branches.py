@@ -128,7 +128,7 @@ class TestListAndLoadFailures:
         assert hs.load_all() == []
         assert hs.prune(retention_days=180, max_count=1) == 0
 
-    def test_load_missing_file_returns_none(self, monkeypatch, tmp_path):
+    def test_file_vanishes_between_listdir_and_read_is_skipped(self, monkeypatch, tmp_path):
         _empty_workspace(monkeypatch, tmp_path)
         # 列举到的文件在读取前消失（并发 prune 的真实竞态）
         monkeypatch.setattr(hs.os, "listdir", lambda _p: ["snapshot_20260101T090000.json"])

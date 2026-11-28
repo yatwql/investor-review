@@ -73,14 +73,20 @@ def _extract_holding_map(holdings_details: list[dict] | None) -> dict[str, str]:
 def _calc_portfolio_values(holdings_details: list[dict] | None) -> dict[str, float]:
     """计算组合核心数值。
 
+    市值全缺失（明细里没有任何 ``market_value``）时收益率**不可知**，按 0 记：
+    若把缺失当 0 市值算，会得出 ``-100%``（全亏）并把 LLM 正确的"累计收益率 5%"
+    判成不一致、还生成``实际 -100.0%`` 的自动修正。0 由下游语境门
+    （``profit_rate < 0.01`` → 跳过收益类比对）自然降级为「不校验」。
+
     Returns:
         {"total_mv": float, "total_cost": float, "total_profit": float, "total_profit_rate": float}
     """
     total_mv = sum(d.get("market_value", 0) or 0 for d in holdings_details or [])
     total_cost = sum(d.get("cost", 0) or 0 for d in holdings_details or [])
-    total_profit = total_mv - total_cost
+    has_market_value = any(d.get("market_value") is not None for d in holdings_details or [])
+    total_profit = total_mv - total_cost if has_market_value else 0.0
     total_profit_rate = 0.0
-    if total_cost and abs(total_cost) > 1e-10:
+    if has_market_value and total_cost and abs(total_cost) > 1e-10:
         total_profit_rate = (total_profit / total_cost) * 100
     return {
         "total_mv": total_mv,
