@@ -273,8 +273,11 @@ class TestOutputModes:
         assert [item["name"] for item in payload["targets"]] == [target.name for target in mutation.TARGETS]
         assert payload["targets"][0]["status"] == mutation.STATUS_PASSED
         assert payload["targets"][1]["status"] == mutation.STATUS_BELOW
-        # 按变异体加权：9 + 3×5 杀掉 / (10 + 3×10) 计入
-        assert payload["score"] == pytest.approx(24 * 100.0 / 40)
+        # 按变异体加权：首切片 9/10 杀掉，其余切片各 5/10 —— 期望值从切片数派生，
+        # 不写死总数（新增/下线切片时该断言不应变红）。
+        killed = 9 + 5 * (len(mutation.TARGETS) - 1)
+        counted = 10 + 10 * (len(mutation.TARGETS) - 1)
+        assert payload["score"] == pytest.approx(killed * 100.0 / counted)
 
     def test_json_status_no_data_for_unparsable_target(self, mutation, monkeypatch, capsys):
         _patch_backend(monkeypatch, mutation, ["garbage\n"])
