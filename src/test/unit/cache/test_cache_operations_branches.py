@@ -295,3 +295,118 @@ class TestUpdateBasicCacheSuccessBranches:
         assert result.pf_ok == 0
         assert any("盈利预测 获取失败" in msg for msg in reporter.warns)
         assert any("分红数据 获取失败" in msg for msg in reporter.warns)
+
+
+class TestNavDateAliasNormalization:
+    """`nav_date` 别名补齐：覆盖「缺字段补值」「非字典透传」两种输入形状。"""
+
+    def test_missing_nav_date_filled_from_price_date(self):
+        assert ops._with_nav_date([{"code": "600519", "price_date": "T"}]) == [
+            {"code": "600519", "price_date": "T", "nav_date": "T"}
+        ]
+
+    def test_non_dict_detail_passes_through(self):
+        """非字典明细（取数层异常形态）原样透传，不因取 nav_date 而抛。"""
+        assert ops._with_nav_date(["raw", None]) == ["raw", None]
+
+
+class TestMarketBreakdownDetailNormalization:
+    """明细归一：同代码只认第一条、缺 price 按 0、缺 name 按空串。"""
+
+    @staticmethod
+    def _stub(monkeypatch, groups, latest):
+        monkeypatch.setattr("src.python.report.market_value.classify_holdings", lambda h: groups)
+        monkeypatch.setattr("src.python.report.market_value._determine_price_type", lambda api, nav, day: f"nav={nav}")
+        monkeypatch.setattr(
+            "src.python.report.market_value.price_update_status", lambda rows, day: [latest] * len(rows)
+        )
+
+    def test_first_detail_wins_on_duplicate_code(self, monkeypatch):
+        self._stub(monkeypatch, {"场内股票": None}, False)
+        monkeypatch.setattr(
+            "src.python.report.market_value.classify_holdings",
+            lambda h: {"场内股票": h},
+        )
+        details = [
+            {"code": "600900", "name": "长江电力", "price": 28.0, "nav_date": "T"},
+            {"code": "600900", "name": "重复明细", "price": 99.0, "nav_date": "T-1"},
+        ]
+
+        breakdown = ops._market_breakdown([_Holder("600900", "长江电力")], details, "T")
+
+        assert dict(breakdown[0]["labels"]) == {"nav=T": 1}
+
+    def test_missing_price_field_defaults_to_zero(self, monkeypatch):
+        self._stub(monkeypatch, {"场内股票": None}, True)
+        monkeypatch.setattr("src.python.report.market_value.classify_holdings", lambda h: {"场内股票": h})
+        details = [{"code": "600900", "name": "长江电力", "nav_date": "T"}]
+
+        breakdown = ops._market_breakdown([_Holder("600900", "长江电力")], details, "T")
+
+        assert (breakdown[0]["total"], breakdown[0]["latest"]) == (1, 1)
+
+    def test_detail_name_none_becomes_empty(self, monkeypatch):
+        self._stub(monkeypatch, {"场内股票": None}, False)
+        monkeypatch.setattr("src.python.report.market_value.classify_holdings", lambda h: {"场内股票": h})
+        details = [{"code": "000001", "name": None, "price": 1.0, "nav_date": "T-1"}]
+
+        breakdown = ops._market_breakdown([_Holder("000001", "")], details, "T")
+
+        assert breakdown[0]["pending"][0]["name"] == ""
+
+
+class TestCacheStatsPanelLine:
+    def test_size_reported_in_kb(self):
+        """面板行按 KB 播报总大小（字节 / 1024）。"""
+        reporter = RecordingReporter()
+        with (
+            patch(
+                "src.python.cache.get_cache_stats",
+                return_value={"total_files": 2, "total_size_bytes": 4096, "by_prefix": {}, "top_by_size": []},
+            ),
+            patch(
+                "src.python.cache.get_cache_hit_rate", return_value={"hits": 0, "misses": 0, "total": 0, "rate": 0.0}
+            ),
+            patch("src.python.cache.cleanup_expired", return_value=0),
+        ):
+            stats = ops.get_cache_stats(reporter)
+
+        assert stats.total_files == 2
+        assert any("大小: 4 KB" in msg for msg in reporter.infos)
+
+
+class TestWarmNewAssetFalsyPayloads:
+    """预热取数返回 None（非空字典）时的降级播报：只告警，不因取键抛。"""
+
+    def test_none_fund_holdings_and_industry_warn(self):
+        reporter = RecordingReporter()
+        holder = _Holder("000001", "基金A")
+        with (
+            patch("src.python.cache.check_and_refresh_caches", return_value=["000001"]),
+            patch("src.python.fetcher.price.fetch_market_data", return_value={"price": 1.5}),
+            patch("src.python.core.code_utils.is_fund_holding", return_value=True),
+            patch("src.python.fetcher.fund.fetch_fund_rankings", return_value={}),
+            patch("src.python.fetcher.fund.fetch_fund_holdings", return_value=None),
+            patch("src.python.fetcher.industry.batch_fetch_industry_data", return_value=None),
+        ):
+            codes = ops.warm_new_asset_caches([holder], reporter)
+
+        assert codes == ["000001"]
+        assert any("持仓明细 基金A 无数据" in msg for msg in reporter.warns)
+        assert any("行业 基金A 无数据" in msg for msg in reporter.warns)
+
+
+class TestPriceFetchFailureBranches:
+    """行情缺失（None）或价为 0 都算失败，不得计入成功数。"""
+
+    @pytest.mark.parametrize("payload", [None, {"price": 0}])
+    def test_missing_or_zero_price_counts_as_failure(self, monkeypatch, payload):
+        reporter = RecordingReporter()
+        monkeypatch.setattr("src.python.fetcher.price.fetch_market_data", lambda code, name: payload)
+        monkeypatch.setattr("src.python.fetcher.index.fetch_indices", lambda: {})
+        monkeypatch.setattr("src.python.fetcher.index.fetch_us_indices", lambda: {})
+
+        result, details = ops._fetch_prices_and_indices([_Holder("600519", "贵州茅台")], reporter)
+
+        assert (result.price_ok, details) == (0, [])
+        assert any("失败" in msg for msg in reporter.warns)
