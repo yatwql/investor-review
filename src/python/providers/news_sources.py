@@ -40,6 +40,7 @@ def _require_or_empty(label: str, items: list[dict[str, Any]]) -> list[dict[str,
         raise NewsSourceUnavailable(f"{label} 不可用：{reason}")
     return items
 
+
 # ── 新闻来源注册（静态元数据，不含开关状态） ─────────────────
 
 _SOURCE_LABELS: dict[str, str] = {

@@ -5,14 +5,6 @@
   "dynamic-target": [],
   "layer-inversion": [
     {
-      "path": "src/python/cache/_cache_refresh.py",
-      "name": "src.python.report.fund_style_classify",
-      "owner": "cache（预热编排）",
-      "reason": "基金风格扩展数据预取复用报告侧装配",
-      "expiry": "2027-06-30",
-      "replacement": "风格扩展取数原语下沉 core/fetcher，报告只做装配"
-    },
-    {
       "path": "src/python/cache/operations.py",
       "name": "src.python.report.market_value",
       "owner": "cache（刷新判定）",

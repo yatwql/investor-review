@@ -494,7 +494,9 @@ class TestSourceFailureStatus:
             raise NewsSourceUnavailable("华尔街见闻 不可用：请求失败: Name or service not known")
 
         monkeypatch.setitem(na._FETCH_MAP, "wallstreetcn", _boom)
-        monkeypatch.setitem(na._FETCH_MAP, "cls", lambda n: [{"title": "t", "url": "http://u", "intro": "", "ctime": ""}])
+        monkeypatch.setitem(
+            na._FETCH_MAP, "cls", lambda n: [{"title": "t", "url": "http://u", "intro": "", "ctime": ""}]
+        )
 
         _items, results = na._fetch_from_all_sources(["wallstreetcn", "cls"], 10)
 
