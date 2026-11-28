@@ -157,6 +157,35 @@ def _auto_reset_config_cache():
 
 
 @pytest.fixture(autouse=True)
+def _auto_reset_providers_revision():
+    """自动清零线路配置修订序号（`config.get_providers_revision()`）。
+
+    序号只在 ``write_llm_providers`` 时递增，跨用例累积会让 ``llm/pacing.py`` 的
+    「序号变化即重载」判据在任何写盘用例之后对整个套件生效，使策略装载时机随
+    用例顺序漂移。故每个用例前后都回到 0。
+    """
+    from src.python.config import _llm_providers
+
+    _llm_providers.reset_providers_revision()
+    yield
+    _llm_providers.reset_providers_revision()
+
+
+@pytest.fixture(autouse=True)
+def _auto_reset_sector_keywords():
+    """自动把行业关键词表退回读盘基线（`core.sector` 的进程内单源）。
+
+    关键词表在导入期读盘一次；用例 monkeypatch 替换后若不复位，后续用例看到的
+    就是上一条用例塞进去的表（板块判定随之漂移）。故每个用例前后都重新读盘。
+    """
+    from src.python.core import sector
+
+    sector.reset_sector_keywords()
+    yield
+    sector.reset_sector_keywords()
+
+
+@pytest.fixture(autouse=True)
 def _auto_reset_config_session():
     """自动关闭配置面板会话，防止撤销记录跨用例串扰。
 

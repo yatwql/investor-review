@@ -53,6 +53,12 @@ def sector_keywords() -> dict[str, str]:
     return dict(_SECTOR_KEYWORDS)
 
 
+def reset_sector_keywords() -> None:
+    """把进程内关键词表退回「按当前文件重新读盘」的基线（测试隔离用）。"""
+    global _SECTOR_KEYWORDS
+    _SECTOR_KEYWORDS = load_sector_keywords()
+
+
 def reload_sector_keywords() -> dict[str, str]:
     """重新读盘并替换进程内关键词表（配置/知识库热更新与测试注入用）。
 

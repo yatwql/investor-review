@@ -40,6 +40,12 @@ def get_providers_revision() -> int:
     return _PROVIDERS_REVISION
 
 
+def reset_providers_revision() -> None:
+    """把修订序号退回 0（测试隔离用：序号跨用例累积会让节流策略重载判据失真）。"""
+    global _PROVIDERS_REVISION
+    _PROVIDERS_REVISION = 0
+
+
 def _get_llm_providers_path() -> str:
     """返回 llm_providers.json 路径（优先读取 config.json 配置）。"""
     try:
