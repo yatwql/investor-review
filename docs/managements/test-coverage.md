@@ -155,8 +155,10 @@
 | `analysis-metrics`（全量 144，`--max-mutants 200`，`--jobs 1`） | 144 | 144 | 135 | 9 | 0 / 0 | **93.8%** | 237s |
 | `cache-ttl-atomic-write`（`--max-mutants 40`） | 278 | 40 | 40 | 0 | 0 / 0 | **100.0%** | 83s |
 | `cache-ttl-atomic-write`（全量 278，`--max-mutants 400`，`--jobs 1`） | 278 | 278 | 278 | 0 | 0 / 0 | **100.0%** | 1,012s |
+| `report-pipeline-data`（全量 23） | 23 | 23 | 23 | 0 | 0 / 0 | **100.0%** | 21s |
+| `analysis-factor-formulas`（`--max-mutants 40`） | 205 | 40 | 37 | 3 | 0 / 0 | **92.5%** | 96s |
 
-> 有界采样口径：`analysis-metrics` 共 144 个变异体、`cache-ttl-atomic-write`（`src/python/cache/`）共 278 个变异体，`--max-mutants 40` 行只代表执行前 40 个变异体；`analysis-metrics` 另追加全量行（144 个全跑，93.8%，9 个均为等价变异），`core-dates`（3 个）与 `analysis-correlation`（96 个）为全量读数，`cache-ttl-atomic-write` 亦已追加全量行（278 个全跑，100.0%）。全量行取 `--jobs 1`：该切片三份源文件同属一个导入面（`metrics.py` 门面聚合 `metrics_returns`/`metrics_risk`），并行时一份文件被变异会污染另两份的判读（实测 `--jobs 3` 会把 8 个等价变异体误报为 killed，得 99.3%）。
+> 有界采样口径：`analysis-metrics` 共 144 个变异体、`cache-ttl-atomic-write`（`src/python/cache/`）共 278 个变异体，`--max-mutants 40` 行只代表执行前 40 个变异体；`analysis-metrics` 另追加全量行（144 个全跑，93.8%，9 个均为等价变异），`core-dates`（3 个）与 `analysis-correlation`（96 个）为全量读数，`cache-ttl-atomic-write` 亦已追加全量行（278 个全跑，100.0%）；`report-pipeline-data`（23 个）为全量读数，`analysis-factor-formulas`（共 205 个）为 `--max-mutants 40` 采样读数（首期 42.5% → 补数值断言后 92.5%）。全量行取 `--jobs 1`：该切片三份源文件同属一个导入面（`metrics.py` 门面聚合 `metrics_returns`/`metrics_risk`），并行时一份文件被变异会污染另两份的判读（实测 `--jobs 3` 会把 8 个等价变异体误报为 killed，得 99.3%）。
 
 **基线判读**：`core-dates` 满格（该模块只是三个解析包装函数，3 个变异体即全被断言住，切片小所以无判别力之外的结论）。`analysis-correlation` 首期读数为 76.0%（全量）/ 71.7%（默认上限），存活变异体集中在两处：① `_pearson_pvalue` 的 p 值数值链（`df = n - 2`、`t = r·√(df/(1-r²))`、`p = 2(1-CDF)`）——属性测试只查对称性/缩放不变/值域/顺序无关，p 值被改成 `2(1+CDF)` 后仍落在 `[0, 1]` 而不变量全过；② `_pearson_r` 与滚动趋势的窗口数值（`num/(sx·sy)` → `num/(sx/sy)` 恒被 clamp 成 ±1 也无人断言）。按首期读数逐条补强断言后达 **96/96（100.0%）**，补的是七类数值/边界断言：p 链用 df=1（Cauchy）与 df=2 闭式解析解对齐手推的 r；`_pearson_r` 手算值（0.6、±1 端点、大偏移窄幅数据下的中心化精度）；`_CONSTANT_EPS` 与 `SIGNIFICANCE_LEVEL` 的等值边界（两者均为严格小于口径）；滚动趋势首个端点 (date, r) 的手算值、完整窗起点恰等首个端点、全窗皆空时的降级结构、notes 截断与完整窗两分支文案。判读口径：等式类幸存变异体大多落在“恰等浮点边界”处，能用阈值等值边界用例杀掉的即补用例，构造不出的才留作等价变异登记。
 
