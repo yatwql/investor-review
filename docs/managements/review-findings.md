@@ -1,5 +1,5 @@
 # 投资复盘助手 - 自我审查问题记录
-> 文档版本：0.19.2-dev
+> 文档版本：0.19.2
 > **编号源**：`rf-next = 1279`（新增问题提出后更新为 +1；已用最大 rf-1278，递增保证唯一，归档不回收。若与历史归档冲突，运行 `scripts/check-task-numbering.py` 校验）
 ---
 
@@ -67,18 +67,7 @@
 
 > 本表为本开发周期已修条目的**摘要行**（详情见 `changelog.md` 对应段）；发布时由 `release.py prepare` 的 archive 步原表搬入版本归档并在此留占位。
 
-| # | 问题 | 修复方向 |
-| --- | --- | --- |
-| **rf-1269** | 分层越界存量项：板块分类原语（行业关键词表 + 名称→板块判定）居 `report/penetration.py`，纯计算层 `analysis/`（景气度评分与输入装配）只能反向依赖报告层 | 原语整块下沉 `core/sector.py`（关键词表加载/降级/只读访问/热重载 + `classify_sector`），report 与 analysis 双侧改为消费 core；分层例外表与文档表同步删除 2 行 |
-| **rf-1270** | 分层越界存量项：持仓快照存储（保存/加载/列表/清理 + 命名空间隔离）整体居 `report/history_snapshot.py`，`analysis/` 三处与 `web/`、`scripts/` 均为读快照而反向依赖报告层 | 整模块迁至 `core/snapshot_store.py`（只依赖 core 与 schemas，无报告侧耦合），全仓引用改指 core；纯存储用例随模块归位 `unit/core` 并按模块改名；分层例外表与文档表同步删除 3 行 |
-| **rf-1271** | 分层越界存量项（7 行）：纯解析/派生原语（费率表模型、三张报表派生、财务指标全文解析、回撤事件下限常量）居 `analysis/`，`fetcher/`、`providers/`、`config/`、`report/` 四处为复用同一口径而反向依赖纯计算层 | 四个纯计算模块整块下沉 `core/`（只依赖 `core`/`schemas`，零上层耦合），全仓引用改指 core；其用例随模块归位 `unit/core`；分层例外表与 `technical.md` 存量例外表各减 7 行；分层守卫用例的示例目标改为仍在 `analysis/` 的模块 |
-| **rf-1272** | 分层越界存量项（2 行）：配置层反向依赖 LLM 实现——`config/_llm_providers.py` 写盘后直接调 `llm.pacing.register_policies`，`config/_validation_llm.py` 从 `llm.depth_profile` 取深度档常量（常量真值本就在 `core/constants.py`） | 前者改为「配置只发信号」：写盘递增 `get_providers_revision()` 修订序号，`llm/pacing.py` 惰性装载时按序号变化自行重载（分层单向）；后者直接改从 `core/constants.py` 取常量。分层例外表与存量例外表各减 2 行 |
-| **rf-1273** | 分层越界存量项：行业/概念关键词扩展（含取数）居 `report/news_correlation.py`，缓存预热为复用同一口径而反向依赖报告层 | 原语迁入 `fetcher/news.py::expand_industry_keywords`（与新闻聚合同层，取数归取数层）；预热与报告两侧改引 fetcher；纯函数的 5 条用例随迁 `unit/fetcher`；分层例外表与存量例外表各减 1 行 |
-| **rf-1274** | 新闻源传输级失败被记成「成功 0 条」（实测华尔街见闻连续两天 DNS 失败仍显示正常）：provider 契约是「失败返回空列表」，聚合层只看返回值无法区分「网络失败」与「源侧确实没有新闻」，健康矩阵与 `get_last_source_status()` 同时失真，provider 还打印「获取成功」 | provider 在传输/解析/鉴权失败分支经 `providers.utils.set_last_reason` 落可读原因；取数包装层（`news_sources._fetch_from_*`）把「空结果 + 有原因」转成 `NewsSourceUnavailable` 抛出，聚合层既有 `except` 分支即登记「失败(<原因>)」；新增 4 条回归用例（含新浪多分类线程内原因回传） |
-| **rf-1275** | 财报索引「各源均无该标的」未入负缓存，每轮重探：实测 16 个代码 × 2~4 源全部预期缺失，单轮财报摘要阶段 50.9s（占数据准备 65%）几乎全是纯等待 | 新增负缓存 `report_index_miss_`（6h，注册表 + 数据源文档 + `technical.md` 同源登记）：仅当主备两源都答「无该标的」且**无传输级失败**时写入，传输级失败照旧不入缓存；新增 2 条回归用例（第二轮即命中负缓存、探源次数保持 1 / 传输级失败不入缓存） |
-| **rf-1277** | 市值缺失被当成「全亏 -100%」：`fact_checker` 组合收益率用 `sum(market_value)` 算，明细缺 `market_value` 时当 0 市值，得出 -100%，把 LLM 正确的「累计收益率 5%」判为不一致并生成「实际 -100.0%」的自动修正；对应用例 `test_missing_market_value` 只断言 `isinstance(issues, list)`，把该缺陷完全掩盖 | `_calc_portfolio_values` 增「市值全缺失 → 收益率不可知」分支（按 0 记，由下游 `profit_rate < 0.01` 语境门跳过收益类比对）；用例改为断言 `checked == 1 / issues == [] / corrections == []`（回归锁） |
-| **rf-1278** | 测试用例年度审计发现四类问题：跨文件或跨类**冗余**（注册表不变式在 `unit/config/test_features.py` 与 `test_feature_registry.py` 双份；`test_financial_indicator_hithink::test_chain_order` 与 `test_financial_indicator::test_chain_registered_with_main_and_fallback` 同断言）、**名实不符**（`test_load_missing_file_returns_none` 实为「列举后文件消失」、`test_today_str_none` 实传空串、`test_none` 语义不明）、**弱断言致无效**（`test_zero_budget_returns_without_blocking` 用快探针导致断言恒过、`run_scope` 两处只断言 `isinstance(dict)`、熔断状态用例只断言 `isinstance(dict)` 未验委派） | 冗余项按「一条不变式一个出处」合并（注册表派生断言归 `test_feature_registry.py`，更强的划分/完整项留 `test_features.py`；链序断言只留描述性命名的那条）；名实不符三项改名并补语义注释；弱断言改断可观测结果（零预算用挂起探针断言「超时」占位项、run_scope 断言基线等于真实用量、熔断断言委派返回同一对象） |
-| **rf-1268** | 两个包的门面与其子模块在**顶层**互相导入（`config` 门面 ↔ `_core`/`_llm_settings`，`llm/fact_checker` 门面 ↔ `_numerical`）：导入能否成功取决于包初始化走到第几行，调换 `__init__` 里顶层导入的顺序或新增一行就可能变成 `ImportError`，且报错点与病因相距很远 | 子模块侧改用 `import 包.子模块 as 名` 直取子模块（不经包门面转手），环消除；新增 `src/test/unit/core/test_import_cycles.py` 以顶层导入图的强连通分量为守卫，防再次引入 |
+（本版开发期已修复项已随 v0.19.2 发布迁入归档档案）
 
 ### 归档档案
 - [`archived_review-findings.0.19.x.md`](../archive/v0.19.x/archived_review-findings.0.19.x.md) — v0.19.x（2026-11-27 ~ 2026-11-28）
