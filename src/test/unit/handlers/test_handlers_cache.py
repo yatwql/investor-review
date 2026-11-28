@@ -334,7 +334,7 @@ class TestRefreshNewsCache(unittest.TestCase):
         return _refresh_news_cache(holdings)
 
     @patch("src.python.cache._cache_refresh._get_news_top_count")
-    @patch("src.python.report.news_correlation._expand_industry_keywords")
+    @patch("src.python.fetcher.news.expand_industry_keywords")
     @patch("src.python.fetcher.news.build_holding_keywords")
     @patch("src.python.fetcher.news.aggregate_news")
     def test_reuses_pipeline_and_returns_match_count(self, mock_agg, mock_build, mock_expand, mock_top):
@@ -379,7 +379,7 @@ class TestRefreshNewsCache(unittest.TestCase):
         mock_agg.assert_not_called()
 
     @patch("src.python.cache._cache_refresh._get_news_top_count")
-    @patch("src.python.report.news_correlation._expand_industry_keywords")
+    @patch("src.python.fetcher.news.expand_industry_keywords")
     @patch("src.python.fetcher.news.build_holding_keywords")
     @patch("src.python.fetcher.news.aggregate_news")
     def test_empty_news_result(self, mock_agg, mock_build, mock_expand, mock_top):

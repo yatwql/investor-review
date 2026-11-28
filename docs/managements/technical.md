@@ -4060,7 +4060,6 @@ lint 基线为 `E4`/`E7`/`E9`/`F`/`RUF100` + `ARG` + `BLE001` + `ANN001`（`pypr
 
 | 违规文件 | 被依赖的上层模块 | 暂不下沉的理由 | 收敛方向 |
 |:---|:---|:---|:---|
-| `cache/_cache_refresh.py` | `report.news_correlation` | 新闻预热复用报告侧行业关键词扩展（同一口径），实现居 report | 把行业关键词扩展下沉 core（如 core/news_keywords.py），预热与报告共同消费 |
 | `cache/_cache_refresh.py` | `report.fund_style_classify` | 基金风格扩展数据预取复用报告侧装配 | 风格扩展取数原语下沉 core/fetcher，报告只做装配 |
 | `cache/operations.py` | `report.market_value` | 刷新后判定交易日与市值构成需复用报告侧市值核算原语 | 市值核算与价格类型判定下沉 core（交易日原语已下沉，剩余为市值派生） |
 | `core/check_sources.py` | `fetcher.report_adapters`<br>`providers.cninfo`<br>`providers.utils`<br>`providers.akshare_extras` | 数据源健康检查须在链外直呼各源实现才测得到真实连通性（链路自带重试/降级），且探针要按源侧口径区分「负缓存跳过」与「本轮真失败」 | 探针面收成 core 侧探针注册表（各取数层追加注册探测函数），失败原因与负缓存判定原语下沉 core |

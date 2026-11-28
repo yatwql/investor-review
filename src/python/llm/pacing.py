@@ -37,6 +37,7 @@ provider 条目自带 ``pacing`` 段，缺省即表示「无额外约束」（�
 from __future__ import annotations
 
 import logging
+import math
 import threading
 import time
 from typing import Any
@@ -55,15 +56,32 @@ _LOADED = False
 _LOADED_REVISION: int | None = None
 
 
+def _as_float(value: Any, default: float = 0.0) -> float:
+    """尽力把入参转成有限浮点；不可转/非有限一律给 default（不抛）。"""
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return default
+    return num if math.isfinite(num) else default
+
+
+def _as_int(value: Any, default: int = 0) -> int:
+    """尽力把入参转成整数；不可转一律给 default（不抛）。"""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 class PacingPolicy:
     """单个端点的节流与并发策略（不可变值对象）。"""
 
     __slots__ = ("min_interval", "jitter", "max_concurrency")
 
     def __init__(self, min_interval: float = 0.0, jitter: float = 0.0, max_concurrency: int = 0) -> None:
-        self.min_interval = max(0.0, float(min_interval))
-        self.jitter = min(1.0, max(0.0, float(jitter)))
-        self.max_concurrency = max(0, int(max_concurrency))
+        self.min_interval = max(0.0, _as_float(min_interval))
+        self.jitter = min(1.0, max(0.0, _as_float(jitter)))
+        self.max_concurrency = max(0, _as_int(max_concurrency))
 
     @property
     def is_noop(self) -> bool:

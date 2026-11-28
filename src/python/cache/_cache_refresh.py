@@ -180,21 +180,25 @@ def _get_news_top_count() -> int:
 def _refresh_news_cache(holdings: list) -> int:
     """刷新财经新闻缓存：持仓关键词 → 聚合新闻（写入 news_ 前缀缓存）。
 
-    与报告生成共用 build_holding_keywords + _expand_industry_keywords 管线，
+    与报告生成共用 build_holding_keywords + expand_industry_keywords 管线，
     保证缓存键一致、后续报告生成命中缓存。
 
     Returns:
         成功关联的新闻条数；无持仓或关键词为空时返回 0。
     """
-    from src.python.fetcher.news import aggregate_news, build_holding_keywords, news_fetch_limits
-    from src.python.report.news_correlation import _expand_industry_keywords
+    from src.python.fetcher.news import (
+        aggregate_news,
+        build_holding_keywords,
+        expand_industry_keywords,
+        news_fetch_limits,
+    )
 
     if not holdings:
         return 0
     keywords = build_holding_keywords(holdings, penetrated_assets=None)
     if not keywords:
         return 0
-    keywords, _industry_data, lightweight_kw = _expand_industry_keywords(holdings, None, keywords)
+    keywords, _industry_data, lightweight_kw = expand_industry_keywords(holdings, None, keywords)
     top_n, per_source = news_fetch_limits(_get_news_top_count())  # 抓取预算单源算式
     news_items = aggregate_news(
         keywords,

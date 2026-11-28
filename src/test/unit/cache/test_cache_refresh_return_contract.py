@@ -170,7 +170,7 @@ def _patch_news_pipeline(monkeypatch: pytest.MonkeyPatch, *, keywords: dict, new
         lambda holdings, penetrated_assets=None: keywords,
     )
     monkeypatch.setattr(
-        "src.python.report.news_correlation._expand_industry_keywords",
+        "src.python.fetcher.news.expand_industry_keywords",
         lambda holdings, industry, kw: (kw, None, []),
     )
     monkeypatch.setattr("src.python.fetcher.news.news_fetch_limits", lambda top: (10, 2))

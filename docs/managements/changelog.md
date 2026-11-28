@@ -15,6 +15,7 @@
 - **板块分类原语下沉 `core/sector.py`（rf-1269）**：行业关键词表加载（缺文件/损坏降级）、只读访问器、热重载与「名称 → 板块」判定整块移出报告层，`report/` 与 `analysis/` 两侧共同消费 core——纯计算层不再反向依赖报告层；分层例外表与 `technical.md` 的存量例外表各减 2 行
 - **持仓快照存储下沉 `core/snapshot_store.py`（rf-1270）**：保存/加载/列表/清理与命名空间隔离整体迁入 core（只依赖 `core` 与 `schemas`，零报告侧耦合），`analysis/` 三处、`web/`、`scripts/` 的读快照路径改指 core；纯存储用例按被测模块归位 `unit/core` 并按新模块名重命名；分层例外表与存量例外表各减 3 行
 
+- **行业/概念关键词扩展下沉取数层（rf-1273）**：`report/news_correlation` 的 `_expand_industry_keywords`（取行业数据 + 关键词扩展）迁入 `fetcher/news.py` 并改名 `expand_industry_keywords`——缓存预热与报告两侧同源，预热不再反向依赖报告层；纯函数用例随之归位 `unit/fetcher`
 - **配置层不再直接驱动 LLM 节流（rf-1272）**：`write_llm_providers` 写盘后只递增线路配置修订序号（`config.get_providers_revision()`），`llm/pacing.py` 惰性装载时按序号变化自行重载策略——配置层不再反向 import LLM 实现；深度档常量校验改从 `core/constants.py` 取（真值本就在那里）。分层例外表与存量例外表各减 2 行
 - **纯解析/派生原语下沉 `core/`（rf-1271）**：`fee_schedule_model`（申赎费率表）、`financial_statement_derive`（三表合并派生）、`financial_indicator_extract`（财务指标全文解析）、`drawdown_events`（回撤事件与窗口下限常量）四个纯计算模块从 `analysis/` 整块迁入 `core/`——`fetcher/`、`providers/`、`config/`、`report/` 复用同一口径时不再反向依赖纯计算层；用例随之归位 `unit/core`，分层例外表与存量例外表各减 7 行
 

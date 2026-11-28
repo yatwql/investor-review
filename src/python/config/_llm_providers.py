@@ -138,7 +138,11 @@ def _attach_credentials_provider(backend: str) -> None:
     raw["providers"] = provider_list
     raw.setdefault("strategy", _DEFAULT_LLM_PROVIDERS["strategy"])
     raw.setdefault("preferred_providers", _DEFAULT_LLM_PROVIDERS["preferred_providers"])
-    os.makedirs(os.path.dirname(providers_path), exist_ok=True)
+    try:
+        os.makedirs(os.path.dirname(providers_path), exist_ok=True)
+    except OSError as e:
+        # 目录不可建属配置写入失败：带路径报出，便于定位权限/磁盘问题
+        raise OSError(f"llm_providers.json 目录创建失败（{os.path.dirname(providers_path)}）: {e}") from e
     _atomic_write(providers_path, json.dumps(raw, ensure_ascii=False, indent=2))
 
 
@@ -473,10 +477,18 @@ def write_llm_providers(config: dict, path: str) -> None:
             raw = f.read()
     except FileNotFoundError:
         raw = ""
+    except OSError as e:
+        raise OSError(f"llm_providers.json 读取失败（{path}）: {e}") from e
 
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+    except OSError as e:
+        raise OSError(f"llm_providers.json 目录创建失败（{os.path.dirname(path)}）: {e}") from e
     if raw.strip():
-        current = json.loads(strip_json_comments(raw))
+        try:
+            current = json.loads(strip_json_comments(raw))
+        except ValueError as e:
+            raise ValueError(f"llm_providers.json 不是合法 JSON（{path}）: {e}") from e
         updated_raw = _update_json_raw_text(raw, current, config)
         _atomic_write(path, _neutralize_chain_labels(updated_raw))
     else:

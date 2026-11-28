@@ -6,14 +6,6 @@
   "layer-inversion": [
     {
       "path": "src/python/cache/_cache_refresh.py",
-      "name": "src.python.report.news_correlation",
-      "owner": "cache（预热编排）",
-      "reason": "新闻预热复用报告侧行业关键词扩展（同一口径），实现居 report",
-      "expiry": "2027-06-30",
-      "replacement": "把行业关键词扩展下沉 core（如 core/news_keywords.py），预热与报告共同消费"
-    },
-    {
-      "path": "src/python/cache/_cache_refresh.py",
       "name": "src.python.report.fund_style_classify",
       "owner": "cache（预热编排）",
       "reason": "基金风格扩展数据预取复用报告侧装配",
