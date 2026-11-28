@@ -91,12 +91,12 @@ class TestPrepareReportData:
             patch("src.python.report.penetration.compute_penetration_top10", return_value={"top10": []}),
             # 因子暴露编排含真实网络拉取（持仓历史/因子指数 K 线），测试必须 mock（防 API 依赖/不稳定）
             patch(
-                "src.python.report.orchestrator.compute_factor_exposure_data",
+                "src.python.report._orchestrator_data.compute_factor_exposure_data",
                 return_value={"available": False, "status": "insufficient"},
             ),
             # 持仓关系矩阵·相关性编排同样含真实网络拉取（持仓历史 K 线），必须 mock
             patch(
-                "src.python.report.orchestrator.compute_correlation_data",
+                "src.python.report._orchestrator_data.compute_correlation_data",
                 return_value={"available": False, "status": "insufficient"},
             ),
         ):
@@ -196,11 +196,11 @@ class TestPrepareReportData:
             patch("src.python.fetcher.index.fetch_us_indices", return_value={}),
             patch("src.python.report.penetration.compute_penetration_top10", return_value={"top10": []}),
             patch(
-                "src.python.report.orchestrator.compute_factor_exposure_data",
+                "src.python.report._orchestrator_data.compute_factor_exposure_data",
                 return_value={"available": False, "status": "insufficient"},
             ),
             patch(
-                "src.python.report.orchestrator.compute_correlation_data",
+                "src.python.report._orchestrator_data.compute_correlation_data",
                 return_value={"available": False, "status": "insufficient"},
             ),
         ):

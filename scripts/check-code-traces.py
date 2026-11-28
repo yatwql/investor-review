@@ -28,7 +28,7 @@ _magic_excludes() / _dash_excludes() / _under_excludes() 行豁免。
   - 标识符扫描：IDENTIFIER_PATTERNS 匹配代码中的完整标识符 token
     （.py 用 ast 提取，.js/.mjs 用正则提取声明）
 
-三类 AST 级架构守卫（与注释无关，直接看语法树）：
+六类 AST 级架构/口径守卫（与注释无关，直接看语法树）：
   - core 分层：core 层禁止反向 import 上层包
   - 日志统一：print() 仅限交互呈现层（TUI/CLI 目录 + 逐文件列举的交互输出
     模块），其余生产模块须走 logging 落盘；且模块日志器名称一律为
@@ -41,6 +41,10 @@ _magic_excludes() / _dash_excludes() / _under_excludes() 行豁免。
     无人校验：规则命中时 CI 红在 BLE001，抑制空转时红在 RUF100）
   - pragma 豁免清单：`# pragma: no cover` 只能在 test-coverage.md 的
     「豁免清单」表里按 `文件:行号` 登记后使用，未登记报 PRAGMA（LOW）
+  - 浮点求和口径单源：浮点均值/方差求和须走 `math.fsum`（正确舍入，跨解释器
+    与相加顺序一致）；内建 `sum()` 的浮点累加策略随解释器演进，末位差会让
+    「零方差」判据翻转（FLOATSUM）。整数计数、已 fsum 包裹、`sum` 被重绑定不报；
+    确属整数但无法静态证明的登记在 `scripts/_code_traces_exceptions.json`
 
 本文件为**薄 CLI**：模式表/扫描/守卫实现均在 `scripts/_traces_code/` 包
 （config / patterns / exemptions / extract / scan / layers 六模块），
@@ -58,7 +62,8 @@ _magic_excludes() / _dash_excludes() / _under_excludes() 行豁免。
   1 — 发现高置信度痕迹（HIGH/ORIGIN/VERSION）
   2 — 发现任务编号/章节编号/架构约束代号/语义命名暗号引用
       （CODE/IDENT/CHAPTER/ROUND/MAGIC/DASHTASK/UNDERSCORE）或日志统一违规（LOG）
-      或配置默认值重复兜底（DEFAULTDUP）或散文形态宽捕获抑制（CAPTURE），
+      或配置默认值重复兜底（DEFAULTDUP）或散文形态宽捕获抑制（CAPTURE）
+      或浮点均值/方差用内建 sum（FLOATSUM），
       应从注释/标识符中移除 / 改用 logging 落盘 / 改走默认值单一入口
       / 改写成 `# noqa: BLE001 — <理由>`（CAPTURE）
       （CHAPTER：注释中用数字章节号"N 章"/"第 N 章"指代报告具体章节，
@@ -86,37 +91,17 @@ from _shared.checklib import add_common_args
 from _shared.checklib import conclusion_cache_load, conclusion_cache_save
 from _shared.checklib import rel as rel_path  # 统一相对路径展示（原面 re-export）
 from _traces_code import (
-    EXCLUDE_LINE,  # noqa: F401
-    IDENTIFIER_PATTERNS,  # noqa: F401
-    PATTERNS,  # noqa: F401
-    REPO_ROOT,  # noqa: F401
     SCAN_DIRS,
-    TEST_META_EXCLUDE,  # noqa: F401
     _COMPILED_CHAPTER_EXCLUDE,
     _COMPILED_ROUND_EXCLUDE,
     _chapter_excludes,
-    _html_comment_lines,  # noqa: F401
     _is_chapter_excluded,
-    _is_dash_excluded,  # noqa: F401
-    _is_excluded,  # noqa: F401
-    _is_magic_match_excluded,  # noqa: F401
     _is_round_excluded,
-    _is_tool_self,  # noqa: F401
-    _is_under_excluded,  # noqa: F401
-    _iter_comment_lines,  # noqa: F401
-    _js_comment_lines,  # noqa: F401
-    _js_identifier_names,  # noqa: F401
-    _magic_excludes,  # noqa: F401
-    _py_comment_lines,  # noqa: F401
-    _py_identifier_names,  # noqa: F401
     _round_excludes,
-    _scan_config_default_fallbacks,  # noqa: F401
-    _scan_broad_capture_prose,  # noqa: F401
-    _scan_core_layering,  # noqa: F401
-    _scan_identifiers,  # noqa: F401
-    _scan_pragma_no_cover,  # noqa: F401
-    _shell_comment_lines,  # noqa: F401
+    FLOAT_SUM_EXCEPTIONS_FILE,
     PRAGMA_EXEMPTION_DOC,
+    audit_float_sum_exceptions,
+    load_float_sum_exceptions,
     scan_file,
 )
 
@@ -148,6 +133,7 @@ CODE_CATEGORIES = (
     "LOG",
     "DEFAULTDUP",
     "CAPTURE",
+    "FLOATSUM",
 )
 LOW_CATEGORIES = ("TODO", "CHANGE", "DEPR", "PRAGMA")
 
@@ -235,6 +221,15 @@ def _scan_all(args: argparse.Namespace, jobs: int | None = None) -> int:
                 if args.verbose:
                     print(f"           {text}")
 
+    # ── 例外表自审（浮点求和口径）────────────────────────────────
+    # 字段/到期/是否仍命中逐条核验：例外是封闭白名单，登记点改好后必须删除，
+    # 否则一次豁免就成永久免死金牌（与 patch-surface 例外表同一口径）。
+    for message in audit_float_sum_exceptions(load_float_sum_exceptions()):
+        total_hits += 1
+        summary["FLOATSUM"] = summary.get("FLOATSUM", 0) + 1
+        code_count += 1
+        print(f"{rel_path(FLOAT_SUM_EXCEPTIONS_FILE)} [FLOATSUM] {message}")
+
     # ── 汇总输出 ──────────────────────────────────────────────
     print()
     if total_hits == 0:
@@ -249,8 +244,9 @@ def _scan_all(args: argparse.Namespace, jobs: int | None = None) -> int:
 
     if code_count > 0:
         print(
-            f"    {code_count} 处任务编号/章节编号引用或日志/抑制形态违规"
-            "（CODE/IDENT/CHAPTER/ROUND/LOG/CAPTURE），应改写为语义描述 / 改用 logging / 改成 noqa 形态"
+            f"    {code_count} 处任务编号/章节编号引用、日志/抑制形态或浮点求和口径违规"
+            "（CODE/IDENT/CHAPTER/ROUND/LOG/CAPTURE/FLOATSUM），应改写为语义描述 / 改用 logging / "
+            "改成 noqa 形态 / 浮点均值方差改走 math.fsum"
         )
         return 2
 
@@ -271,7 +267,7 @@ def main() -> None:
     # 自身 + _traces_code 实现模块）均未变时逐字回放上次输出（通过与发现
     # 都缓存）——按域提交（只动文档不动源码）时命中，省全仓正则/AST 重扫
     if args.ci:
-        inputs = [*_collect_scan_files(), PRAGMA_EXEMPTION_DOC]
+        inputs = [*_collect_scan_files(), PRAGMA_EXEMPTION_DOC, FLOAT_SUM_EXCEPTIONS_FILE]
         logic = [Path(__file__), *sorted((Path(__file__).resolve().parent / "_traces_code").glob("*.py"))]
         cached = conclusion_cache_load("code_traces", logic, inputs)
         if cached is not None:

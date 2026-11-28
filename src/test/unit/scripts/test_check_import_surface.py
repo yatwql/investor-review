@@ -239,15 +239,23 @@ def test_layer_inversion_core_import_allowed(surface, tmp_path):
     assert surface.scan_layer_inversion(root) == []
 
 
-def test_layer_inversion_exception_suppresses_and_is_used(surface, tmp_path):
+def test_layer_inversion_exception_suppresses_and_is_used(surface, monkeypatch, tmp_path):
     """例外表命中即放行，并登记为 used（避免被判「从未命中的陈货」）。"""
     root = tmp_path / "py"
     (root / "fetcher").mkdir(parents=True)
     (root / "analysis").mkdir(parents=True)
     target = root / "fetcher" / "mod.py"
     target.write_text("from src.python.analysis.fee_schedule_model import parse_fee_percent\n", encoding="utf-8")
-    exc = surface._ExceptionTable(
-        {"layer-inversion": [{"path": str(target), "name": "src.python.analysis.fee_schedule_model"}]}
+    monkeypatch.setattr(surface, "rel", lambda path: "fetcher/mod.py")
+    exc = surface.ExceptionTable(
+        surface.EXCEPTIONS_FILE,
+        surface.table_spec("import-surface").rules,
+        {
+            "layer-inversion": [
+                {"path": "fetcher/mod.py", "name": "src.python.analysis.fee_schedule_model"},
+            ]
+        },
     )
     assert surface.scan_layer_inversion(root) != []
-    assert "layer-inversion" in exc
+    assert surface.scan_layer_inversion(root, exc) == []
+    assert ("layer-inversion", "fetcher/mod.py", "src.python.analysis.fee_schedule_model") in exc.used

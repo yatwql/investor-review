@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from functools import partial
 from typing import Any
 
@@ -44,7 +45,7 @@ def weighted_roe(items: list[tuple[float, float]]) -> float | None:
     if not valid:
         return None
     total_ratio = sum(r for r, _ in valid)
-    return sum(r * roe for r, roe in valid) / total_ratio
+    return math.fsum(r * roe for r, roe in valid) / total_ratio
 
 
 def _fetch_stock_roe_batch(codes: list[str]) -> dict[str, float]:

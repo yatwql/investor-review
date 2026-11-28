@@ -31,6 +31,12 @@ LLM_MODULE_ORDER: tuple[str, ...] = (
 )
 
 #: 同上，集合形态（成员判定/子集断言用；不含顺序语义）。
+#:
+#: **对外契约面，不是内部实现细节**：生产代码取的是 `LLM_MODULE_ORDER`（有序）与
+#: `PARALLEL_MODULE_ORDER`（四并行子集），本集合面供守卫与派生方引用——测试用它校
+#: 「注册表 / 页签键 / 可强制范围 ⊆ 全集」，下游派生集合（如页签键表）用它做双向相等
+#: 断言。名字带 `SUFFIXES` 表示模块后缀而非序号；新增模块只需进 `LLM_MODULE_ORDER`，
+#: 本集合随派生而变，不另维护。
 LLM_MODULE_SUFFIXES: frozenset[str] = frozenset(LLM_MODULE_ORDER)
 
 #: 四并行单例模块（顺序 = ``llm_content`` 四元组与各阶段结果元组的位置顺序）。

@@ -8,7 +8,6 @@
 from __future__ import annotations
 
 import pytest
-from src.test._script_loader import load_script
 from src.test.unit.scripts.test_trace_check_scripts import (  # 单源：命中判定与分类抓取
     _code_cat,
     _code_hit,
@@ -20,15 +19,10 @@ pytestmark = [
 ]
 
 
-@pytest.fixture(scope="module")
-def code_traces():
-    return load_script("check-code-traces.py")
-
-
 class TestDomainValueExemptions:
     """MAGIC/DASHTASK/UNDERSCORE 三类"字母+数字"模式的检出边界与合法领域值豁免。"""
 
-    def test_legit_letter_digit_not_flagged(self, code_traces):
+    def test_legit_letter_digit_not_flagged(self):
         """合法领域值不误伤：场景标签（S-P1）、小写缩写（f9）、Excel 单元格/范围。"""
         legit = [
             "S-P1 场景",
@@ -37,9 +31,9 @@ class TestDomainValueExemptions:
             "数据在 B2~B5",
         ]
         for line in legit:
-            assert _code_hit(code_traces, line) is None, f"合法字母+数字被误伤: {line}"
+            assert _code_hit(line) is None, f"合法字母+数字被误伤: {line}"
 
-    def test_magic_number_letter_digit_flagged(self, code_traces):
+    def test_magic_number_letter_digit_flagged(self):
         """MAGIC：注释中"字母+数字/连续字母+数字"（R11/C26/AB14/HH6）属魔法编号须检出。"""
         flagged = [
             "K9 优先级",  # P0~P4 已入合法领域值（门禁档位/公式价格符号），非此列
@@ -54,9 +48,9 @@ class TestDomainValueExemptions:
         for line in flagged:
             # 这组样本横跨「魔法编号」与「架构约束代号」两类（后者判定为 CODE），
             # 断言落到允许分类集合，而非只证明「有命中」。
-            assert _code_cat(code_traces, line) in {"MAGIC", "CODE"}, f"魔法编号未检出: {line}"
+            assert _code_cat(line) in {"MAGIC", "CODE"}, f"魔法编号未检出: {line}"
 
-    def test_magic_percentile_notation_not_flagged(self, code_traces):
+    def test_magic_percentile_notation_not_flagged(self):
         """MAGIC 合法领域值：分位记号（P50/P90/P95/P99）为性能/风险统计口径，非任务编号。"""
         legit = [
             "P95 / P99 报告生成耗时",
@@ -65,21 +59,21 @@ class TestDomainValueExemptions:
             "分位输出 P95、P99",
         ]
         for line in legit:
-            assert _code_hit(code_traces, line) is None, f"分位记号被误伤: {line}"
+            assert _code_hit(line) is None, f"分位记号被误伤: {line}"
 
-    def test_magic_percentile_exemption_stays_narrow(self, code_traces):
+    def test_magic_percentile_exemption_stays_narrow(self):
         """豁免只覆盖两位数分位记号：一位数近邻（P9）仍属魔法编号须检出。"""
-        assert _code_cat(code_traces, "P9 协议") == "MAGIC"
+        assert _code_cat("P9 协议") == "MAGIC"
 
-    def test_magic_style_guardrail_codes_not_flagged(self, code_traces):
+    def test_magic_style_guardrail_codes_not_flagged(self):
         """MAGIC 合法领域值：样式护栏编号（E1~E3/W1~W5）为 DESIGN.md「机检落地」
         定义的分类名不误伤；越界邻值（W6/E6）仍须检出，豁免不随手扩位。"""
         for line in ["W3 内联色值观察", "W4/W5 档外字号间距", "E1 强调色越权", "W2 圆角档外"]:
-            assert _code_hit(code_traces, line) is None, f"护栏编号被误伤: {line}"
+            assert _code_hit(line) is None, f"护栏编号被误伤: {line}"
         for line in ["W6 新维度", "E6 规则"]:
-            assert _code_cat(code_traces, line) == "MAGIC", f"越界护栏编号未检出: {line}"
+            assert _code_cat(line) == "MAGIC", f"越界护栏编号未检出: {line}"
 
-    def test_dashtask_letter_digit_flagged(self, code_traces):
+    def test_dashtask_letter_digit_flagged(self):
         """DASHTASK：注释中"字母-数字/连续字母-数字"（F-1/G-1/TASK-22/D-8）疑似任务编号须检出。"""
         flagged = [
             "F-1 方案",
@@ -90,9 +84,9 @@ class TestDomainValueExemptions:
             "CONCENTRATION-03 阈值",  # 非 requirements.md 需求 ID 形态的裸字母-数字
         ]
         for line in flagged:
-            assert _code_cat(code_traces, line) == "DASHTASK", f"疑似任务编号未检出: {line}"
+            assert _code_cat(line) == "DASHTASK", f"疑似任务编号未检出: {line}"
 
-    def test_dashtask_legit_not_flagged(self, code_traces):
+    def test_dashtask_legit_not_flagged(self):
         """DASHTASK 合法领域值不误伤：交易日（T-1）、小写下标/编码（i-1/utf-8）、计数算术（N-2 项）。"""
         legit = [
             "T-1 交易日",
@@ -102,9 +96,9 @@ class TestDomainValueExemptions:
             "R-LLM-DB-QA-CONCENTRATION-03/04：需求",  # requirements.md 定义的需求 ID
         ]
         for line in legit:
-            assert _code_hit(code_traces, line) is None, f"合法字母-数字被误伤: {line}"
+            assert _code_hit(line) is None, f"合法字母-数字被误伤: {line}"
 
-    def test_underscore_letter_digit_flagged(self, code_traces):
+    def test_underscore_letter_digit_flagged(self):
         """UNDERSCORE：注释中"字母_数字/连续字母_数字"（F_1/H_1/MINE_22）疑似无意义代码须检出。"""
         flagged = [
             "F_1 变量",
@@ -112,13 +106,13 @@ class TestDomainValueExemptions:
             "MINE_22 编号",
         ]
         for line in flagged:
-            assert _code_cat(code_traces, line) == "UNDERSCORE", f"疑似无意义代码未检出: {line}"
+            assert _code_cat(line) == "UNDERSCORE", f"疑似无意义代码未检出: {line}"
 
-    def test_underscore_legit_not_flagged(self, code_traces):
+    def test_underscore_legit_not_flagged(self):
         """UNDERSCORE 合法领域值不误伤：小写语义短名（changed_1m/syl_1y）。"""
         legit = [
             "changed_1m 周期",
             "syl_1y 跨度",
         ]
         for line in legit:
-            assert _code_hit(code_traces, line) is None, f"合法字母_数字被误伤: {line}"
+            assert _code_hit(line) is None, f"合法字母_数字被误伤: {line}"

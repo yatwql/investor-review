@@ -37,7 +37,7 @@
 | `check-doc-links.py` | 文档 | 文档链接与结构一致性校验（死链/死锚点/重复标题/层级/编号序列/§引用） |
 | `check-import-surface.py` | 质量 | 导入面契约（compat-comment 兼容注释 / private-all 私有 `__all__` / cross-private 跨包私有导入 / cross-private-scripts 脚本侧私有模块导入 / dynamic-target 动态导入字面量 / layer-inversion 分层倒置（底层不得依赖上层） / exception-table 例外表自审（字段齐全+到期+失效）；例外表 `_import_surface_exceptions.json`；**已入域**：钩子只随 `src/python/` 变更触发（~1s），CI `guards` 与 P2 恒全量） |
 | `check-file-length.py` | 质量 | 单文件行数红线守护（主程序/脚本 >1000 行 / 测试 >1200 行；豁免登记与 review-findings 挂账同步；另断言 review-findings P4 膨胀登记表行数与实测一致（防表腐化），`-v` 输出可选优化区间清单、登记实况与「行数 × 近 90 天改动」优先级） |
-| `check-test-redundancy.py` | 测试 | 测试用例冗余与无效检查（死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / 恒真断言 / 死 fixture / 弱 mock 断言 / 账本日期写死绝对日期；实现拆在 `_test_redundancy/`——九类用例质量检查 + 标记合规支路各一模块 + 共用 AST 原语 + 事实缓存 + 编排，入口只留 CLI） |
+| `check-test-redundancy.py` | 测试 | 测试用例冗余与无效检查（死用例 / 无断言 / 完全重复 / 自证用例 / 硬编码演进总数 / 恒真断言 / 死 fixture / 弱 mock 断言 / 账本日期写死绝对日期 / 真实耗时与真实子进程 / patch 打在 re-export 面；实现拆在 `_test_redundancy/`——十一类用例质量检查 + 标记合规支路各一模块 + 共用 AST 原语 + 事实缓存 + 编排，入口只留 CLI） |
 | `check-requirement-trace.py` | 质量 | 需求 ID ↔ 验证载体追溯（单段 ID 全域覆盖 / 载体文件存在 / ID 双向一致） |
 | `hook-install-claude.py` | 质量 | 安装/卸载 Claude Code PostToolUse hook（任务编号一致性自动校验） |
 | `probe-date-bombs.py` | 测试 | 时间炸弹经验筛查（变异法）：把候选测试文件里的绝对日期整体回移 N 年再逐个跑 pytest，失败即「依赖日期处于近期」（rot-suspect）；`--detail` 打印失败断言原文（实际/期望两侧）供判读；改写前备份、`finally`/`atexit` 双兜底还原并校验 sha256，脏文件默认跳过；结果需人工判读（生产侧显式注入 today / 星期-财季语义 / 断言目标在未变异 fixture 均为伪信号）；不入门禁 |
@@ -59,9 +59,10 @@
 | `probe-report-claims.py` | 运维观测 | 批量重放历史报告做确定性数值核对（覆盖率/告警/自动改写，零 LLM 调用、只读；不入门禁） |
 | `eval-factor-zoo.py` | 评测 | 因子动物园目录评测（非生产代码；五个来源族各抽 5 个因子，评测 A 字段可得率 / B 与既有信号族增量 / C 全量计算耗时占比三项指标，A/B/C 全过才转正立项；子命令 catalog / fields / signals / timing / verdict / all，产物只落 `docs/tmp/factor-zoo/`；实现拆在 `_eval_factor_zoo/`） |
 | `eval-decision-quality.py` | 评测 | 投资决策质量待验证项回测（决策视界命中率 / 因子单因子 IC / 估值两口径区分度；判据预注册于脚本常量，样本门槛 100、IC 绝对值拒绝线 0.05；子命令 horizon / factor-ic / valuation / all，产物落 `docs/tmp/decision-quality/`） |
+| `eval-mutation-score.py` | 评测 | 变异得分离线评测（**默认内置有界变异器**逐点注入，四类算子，killed/(killed+survived) 与阈值比对；`--backend mutmut` 为可选后端；`--list-targets`/`--dry` 不跑变异；退出码 0 达标 / 1 可选后端缺失 / 2 不达标或工作树脏 / 130 中断；不入门禁；入口只做 argparse 装配与调用，执行/判定/汇总在 `_eval_mutation/cli.py`） |
 | `_assets/` | 内部 | 视觉资产实现包（`social_preview.py` 预览图绘制与栅格化 / `svg_check.py` 架构图渲染体检） |
 | `_screenshots/` | 内部 | 演示截图实现包（`demo_workspace.py` 隔离工作区与报告 / `tui_frame.py` 帧文本折行保色与渲染 / `web_shot.py` CDP 封装 + `cdp_shot.mjs` / `xlsx_frame.py` Excel 页签 → HTML 网格 → PNG） |
-| `_shared/` | 内部 | 跨脚本共享设施包（`checklib.py` CLI 契约与输出/路径/区间解析；`traces_common.py` 两域共用痕迹词表） |
+| `_shared/` | 内部 | 跨脚本共享设施包（`checklib.py` CLI 契约与输出/路径/区间解析；`exceptions.py` 例外表规范化加载与自审设施、三张例外表路径与规则 schema 的登记表；`traces_common.py` 两域共用痕迹词表） |
 | `_test_runner/` | 内部 | 测试驱动内部实现包（paths / modes / pytest_env / machine_info / doc_writer / report_html / runner） |
 | `launch.sh` / `launch.ps1` | 启动 | Linux/macOS / Windows 一键启动脚本（无参数启动 TUI；`web` 子命令启动 Web 浏览器模式） |
 | `cli.sh` / `cli.ps1` | 启动 | Linux/macOS / Windows CLI 命令行包装（无参数默认生成报告） |
@@ -116,10 +117,19 @@
 - **统一契约**（`checklib.add_common_args()` / `report()`）：`-v/--verbose` 详细输出、`--ci` 仅输出 `文件:描述`；**通过退出 0，发现 finding 退出 2**（`check-code-traces.py` 另有 HIGH=1 / LOW=3 的分级语义，属其自身约定）；通过打印 `[OK] …`，失败逐条 `[ERR] file:desc`（`--ci` 下为裸行）+ 汇总行
 - **共享原语**：`REPO_ROOT` / `rel()`（仓库相对路径，非仓库内路径原样返回）、`extract_region()` / `replace_region()`（标记区间）、`extract_table_region()` / `replace_table_region()`（表区域，带结构校验）
 - **子进程一律设超时**：检查/钩子脚本对 `git`、`pytest`、子脚本的调用必须带 `timeout=`，超时按「环境不可用」走明确分支（缓存指纹退全量、钩子放行并告警、编排抛 `ReleaseError`），**不得**裸等——卡死的 git 会把提交钩子或 CI `guards` job 挂成无输出等待，现场还看不出原因
-- **`_traces_code/`**：check-code-traces 内部实现包——`patterns.py`（**匹配表**：历史痕迹/标识符/暗号模式与编译镜像；只管「命中了什么」，共享历史叙述正则引用 `_traces_common` 常量）、`exemptions.py`（**豁免表**：章节计数与迭代轮次豁免〔check-doc-traces 共用〕+ 代码侧行级豁免〔合法领域值/魔法编号领域值/测试回归元描述〕与 `_is_*_excluded` 判定——调漏检改前者、调误报改后者，不在一处相互淹没）、`extract.py`（注释/标识符抽取）、`scan.py`（扫描调度）、`layers.py`（core 反向依赖守卫）、`config.py`（扫描域配置与规则载体豁免：`RULE_CARRIER_DIRS` / `RULE_CARRIER_FILES`）；check-code-traces.py 只留 CLI 与原面 re-export
+- **`_traces_code/`**：check-code-traces 内部实现包——`patterns.py`（**匹配表**：历史痕迹/标识符/暗号模式与编译镜像；只管「命中了什么」，共享历史叙述正则引用 `_traces_common` 常量）、`exemptions.py`（**豁免表**：章节计数与迭代轮次豁免〔check-doc-traces 共用〕+ 代码侧行级豁免〔合法领域值/魔法编号领域值/测试回归元描述〕与 `_is_*_excluded` 判定——调漏检改前者、调误报改后者，不在一处相互淹没）、`extract.py`（注释/标识符抽取）、`scan.py`（扫描调度）、`layers.py`（core 反向依赖守卫）、`config.py`（扫描域配置与规则载体豁免：`RULE_CARRIER_DIRS` / `RULE_CARRIER_FILES`）；check-code-traces.py 只留 CLI，词表与豁免判定按实现包名直接引用（入口不做私有面 re-export）
 - **`_traces_doc/`**：check-doc-traces 后端包——`patterns.py`（文档痕迹模式表 `DOC_PATTERNS` / 树行专属 `TREE_ONLY_PATTERNS` / 行级豁免 `EXCLUDE_PATTERNS`+`is_excluded`，共享历史叙述正则引用 `_traces_common` 常量）、`bundle.py`（编译镜像 + 按域取子集 + 树行拼表 + 高置信度分类 `HIGH_CATEGORIES`，`pattern_bundle` 按〔分类集, CIPHER 开关, 树行〕lru 缓存并集预筛——预筛面与精确面同源）、`dedup.py`（结构性冗余扫描：单次遍历内完成标题路径感知判重、台账/归档域重复长行与区块同小节限定、空白归一与同块单报）、`deleted_refs.py`（已删除函数残留：git 历史 def 全集 × 当前 def 全集差集比对，浅克隆告警不假绿）、`findings.py`（结论汇总行与退出码 + 缓存结论结构校验，全量与回放两路共用），入口薄 CLI 与原面 re-export
 - **`_shared/traces_common.py`**：两脚本**逐字节相同**的历史叙述正则单一来源（命名常量 + `SHARED_REGEXES` 元组）；只登记字面量，**分类与描述仍按各自域定义**，判定入口/域矩阵/豁免语义不在此模块——新增同源词汇先加此处再两侧引用，仅一域需要的词汇不进共享表（机检见 `test_trace_shared_vocabulary`：两表交集须恰等于词表、两侧须都引用、模式源码内不得写死字面量）
 - **`_test_runner/`**：`test-runner.py` 的内部实现包（paths / modes / pytest_env / machine_info / doc_writer / report_html / runner），入口仅保留 CLI 与主流程并原面 re-export —— 既有测试访问 `test_runner._env_value` 等名字仍有效；**注意**：monkeypatch 内部状态（如 `_LATEST_DIR` / `_DOC_COVERAGE_PATH`）须指向持有它的子模块（`_test_runner.report_html` / `_test_runner.doc_writer`）
+- **`_shared/exceptions.py`**：例外表统一设施——三张例外表的**文件名与规则 schema 单源登记在此**（`TABLE_SPECS`：表键 → 路径 + 规则定位键 schema），各检查脚本按表键取 `path` / `rules`，不再各自写字面量路径。协议：规范化加载（文件缺失视为无例外；JSON 非法 / 顶层不是对象 / 规则值不是数组 / 未登记规则键一律落 `load_error`，文案形如 `<文件> 无法解析：<原因>`）、必填字段与 `expiry` 的 ISO 日历日回环校验、到期判定、「已使用」标记与陈旧自审（finding 前缀统一 `[exception-metadata]` / `[exception-expiry]` / `[exception-stale]`）。定位键 schema 按规则声明（多数是单字段 `name`，导入面检查是「文件路径 + 符号」三元组，规则名后以 `:` 内联）；同表内共用的字段（典型：同一续期日）写顶层 `defaults` 段，条目只写差异字段
+
+**例外表清单**（登记表：`scripts/_shared/exceptions.py` 的 `TABLE_SPECS`。新增例外表或改文件名只改登记表 + 本表，不必逐个脚本翻找）
+
+| 例外表文件 | 表键 | 规则（定位键） | 消费方 |
+|:---|:---|:---|:---|
+| `_code_traces_exceptions.json` | `code-traces` | `float-sum`（`<仓库相对路径>::<外围限定名>::<sum 调用源码>`） | `check-code-traces.py`（浮点均值/方差求和守卫） |
+| `_test_redundancy_exceptions.json` | `test-redundancy` | `patch-surface`（点分目标）、`slow-or-subprocess`（`<仓库相对路径>::<分类>::<细节>`） | `check-test-redundancy.py` |
+| `_import_surface_exceptions.json` | `import-surface` | `compat-comment` / `private-all` / `cross-private` / `cross-private-scripts` / `dynamic-target` / `layer-inversion`（`path` = 违规文件、`name` = 符号/目标） | `check-import-surface.py` |
 
 **跨脚本口径：共性 / 差异（`_shared/traces_common` 的边界）**
 
@@ -281,7 +291,7 @@ Web 模式全链路可复跑冒烟验证（上传→生成→进度→产物，F
 
 **设计逻辑**（为什么存在 / 判什么 / 怎么判 / 边界与取舍）
 
-静态分析 `src/test/`（默认跳过 `pytest.ini` 刻意排除的 `live/` 真网套件），抓九类「看着有测试其实没测住」的问题：
+静态分析 `src/test/`（默认跳过 `pytest.ini` 刻意排除的 `live/` 真网套件），抓十一类「看着有测试其实没测住 / 测不安稳」的问题：
 
 1. **死用例**：同文件同类同名重复定义（后者覆盖前者）、类名不以 `Test` 开头的方法形式 `test_*`、`Test*` 类定义了 `__init__`（pytest 整类跳过）
 2. **无断言用例**：既无 `assert`、也无 `pytest.raises/warns/fail`、也无 `assertEqual` 等 `assert*` / `assert_called*`，且不经同类辅助方法（如 `self._assert_pairs_contain(...)`，其内部含断言）——断言落在辅助方法里同样算数
@@ -295,11 +305,12 @@ Web 模式全链路可复跑冒烟验证（上传→生成→进度→产物，F
 7. **死 fixture**：test 文件内定义（排除 conftest 自身与 autouse）且全仓语料（测试 + conftest）无任何引用——定义后从未被消费的死代码
 8. **弱 mock 断言**：`assert <mock>.<属性>` 作真值 / `assertIsNotNone(<mock>)`——Mock 恒真且恒不为 None，断言恒成立不验证行为（`.called` / `assert_called*` 等专用断言不算弱）
 9. **账本日期写死绝对日期（时间炸弹）**：账本写入/裁剪类调用（`append_signals` / `append_decision` / `register_deterministic_signals` / `prune_jsonl_by_age` …）的 `report_date` / `settle_date` / `date` 实参写死「当前年 ±2 年」内的绝对日期字面量（含经模块级常量转手）。账本按保留期（730 天）在**写侧即裁剪**并按 `now()` 判定，这类用例会在「日期 + 保留期」之后静默退化成「空账本 / 键缺失」。远过去锚点（`"2020-01-02"` 表「必过期」）不报；正确写法是从当天回推派生。经验筛查（真跑、不入门禁）见 `probe-date-bombs.py`
+11. **真实耗时 / 真实子进程**：测试内 `time.sleep(<≥0.1s 字面量>)` 真睡满墙钟；`subprocess.run` / `check_output` / `Popen` 真跑 `pytest` 或 `python -m …`（调用源码含 `pytest` 或 `sys.executable`）且同作用域内无 `patch(subprocess…)` / `monkeypatch.setattr(subprocess…, …)` 证据。两类都是 CI 抖动与 flaky 的主要来源——墙钟随宿主环境与门禁并行度漂移，失败信息还隔着子进程边界。确需真等/真跑（并发重叠量测、假源模拟慢源、CLI 退出码契约）登记在 `scripts/_test_redundancy_exceptions.json` 的 `slow-or-subprocess` 规则
 
 **使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
 
 ```bash
-.venv/bin/python scripts/check-test-redundancy.py                 # 九类用例质量 + 标记合规全查
+.venv/bin/python scripts/check-test-redundancy.py                 # 十一类用例质量 + 标记合规全查
 .venv/bin/python scripts/check-test-redundancy.py -v              # 详细输出（扫描规模 + 各类计数 + 跳过的间接调用用例数）
 .venv/bin/python scripts/check-test-redundancy.py --ci            # CI 模式（只输出 文件:描述，退出码 2）
 .venv/bin/python scripts/check-test-redundancy.py --include-live  # 连带扫描 src/test/live/
@@ -333,7 +344,19 @@ Web 模式全链路可复跑冒烟验证（上传→生成→进度→产物，F
 .venv/bin/python scripts/check-test-redundancy.py --ci
 ```
 
-判 finding 与其余九类同一退出码（2）。`src/test/` 变更即由 pre-commit 触发；入口本身不另设开关。
+判 finding 与其余十一类同一退出码（2）。`src/test/` 变更即由 pre-commit 触发；入口本身不另设开关。
+
+**patch 打在 re-export 面（第 10 类）**：扫描 `src/test/**` 的 `patch("a.b.c")` 与 `monkeypatch.setattr(<module>, "name")`，
+解析目标模块；若该 `name` 在模块里只来自 import（模块体内没有任何其它引用）即报 finding——这类 patch 会让测试绿着通过、而生产仍走真实绑定。
+口径刻意排除包门面 `__init__.py` 与模块 `__all__` 里声明的公开导出面（那是刻意维持的公开导入面，报它等于把公开 API 判成违规）。
+确有正当理由的（目标模块自己就在函数体里调用了该符号）登记在 `scripts/_test_redundancy_exceptions.json`（owner / reason / expiry / replacement）。
+
+**真实耗时与真实子进程（第 11 类，实现 `_test_redundancy/slow_io.py`）**：真睡满整段耗时、真起解释器跑 `pytest`，
+把测试的墙钟绑到宿主环境与并行度上，是 CI 抖动与 flaky 的主要来源。判据刻意收窄以免误报——非字面量的
+`sleep(x)` 不判、与解释器/测试无关的子进程（如 `ls`）不判、已被替身接管（同作用域内有 `patch(subprocess…)` /
+`monkeypatch.setattr(subprocess…, …)`，含装饰器形态）不判。确需真等/真跑的量测（并发重叠、慢源模拟、CLI 退出码契约、
+pty 按键解码）登记在 `scripts/_test_redundancy_exceptions.json` 的 `slow-or-subprocess` 规则，定位键为
+`<仓库相对路径>::<分类>::<细节>`（sleep 取字面量值、子进程取 argv 源码），到期须复核或按 `replacement` 消除。
 
 ## 文档类
 
@@ -701,7 +724,7 @@ y 范围（svg 单位）；`margin` = 检测范围到卡片右缘的右扩量（
 
 ## 代码与文件质量类
 
-代码注释痕迹（含五条 AST/行级守卫）、文件行数红线、需求追溯与任务编号一致性（含钩子接线）、导入面契约与 scripts 顶层脚本契约机检。
+代码注释痕迹（含六条 AST/行级守卫）、文件行数红线、需求追溯与任务编号一致性（含钩子接线）、导入面契约与 scripts 顶层脚本契约机检。
 
 **`check-code-traces.py` — 代码注释历史痕迹检查**
 
@@ -709,7 +732,7 @@ y 范围（svg 单位）；`margin` = 检测范围到卡片右缘的右扩量（
 
 扫描 `src/python/`、`src/test/`、`src/static/`、`scripts/` 下所有 `.py` / `.js` / `.mjs` / `.html` / `.sh` / `.ps1` / `.bat` / `.cmd` 文件的注释和文档字符串，检查是否含有代码历史迭代信息（来源拆分、版本号、任务编号、历史迭代叙述等）。代码注释只应描述"当前是什么"，不应记录"从哪里来、怎么变的"。
 
-除注释痕迹外，另有五条 **AST/行级架构守卫**（直接看语法树，与注释格式无关）：
+除注释痕迹外，另有六条 **AST/行级架构守卫**（直接看语法树，与注释格式无关）：
 
 | 守卫 | 检出内容 | 实现 |
 |:-----|:---------|:-----|
@@ -718,6 +741,7 @@ y 范围（svg 单位）；`margin` = 检测范围到卡片右缘的右扩量（
 | 语义命名 | 标识符/注释夹带任务编号、系列代号、字母数字暗号 | `_traces_code/extract.py` + `patterns.py` |
 | 配置默认值单源 | 生产代码自带与默认值表同值同键的字面量兜底（`x.get("<键>", <默认值>)`，改默认表不会跟随） | `_traces_code/config_defaults.py`（默认表自身与测试不在扫描域） |
 | 宽捕获抑制形态 | 散文形态抑制（只写口径词「有意宽捕获」而不挂 `noqa: BLE001`）——与 BLE001/RUF100 脱钩的抑制无人校验 | `_traces_code/broad_capture.py`（只认 `# noqa: BLE001 — <理由>` 一种形态；限 `src/python` + `scripts`） |
+| 浮点求和口径单源 | 浮点均值/方差用内建 `sum()` 朴素累加（`sum(xs) / len(xs)`、`sum((a-b)**2 …)`）——3.11 朴素 vs 3.12 起补偿求和，末位差会让零方差判定失效（假标准误）；须改 `math.fsum` | `_traces_code/numeric_sum.py`（整数计数 / 已 fsum 包裹 / `sum` 被重绑定不报；例外登记 `_code_traces_exceptions.json`，逐条自审字段/到期/仍命中） |
 
 **使用逻辑**（怎么跑 / 退出码 / finding 处置 / 何时跑）
 
@@ -740,7 +764,7 @@ y 范围（svg 单位）；`margin` = 检测范围到卡片右缘的右扩量（
 |:------:|:-----|:-----|
 | 0 | 全部通过 | 无需处理 |
 | 1 | HIGH/ORIGIN/VERSION 痕迹 | 必须修复后再提交 |
-| 2 | CODE/IDENT/CHAPTER/ROUND/LOG/DEFAULTDUP/CAPTURE（任务编号/标识符/章节编号引用/日志统一违规/默认值重复兜底/散文形态宽捕获抑制） | 应改用语义描述，`print()` 改用 `logging`，默认值改走 `get_default()` / `get_llm_setting_default()`，抑制改写成 `# noqa: BLE001 — <理由>` |
+| 2 | CODE/IDENT/CHAPTER/ROUND/LOG/DEFAULTDUP/CAPTURE/FLOATSUM（任务编号/标识符/章节编号引用/日志统一违规/默认值重复兜底/散文形态宽捕获抑制/浮点均值方差用内建 `sum`） | 应改用语义描述，`print()` 改用 `logging`，默认值改走 `get_default()` / `get_llm_setting_default()`，抑制改写成 `# noqa: BLE001 — <理由>`，浮点均值/方差求和改 `math.fsum()` |
 | 3 | 仅 TODO/CHANGE/DEPR 级别 | 建议人工复核 |
 
 > **何时跑**：`git commit` 时由 pre-commit 钩子按暂存域自动执行（**勿手动重复**）；发布门禁（P2）与 CI `guards` job 恒跑全量兜底。
@@ -1313,6 +1337,105 @@ curl 对照命令：`curl -s "https://push2.eastmoney.com/api/qt/stock/get?secid
 取数只经既有能力（`decision_settlement` 行情/指数序列 + `valuation_percentile` 口径函数 +
 `financial_indicator` 缓存链），不裸调 provider；只读账本与缓存，不写 `data/` 生产状态；
 产物只落 `docs/tmp/decision-quality/`（git 忽略）。首批评测结论见讨论稿 §8.1。
+
+**`eval-mutation-score.py` — 变异得分离线评测**
+
+**干什么**：行覆盖率证明「用例执行过这行代码」，不证明「断言住了它的行为」——恒真断言、自证用例、
+弱 mock 断言在接近满格的覆盖率下照样存活。本脚本按**目标切片**逐点注入变异，再只跑该切片的相关
+测试，统计 `变异得分 = killed / (killed + survived)`，逐目标与阈值（默认 80%）比对。
+
+**后端**：默认 `builtin` = 脚本自带的**内置有界变异器**（`_eval_mutation/`，无任何外部依赖，
+缺失可选工具也能跑）。`--backend mutmut` 保留为可选后端，但需要 3.x 兼容配置（`[tool.mutmut]`
+声明路径与测试命令、关掉它在 `mutants/` 子目录里的裸 `pytest`）才真能跑，缺配置的表现是
+`collected 0 items`，故不作默认。
+
+**代码分层**：入口 `eval-mutation-score.py` 只做 argparse 装配与调用；逐切片执行、判定与三种
+汇总输出在 `_eval_mutation/cli.py`，目标表与默认阈值在 `_eval_mutation/targets.py`，内置变异器与
+四层安全阀在 `_eval_mutation/runner.py`。子进程解释器一律取 `sys.executable`（不裸用 `python`：
+PATH 上的命令可能是系统解释器，缺 pytest/mutmut 时每个变异体都会以非预期退出码落档）。
+
+```bash
+# 本期目标清单（路径 + 测试选择 + 声明算子口径）：纯配置读取，不跑任何变异
+.venv/bin/python scripts/eval-mutation-score.py --list-targets
+
+# 干跑：打印每个切片的变异体规模与将要执行的 pytest 选择命令（不写文件、不起子进程）
+.venv/bin/python scripts/eval-mutation-score.py --dry
+
+# 实跑并判定（默认内置变异器）：逐变异体跑 `python -B -m pytest <该切片测试> -x -q --tb=no`
+.venv/bin/python scripts/eval-mutation-score.py -v
+
+# 单切片 / 安全阀 / 并行
+.venv/bin/python scripts/eval-mutation-score.py --only core-dates -v
+.venv/bin/python scripts/eval-mutation-score.py --max-mutants 30 --timeout 60 --slice-timeout 900
+.venv/bin/python scripts/eval-mutation-score.py --jobs 2      # 多文件切片并行（按文件互斥）
+
+# 机读结果 / 只输出 文件:描述（未达标目标各一行）/ 放宽阈值
+.venv/bin/python scripts/eval-mutation-score.py --json
+.venv/bin/python scripts/eval-mutation-score.py --ci
+.venv/bin/python scripts/eval-mutation-score.py --threshold 60
+
+# 可选后端（需 3.x 兼容配置，否则 collected 0 items）
+.venv/bin/python scripts/eval-mutation-score.py --backend mutmut --dry
+```
+
+**退出码**：0 全部目标达标（`--list-targets` / `--dry` 亦返回 0）/ 1 `--backend mutmut` 但后端未安装
+（打印安装命令，与 `check-types.py`=1 环境缺失同口径；内置后端不会返回本码）/ 2 存在低于阈值或算不出
+得分的目标、工作树在切片路径上有未提交改动（拒跑）、`--only` 未匹配任何切片、还原校验失败
+（fail-closed：算不出即算不达标，不猜成 0 分）/ 130 用户中断（Ctrl-C，原文件已还原）。
+
+**算子口径**（内置变异器，AST 定位 + 单点文本替换，逐条实现）：
+
+| 算子 | 变换 | 说明 |
+|:--|:--|:--|
+| 比较取反 | `<`↔`<=`、`>`↔`>=`、`==`↔`!=`、`in`↔`not in` | `is` / `is not` 不在声明口径内，不动 |
+| 布尔取反 | `and`↔`or`、`not x` → `(x)` | 跨行书写的操作符跳过（边界不确定） |
+| 算术替换 | `+`↔`-`、`*`↔`/` | `%` / `**` / `//` 不在口径内 |
+| 返回值替换 | `return X` → `return None` | `X` 是 `None` 常量或裸 `return` 时不算变异体 |
+
+只替换操作符那一小段文本，其余字节原样保留（差异可读，判读 survived 时看得出改了什么）；唯一例外是
+`not x`（要连 `not ` 一起削掉，用 `ast.unparse` 重排操作数）。`col_offset` 是**UTF-8 字节**偏移，
+故所有位置运算都在字节上做（源码含中文注释时分叉）。
+
+**判定口径**：pytest 退出码 0 → survived（测试没断言住）；1 → killed（有用例失败）；子进程超时 →
+timeout；其余退出码（2 收集中断/变异体语法错误、3 内部错误、4 用法错、5 无用例）→ error。
+**timeout 与 error 单独计数、不进分母**——否则工具故障会被算成测试质量问题。
+
+**安全协议**（改的是真实源码，故四层兜底）：
+
+1. **跑之前**校验工作树干净（`git status --porcelain` 在切片源码路径与测试选择路径上为空），脏即
+   退出 2 并列出脏文件（否则还原会把用户未提交的编辑一起写掉）；
+2. **逐文件字节级备份**，每个变异体 `finally` 还原并**校验 sha256** 与备份一致，不一致立刻抛错中止
+   整轮（大声失败，不静默继续）；
+3. `atexit` + **SIGTERM/SIGHUP 处理器**兜底：Ctrl-C 走 `finally`，被 `kill`/supervisord 结束走信号
+   处理（`atexit` 对 SIGTERM 不生效，只靠它会留下变异版源码）；
+4. 子进程带 `-B` 且 `PYTHONDONTWRITEBYTECODE=1`——变异源码绝不写 `.pyc`（否则断言重写缓存按
+   size/mtime 命中，还原后仍指向变异版字节码，下一次正常跑测试会凭空失败）。
+
+**安全阀**：`--max-mutants`（默认 60/切片，防无界耗时；截断如实记进 note）、`--timeout`（默认 180s/
+变异体）、`--slice-timeout`（默认 1800s/切片，到点即停、未执行的不计入分母）、`--jobs`（默认 1 串行；
+>1 按**文件互斥**分组并行，跨文件相互依赖的切片可能误判 killed，判读存疑时用 `--jobs 1` 复跑）。
+
+**首期目标与测试选择**（模块级 `TARGETS`，改目标只改这张表；`tests` 字段决定逐变异体跑哪些用例——
+只跑相关测试是可承受的唯一前提）：
+
+| 目标切片 | 变异路径 | 测试选择 |
+|:--|:--|:--|
+| `analysis-metrics` | `src/python/analysis/metrics*.py` | `src/test/unit/analysis/test_metrics*.py` 与指标属性/尾部风险用例 |
+| `analysis-correlation` | `src/python/analysis/correlation.py` | `test_correlation.py` / `test_correlation_edge.py` / `test_property_correlation_invariants.py` |
+| `cache-ttl-atomic-write` | `src/python/cache/` | `src/test/unit/cache/` |
+| `core-dates` | `src/python/core/dates.py` | `src/test/unit/core/test_dates.py` |
+
+**为什么是离线评测、不进提交门禁**：单个切片要跑几十到上百次 pytest（分钟量级），且可选后端 mutmut
+不在 `requirements.txt` 里——提交门禁必须短而决定性。故本脚本只在「测试质量自省」时按需人工跑，
+`eval-` 域一律不进 pre-commit 钩子与 CI 守护清单。**实现分包**：算子在 `_eval_mutation/operators.py`、
+执行协议与安全阀在 `_eval_mutation/runner.py`、结果类型在 `_eval_mutation/results.py`、目标表在
+`_eval_mutation/targets.py`、可选后端适配在 `_eval_mutation/mutmut_backend.py`，入口只留 CLI、判定与
+门面 re-export。
+
+**mutmut 后端得分解析口径**（`--backend mutmut` 仍保留）：优先取 mutmut 进度行
+（`3/40  🎉 2  ⏰ 0  🤔 0  🙁 1  🔇 0`，每行是累计值，取最后一条）的 killed / survived；无进度行时退回
+`killed:` / `survived:` 计数行；两者都没有则判「无法解析」并按不达标处理。timeout 与 suspicious
+同样不进分母。
 
 ## 启动脚本
 

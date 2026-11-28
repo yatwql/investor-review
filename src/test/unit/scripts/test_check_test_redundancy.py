@@ -35,7 +35,8 @@ from _test_redundancy import _common  # noqa: E402
 from _test_redundancy.cases import check_assertion_free, check_dead_tests  # noqa: E402
 from _test_redundancy.date_bombs import check_ledger_absolute_dates  # noqa: E402
 from _test_redundancy.duplicates import body_signature, check_duplicate_bodies  # noqa: E402
-from _test_redundancy.facts_cache import _facts_cache_path  # noqa: E402
+from _test_redundancy.facts_cache import _facts_cache_path, _cache_version  # noqa: E402
+from _test_redundancy import facts_cache  # noqa: E402
 from _test_redundancy.hardcoded import check_hardcoded_evolving_totals  # noqa: E402
 from _test_redundancy.self_fulfilling import check_self_fulfilling  # noqa: E402
 from _test_redundancy.similar import audit_similar_bodies  # noqa: E402
@@ -430,6 +431,50 @@ class TestFactsCache:
         """隔离：缓存路径必须被 TEST_REDUNDANCY_CACHE 重定向到 tmp_path（不碰真实 data/cache）。"""
         cache_path = _facts_cache_path()
         assert str(cache_path).startswith(str(tmp_tree.parents[1]))
+
+
+class TestLogicFingerprint:
+    """指纹必须覆盖实现包里的**每一个**规则模块：漏掉一个就会在该模块改口径后回放旧结论。"""
+
+    @pytest.fixture(name="fake_pkg")
+    def fixture_fake_pkg(self, tmp_path, monkeypatch):
+        """把指纹的实现包目录指到临时目录（不碰仓库真实模块）。"""
+        scripts = tmp_path / "scripts"
+        package = scripts / "_test_redundancy"
+        package.mkdir(parents=True)
+        (scripts / "_shared").mkdir()
+        (scripts / "_shared" / "checklib.py").write_text("VALUE = 1\n", encoding="utf-8")
+        (package / "facts_cache.py").write_text("", encoding="utf-8")
+        monkeypatch.setattr(facts_cache, "__file__", str(package / "facts_cache.py"))
+        return package
+
+    def test_new_rule_module_changes_fingerprint(self, fake_pkg):
+        baseline = _cache_version()
+        (fake_pkg / "brand_new_rule.py").write_text("RULE = 1\n", encoding="utf-8")
+        assert _cache_version() != baseline
+
+    def test_edited_rule_module_changes_fingerprint(self, fake_pkg):
+        rule = fake_pkg / "rules.py"
+        rule.write_text("RULE = 1\n", encoding="utf-8")
+        baseline = _cache_version()
+        rule.write_text("RULE = 2\n", encoding="utf-8")
+        assert _cache_version() != baseline
+
+    def test_shared_checklib_change_changes_fingerprint(self, fake_pkg):
+        baseline = _cache_version()
+        (fake_pkg.parent / "_shared" / "checklib.py").write_text("VALUE = 2\n", encoding="utf-8")
+        assert _cache_version() != baseline
+
+    def test_fingerprint_is_content_based_not_order_dependent(self, fake_pkg):
+        for name in ("beta.py", "alpha.py"):
+            (fake_pkg / name).write_text(f"NAME = {name!r}\n", encoding="utf-8")
+        baseline = _cache_version()
+        # 重建同名同内容文件（创建顺序相反、mtime 不同）→ 指纹必须一致
+        for name in ("alpha.py", "beta.py"):
+            (fake_pkg / name).unlink()
+        for name in ("alpha.py", "beta.py"):
+            (fake_pkg / name).write_text(f"NAME = {name!r}\n", encoding="utf-8")
+        assert _cache_version() == baseline
 
 
 @pytest.fixture()

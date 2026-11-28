@@ -19,6 +19,7 @@ import 绑定回本模块命名空间（pytest 只认入口模块里的夹具与
   - `_conftest_state_reset.py` 各模块单例、缓存与开关状态的用例级复位
   - `_conftest_cassette.py`    数据源记录-回放
   - `_conftest_network.py`     外网阻断与离线桩
+  - `_conftest_state_guard.py` 会话级全局状态泄漏守卫（开跑快照 / 结束比对）
   - `_conftest_hooks.py`       命令行选项、标记全集与收集期 edge/scenario/标记校验
 """
 
@@ -59,6 +60,12 @@ from src.test._conftest_isolation import (  # noqa: F401 — 夹具/钩子须绑
 from src.test._conftest_network import (  # noqa: F401 — 夹具/钩子须绑定在入口命名空间
     _block_external_network,
     offline_external_sources,
+)
+from src.test._conftest_state_guard import (  # noqa: F401 — 夹具/钩子须绑定在入口命名空间
+    _guard_global_state_leaks,
+    _restore_invest_logger_level,
+    pytest_collection_finish as _guard_collection_finish,
+    pytest_runtest_teardown as _guard_runtest_teardown,
 )
 from src.test._conftest_state_reset import (  # noqa: F401 — 夹具/钩子须绑定在入口命名空间
     _auto_reset_provider_registry,

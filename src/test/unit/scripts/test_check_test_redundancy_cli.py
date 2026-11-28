@@ -27,6 +27,7 @@ _STATS = {
     "weak_mock": 0,
     "date_bombs": 0,
     "markers": 0,
+    "patch_surface": 0,
     "duplicate_skipped": 0,
 }
 _AUDIT_STATS = {"groups": 0, "intra_groups_total": 0}

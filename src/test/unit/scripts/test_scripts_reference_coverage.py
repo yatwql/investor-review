@@ -155,6 +155,7 @@ _EXTERNAL_FLAGS = {
     "--no-archive",
     "--skip-design-docs",
     "--record-cassettes",
+    "--paths-to-mutate",  # mutmut（可选后端，变异评测脚本委托它跑）
 }
 
 

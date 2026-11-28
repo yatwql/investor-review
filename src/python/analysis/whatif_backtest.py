@@ -198,8 +198,8 @@ def _vol_pct(ret: list[float]) -> float | None:
     """年化波动率（%）：std(ddof=1) × √252。"""
     if len(ret) < 2:
         return None
-    mean = sum(ret) / len(ret)
-    variance = sum((r - mean) ** 2 for r in ret) / (len(ret) - 1)
+    mean = math.fsum(ret) / len(ret)
+    variance = math.fsum((r - mean) ** 2 for r in ret) / (len(ret) - 1)
     if variance < _VAR_EPS:
         return 0.0
     return round(math.sqrt(variance) * math.sqrt(252) * 100, 2)

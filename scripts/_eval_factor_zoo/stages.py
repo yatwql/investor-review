@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 import json
+import math
 import time
 
 from _eval_factor_zoo import PROJECT_ROOT
@@ -314,7 +315,7 @@ def _pool_mean_returns(bars_by_code: dict[str, list[dict]], _index_bars: list[di
     for date in dates:
         values = [series[date] for series in per_code.values() if date in series]
         if len(values) >= MIN_CODES_PER_DAY:
-            mean[date] = sum(values) / len(values)
+            mean[date] = math.fsum(values) / len(values)
     return mean
 
 
@@ -357,7 +358,7 @@ def measure_cold_sample() -> dict[str, Any]:
     except Exception:  # noqa: BLE001 — 性能评测：探针失败按「指数不可用」记录，采集继续
         index_ok = False
     index_seconds = time.perf_counter() - t0
-    mean_cold = (sum(cold_durations) / len(cold_durations)) if cold_durations else None
+    mean_cold = (math.fsum(cold_durations) / len(cold_durations)) if cold_durations else None
     return {
         "samples": samples,
         "cold_request_count": len(cold_durations),

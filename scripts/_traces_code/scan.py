@@ -1,4 +1,4 @@
-"""check-code-traces 单文件扫描调度（痕迹/标识符/分层/日志/配置默认值 五条支路汇聚）。"""
+"""check-code-traces 单文件扫描调度（痕迹/标识符/分层/日志/配置默认值 六条支路汇聚）。"""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from _traces_code.exemptions import _is_chapter_excluded, _is_round_excluded
 from _traces_code.extract import _iter_comment_lines, _scan_identifiers
 from _traces_code.layers import _scan_core_layering
 from _traces_code.logging_discipline import _scan_logger_calls, _scan_print_calls
+from _traces_code.numeric_sum import _scan_float_sum
 from _traces_code.patterns import (
     _COMPILED_PATTERNS,
     _PATTERNS_PREFILTER,
@@ -91,9 +92,10 @@ def scan_file(fpath: Path, verbose: bool) -> list[tuple[int, str, str, str]]:
     # 配置默认值单源守卫（禁止与默认表同值的字面量兜底）
     hits.extend(_scan_config_default_fallbacks(fpath, REPO_ROOT))
 
-    # 口径类守卫（只管辖 src/python + scripts）：pragma 豁免清单 + 宽捕获抑制形态
+    # 口径类守卫（只管辖 src/python + scripts）：pragma 豁免清单 + 宽捕获抑制形态 + 浮点求和口径
     if _is_guarded_surface(fpath):
         hits.extend(_scan_pragma_no_cover(fpath))
         hits.extend(_scan_broad_capture_prose(fpath))
+        hits.extend(_scan_float_sum(fpath))
 
     return hits

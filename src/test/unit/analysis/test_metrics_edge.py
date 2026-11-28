@@ -530,6 +530,15 @@ class TestComputeAllMetricsEdge:
         result = compute_all_metrics(returns, holdings_details=None)
         assert result["win_rate"]["win_rate"] == 0.0
 
+    def test_all_zero_weights_yield_no_equivalent_count(self):
+        """权重全为 0（HHI=0）→ 等效品种数保持 None，不做 1/0。"""
+        from src.python.analysis.metrics import compute_all_metrics
+
+        result = compute_all_metrics([], portfolio_weights=[0.0, 0.0])
+
+        assert result["hhi"] == pytest.approx(0.0)
+        assert result["hhi_equivalent"] is None
+
 
 # ═══════════════════════════════════════════════════════════════
 # portfolio_beta_analysis — 额外异常路径

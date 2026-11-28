@@ -657,7 +657,7 @@ class PortfolioHistoryCalculator:
         """
         if len(daily_returns) < 2:
             return 0.0
-        mean = sum(daily_returns) / len(daily_returns)
-        variance = sum((r - mean) ** 2 for r in daily_returns) / (len(daily_returns) - 1)
+        mean = math.fsum(daily_returns) / len(daily_returns)
+        variance = math.fsum((r - mean) ** 2 for r in daily_returns) / (len(daily_returns) - 1)
         std_dev = math.sqrt(variance)
         return std_dev * math.sqrt(252)

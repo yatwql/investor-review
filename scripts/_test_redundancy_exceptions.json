@@ -1,0 +1,171 @@
+{
+  "defaults": {
+    "expiry": "2027-06-30"
+  },
+  "patch-surface": [
+    {
+      "name": "src.python.core.registry.get_report_section_order",
+      "owner": "core（注册表兼容门面）",
+      "reason": "core/registry.py 是刻意维护的「单入口不变」兼容门面；真实调用方（report/_generation_full._generate_report_full、report/_both_stages.resolve_both_options、report/orchestrator）都用函数内延迟 import 取符号，调用时读的是门面属性，patch 真实生效",
+      "replacement": "调用方统一改为从定义模块 core/report_section_registry 导入（去掉门面延迟 import）后，测试 patch 面同步迁到定义模块"
+    },
+    {
+      "name": "src.python.core.registry.get_llm_module_name",
+      "owner": "core（注册表兼容门面）",
+      "reason": "调用点 report/decision_book._module_label 用函数内延迟 import 从门面取该符号，patch 在调用时读取门面属性，真实生效",
+      "replacement": "同 get_report_section_order：门面延迟 import 收敛后改 patch 到 core/data_registry"
+    },
+    {
+      "name": "src.python.core.registry.get_llm_module_names",
+      "owner": "core（注册表兼容门面）",
+      "reason": "调用点 core/system_info.llm_status、web/handlers._handle_index、tui/tui 等均为函数内延迟 import 从门面取符号，patch 真实生效",
+      "replacement": "同 get_report_section_order：门面延迟 import 收敛后改 patch 到定义模块"
+    },
+    {
+      "name": "src.python.report.orchestrator.prepare_report_data",
+      "owner": "report（编排单入口）",
+      "reason": "orchestrator 是报告编排的唯一对外入口，re-export 服务于调用方的函数内延迟 import（report/_generation_full._generate_report_full 在函数体内 from orchestrator import prepare_report_data），patch 真实生效",
+      "replacement": "调用点改为从 report/_orchestrator_data 直接导入后，测试 patch 面同步迁到 _orchestrator_data"
+    },
+    {
+      "name": "src.python.report.orchestrator.compute_valuation_data",
+      "owner": "report（编排单入口）",
+      "reason": "调用点 report/_both_stages.stage_quotes 在函数体内 from orchestrator import，patch 在调用时读取门面属性，真实生效",
+      "replacement": "同 prepare_report_data：调用点改直连 _orchestrator_data 后同步迁 patch 面"
+    },
+    {
+      "name": "src.python.report.orchestrator.compute_market_temperature_data",
+      "owner": "report（编排单入口）",
+      "reason": "调用点 report/_both_stages.stage_quotes 在函数体内 from orchestrator import，patch 真实生效",
+      "replacement": "同 prepare_report_data：调用点改直连 _orchestrator_data 后同步迁 patch 面"
+    },
+    {
+      "name": "src.python.report.orchestrator.compute_purchase_status_data",
+      "owner": "report（编排单入口）",
+      "reason": "调用点 report/whatif_operations 在函数体内 from orchestrator import compute_purchase_status_data，patch 真实生效",
+      "replacement": "调用点改直连 _orchestrator_data 后同步迁 patch 面"
+    },
+    {
+      "name": "src.python.llm.generators_orchestrator.thinking_wait_total_seconds",
+      "owner": "report（LLM 阶段计数）",
+      "reason": "调用点 report/_generation_full._record_llm_stage_counters 在函数体内 from llm.generators_orchestrator import，patch 真实生效（符号本身是模块级累计态，需按读取时点替换）",
+      "replacement": "把思考等待累计态收敛为 llm/_llm_dispatch 的唯一读取入口（该模块已持有实现）后，测试改 patch 该入口的访问器"
+    },
+    {
+      "name": "src.python.report.summary.write_llm_usage_sheet",
+      "owner": "report（用量页签）",
+      "reason": "summary 末尾的 re-export 是规避循环导入的延迟导入面：report/excel_llm_usage 在函数体内 from report.summary import write_llm_usage_sheet，patch 真实生效",
+      "replacement": "把 write_llm_usage_sheet 的导入点下沉到无循环依赖的位置（excel_llm_usage 直接 from report.summary_llm_usage import）后，测试改 patch 该模块"
+    },
+    {
+      "name": "src.python.providers.sina.fetch_index_kline",
+      "owner": "providers（指数 K 线派发）",
+      "reason": "指数历史 K 线走动态派发：fetcher/chain_incremental 以 importlib.import_module + getattr(provider_module, \"fetch_index_kline\") 按属性名运行时取函数，providers/sina 的 re-export 就是派发面，patch 真实生效",
+      "replacement": "派发改为显式 provider 函数表（注册表登记函数对象，不再按属性名 getattr）后，测试改注入该表"
+    }
+  ],
+  "slow-or-subprocess": [
+    {
+      "name": "src/test/unit/core/test_check_sources.py::slow-sleep::time.sleep(30)",
+      "owner": "core（数据源健康检查）",
+      "reason": "假源 lambda 内的 30s 等待就是被测场景本身（预算内未完成的检查项标超时），检查跑在独立线程里、主用例按时返回；换成事件等待会失去「慢源占住线程」这一被测条件",
+      "replacement": "被测检查器改为可注入时钟后，假源改用「永不返回的阻塞事件 + 注入时钟」，不再真睡"
+    },
+    {
+      "name": "src/test/unit/core/test_phase_timeout.py::slow-sleep::time.sleep(0.1)",
+      "owner": "core（相位超时）",
+      "reason": "两处用例各睡满 0.1s：① 越过多处 0.01s 预算以断言 remaining 归零；② 占住全局相位让另一线程在占用窗口内撞上全局超时——两处测量对象都是真实墙钟",
+      "replacement": "相位计时改为可注入单调时钟（monotonic 替身）：remaining 断言改虚拟时间推进，并发用例改用事件同步占用窗口"
+    },
+    {
+      "name": "src/test/unit/fetcher/test_fund_fee.py::slow-sleep::time.sleep(0.2)",
+      "owner": "fetcher（基金费率并发取数）",
+      "reason": "让并发的多路取数在 0.2s 窗口内真正重叠，用于断言并发上限（max_active）——重叠靠真实耗时形成",
+      "replacement": "并发上限改为可注入信号量/事件后，改由事件汇合制造重叠"
+    },
+    {
+      "name": "src/test/unit/llm/test_llm_pacing.py::slow-sleep::time.sleep(0.3)",
+      "owner": "llm（节流器计量）",
+      "reason": "量测对象是单次调用的墙钟 elapsed（0.2s 排队门禁 + 0.1s 真实请求），必须真睡才能让 elapsed 落在被测区间",
+      "replacement": "把 elapsed 的来源改为可注入单调时钟后再断言"
+    },
+    {
+      "name": "src/test/unit/providers/test_cninfo.py::slow-sleep::time.sleep(0.3)",
+      "owner": "providers（巨潮资讯）",
+      "reason": "`_SlowClient.post` 故意慢于墙钟预算，用于验证端到端截止生效（而非 httpx 分阶段超时）——慢速就是被测输入",
+      "replacement": "截止逻辑改为按注入时钟判定后，客户端可改为零等待返回"
+    },
+    {
+      "name": "src/test/unit/providers/test_tiantian_holdings_channels.py::slow-sleep::time.sleep(0.1)",
+      "owner": "providers（天天基金持仓通道）",
+      "reason": "两路通道按时间先后拼装（后一路需在前一路启动后 0.1s 内发起），顺序由真实延时构成",
+      "replacement": "通道调度改为按事件汇合排序后，去掉真实延时"
+    },
+    {
+      "name": "src/test/unit/report/test_factor_metrics_parallel.py::slow-sleep::time.sleep(0.12)",
+      "owner": "report（因子数据并行取数）",
+      "reason": "单路耗时 0.12s 超过 0.05s 慢取数告警阈值，用于断言 WARNING 带标的与耗时——超阈靠真实耗时达成",
+      "replacement": "慢取数耗时改为取自注入时钟后，_slow_holding 可零等待"
+    },
+    {
+      "name": "src/test/unit/web/test_handlers.py::slow-sleep::time.sleep(0.2)",
+      "owner": "web（处理器并发上限）",
+      "reason": "慢执行者占位 0.2s，用于量测并发数上限（同刻活跃数）——并发重叠由真实耗时形成",
+      "replacement": "执行者改用事件阻塞 + 测试内放行后，去掉真实睡眠"
+    },
+    {
+      "name": "src/test/unit/web/test_runs.py::slow-sleep::time.sleep(0.15)",
+      "owner": "web（运行队列容量）",
+      "reason": "队列容量上限用例需要执行体真实占住 worker（0.15s），否则超出上限的提交不会返回 None",
+      "replacement": "RunManager 改为可注入执行器后，改由事件阻塞执行体"
+    },
+    {
+      "name": "src/test/unit/cli/test_cli_main.py::real-subprocess::[sys.executable, '-c', self._PROBE]",
+      "owner": "cli（模块入口退出码）",
+      "reason": "断言 `python -m src.python.cli` 把退出码传给 shell——退出码只有在真进程边界才可观测，`runpy` 的 SystemExit 需真实解释器承载",
+      "replacement": "无（进程退出码语义只能在子进程量测）"
+    },
+    {
+      "name": "src/test/unit/core/test_constants_project_root.py::real-subprocess::[sys.executable, '-c', code]",
+      "owner": "core（工程根解析）",
+      "reason": "在指定 cwd 下起新解释器验证 REPO_ROOT 解析与 cwd 无关——换 cwd 的导入期行为无法在进程内复现",
+      "replacement": "无（依赖解释器启动期 sys.path/cwd 语义）"
+    },
+    {
+      "name": "src/test/unit/core/test_json_comments.py::real-subprocess::[sys.executable, '-c', code]",
+      "owner": "core（JSON 注释解析）",
+      "reason": "验证导入叶子模块不会牵入 config 包——需在干净解释器里看 sys.modules 初态，进程内已被其它用例污染",
+      "replacement": "无（需干净解释器的导入面快照）"
+    },
+    {
+      "name": "src/test/unit/scripts/test_check_conclusion_cache.py::real-subprocess::[sys.executable, str(_SCRIPTS_DIR / f'{name}.py'), '--ci']",
+      "owner": "scripts（结论缓存 CLI 契约）",
+      "reason": "校验 check 脚本的「结论缓存逐字回放」CLI 契约：必须真跑脚本进程，缓存命中/失效结论才与线上一致",
+      "replacement": "抽出 CLI 入口函数后可在进程内调用，届时去掉子进程"
+    },
+    {
+      "name": "src/test/unit/scripts/test_check_style_guardrails.py::real-subprocess::[sys.executable, str(_SCRIPTS_DIR / 'check-style-guardrails.py'), '--ci']",
+      "owner": "scripts（设计护栏 CLI 契约）",
+      "reason": "设计护栏脚本的退出码/输出契约由 `check-script-contract` 强制 CLI 面，须真跑进程量测退出码",
+      "replacement": "退出码契约改为进程内调用入口函数后去掉子进程"
+    },
+    {
+      "name": "src/test/unit/scripts/test_find_order_dependent.py::real-subprocess::[sys.executable, str(_SCRIPTS_DIR / 'test-find-order-dependent.py'), *argv]",
+      "owner": "scripts（顺序依赖定位工具）",
+      "reason": "该工具本身是「起 pytest 子进程探测顺序依赖」的实现，契约用例须真跑它的 CLI 才能量测传播的退出码",
+      "replacement": "无（被量测对象就是子进程编排器）"
+    },
+    {
+      "name": "src/test/unit/scripts/test_perf_report.py::real-subprocess::[sys.executable, '-c', code]",
+      "owner": "scripts（性能报告日志落盘）",
+      "reason": "需在清空测试信号环境的**干净**解释器里验证日志落盘路径（PYTEST_CURRENT_TEST 等残留会改变落盘目标），进程内无法复现",
+      "replacement": "无（依赖干净进程环境）"
+    },
+    {
+      "name": "src/test/unit/ui/test_tui_keys.py::real-subprocess::[_sys.executable, '-c', code]",
+      "owner": "ui（TUI 按键解码）",
+      "reason": "按键解码须在真实伪终端（pty）下量测，伪终端的一端只存在于子进程；进程内无法造出 raw 模式终端",
+      "replacement": "无（pty 语义要求真进程）"
+    }
+  ]
+}

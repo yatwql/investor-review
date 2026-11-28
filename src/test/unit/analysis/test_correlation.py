@@ -9,6 +9,10 @@
   6. 名称回退：names_by_code 缺失时回退 code 本身
   7. 数据契约键完整性（含 unavailable_result 工厂）
   8. 常数序列 → (0.0, 1.0) 不显著（绝不硬算）
+  9. 数值真值：p 链（df / t / 1-r² / 2(1-CDF)）与 _pearson_r 对齐手算值与解析解
+     （df=1 Cauchy、df=2 闭式、大偏移窄幅的中心化精度、±1 端点）
+ 10. 阈值边界：常数检测与显著性判定均为严格小于（等值不触发）
+ 11. 滚动端点首个 (date, r) 手算值、完整窗等值端点、全窗皆空的降级结构与 notes 文案
 
 运行：
   python -m pytest src/test/unit/analysis/test_correlation.py -v
@@ -20,11 +24,14 @@ import math
 
 import pytest
 
+from src.python.analysis import correlation as correlation_module
 from src.python.analysis.correlation import (
     DEFAULT_WINDOW,
     MIN_SAMPLES,
+    ROLLING_WINDOWS,
     SIGNIFICANCE_LEVEL,
     _pearson_pvalue,
+    _pearson_r,
     compute_correlation_matrix,
     unavailable_result,
 )
@@ -128,6 +135,101 @@ class TestKnownAnswerCorrelation:
         noise = _sin(60)
         r, p = _pearson_pvalue(const, noise)
         assert abs(r) < 1e-12 and p == 1.0
+
+
+class TestPearsonStatisticNumericTruth:
+    """(r, p) 数值真值：df / t / 1-r² / 双侧 p 每一环都必须精确（手推 + 解析解）。"""
+
+    def test_three_samples_compute_against_cauchy_closed_form(self):
+        """n=3（df=1，合法下限）必须参与计算：r=9/√84，p=1-2·atan(3√3)/π。
+
+        手推：x=[1,2,3]、y=[1,2,4] → mx=2、my=7/3、num=3、sx=√2、sy=√42/3
+        → r=9/√84；df=1 时 t 分布即标准 Cauchy，p = 1 - 2·atan(t)/π
+        （t²=r²/(1-r²)=27 → t=3√3），此式不经被测 _t_cdf。
+        """
+        r, p = _pearson_pvalue([1.0, 2.0, 3.0], [1.0, 2.0, 4.0])
+        assert r == pytest.approx(9.0 / math.sqrt(84.0), rel=1e-12)
+        assert p == pytest.approx(1.0 - 2.0 * math.atan(3.0 * math.sqrt(3.0)) / math.pi, rel=1e-9)
+
+    def test_four_samples_compute_against_df2_closed_form(self):
+        """n=4（df=2）→ r=6/√50；df=2 的 t CDF 有闭式，故 p = 1-|r|。
+
+        手推：x=[1,2,3,4]、y=[2,1,4,5] → num=6、sx=√5、sy=√10 → r=6/√50；
+        df=2 时 t²/(2+t²)=r²，p = 1 - |r| = 1 - 6/√50。
+        """
+        r, p = _pearson_pvalue([1.0, 2.0, 3.0, 4.0], [2.0, 1.0, 4.0, 5.0])
+        assert r == pytest.approx(6.0 / math.sqrt(50.0), rel=1e-12)
+        assert p == pytest.approx(1.0 - 6.0 / math.sqrt(50.0), rel=1e-9)
+        # p 关于 |r| 单调递减：同 df 下更弱的相关（r=0.6）必须给出更大的 p
+        _, p_weak = _pearson_pvalue([1.0, 2.0, 3.0, 4.0], [2.0, 1.0, 4.0, 3.0])
+        assert p_weak == pytest.approx(0.4, rel=1e-9)
+        assert p < p_weak
+
+
+class TestPearsonRKnownAnswers:
+    """_pearson_r 数值真值：中心化、平方项与归一化分母任一错位都会被手算值判出。"""
+
+    def test_three_sample_lower_bound_computes(self):
+        """n=3（合法下限）→ 正常返回 r=1 而非 None（不落 <3 的早退）。"""
+        assert _pearson_r([1.0, 2.0, 3.0], [3.0, 5.0, 7.0]) == pytest.approx(1.0, abs=1e-9)
+
+    def test_perfect_linear_map_hits_both_endpoints(self):
+        """y=3+2x → r=1；y=5-x → r=-1（端点钳位，符号不得翻转）。"""
+        x = [1.0, 2.0, 3.0, 4.0]
+        assert _pearson_r(x, [3.0 + 2.0 * v for v in x]) == pytest.approx(1.0, abs=1e-9)
+        assert _pearson_r(x, [5.0 - v for v in x]) == pytest.approx(-1.0, abs=1e-9)
+
+    def test_hand_computed_half_correlation(self):
+        """x=[1..4]、y=[2,1,4,3]：num=3、sx=sy=√5 → r=3/5=0.6。
+
+        归一化分母必须是 sx·sy：写成 sx/sy 会得 num·(sy/sx)=3 再被钳成 1.0。
+        """
+        assert _pearson_r([1.0, 2.0, 3.0, 4.0], [2.0, 1.0, 4.0, 3.0]) == pytest.approx(0.6, rel=1e-12)
+
+    def test_large_offset_narrow_spread_keeps_centering(self):
+        """均值 1e7、振幅 1e-2 的同构数据仍须给出 r=0.6（中心化只能减均值）。
+
+        均值未精确可表示时 Σ(b-my) 留有 ~n·ulp(1e7) 的浮点残差；把 (a-mx) 写成
+        (a+mx)，该残差被 2·mx 放大到 num 量级（r 由 0.6 变成钳位后的 -1.0）。
+        """
+        offset, step = 1e7, 1e-2
+        x = [offset + i * step for i in range(4)]
+        y = [offset + (k - 1) * step for k in (2, 1, 4, 3)]
+        assert _pearson_r(x, y) == pytest.approx(0.6, rel=1e-9)
+        # _pearson_pvalue 的 num 用同一中心化口径，同一残差同样会把它带偏
+        r_pvalue, _ = _pearson_pvalue(x, y)
+        assert r_pvalue == pytest.approx(0.6, rel=1e-9)
+
+
+class TestThresholdBoundaries:
+    """阈值边界：常数检测与显著性判定都用严格小于——等值不得触发。"""
+
+    def test_constant_threshold_equal_to_std_still_computes(self, monkeypatch):
+        """标准差恰等于常数阈值 → 不判常数，仍返回真实 (r, p)。
+
+        阈值语义是「低于才判常数」；放宽成 <= 会让等值序列退化成虚假的不显著白格。
+        x=[1,2,3,4] 与 y=[2,1,4,3] 的离差集合相同，故 sx=sy，取 sx 作为阈值即落在等值点。
+        """
+        x = [1.0, 2.0, 3.0, 4.0]
+        y = [2.0, 1.0, 4.0, 3.0]
+        mx = math.fsum(x) / len(x)
+        sx = math.sqrt(math.fsum((a - mx) ** 2 for a in x))
+        monkeypatch.setattr(correlation_module, "_CONSTANT_EPS", sx)
+        r, p = _pearson_pvalue(x, y)
+        assert r == pytest.approx(0.6, rel=1e-9)
+        assert p == pytest.approx(0.4, rel=1e-9)
+        assert _pearson_r(x, y) == pytest.approx(0.6, rel=1e-9)
+
+    def test_significance_threshold_equal_to_p_is_not_significant(self, monkeypatch):
+        """p 恰等于显著性阈值 → 不显著（判定口径是 p < 阈值，不是 <=）。"""
+        n = MIN_SAMPLES  # 窗口即全部样本：生产侧与本侧用同一批浮点值算出同一个 p
+        x = _sin(n)
+        y = [math.cos(i / 7.0) for i in range(n)]
+        _, raw_p = _pearson_pvalue(x, y)
+        assert raw_p < SIGNIFICANCE_LEVEL  # 该对在默认阈值下显著，阈值调到 p 上即成等值边界
+        monkeypatch.setattr(correlation_module, "SIGNIFICANCE_LEVEL", raw_p)
+        res = compute_correlation_matrix({"a": _returns(x), "b": _returns(y)})
+        assert res["pairs"][0]["significant"] is False
 
 
 class TestInsignificantPair:
@@ -403,3 +505,70 @@ class TestRollingCorrelations:
         assert focus_ad["series"]["60"] == []
         # 组合平均仍由 A×B/B×C/A×C 等有效对构成
         assert all(p["n_pairs"] >= 1 for p in res["portfolio"]["60"])
+
+    def test_first_endpoint_value_is_hand_computable(self):
+        """最小窗配置下首个端点 (date, r) 可手算：x=[1,2,3] vs y=[1,3,2] → r=1/(√2·√2)=0.5。"""
+        from src.python.analysis.correlation import compute_rolling_correlations
+
+        xs = [1.0, 2.0, 3.0, 4.0, 5.0]
+        ys = [1.0, 3.0, 2.0, 5.0, 4.0]
+        dates = _dates(5)
+        data = {
+            "a": [{"date": d, "return": v} for d, v in zip(dates, xs)],
+            "b": [{"date": d, "return": v} for d, v in zip(dates, ys)],
+        }
+        res = compute_rolling_correlations(data, windows=(3,), min_samples=3)
+        assert res["available"] is True
+        p3 = res["portfolio"]["3"]
+        assert p3, "凑满 min_samples 的端点不得缺席"
+        assert p3[0]["date"] == dates[2], "端点应为首个凑满 3 期的日期"
+        assert p3[0]["value"] == pytest.approx(0.5, abs=1e-9)
+        assert p3[0]["n_pairs"] == 1
+        # 完整窗起点恰等首个端点：完整窗判定含等值端点（<= 而非 <）
+        assert res["coverage"]["full_window_from"]["3"] == dates[2]
+
+    def test_all_windows_empty_degrades_to_contract(self):
+        """全窗皆空（两品种均为常数收益）→ 降级返回完整空结构，绝不返回 None。"""
+        from src.python.analysis.correlation import compute_rolling_correlations
+
+        dates = _dates(MIN_SAMPLES + 10)
+        data = {
+            "a": [{"date": d, "return": 0.01} for d in dates],
+            "b": [{"date": d, "return": 0.02} for d in dates],
+        }
+        res = compute_rolling_correlations(data)
+        assert isinstance(res, dict)
+        assert res["available"] is False and res["status"] == "insufficient"
+        assert res["portfolio"] == {str(w): [] for w in ROLLING_WINDOWS}
+        assert res["notes"] == []
+        assert res["coverage"]["dates"] == 0
+
+    def test_truncated_window_note_exact_text(self):
+        """重叠 80 期 < 120 窗 → 截断分支文案带实际重叠期数与窗口期数。"""
+        from src.python.analysis.correlation import compute_rolling_correlations
+
+        res = compute_rolling_correlations(_rolling_returns(n=80))
+        assert "历史仅 80 期重叠 < 120 日窗，该窗全程按可得区间截断计算" in res["notes"]
+
+    def test_full_window_exactly_reaching_window_is_not_truncated(self):
+        """重叠期数恰等于窗口期数（120）→ 走完整窗分支，不得误判为截断。"""
+        from src.python.analysis.correlation import compute_rolling_correlations
+
+        res = compute_rolling_correlations(_rolling_returns(n=120))
+        notes = res["notes"]
+        assert any(n.startswith("120 日窗完整重叠自") for n in notes), notes
+        assert not any("历史仅" in n for n in notes), notes
+        assert res["coverage"]["full_window_from"]["120"] == _dates(120)[-1]
+
+    def test_full_window_from_first_endpoint_needs_no_truncation_note(self):
+        """首个端点即已完整窗（窗长 == min_samples）→ 无"更早端点按可得区间"标注。
+
+        该标注只在完整窗起点晚于首个端点时才有意义；起点与首端点重合时并无更早的
+        截断端点，标注必须同时满足"完整窗起点存在"与"起点晚于首端点"两个条件。
+        """
+        from src.python.analysis.correlation import compute_rolling_correlations
+
+        res = compute_rolling_correlations(_rolling_returns(n=70), windows=(60,), min_samples=60)
+        first_endpoint = res["portfolio"]["60"][0]["date"]
+        assert res["coverage"]["full_window_from"]["60"] == first_endpoint
+        assert not any("完整重叠自" in n for n in res["notes"]), res["notes"]

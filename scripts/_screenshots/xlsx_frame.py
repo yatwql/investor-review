@@ -13,6 +13,7 @@ xlsx），逐格取「显示值 / 填充色 / 字体 / 合并区 / 列宽」，�
 from __future__ import annotations
 
 import html
+import math
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -186,7 +187,7 @@ def _column_widths(sheet: Worksheet, max_col: int, max_rows: int, available: int
         # 下限 48px 仍可能撑破（列极多时）：在可压缩空间里等比再削一轮
         overflow = sum(widths) - available
         if overflow > 0:
-            room = sum(max(0.0, width - 48.0) for width in widths)
+            room = math.fsum(max(0.0, width - 48.0) for width in widths)
             if room > 0:
                 widths = [width - max(0.0, width - 48.0) * overflow / room for width in widths]
     return [int(width) for width in widths]

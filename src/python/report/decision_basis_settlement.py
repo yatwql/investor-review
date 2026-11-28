@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from src.python.core.decision_ledger import fold_ledger
@@ -32,7 +33,7 @@ def _tone_class_of(value: float | None) -> str:
 
 
 def _mean(values: list[float]) -> float | None:
-    return sum(values) / len(values) if values else None
+    return math.fsum(values) / len(values) if values else None
 
 
 PERFORMANCE_TITLE = "我的建议历史表现（按视界）"

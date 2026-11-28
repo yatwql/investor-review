@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -550,7 +551,7 @@ def _build_penetration_result(
     if not top10_list:
         logger.warning("[penetration] 天天基金持仓解析结果为空，穿透表不可用")
 
-    top10_coverage = sum(v["mv"] for _, v in sorted_items[:10]) / total_mv * 100 if total_mv > 0 else 0.0
+    top10_coverage = math.fsum(v["mv"] for _, v in sorted_items[:10]) / total_mv * 100 if total_mv > 0 else 0.0
 
     return {
         "update_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),

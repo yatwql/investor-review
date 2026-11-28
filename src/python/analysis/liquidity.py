@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from typing import Any
 
 logger = logging.getLogger("invest")
@@ -91,7 +92,7 @@ def _compute_avg_daily_turnover(code: str) -> float | None:
     if not daily_turnovers:
         return None
 
-    return sum(daily_turnovers) / len(daily_turnovers)
+    return math.fsum(daily_turnovers) / len(daily_turnovers)
 
 
 def check_liquidity(

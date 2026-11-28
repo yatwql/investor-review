@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import math
+
 from src.python.config.anonymizer import mask_holding_code
 from src.python.core.code_utils import is_qdii_extended
 from src.python.llm.rate_caliber import LABEL_INTERVAL, LABEL_POSITION_SHORT
@@ -158,7 +160,7 @@ def _build_concept_sector_block(penetrated_assets: list[dict] | None) -> str:
 
     if top5:
         top1_pct = top5[0][1] / total_mv * 100 if total_mv > 0 else 0
-        top3_pct = sum(v for _, v in top5[:3]) / total_mv * 100 if total_mv > 0 else 0
+        top3_pct = math.fsum(v for _, v in top5[:3]) / total_mv * 100 if total_mv > 0 else 0
         if top1_pct > 40 or top3_pct > 70:
             lines.append("集中度判断: 高")
         elif top1_pct > 20 or top3_pct > 50:

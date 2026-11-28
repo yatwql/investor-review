@@ -17,7 +17,8 @@
                             finding（续期须显式改日期并复核理由），且登记项须仍命中违规
                             （规则已修复却留着例外 → 腐化成永久豁免，须清理）
 
-例外表在 `scripts/_import_surface_exceptions.json`。已入域为第 11 条守护：本地只随
+例外表在 `scripts/_import_surface_exceptions.json`（文件名与规则 schema 单源登记在
+`_shared.exceptions` 的 `import-surface` 表；定位键为「文件路径 + 符号」）。已入域为第 11 条守护：本地只随
 `src/python/` 变更由 pre-commit 触发，CI `guards` job 与 P2 门禁恒全量覆盖（观察期
 结束条件——真实树上零 finding、零例外，误报为零）。
 
@@ -36,25 +37,20 @@ from __future__ import annotations
 import argparse
 import ast
 import importlib.util
-import json
-import re
 import sys
-from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _shared.checklib import REPO_ROOT, add_common_args, rel, report
+from _shared.exceptions import ExceptionTable, load_exception_table, table_spec
 
 PY_ROOT = REPO_ROOT / "src" / "python"
 SCRIPTS_ROOT = REPO_ROOT / "scripts"
-EXCEPTIONS_FILE = Path(__file__).resolve().parent / "_import_surface_exceptions.json"
+
+#: 例外表路径与规则 schema 取自 `_shared.exceptions` 的登记表（`import-surface` 表）
+_TABLE_SPEC = table_spec("import-surface")
+EXCEPTIONS_FILE = _TABLE_SPEC.path
 COMPAT_MARKERS = ("兼容既有导入面", "兼容既有引用", "公开别名", "私有名保留")
-
-#: 例外条目必填字段（缺一即无法追责或无法自动到期）
-_REQUIRED_FIELDS = ("owner", "reason", "expiry", "replacement")
-
-#: 到期日格式（ISO 日历日，无时区歧义；`YYYY-MM-DD` 之外的写法一律判元数据违规）
-_EXPIRY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def _module_name(path: Path, root: Path) -> str:
@@ -73,84 +69,47 @@ def _package_of(module: str) -> str:
     return ".".join(module.split(".")[:3])
 
 
-class _ExceptionTable(dict):
-    """例外表：`{规则: {(相对路径, 符号)}}`，附带原始条目与命中记录。
-
-    `used` 记下 `_excepted` 实际查询过的 `(规则, 路径, 符号)`：查询由违规候选驱动，
-    没命中说明该规则早已修复，留下的例外只是永不到期的豁免。
-    """
-
-    def __init__(self, raw: dict[str, list[dict]] | None = None) -> None:
-        super().__init__()
-        self.raw: dict[str, list[dict]] = dict(raw or {})
-        self.used: set[tuple[str, str, str]] = set()
-        #: 读表失败原因（非空时整张表作废，由 `collect` 转成一条 finding）
-        self.load_error: str = ""
-        for rule, entries in self.raw.items():
-            self[rule] = {(str(e.get("path", "")), str(e.get("name", ""))) for e in entries}
-
-
-def _load_exceptions() -> _ExceptionTable:
+def _load_exceptions() -> ExceptionTable:
     """返回例外表；文件缺失视为无例外，解析失败落在 `load_error` 上。"""
-    if not EXCEPTIONS_FILE.exists():
-        return _ExceptionTable()
-    try:
-        return _ExceptionTable(json.loads(EXCEPTIONS_FILE.read_text(encoding="utf-8")))
-    except (OSError, ValueError) as exc:
-        table = _ExceptionTable()
-        table.load_error = f"{rel(EXCEPTIONS_FILE)} 无法解析：{exc}"
-        return table
+    return load_exception_table(EXCEPTIONS_FILE, _TABLE_SPEC.rules)
 
 
-def _excepted(exceptions: dict[str, set[tuple[str, str]]], rule: str, path: Path, name: str) -> bool:
-    rel_path = rel(path)
-    if (rel_path, name) not in exceptions.get(rule, set()):
-        return False
-    used = getattr(exceptions, "used", None)
-    if used is not None:
-        used.add((rule, rel_path, name))
-    return True
+def _excepted(exceptions: ExceptionTable, rule: str, path: Path, name: str) -> bool:
+    """该（规则, 文件, 符号）是否已登记例外；命中即记入 `used`。"""
+    return exceptions.is_excepted(rule, rel(path), name)
 
 
-def audit_exceptions(exceptions: _ExceptionTable) -> list[str]:
+def audit_exceptions(exceptions: ExceptionTable) -> list[str]:
     """exception-table：例外条目元数据齐全 + 未到期 + 仍命中违规。"""
+    audit = exceptions.audit()
     findings: list[str] = []
-    today = date.today()
-    for rule, entries in exceptions.raw.items():
-        for entry in entries:
-            path = str(entry.get("path", ""))
-            name = str(entry.get("name", ""))
-            where = f"{rel(EXCEPTIONS_FILE)} {rule}:{path}::{name}"
-            missing = [field for field in _REQUIRED_FIELDS if not str(entry.get(field, "")).strip()]
-            if missing:
-                findings.append(f"[exception-metadata] {where} 缺少字段 {'/'.join(missing)}")
-                continue
-            expiry_raw = str(entry["expiry"]).strip()
-            if not _EXPIRY_RE.match(expiry_raw):
-                findings.append(f"[exception-metadata] {where} expiry 须为 YYYY-MM-DD，实为「{expiry_raw}」")
-                continue
-            if date.fromisoformat(expiry_raw) < today:
-                findings.append(f"[exception-expiry] {where} 已于 {expiry_raw} 到期，须删除例外或续期并复核理由")
-            elif (rule, path, name) not in exceptions.used:
-                findings.append(f"[exception-stale] {where} 未命中任何违规（规则已修复），须删除该例外")
-    return findings
+    for rule_name, entry in audit.usable:
+        key = (rule_name, *exceptions.rule(rule_name).key_of(entry))
+        if key not in exceptions.used:
+            findings.append(exceptions.stale_finding(rule_name, entry))
+    return audit.findings + findings
 
 
-def scan_compat(root: Path = PY_ROOT, exceptions: dict[str, set[tuple[str, str]]] | None = None) -> list[str]:
+def _table_or_empty(exceptions: ExceptionTable | None) -> ExceptionTable:
+    """扫描函数的缺省例外表：空表（不读盘，合成目录的单测不受仓库例外影响）。"""
+    return exceptions if exceptions is not None else ExceptionTable(EXCEPTIONS_FILE, _TABLE_SPEC.rules)
+
+
+def scan_compat(root: Path = PY_ROOT, exceptions: ExceptionTable | None = None) -> list[str]:
     """compat-comment：兼容历史导入路径的注释关键词。"""
-    exceptions = exceptions or {}
+    table = _table_or_empty(exceptions)
     findings: list[str] = []
     for path in sorted(root.rglob("*.py")):
         for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             marker = next((m for m in COMPAT_MARKERS if m in line), None)
-            if marker and not _excepted(exceptions, "compat-comment", path, marker):
+            if marker and not _excepted(table, "compat-comment", path, marker):
                 findings.append(f"[compat-comment] {rel(path)}:{lineno} 发现兼容导入标记「{marker}」")
     return findings
 
 
-def scan_private_all(root: Path = PY_ROOT, exceptions: dict[str, set[tuple[str, str]]] | None = None) -> list[str]:
+def scan_private_all(root: Path = PY_ROOT, exceptions: ExceptionTable | None = None) -> list[str]:
     """private-all：包门面 `__all__` 不得导出 `_` 私有名。"""
-    exceptions = exceptions or {}
+    table = _table_or_empty(exceptions)
     findings: list[str] = []
     for path in sorted(root.rglob("__init__.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -165,18 +124,14 @@ def scan_private_all(root: Path = PY_ROOT, exceptions: dict[str, set[tuple[str, 
             except (ValueError, TypeError):
                 continue
             for name in values:
-                if (
-                    isinstance(name, str)
-                    and name.startswith("_")
-                    and not _excepted(exceptions, "private-all", path, name)
-                ):
+                if isinstance(name, str) and name.startswith("_") and not _excepted(table, "private-all", path, name):
                     findings.append(f"[private-all] {rel(path)}:{node.lineno} __all__ 导出私有名 {name}")
     return findings
 
 
-def scan_cross_private(root: Path = PY_ROOT, exceptions: dict[str, set[tuple[str, str]]] | None = None) -> list[str]:
+def scan_cross_private(root: Path = PY_ROOT, exceptions: ExceptionTable | None = None) -> list[str]:
     """cross-private：跨包导入私有模块（同包私有导入是允许的）。"""
-    exceptions = exceptions or {}
+    table = _table_or_empty(exceptions)
     modules = _module_files(root)
     findings: list[str] = []
     for module, path in modules.items():
@@ -189,7 +144,7 @@ def scan_cross_private(root: Path = PY_ROOT, exceptions: dict[str, set[tuple[str
                 continue
             if _package_of(module) == _package_of(target):
                 continue
-            if any(_excepted(exceptions, "cross-private", path, target) for _ in [0]):
+            if _excepted(table, "cross-private", path, target):
                 continue
             findings.append(f"[cross-private] {rel(path)}:{node.lineno} 跨包导入私有模块 {target}")
     return findings
@@ -197,7 +152,7 @@ def scan_cross_private(root: Path = PY_ROOT, exceptions: dict[str, set[tuple[str
 
 def scan_cross_private_scripts(
     root: Path = PY_ROOT,
-    exceptions: dict[str, set[tuple[str, str]]] | None = None,
+    exceptions: ExceptionTable | None = None,
     scripts_root: Path = SCRIPTS_ROOT,
 ) -> list[str]:
     """cross-private-scripts：`scripts/` 侧不得导入 `src/python` 的私有模块。
@@ -209,7 +164,7 @@ def scan_cross_private_scripts(
     按解析结果同判（该名确实对应一个模块且其末段私有）。`scripts` 内部互引
     （`_shared/` 等）不受限：受判目标只有 `src.python.*`。
     """
-    exceptions = exceptions or {}
+    table = _table_or_empty(exceptions)
     production = set(_module_files(root))
     findings: list[str] = []
     for path in sorted(scripts_root.rglob("*.py")):
@@ -235,15 +190,15 @@ def scan_cross_private_scripts(
                     continue
                 if not target.split(".")[-1].startswith("_"):
                     continue
-                if _excepted(exceptions, "cross-private-scripts", path, target):
+                if _excepted(table, "cross-private-scripts", path, target):
                     continue
                 findings.append(f"[cross-private-scripts] {rel(path)}:{lineno} 导入 src/python 私有模块 {target}")
     return findings
 
 
-def scan_dynamic(root: Path = PY_ROOT, exceptions: dict[str, set[tuple[str, str]]] | None = None) -> list[str]:
+def scan_dynamic(root: Path = PY_ROOT, exceptions: ExceptionTable | None = None) -> list[str]:
     """dynamic-target：`import_module("字面量")` 的直接目标必须可解析（变量目标由 smoke 用例兜底）。"""
-    exceptions = exceptions or {}
+    table = _table_or_empty(exceptions)
     findings: list[str] = []
     for path in sorted(root.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -258,7 +213,7 @@ def scan_dynamic(root: Path = PY_ROOT, exceptions: dict[str, set[tuple[str, str]
             if not (isinstance(arg, ast.Constant) and isinstance(arg.value, str)):
                 continue
             target = arg.value
-            if _excepted(exceptions, "dynamic-target", path, target):
+            if _excepted(table, "dynamic-target", path, target):
                 continue
             if importlib.util.find_spec(target) is None:
                 findings.append(f"[dynamic-target] {rel(path)}:{node.lineno} 动态导入目标不存在 {target}")
@@ -283,7 +238,7 @@ _LAYER_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 
 
-def scan_layer_inversion(root: Path = PY_ROOT, exceptions: dict[str, set[tuple[str, str]]] | None = None) -> list[str]:
+def scan_layer_inversion(root: Path = PY_ROOT, exceptions: ExceptionTable | None = None) -> list[str]:
     """layer-inversion：下层不得 import 上层模块（规则见 :data:`_LAYER_RULES`）。
 
     分层纪律：`core` → `fetcher`/`providers` → `analysis` → `report`/`llm` → `tui`/`web`/`cli`，
@@ -294,7 +249,7 @@ def scan_layer_inversion(root: Path = PY_ROOT, exceptions: dict[str, set[tuple[s
     `core/trading_calendar.py`）。存量越界走例外表（`path` = 违规文件，`name` = 被
     导入的目标模块），到期须收敛。
     """
-    exceptions = exceptions or {}
+    table = _table_or_empty(exceptions)
     findings: list[str] = []
     for layer, forbidden in _LAYER_RULES:
         layer_root = root / layer
@@ -317,7 +272,7 @@ def scan_layer_inversion(root: Path = PY_ROOT, exceptions: dict[str, set[tuple[s
                     parts = target.split(".")
                     if len(parts) < 3 or parts[0] != "src" or parts[1] != "python" or parts[2] not in forbidden:
                         continue
-                    if _excepted(exceptions, "layer-inversion", path, target):
+                    if _excepted(table, "layer-inversion", path, target):
                         continue
                     findings.append(f"[layer-inversion] {rel(path)}:{lineno} {layer} 不得依赖 {target}")
                     break

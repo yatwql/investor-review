@@ -461,7 +461,7 @@ class TestPairSimilarityMatchesLinkDecision(unittest.TestCase):
 
         self._tmpdir = tempfile.mkdtemp()
         self._path_patch = patch(
-            "src.python.providers.news_dedup._ANCHOR_PATH", os.path.join(self._tmpdir, "anchors.jsonl")
+            "src.python.providers.news_dedup_anchor_store._ANCHOR_PATH", os.path.join(self._tmpdir, "anchors.jsonl")
         )
         self._path_patch.start()
         news_dedup_anchor_policy.reset_anchor_records()

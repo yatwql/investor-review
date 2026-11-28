@@ -216,14 +216,14 @@ class TestWriteHtmlReportDataStatus(unittest.TestCase):
             # 穿透子函数 mock — 返回空穿透结果
             stack.enter_context(
                 patch(
-                    "src.python.report.html_writer._render_penetration_section",
+                    "src.python.report.html_sections._render_penetration_section",
                     return_value=({"top10": [], "summary": {}}, False, True),
                 )
             )
             # 基金业绩子函数 mock（第二项为候选比较数据，开关关闭时为 None）
             stack.enter_context(
                 patch(
-                    "src.python.report.html_writer._render_fund_performance_section",
+                    "src.python.report.html_sections._render_fund_performance_section",
                     return_value=([], None),
                 )
             )
@@ -276,14 +276,14 @@ class TestWriteHtmlReportDataStatus(unittest.TestCase):
             )
             stack.enter_context(
                 patch(
-                    "src.python.report.html_writer._render_penetration_section",
+                    "src.python.report.html_sections._render_penetration_section",
                     return_value=({"top10": [], "summary": {}}, True, True),
                 )
             )
             # 基金业绩子函数 — profit_success=False（第二项为候选比较数据，开关关闭时为 None）
             stack.enter_context(
                 patch(
-                    "src.python.report.html_writer._render_fund_performance_section",
+                    "src.python.report.html_sections._render_fund_performance_section",
                     return_value=([], None),
                 )
             )
@@ -335,13 +335,13 @@ class TestWriteHtmlReportDataStatus(unittest.TestCase):
             # 穿透有数据（truthy），profit_success/dividend_success 不影响 data_status mock
             stack.enter_context(
                 patch(
-                    "src.python.report.html_writer._render_penetration_section",
+                    "src.python.report.html_sections._render_penetration_section",
                     return_value=({"top10": [{"rank": 1, "codes": ["600900"]}], "summary": {}}, True, True),
                 )
             )
             stack.enter_context(
                 patch(
-                    "src.python.report.html_writer._render_fund_performance_section",
+                    "src.python.report.html_sections._render_fund_performance_section",
                     return_value=([], None),
                 )
             )
@@ -430,38 +430,38 @@ class TestWriteHtmlReportFundDeepAnalysisEmpty(unittest.TestCase):
         # 穿透 + 基金业绩返回（标准）
         stack.enter_context(
             patch(
-                "src.python.report.html_writer._render_penetration_section",
+                "src.python.report.html_sections._render_penetration_section",
                 return_value=({"top10": [], "summary": {}}, False, True),
             )
         )
         stack.enter_context(
             patch(
-                "src.python.report.html_writer._render_fund_performance_section",
+                "src.python.report.html_sections._render_fund_performance_section",
                 return_value=([], None),
             )
         )
         # 4 个基金深度分析模块返回空数据
         stack.enter_context(
             patch(
-                "src.python.report.html_writer._render_manager_analysis",
+                "src.python.report.html_sections._render_manager_analysis",
                 return_value={"results": [], "first_check_summary": None},
             )
         )
         stack.enter_context(
             patch(
-                "src.python.report.html_writer._render_overlap_matrix",
+                "src.python.report.html_sections._render_overlap_matrix",
                 return_value={"funds": [], "fund_names": {}, "matrix": [], "pairs": [], "has_mv_data": False},
             )
         )
         stack.enter_context(
             patch(
-                "src.python.report.html_writer._render_concentration",
+                "src.python.report.html_sections._render_concentration",
                 return_value={"results": []},
             )
         )
         stack.enter_context(
             patch(
-                "src.python.report.html_writer._render_style_analysis",
+                "src.python.report.html_sections._render_style_analysis",
                 return_value={"results": []},
             )
         )

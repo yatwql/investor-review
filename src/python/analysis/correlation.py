@@ -119,11 +119,11 @@ def _pearson_pvalue(x: list[float], y: list[float]) -> tuple[float, float]:
     n = len(x)
     if n < 3:
         return 0.0, 1.0
-    mx = sum(x) / n
-    my = sum(y) / n
-    num = sum((a - mx) * (b - my) for a, b in zip(x, y))
-    sx = math.sqrt(sum((a - mx) ** 2 for a in x))
-    sy = math.sqrt(sum((b - my) ** 2 for b in y))
+    mx = math.fsum(x) / n
+    my = math.fsum(y) / n
+    num = math.fsum((a - mx) * (b - my) for a, b in zip(x, y))
+    sx = math.sqrt(math.fsum((a - mx) ** 2 for a in x))
+    sy = math.sqrt(math.fsum((b - my) ** 2 for b in y))
     if sx < _CONSTANT_EPS or sy < _CONSTANT_EPS:
         return 0.0, 1.0
     r = max(-1.0, min(1.0, num / (sx * sy)))
@@ -264,11 +264,11 @@ def _pearson_r(x: list[float], y: list[float]) -> float | None:
     n = len(x)
     if n < 3:
         return None
-    mx = sum(x) / n
-    my = sum(y) / n
-    num = sum((a - mx) * (b - my) for a, b in zip(x, y))
-    sx = math.sqrt(sum((a - mx) ** 2 for a in x))
-    sy = math.sqrt(sum((b - my) ** 2 for b in y))
+    mx = math.fsum(x) / n
+    my = math.fsum(y) / n
+    num = math.fsum((a - mx) * (b - my) for a, b in zip(x, y))
+    sx = math.sqrt(math.fsum((a - mx) ** 2 for a in x))
+    sy = math.sqrt(math.fsum((b - my) ** 2 for b in y))
     if sx < _CONSTANT_EPS or sy < _CONSTANT_EPS:
         return None
     return max(-1.0, min(1.0, num / (sx * sy)))

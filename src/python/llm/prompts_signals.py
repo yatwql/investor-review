@@ -28,6 +28,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from typing import Any
 
 from src.python.core.num_utils import is_finite_number
@@ -397,7 +398,7 @@ def _fundamental_signal(pipeline_data: dict) -> str | None:
     if up or down:
         parts.append(f"年度趋势 增长 {up}、下滑 {down}")
     if roes:
-        parts.append(f"平均 ROE {sum(roes) / len(roes) * 100:.1f}%")
+        parts.append(f"平均 ROE {math.fsum(roes) / len(roes) * 100:.1f}%")
     return _format_signal(f"持仓基本面（{len(rows)} 只 A 股）", verdict, "，".join(parts))
 
 

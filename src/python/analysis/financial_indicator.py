@@ -20,6 +20,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from collections.abc import Iterable, Mapping
 from typing import Any
 
@@ -95,7 +96,7 @@ def quality_grade(record: Mapping[str, Any] | None) -> tuple[str, float | None]:
 
     if not scores:
         return "", None
-    average = round(sum(scores) / len(scores), 2)
+    average = round(math.fsum(scores) / len(scores), 2)
     for threshold, grade in _GRADE_THRESHOLDS:
         if average >= threshold:
             return grade, average

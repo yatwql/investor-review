@@ -861,13 +861,13 @@ def test_mask_report_text_applies_alias_and_code_mask(monkeypatch):
     from src.python.report import html_writer
 
     monkeypatch.setattr("src.python.config.anonymizer.get_anonymization_mode", lambda: "full_anonymous")
-    monkeypatch.setattr(
-        html_writer,
-        "_MASK_CTX",
-        {"holdings": [{"code": "600519", "name": "贵州茅台"}], "code_map": {"600519": "***"}},
-    )
+    state = {
+        "html": "<p>贵州茅台 600519 今日上涨</p>",
+        # 渲染期上下文随本轮状态传入（不读模块级全局）
+        "mask_ctx": {"holdings": [{"code": "600519", "name": "贵州茅台"}], "code_map": {"600519": "***"}},
+    }
 
-    masked = html_writer._mask_report_text({"html": "<p>贵州茅台 600519 今日上涨</p>"})
+    masked = html_writer._mask_report_text(state)
 
     assert "贵州茅台" not in masked
     assert "600519" not in masked

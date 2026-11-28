@@ -16,6 +16,14 @@ from __future__ import annotations
 # ——自建表在新增交易所时会漏改一处，导致同一代码在两处判定口径分叉。
 EXCHANGE_PREFIXES = ("sh", "sz", "bj")
 
+#: 板块前缀表（单一事实位）：后世加「取后缀 / 估市值 / 判板块」都从这里派生，
+#: 避免同一段前缀知识在多个函数里各写一份（改一处漏一处的典型来源）。
+SH_MAIN_BOARD_PREFIXES = ("600", "601", "603", "605")
+STAR_BOARD_PREFIXES = ("688", "689")
+SZ_MAIN_BOARD_PREFIXES = ("000", "001", "002", "003")
+GEM_BOARD_PREFIXES = ("300", "301")
+BJ_BOARD_PREFIXES = ("43", "83", "87", "92")
+
 # A 股指数交易所前缀
 _INDEX_EXCHANGE_PREFIXES = ("sh", "sz")
 
@@ -91,11 +99,11 @@ def to_fmp_symbol(code: str) -> str:
         return raw
     if not (len(raw) == 6 and raw.isdigit()):
         return ""
-    if raw.startswith(("600", "601", "603", "605", "688", "689")):
+    if raw.startswith(SH_MAIN_BOARD_PREFIXES + STAR_BOARD_PREFIXES):
         return f"{raw}.SS"
-    if raw.startswith(("000", "001", "002", "003", "300", "301")):
+    if raw.startswith(SZ_MAIN_BOARD_PREFIXES + GEM_BOARD_PREFIXES):
         return f"{raw}.SZ"
-    if raw.startswith(("43", "83", "87", "92")):
+    if raw.startswith(BJ_BOARD_PREFIXES):
         return f"{raw}.BJ"
     return ""
 
@@ -237,7 +245,7 @@ def estimate_market_cap_by_prefix(code: str) -> str:
         return "大盘"
     elif raw.startswith(("000",)) or raw.startswith(("002",)):
         return "中盘"
-    elif raw.startswith(("300",)) or raw.startswith(("688",)):
+    elif raw.startswith(GEM_BOARD_PREFIXES) or raw.startswith(STAR_BOARD_PREFIXES):
         return "中小盘"
     elif raw.startswith(("4", "8")):
         return "小盘"

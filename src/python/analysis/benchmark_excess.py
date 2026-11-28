@@ -205,8 +205,8 @@ def _information_ratio(pairs: list[tuple[str, float, float]]) -> float | None:
     excess = _excess_series(pairs)
     if len(excess) < _MIN_SAMPLE_IR:
         return None
-    mean = sum(excess) / len(excess)
-    var = sum((x - mean) ** 2 for x in excess) / (len(excess) - 1)
+    mean = math.fsum(excess) / len(excess)
+    var = math.fsum((x - mean) ** 2 for x in excess) / (len(excess) - 1)
     if var < _EPS:
         return None
     ir = mean / math.sqrt(var) * math.sqrt(_TRADING_DAYS_PER_YEAR)
@@ -218,8 +218,8 @@ def _tracking_error(pairs: list[tuple[str, float, float]]) -> float | None:
     excess = _excess_series(pairs)
     if len(excess) < _MIN_SAMPLE_IR:
         return None
-    mean = sum(excess) / len(excess)
-    var = sum((x - mean) ** 2 for x in excess) / (len(excess) - 1)
+    mean = math.fsum(excess) / len(excess)
+    var = math.fsum((x - mean) ** 2 for x in excess) / (len(excess) - 1)
     if var < _EPS:
         return None
     te = math.sqrt(var) * math.sqrt(_TRADING_DAYS_PER_YEAR)

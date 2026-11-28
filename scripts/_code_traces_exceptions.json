@@ -1,0 +1,32 @@
+{
+  "float-sum": [
+    {
+      "name": "src/python/llm/fact_checker/_utils.py::_subject_spans::sum(((len(_c) - len(_a)) * norm[:idx].count(_c) for _a, _c in _NAME_ALIAS_MAP.items()))",
+      "owner": "llm（事实核查别名跨度）",
+      "reason": "被加项全是 int（两个 len() 之差 × str.count()），整数加法在任意解释器上精确，不存在末位漂移；且结果用作文本索引偏移，须保持 int 而非 math.fsum 的 float",
+      "expiry": "2027-06-30",
+      "replacement": "若日后别名表改为加权浮点分数，则拆出「整数偏移」与「浮点加权」两条路径，后者改 math.fsum"
+    },
+    {
+      "name": "src/python/llm/fact_checker/_utils.py::_locate_subject_in::sum(((len(_c) - len(_a)) * norm[:idx].count(_c) for _a, _c in _NAME_ALIAS_MAP.items()))",
+      "owner": "llm（事实核查别名位置）",
+      "reason": "同上：整数字面量与 len()/count() 的整数乘积求和，结果直接当文本索引偏移使用",
+      "expiry": "2027-06-30",
+      "replacement": "同 _alias_spans：出现浮点权重时拆路径，浮点侧改 math.fsum"
+    },
+    {
+      "name": "scripts/_eval_decision_quality/primitives.py::_aggregate_horizon::sum(sub_hits)",
+      "owner": "scripts（决策质量评测命中率）",
+      "reason": "sub_hits 是 direction_hit 布尔命中列表，求和即命中计数（整数），除以样本数得到的比例与求和顺序无关",
+      "expiry": "2027-06-30",
+      "replacement": "若 direction_hit 改为带权浮点得分，则改 math.fsum 并同步口径说明"
+    },
+    {
+      "name": "scripts/_eval_decision_quality/primitives.py::_aggregate_horizon::sum(hits)",
+      "owner": "scripts（决策质量评测命中率）",
+      "reason": "hits 同上为 direction_hit 布尔命中列表，求和是整数计数",
+      "expiry": "2027-06-30",
+      "replacement": "同 hit_rate：改带权浮点得分时换 math.fsum"
+    }
+  ]
+}

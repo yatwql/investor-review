@@ -10,10 +10,14 @@
 from __future__ import annotations
 
 import unittest
+from typing import TYPE_CHECKING
 from unittest.mock import patch
 
 from src.python.core.models import Holding
 import pytest
+
+if TYPE_CHECKING:  # 仅注解用；真实类型在用例内延迟导入
+    from src.python.report.market_value import DetailRow
 
 pytestmark = [
     pytest.mark.unit,

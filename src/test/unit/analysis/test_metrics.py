@@ -57,6 +57,38 @@ class TestSharpeRatio:
 
         assert sharpe_ratio([0.001] * 10) is None
 
+    def test_matches_hand_computed_annualized_value(self):
+        """21 日、无风险利率非零 → 夏普等于按四步公式手算的定值。
+
+        样本：0.004/-0.002/0.003/-0.001 各 5 次 + 0.010 → 均值 0.0005，
+        样本标准差按 (n-1) 口径；期望值由公式手算后固化为字面量。
+        逐项敏感：超额收益的减号、方差分母、两处年化乘法、末步除法任一被换
+        （`-`→`+`、`*`→`/`、`/`→`*`）都改变末位之前的量级。
+        """
+        from src.python.analysis.metrics import sharpe_ratio
+
+        returns = [0.004, -0.002, 0.003, -0.001] * 5 + [0.010]
+        sr = sharpe_ratio(returns, rf_annual=0.0175)
+        assert sr == pytest.approx(6.704097506126198, rel=1e-9)
+
+    def test_variance_at_epsilon_boundary_is_still_computed(self):
+        """样本方差恰为 epsilon（1e-15）→ 不判为「零波动」，夏普仍返回数值。
+
+        构造：`[a, -a] + [0]*19`（a = nextafter(1e-7)）的样本方差精确等于
+        `1e-15`，故 `variance < eps` 为假、`variance <= eps` 为真——用恰等边界
+        区分 `<` 与 `<=`。无风险利率取 0，超额收益为 0，期望夏普 0.0（不是 None）。
+        """
+        import math
+
+        from src.python.analysis.metrics import sharpe_ratio
+
+        a = math.nextafter(1e-7, 1.0)
+        returns = [a, -a] + [0.0] * 19
+
+        sr = sharpe_ratio(returns, rf_annual=0.0)
+        assert sr is not None, "方差恰等于 epsilon 时不应按零波动判 None"
+        assert sr == pytest.approx(0.0, abs=1e-12)
+
 
 class TestCalmarRatio:
     """卡玛比率测试。"""
@@ -78,6 +110,59 @@ class TestCalmarRatio:
         returns = [0.00001] * 252
         cr = calmar_ratio(returns)
         assert cr is None
+
+    def test_matches_hand_computed_value(self):
+        """先连涨 10 日（+1%×10）再单日 -5% → 卡玛 = 年化收益 / 5%。
+
+        手算：复利终值 1.01^10×0.95，年化 = 终值^(252/21) - 1；最大回撤恰为 5%
+        （峰值即第 10 日的复利值，随后一日跌 5%）。卡玛的分母口径（除以回撤幅度
+        而非乘以）与年化收益的分子都在这个定值里锁住。
+        """
+        from src.python.analysis.metrics import calmar_ratio
+
+        returns = [0.01] * 10 + [-0.05] + [0.0] * 10
+        cr = calmar_ratio(returns)
+        assert cr == pytest.approx(15.667947033448772, rel=1e-9)
+
+    def test_missing_annual_return_or_drawdown_returns_none(self, monkeypatch):
+        """年化收益或回撤任一为 None → 返回 None（不是「两者都 None」才返回）。"""
+        from src.python.analysis import metrics_returns
+
+        returns = [0.01, -0.02, 0.015, -0.005] * 10
+        monkeypatch.setattr(metrics_returns, "annualized_return", lambda *a, **k: None)
+        assert metrics_returns.calmar_ratio(returns) is None
+
+        monkeypatch.undo()
+        monkeypatch.setattr(metrics_returns, "max_drawdown_pct", lambda *a, **k: None)
+        assert metrics_returns.calmar_ratio(returns) is None
+
+    def test_drawdown_exactly_at_epsilon_is_not_dropped(self, monkeypatch):
+        """最大回撤恰等于下限 → 仍计算卡玛（`<` 与 `<=` 的分界）。
+
+        日收益 `[-0.5]` 单日 → 累计 0.5、峰值 1.0 → 回撤幅度精确为 0.5。
+        把下限常量临时设为 0.5（测试侧构造边界，不改被测口径）：`0.5 < 0.5` 为假
+        → 照常计算，`<=` 会误判为 0 回撤而返回 None。
+        """
+        from src.python.analysis import metrics_returns
+
+        monkeypatch.setattr(metrics_returns, "_MAX_DRAWDOWN_EPSILON", 0.5)
+        cr = metrics_returns.calmar_ratio([-0.5] + [0.0] * 20)
+        assert cr == pytest.approx(-1.99951171875, rel=1e-9)
+
+
+class TestMaxDrawdownPct:
+    """最大回撤幅度（正数口径）测试。"""
+
+    def test_multi_leg_drawdown_measures_from_peak(self):
+        """先涨 10% 再两次各跌 10%/20% → 回撤从峰值算 = 28%。
+
+        手算：1.10 → 0.99 → 0.792，相对峰值 1.10 的跌幅 = 1 - 0.792/1.10 = 0.28。
+        用峰值为基准（而非起点 1.0）是本函数的口径。
+        """
+        from src.python.analysis.metrics import max_drawdown_pct
+
+        returns = [0.10, -0.10, -0.20] + [0.0] * 21
+        assert max_drawdown_pct(returns) == pytest.approx(0.28, abs=1e-12)
 
 
 class TestHHI:
@@ -376,6 +461,12 @@ class TestCheckDataSufficiency:
 
         assert check_data_sufficiency([]) == 0
 
+    def test_exactly_min_days_is_low_confidence(self):
+        """恰好等于最小样本天数 → 低置信度而非 0（不足判定是严格小于）。"""
+        from src.python.analysis.metrics import check_data_sufficiency
+
+        assert check_data_sufficiency([0.001] * 20, min_days=20) == 1
+
 
 class TestComputePortfolioPeakMv:
     """组合历史峰值市值（回撤纪律基准）计算测试。"""
@@ -412,3 +503,66 @@ class TestComputePortfolioPeakMv:
         assert compute_portfolio_peak_mv([]) is None
         assert compute_portfolio_peak_mv([{"date": "2026-01-01", "total_value": 0.0}]) is None
         assert compute_portfolio_peak_mv([{"date": "2026-01-01", "total_value": -5.0}]) is None
+
+
+class TestComputeDailyReturns:
+    """日收益率口径（统一源）：空输入返回空列表，而非 None。"""
+
+    def test_empty_input_returns_empty_list(self):
+        from src.python.analysis.metrics import compute_daily_returns
+
+        assert compute_daily_returns(None) == []
+        assert compute_daily_returns([]) == []
+
+
+class TestComputeAllMetricsDerivedFields:
+    """全量聚合里派生出的 HHI 等效数 / 换手率 / 个股波动率 / 风险贡献。"""
+
+    def test_hhi_equivalent_is_reciprocal_of_hhi(self):
+        """等权两品种 → HHI 0.5、等效品种数 2.0（是 1/HHI 而非 HHI 本身）。"""
+        from src.python.analysis.metrics import compute_all_metrics
+
+        result = compute_all_metrics([], portfolio_weights=[0.5, 0.5])
+
+        assert result["hhi"] == pytest.approx(0.5)
+        assert result["hhi_equivalent"] == pytest.approx(2.0)
+
+    def test_turnover_needs_both_periods(self, monkeypatch):
+        """只给上期持仓（本期为 None）→ 换手率为 None，且不调用 turnover_rate。"""
+        from src.python.analysis import metrics
+
+        calls: list = []
+        monkeypatch.setattr(metrics, "turnover_rate", lambda before, after: calls.append((before, after)) or 0.5)
+
+        result = metrics.compute_all_metrics([], holdings_before=[{"code": "600900", "shares": 100}])
+
+        assert result["turnover_rate"] is None
+        assert calls == []
+
+    def test_individual_volatility_passed_through(self):
+        """传入个股波动率字典 → 原样透出，不被抹成 None。"""
+        from src.python.analysis.metrics import compute_all_metrics
+
+        vols = {"600900": 0.21}
+
+        result = compute_all_metrics([], individual_vols=vols)
+
+        assert result["individual_volatility"] == vols
+
+    def test_risk_contributions_empty_without_individual_vols(self):
+        """有权重但无个股波动率 → 风险贡献为空（不去对 None 取 values）。"""
+        from src.python.analysis.metrics import compute_all_metrics
+
+        result = compute_all_metrics([], portfolio_weights=[0.6, 0.4], individual_vols=None)
+
+        assert result["risk_contributions"] == []
+
+    def test_missing_volatility_padded_with_zero(self):
+        """波动率条目少于权重 → 缺的按 0 补齐，仍逐品种出贡献条目。"""
+        from src.python.analysis.metrics import compute_all_metrics
+
+        weights = [0.6, 0.4]
+
+        result = compute_all_metrics([], portfolio_weights=weights, individual_vols={"600900": 0.2})
+
+        assert len(result["risk_contributions"]) == len(weights)

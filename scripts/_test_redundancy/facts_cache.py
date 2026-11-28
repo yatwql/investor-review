@@ -30,6 +30,8 @@ from _test_redundancy.trivial import (
 )
 from _test_redundancy import _common
 from _test_redundancy.markers import check_file as _check_marker_file
+from _test_redundancy.patch_surface import extract_patch_targets
+from _test_redundancy.slow_io import extract_slow_or_subprocess
 from _test_redundancy.weak_mock import (
     check_weak_mock_assertions,
 )
@@ -58,21 +60,23 @@ def _facts_cache_path() -> Path:
 
 
 def _cache_version() -> str:
-    """缓存格式/判定逻辑版本：本脚本 + 同目录 _checklib + 解释器大版本，任一变化全量失效。"""
+    """缓存格式/判定逻辑版本：实现包全部模块 + 解释器大版本，任一变化全量失效。
+
+    指纹来源是「`_test_redundancy/` 下全部 `*.py` + `_shared/checklib.py`」按**文件名排序**
+    后逐文件内容哈希：规则分散在多个模块（各类检查 + 事实抽取 + 编排 + 共享原语），
+    只钉住其中几个会在改其余模块的判定口径时回放旧结论；按文件名排序而非 glob 顺序
+    是为了让同一棵树在任何文件系统上都算出同一指纹。新增一个规则模块自动入指纹。
+    """
+    package_dir = Path(__file__).resolve().parent
+    logic_files = sorted(package_dir.glob("*.py"), key=lambda src: src.name)
+    logic_files.append(package_dir.parent / "_shared" / "checklib.py")
     parts = [f"{sys.version_info[0]}.{sys.version_info[1]}"]
-    logic_files = (
-        Path(__file__),
-        Path(__file__).resolve().parents[1] / "_shared" / "checklib.py",
-        # 标记支路的判定口径（EXPECTED_DIR_MARKERS / 注册集解析）是同源的 per-file 事实，
-        # 改它必须与改本文件一样让缓存全量失效，否则旧「合规」结论会继续命中
-        Path(__file__).with_name("markers.py"),
-    )
     for src in logic_files:
         try:
-            parts.append(hashlib.sha1(src.read_bytes()).hexdigest())
+            parts.append(f"{src.name}:{hashlib.sha256(src.read_bytes()).hexdigest()}")
         except OSError:
-            parts.append("?")
-    return hashlib.sha1("|".join(parts).encode("utf-8")).hexdigest()
+            parts.append(f"{src.name}:?")
+    return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
 
 
 def _load_facts_cache(path: Path) -> dict[str, dict]:
@@ -133,6 +137,8 @@ def _file_facts(path: Path, tree: ast.Module, cases: list[TestCase]) -> dict:
         "trivial": check_trivially_true(cases),
         "weak": check_weak_mock_assertions(cases),
         "date_bomb": check_ledger_absolute_dates(tree, path),
+        "slow": extract_slow_or_subprocess(tree, path),
+        "patch_targets": extract_patch_targets(tree),
         "fixtures": fixtures,
         "params": params,
         "usefix": usefix,
